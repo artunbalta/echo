@@ -1,0 +1,28 @@
+{
+  "name": "echo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECHO — a persistent virtual world where your agent learns who you are.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @echo/shared",
+    "dev:web": "npm run dev -w @echo/web",
+    "dev:realtime": "npm run dev -w @echo/realtime",
+    "dev:ml": "bash services/ml/run.sh",
+    "dev": "npm run build:shared && concurrently -n web,realtime -c cyan,magenta \"npm:dev:web\" \"npm:dev:realtime\"",
+    "build": "npm run build:shared && npm run build -w @echo/realtime && npm run build -w @echo/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "seed": "node db/seed/seed.mjs",
+    "gen:assets": "node pipeline/generate-venue-assets.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

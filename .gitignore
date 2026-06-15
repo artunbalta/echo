@@ -1,0 +1,28 @@
+node_modules/
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# python
+services/ml/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# generated assets / scratch
+pipeline/assets/out/
+*.tmp
