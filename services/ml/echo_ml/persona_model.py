@@ -219,3 +219,32 @@ def anchor_alignment(Phi_centered: np.ndarray, Z_target: np.ndarray,
     resid = Phi_centered - Z @ W                          # (N, F)
     Psi = np.maximum(resid.var(axis=0), _PSI_FLOOR)
     return W, Psi
+
+
+def fit_state_factors(residual: np.ndarray, k_state: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Separate the durable trait from transient state (WI-5). The model is
+
+        φ = Wᵀ z + V m + ε,   m ~ N(0, diag Σ_m) fresh per message,
+
+    so marginalizing the per-message state m turns it into *structured* extra measurement
+    covariance: φ ~ N(Wᵀ z, V diag(Σ_m) Vᵀ + diag(Ψ)). Given the trait residual
+    `residual = Φ_centered − Z W` (the feature variation NOT explained by the named traits),
+    the top-k principal directions of its covariance are the structured transient directions
+    V (mood / fatigue / who they're talking to); the leftover per-feature variance is the iid
+    noise Ψ. In the directions V spans, noise is large, so one-off fluctuations there don't
+    move the trait z.
+
+    Returns (V: (F, k), Σ_m: (k,), Ψ: (F,)).
+    """
+    N, F = residual.shape
+    k_state = max(0, min(int(k_state), F))
+    Cov = (residual.T @ residual) / max(1, N)
+    if k_state == 0:
+        return np.zeros((F, 0)), np.zeros(0), np.maximum(np.diag(Cov), _PSI_FLOOR)
+    vals, vecs = np.linalg.eigh(Cov)                     # ascending
+    order = np.argsort(-vals)[:k_state]
+    V = np.ascontiguousarray(vecs[:, order])             # (F, k) structured state directions
+    Sigma_m = np.maximum(vals[order], 0.0)               # variance along each state direction
+    explained = (V * Sigma_m) @ V.T                      # V diag(Σ_m) Vᵀ
+    Psi = np.maximum(np.diag(Cov) - np.diag(explained), _PSI_FLOOR)
+    return V, Sigma_m, Psi

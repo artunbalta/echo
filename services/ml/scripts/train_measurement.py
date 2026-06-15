@@ -40,8 +40,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from echo_ml import persona as P
+from echo_ml.config import HYPER
 from echo_ml.persona_axes import AXIS_KEYS, AXIS_INDEX
-from echo_ml.persona_model import PersonaModel, fa_em, anchor_alignment, ARTIFACT_PATH
+from echo_ml.persona_model import (
+    PersonaModel, fa_em, anchor_alignment, fit_state_factors, ARTIFACT_PATH,
+)
 
 warnings.filterwarnings("ignore", message=".*encountered in matmul.*")
 
@@ -111,6 +114,7 @@ def main():
     ap.add_argument("--n", type=int, default=900)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--iters", type=int, default=200)
+    ap.add_argument("--k-state", type=int, default=HYPER.k_state)
     ap.add_argument("--out", type=str, default=str(ARTIFACT_PATH))
     args = ap.parse_args()
 
@@ -134,7 +138,14 @@ def main():
     W, Psi = anchor_alignment(Phi - mu, Z, ridge=1.0)   # (D, F) loading, (F,) residual noise
     print(f"[train] anchored W: shape {W.shape}, ‖W‖={np.linalg.norm(W):.2f}")
 
-    model = PersonaModel(W=W, mu_phi=mu, Psi=Psi,
+    # Trait/state split (WI-5): the top-k structured directions of the trait residual are the
+    # transient state V (marginalized into the measurement covariance); the rest is iid Ψ.
+    V = Sigma_m = None
+    if args.k_state > 0:
+        V, Sigma_m, Psi = fit_state_factors((Phi - mu) - Z @ W, args.k_state)
+        print(f"[train] state factors: V{V.shape}, Σ_m={np.round(Sigma_m, 3)}")
+
+    model = PersonaModel(W=W, mu_phi=mu, Psi=Psi, V=V, Sigma_m=Sigma_m,
                          feature_names=P.feature_names(), axis_keys=list(AXIS_KEYS))
     model.save(Path(args.out))
     print(f"[train] wrote {args.out}")
