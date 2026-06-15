@@ -18,6 +18,9 @@ class Hyper:
     # learned W (WI-2) sees semantic variation without a 256-wide loading matrix.
     embed_proj_dim: int = 32        # JL random-projection dim of the semantic embedding
     # feature_dim F = embed_proj_dim + len(STYLOMETRY) + len(TELEMETRY); see persona.FEATURE_DIM.
+    # Trait/state split (WI-5): K_state transient directions V whose variance is marginalized
+    # into the measurement covariance so a bad day / mood can't corrupt the durable trait z.
+    k_state: int = 4
 
     # Robust observation update (WI-4) — innovation gating + Student-t downweighting
     student_t_nu: float = 4.0          # Student-t dof ν: smaller ⇒ heavier tails ⇒ more robust
