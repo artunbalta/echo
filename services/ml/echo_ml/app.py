@@ -132,8 +132,8 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
     if st.baseline_mu is None:
         st.baseline_mu = st.posterior.mu.copy()
 
-    # 2) behavior index (embed (s,a), store) for retrieval (§9.3)
-    emb = embed(f"{ctx} || {req.action}")
+    # 2) behavior index (embed (s,a), store) for retrieval (§9.3) — index side ⇒ "document"
+    emb = embed(f"{ctx} || {req.action}", input_type="document")
     st.behaviors.append(BehaviorEntry(emb, req.action, ctx))
     st.behaviors = st.behaviors[-500:]
 
@@ -192,7 +192,7 @@ def npc_turn(req: NpcTurnReq, authorization: str = Header(None)):
 def agent_turn(req: AgentTurnReq, authorization: str = Header(None)):
     _auth(authorization)
     st = STORE.get(req.userId)
-    query = embed(f"{req.context} || {req.userMessage}")
+    query = embed(f"{req.context} || {req.userMessage}", input_type="query")
     retrieved = st.retrieve(query, k=5)
     pol = generate(st.posterior, st.reward, req.context, req.userMessage, retrieved)
 

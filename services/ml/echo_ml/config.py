@@ -13,6 +13,11 @@ class Hyper:
     obs_noise: float = 0.35         # likelihood noise for the Gaussian observation update
     min_var: float = 0.02           # floor so a bucket can always re-open on drift
     embed_dim: int = 256            # context/action embedding dimension
+    # Language-independent raw featurizer (WI-3). phi = concat(embedding_projection,
+    # stylometry, telemetry). The embedding is JL-projected to embed_proj_dim so the
+    # learned W (WI-2) sees semantic variation without a 256-wide loading matrix.
+    embed_proj_dim: int = 32        # JL random-projection dim of the semantic embedding
+    # feature_dim F = embed_proj_dim + len(STYLOMETRY) + len(TELEMETRY); see persona.FEATURE_DIM.
 
     # Reward model (§9.4)
     reward_hidden: int = 32
@@ -45,8 +50,13 @@ class Settings:
     anthropic_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     model_strong: str = os.getenv("LLM_MODEL_STRONG", "claude-opus-4-8")
     model_cheap: str = os.getenv("LLM_MODEL_CHEAP", "claude-haiku-4-5-20251001")
-    embeddings_provider: str = os.getenv("EMBEDDINGS_PROVIDER", "mock")
+    embeddings_provider: str = os.getenv("EMBEDDINGS_PROVIDER", "mock")  # mock | voyage | openai
     embeddings_key: str = os.getenv("EMBEDDINGS_API_KEY", "")
+    embeddings_model: str = os.getenv("EMBEDDINGS_MODEL", "")  # blank → provider default
+    # Voyage AI (WI-3): multilingual embeddings (voyage-3.5, 256-d Matryoshka) — fixes the
+    # Turkish collapse. VOYAGE_* take precedence; fall back to the generic EMBEDDINGS_* vars.
+    voyage_key: str = os.getenv("VOYAGE_API_KEY", "") or os.getenv("EMBEDDINGS_API_KEY", "")
+    voyage_model: str = os.getenv("VOYAGE_MODEL", "") or os.getenv("EMBEDDINGS_MODEL", "") or "voyage-3.5"
     embed_dim: int = int(os.getenv("EMBEDDINGS_DIM", "256"))
     supabase_url: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
     supabase_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
