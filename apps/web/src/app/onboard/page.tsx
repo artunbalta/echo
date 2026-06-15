@@ -232,8 +232,8 @@ export default function Onboard() {
         {/* REVEAL */}
         {step === "reveal" && style && (
           <div className="text-center">
-            <p className="mb-3 text-sm text-parchment/80">This is your echo.</p>
-            <div className="mb-4 flex items-center justify-center gap-6">
+            <p className="mb-1 text-sm text-parchment/80">This is you, here.</p>
+            <div className="mb-3 flex items-center justify-center gap-6">
               <div className="rounded-lg bg-grass/30 p-4"><AvatarPreview style={style} scale={5} /></div>
               {result?.portraitUrl ? (
                 <img src={result.portraitUrl} alt="portrait" className="pixel h-32 w-32 rounded-lg border-2 border-echo/40" style={{ imageRendering: "pixelated" }} />
@@ -244,6 +244,11 @@ export default function Onboard() {
                 derived: {Object.entries(result.attributes).filter(([, v]) => v && (!Array.isArray(v) || v.length)).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join("/") : v}`).join(" · ") || "neutral"}
               </p>
             )}
+            <p className="mb-4 text-xs leading-relaxed text-parchment/60">
+              The figure is how the world sees you. Your <span className="text-echo">echo</span> is what&apos;s
+              about to start learning you — from how you move, talk, and hesitate — until, one day, it can
+              act as you.
+            </p>
             <button onClick={enterWorld} className="w-full rounded bg-echo px-4 py-3 font-bold text-ink">Step through →</button>
           </div>
         )}
