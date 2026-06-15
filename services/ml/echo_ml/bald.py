@@ -40,6 +40,20 @@ class BaldScore:
     aleatoric: float      # E_q H[p(r_n|z)]  (irreducible)
 
 
+def _sample_z(post: Posterior, samples: int, rng: np.random.Generator) -> np.ndarray:
+    """Draw z ~ N(mu, Sigma) from the full-covariance posterior via Cholesky:
+    z = mu + ξ Lᵀ, ξ ~ N(0, I), L L ᵀ = Σ (+ jitter). Falls back to an eigen-square-root
+    if Σ is numerically non-PD. Reduces to diagonal sampling when Σ is diagonal."""
+    d = post.mu.shape[0]
+    Sigma = post.Sigma + 1e-9 * np.eye(d)
+    try:
+        L = np.linalg.cholesky(Sigma)
+    except np.linalg.LinAlgError:
+        vals, vecs = np.linalg.eigh(Sigma)
+        L = vecs * np.sqrt(np.maximum(vals, 0.0))
+    return post.mu + rng.standard_normal((samples, d)) @ L.T
+
+
 def bald_scores(
     post: Posterior,
     npcs: list[tuple[str, np.ndarray]],
@@ -49,8 +63,8 @@ def bald_scores(
 ) -> list[BaldScore]:
     """Compute BALD scores for each (npc_id, axis_vector). Returns sorted desc by score."""
     rng = np.random.default_rng(seed)
-    # MC samples from the diagonal-Gaussian posterior q(z|H).
-    z = rng.normal(post.mu, np.sqrt(post.var), size=(samples, post.mu.shape[0]))  # (S, d)
+    # MC samples from the full-covariance Gaussian posterior q(z|H).
+    z = _sample_z(post, samples, rng)  # (S, d)
 
     out: list[BaldScore] = []
     for npc_id, a in npcs:

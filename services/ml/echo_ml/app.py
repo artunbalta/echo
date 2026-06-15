@@ -28,6 +28,7 @@ from .bald import bald_scores
 from .policy import generate
 from .llm import complete
 from .autonomy import persona_drift_kl
+from .persona_axes import AXIS_KEYS
 from .cost import METER
 
 app = FastAPI(title="ECHO ML", version="0.1.0")
@@ -35,6 +36,22 @@ app = FastAPI(title="ECHO ML", version="0.1.0")
 # Global observability counters (§14).
 METRICS = {"autonomy_changes": 0, "drift_events": 0, "promotions": 0, "feedback": 0}
 _LEVELS = ["copilot", "supervised", "auto"]
+
+
+def _top_correlation(post: P.Posterior) -> Optional[dict]:
+    """Most strongly correlated off-diagonal axis pair, for the EchoPanel transparency
+    trace (inspectability invariant): which two traits the model now sees as co-moving."""
+    Sigma = post.Sigma
+    d = np.sqrt(np.clip(np.diag(Sigma), 1e-12, None))
+    corr = Sigma / np.outer(d, d)
+    best, bi, bj = 0.0, -1, -1
+    for i in range(P.D):
+        for j in range(i + 1, P.D):
+            if abs(corr[i, j]) > abs(best):
+                best, bi, bj = corr[i, j], i, j
+    if bi < 0:
+        return None
+    return {"axes": [AXIS_KEYS[bi], AXIS_KEYS[bj]], "rho": round(float(best), 3)}
 
 
 def _auth(authorization: str | None):
@@ -120,9 +137,9 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
     st.behaviors.append(BehaviorEntry(emb, req.action, ctx))
     st.behaviors = st.behaviors[-500:]
 
-    # 3) drift check (§9.7): recent vs baseline
-    drift_kl = persona_drift_kl(st.posterior.mu, st.baseline_mu, st.posterior.var,
-                                np.full_like(st.posterior.var, P.HYPER.prior_var))
+    # 3) drift check (§9.7): recent vs baseline, full-covariance KL
+    drift_kl = persona_drift_kl(st.posterior.mu, st.baseline_mu, st.posterior.Sigma,
+                                np.eye(P.D) * P.HYPER.prior_var)
     if drift_kl > P.HYPER.drift_kl_threshold:
         st.posterior = P.inflate(st.posterior, factor=1.5)
         st.baseline_mu = st.posterior.mu.copy()
@@ -130,6 +147,8 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
     return {
         "persona": st.posterior.to_dict(),
         "traits": P.decode_traits(st.posterior),
+        "var": st.posterior.var.tolist(),
+        "correlation": _top_correlation(st.posterior),
         "uncertainty": float(np.mean(st.posterior.var)),
         "behaviors": len(st.behaviors),
         "drift_kl": round(drift_kl, 3),
@@ -263,6 +282,8 @@ def get_persona(uid: str, authorization: str = Header(None)):
         "userId": uid,
         "persona": st.posterior.to_dict(),
         "traits": P.decode_traits(st.posterior),
+        "var": st.posterior.var.tolist(),
+        "correlation": _top_correlation(st.posterior),
         "uncertainty": float(np.mean(st.posterior.var)),
         "behaviors": len(st.behaviors),
         "temperature": round(st.temperature, 3),
