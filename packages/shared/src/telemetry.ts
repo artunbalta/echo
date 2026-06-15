@@ -13,6 +13,7 @@ export type TelemetryType =
   | "revisit" // returned to a previously-visited entity
   | "interaction_start"
   | "interaction_end"
+  | "portal_enter" // stepped through a portal to another scene (e.g. the venue)
   | "gesture"
   | "idle";
 

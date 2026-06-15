@@ -15,6 +15,9 @@ export default function VenuePage() {
   const sceneRef = useRef<VenueScene | null>(null);
   const [mode, setMode] = useState<ModeSummary | null>(null);
   const [near, setNear] = useState(false);
+  const [portalNear, setPortalNear] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [booked, setBooked] = useState(0);
   const [total, setTotal] = useState(0);
@@ -31,6 +34,7 @@ export default function VenuePage() {
     fetch("/api/venue/mode").then((r) => r.json()).then(setMode).catch(() => {});
     const scene = new VenueScene({
       onStandProximity: setNear,
+      onPortalProximity: setPortalNear,
       onVisitorResolved: (o) => {
         setTotal((t) => t + 1);
         if (o.booked) setBooked((b) => b + 1);
@@ -95,17 +99,33 @@ export default function VenuePage() {
     }
   }, [input, busy, mode]);
 
-  // Press E near the stand to talk.
+  // Step through the portal → fade to black, then travel back to the world.
+  const returnToWorld = useCallback(() => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    window.setTimeout(() => {
+      window.location.href = "/world";
+    }, 700);
+  }, []);
+
+  // Press E near the stand to talk, or near the portal to leave.
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
+      // Esc must close the conversation even while the chat input is focused — handle it first.
+      if (e.key === "Escape" && open) {
+        e.preventDefault();
+        closeConvo();
+        return;
+      }
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if ((e.key === "e" || e.key === "E") && near && !open) openConvo();
-      if (e.key === "Escape" && open) closeConvo();
+      else if ((e.key === "o" || e.key === "O") && portalNear && !open) returnToWorld();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [near, open, openConvo, closeConvo]);
+  }, [near, portalNear, open, openConvo, closeConvo, returnToWorld]);
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-ink">
@@ -143,6 +163,25 @@ export default function VenuePage() {
       {near && !open && (
         <div className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment">
           THY temsilcisiyle konuşmak için <span className="font-bold text-echo">E</span>
+        </div>
+      )}
+
+      {/* portal prompt — back to the world */}
+      {portalNear && !near && !open && (
+        <div className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment">
+          Dünyaya dönmek için portala gir — <span className="font-bold text-echo">O</span>
+        </div>
+      )}
+
+      {/* fade-to-black portal transition */}
+      <div
+        className={`pointer-events-none absolute inset-0 z-50 bg-black transition-opacity duration-700 ${
+          leaving ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      {leaving && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center font-mono text-sm italic text-parchment/80">
+          portaldan geçiliyor…
         </div>
       )}
 

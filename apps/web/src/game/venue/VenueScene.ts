@@ -55,6 +55,8 @@ export interface VenueHooks {
   onStandProximity?: (near: boolean) => void;
   onVisitorResolved?: (o: Outcome) => void;
   onReady?: () => void;
+  /** Fires when the human player steps in/out of the portal doorway (→ back to the world). */
+  onPortalProximity?: (near: boolean) => void;
 }
 
 export class VenueScene {
@@ -79,6 +81,7 @@ export class VenueScene {
   private simInFlight = false;
   private spawnAccum = 0;
   private nearStand = false;
+  private nearPortal = false;
   private humanEngaged = false;
   private destroyed = false;
   private initialized = false;
@@ -431,6 +434,13 @@ export class VenueScene {
     if (near !== this.nearStand) {
       this.nearStand = near;
       this.hooks.onStandProximity?.(near);
+    }
+    const portalCx = PORTAL.x + PORTAL.w / 2;
+    const portalCy = PORTAL.y + PORTAL.h / 2;
+    const nearP = dist(this.px, this.py, portalCx, portalCy) <= 2.4;
+    if (nearP !== this.nearPortal) {
+      this.nearPortal = nearP;
+      this.hooks.onPortalProximity?.(nearP);
     }
   }
 

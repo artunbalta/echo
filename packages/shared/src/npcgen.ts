@@ -77,11 +77,17 @@ export function generateSpanningSet(count = 100, seed = 1337): NpcSpec[] {
     }
     const name = `${FIRST[i % FIRST.length]} ${LAST[Math.floor(rng() * LAST.length)]}`;
     const venue = VENUES[i % VENUES.length];
-    // Cluster NPCs loosely around venue anchor points for natural gathering.
-    const vx = (0.15 + 0.7 * ((i * 7) % 10) / 10) * WORLD.MAP_WIDTH;
-    const vy = (0.15 + 0.7 * ((i * 3) % 10) / 10) * WORLD.MAP_HEIGHT;
-    const homeX = Math.round(vx + (rng() - 0.5) * 6);
-    const homeY = Math.round(vy + (rng() - 0.5) * 6);
+    // Scatter NPCs randomly across the walkable map (seeded RNG keeps it reproducible),
+    // avoiding the border ring and the central spawn plaza so they don't pile on the player.
+    const cx = WORLD.MAP_WIDTH / 2;
+    const cy = WORLD.MAP_HEIGHT / 2;
+    let homeX = cx;
+    let homeY = cy;
+    for (let tries = 0; tries < 24; tries++) {
+      homeX = 3 + Math.floor(rng() * (WORLD.MAP_WIDTH - 6));
+      homeY = 3 + Math.floor(rng() * (WORLD.MAP_HEIGHT - 6));
+      if (Math.hypot(homeX - cx, homeY - cy) >= 6) break;
+    }
 
     specs.push({
       id: `npc_${i.toString().padStart(3, "0")}`,

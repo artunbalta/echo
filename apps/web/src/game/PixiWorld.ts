@@ -29,6 +29,7 @@ import {
   buildGrassTexture,
   buildTreeTexture,
   buildBushTexture,
+  buildPortalTexture,
   styleFromId,
 } from "./art";
 
@@ -42,6 +43,8 @@ const ART_URLS = {
   tree: "/assets/world/tree.png",
   bush: "/assets/world/bush.png",
   flower: "/assets/world/flower.png",
+  // Same Higgsfield-generated portal the venue uses, so both sides show the identical door.
+  portal: "/assets/venue/portal.png",
 } as const;
 import { generateTileMap, isBlocked, type TileMap } from "./tilemap";
 
@@ -76,6 +79,8 @@ export interface WorldHooks {
   onMoveIntent?: (dir: { x: -1 | 0 | 1; y: -1 | 0 | 1 }, facing: Facing, seq: number) => void;
   onStop?: (seq: number) => void;
   emitTelemetry?: (type: string, payload: Record<string, unknown>) => void;
+  /** Fires when the local player steps in/out of the portal doorway's interaction radius. */
+  onPortalChange?: (near: boolean) => void;
 }
 
 export class PixiWorld {
@@ -88,6 +93,7 @@ export class PixiWorld {
   private treeTex!: Texture;
   private bushTex!: Texture;
   private flowerTex!: Texture;
+  private portalTex!: Texture;
 
   private selfId = "";
   // local predicted position (tile units)
@@ -101,6 +107,12 @@ export class PixiWorld {
   private nearbyId: string | null = null;
   private dwellTimer = 0;
   private destroyed = false;
+  private portalCenter = { x: 0, y: 0 };
+  private portalNear = false;
+  // Mouse-wheel zoom: a multiplier on top of the base RENDER_SCALE, clamped.
+  private zoom = 1;
+  private static readonly MIN_ZOOM = 0.5;
+  private static readonly MAX_ZOOM = 2.5;
 
   constructor(hooks: WorldHooks) {
     this.hooks = hooks;
@@ -132,12 +144,13 @@ export class PixiWorld {
 
     await this.loadWorldArt();
 
-    this.world.scale.set(SCALE);
+    this.world.scale.set(SCALE * this.zoom);
     this.app.stage.addChild(this.world);
 
     this.buildGround();
     this.buildDecorations();
     this.world.addChild(this.entityLayer);
+    this.buildPortal();
 
     this.bindInput();
     this.app.ticker.add((t) => this.update(t.deltaMS));
@@ -155,16 +168,18 @@ export class PixiWorld {
         return null;
       }
     };
-    const [grass, tree, bush, flower] = await Promise.all([
+    const [grass, tree, bush, flower, portal] = await Promise.all([
       load(ART_URLS.grass),
       load(ART_URLS.tree),
       load(ART_URLS.bush),
       load(ART_URLS.flower),
+      load(ART_URLS.portal),
     ]);
     this.grassTex = grass ?? nearest(Texture.from(buildGrassTexture(TILE)));
     this.treeTex = tree ?? nearest(Texture.from(buildTreeTexture(TILE)));
     this.bushTex = bush ?? nearest(Texture.from(buildBushTexture(TILE)));
     this.flowerTex = flower ?? this.bushTex;
+    this.portalTex = portal ?? nearest(Texture.from(buildPortalTexture(TILE)));
   }
 
   setSelf(id: string, x: number, y: number) {
@@ -204,6 +219,18 @@ export class PixiWorld {
       }
     }
     this.entityLayer.sortableChildren = true;
+  }
+
+  /** Render the portal doorway and cache its center (tile units) for proximity checks. */
+  private buildPortal() {
+    const p = this.map.portal;
+    const s = new Sprite(this.portalTex);
+    s.anchor.set(0.5, 1);
+    s.x = (p.x + p.w / 2) * TILE;
+    s.y = (p.y + p.h) * TILE;
+    (s as any).zIndex = s.y; // z-sorts with entities so the player can stand in front
+    this.entityLayer.addChild(s);
+    this.portalCenter = { x: p.x + p.w / 2, y: p.y + p.h / 2 };
   }
 
   // ── entities ──────────────────────────────────────────────────────────────────
@@ -301,7 +328,17 @@ export class PixiWorld {
   private bindInput() {
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKey);
+    this.app.canvas.addEventListener("wheel", this.onWheel, { passive: false });
   }
+
+  /** Mouse wheel zooms the world in/out around the player, clamped to a sane range. */
+  private onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    this.zoom = Math.max(PixiWorld.MIN_ZOOM, Math.min(PixiWorld.MAX_ZOOM, this.zoom * factor));
+    this.world.scale.set(SCALE * this.zoom);
+    this.updateCamera();
+  };
 
   private onKey = (e: KeyboardEvent) => {
     // Ignore when typing in an input/textarea.
@@ -329,6 +366,21 @@ export class PixiWorld {
     this.stepRemotes(dt);
     this.updateCamera();
     this.detectProximity(dt);
+    this.detectPortal();
+  }
+
+  /** Toggle the portal-nearby hook as the player crosses its interaction radius. */
+  private detectPortal() {
+    const d = Math.hypot(this.localX - this.portalCenter.x, this.localY - this.portalCenter.y);
+    const near = d <= WORLD.INTERACTION_RADIUS + 0.8;
+    if (near !== this.portalNear) {
+      this.portalNear = near;
+      this.hooks.onPortalChange?.(near);
+    }
+  }
+
+  isNearPortal(): boolean {
+    return this.portalNear;
   }
 
   private stepLocal(dt: number) {
@@ -418,8 +470,9 @@ export class PixiWorld {
   private updateCamera() {
     const vw = this.app.screen.width;
     const vh = this.app.screen.height;
-    const px = (this.localX * TILE + TILE / 2) * SCALE;
-    const py = (this.localY * TILE + TILE) * SCALE;
+    const eff = SCALE * this.zoom;
+    const px = (this.localX * TILE + TILE / 2) * eff;
+    const py = (this.localY * TILE + TILE) * eff;
     this.world.x = Math.round(vw / 2 - px);
     this.world.y = Math.round(vh / 2 - py);
   }
@@ -467,6 +520,7 @@ export class PixiWorld {
     this.destroyed = true;
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);
+    if (this.initialized) this.app.canvas.removeEventListener("wheel", this.onWheel);
     // Only destroy a fully-initialized app; otherwise init() handles teardown once
     // it finishes. Guarded because Pixi's resize plugin can throw on a partial app.
     if (this.initialized) {

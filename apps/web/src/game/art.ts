@@ -341,6 +341,57 @@ export function buildBushTexture(tile: number): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * A glowing stone-arch portal: a soft halo, a stone frame (arch cap + two pillars down
+ * to the floor), and a shimmering cyan field filling the doorway. Anchored bottom-center,
+ * it stands 3 tiles tall over a 2-tile-wide footprint and z-sorts with the entities.
+ */
+export function buildPortalTexture(tile: number): HTMLCanvasElement {
+  const w = tile * 2;
+  const h = tile * 3;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+
+  const frame = "#3f6f8f";
+  const frameHi = "#6db3d6";
+  const glow = "#7ec6e6";
+  const core = "#bfe9ff";
+
+  const cx = w / 2;
+  const cyTop = tile; // center of the arch cap
+  const rOuter = tile - 1; // stone-frame radius
+  const rInner = tile - 5; // glowing-field radius
+  const footY = h - 3; // pillars reach the floor here
+
+  // Soft outer halo.
+  ctx.globalAlpha = 0.18;
+  blob(ctx, cx, cyTop, rOuter + 3, glow);
+  ctx.globalAlpha = 1;
+
+  // Stone frame: arch cap + two side pillars down to the floor, with a top highlight.
+  blob(ctx, cx, cyTop, rOuter, frame);
+  px(ctx, cx - rOuter, cyTop, 4, footY - cyTop, frame);
+  px(ctx, cx + rOuter - 4, cyTop, 4, footY - cyTop, frame);
+  blob(ctx, cx - 2, cyTop - 2, rOuter - 4, frameHi);
+
+  // Glowing portal field: the arch cap plus the doorway column beneath it.
+  blob(ctx, cx, cyTop, rInner, core);
+  px(ctx, cx - rInner, cyTop, rInner * 2, footY - cyTop, core);
+  // Diagonal shimmer bands within the doorway column.
+  for (let y = cyTop; y < footY; y++) {
+    for (let x = cx - rInner; x < cx + rInner; x++) {
+      if ((x + y) % 5 === 0) {
+        ctx.fillStyle = glow;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  return c;
+}
+
 function blob(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
   ctx.fillStyle = color;
   for (let y = -r; y <= r; y++) {

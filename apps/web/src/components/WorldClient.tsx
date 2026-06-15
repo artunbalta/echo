@@ -34,6 +34,11 @@ export default function WorldClient() {
   const [status, setStatus] = useState("Connecting…");
   const [uid, setUid] = useState("");
   const [nearby, setNearby] = useState<{ id: string; name: string; refId: string } | null>(null);
+  const [portalNear, setPortalNear] = useState(false);
+  const [entering, setEntering] = useState(false);
+  const portalNearRef = useRef(false);
+  portalNearRef.current = portalNear;
+  const enteringRef = useRef(false);
   const [convo, setConvo] = useState<{ name: string; lines: Line[] } | null>(null);
   const [draft, setDraft] = useState("");
   const [narration, setNarration] = useState<string | null>(null);
@@ -64,6 +69,17 @@ export default function WorldClient() {
     const n = nearbyRef.current;
     if (!n || convoRef.current) return;
     netRef.current?.interactStart(n.id);
+  }, []);
+
+  // Step through the portal → fade to black, then travel to the venue.
+  const enterVenue = useCallback(() => {
+    if (enteringRef.current) return;
+    enteringRef.current = true;
+    setEntering(true);
+    teleRef.current?.emit("portal_enter", { to: "venue" });
+    window.setTimeout(() => {
+      window.location.href = "/venue";
+    }, 700);
   }, []);
 
   useEffect(() => {
@@ -107,6 +123,7 @@ export default function WorldClient() {
         else if (type === "dwell") d.dwell++;
         else if (type === "revisit") d.revisits++;
       },
+      onPortalChange: (near) => setPortalNear(near),
     });
     worldRef.current = world;
 
@@ -196,13 +213,21 @@ export default function WorldClient() {
   // Space/E to talk; Esc to leave.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Esc must end a conversation even while the chat input is focused — handle it first.
+      if (e.key === "Escape" && convoRef.current) {
+        e.preventDefault();
+        leaveConvo();
+        return;
+      }
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if ((e.key === "e" || e.key === " ") && nearbyRef.current && !convoRef.current) {
         e.preventDefault();
         startInteraction();
+      } else if ((e.key === "o" || e.key === "O") && portalNearRef.current && !convoRef.current) {
+        e.preventDefault();
+        enterVenue();
       }
-      if (e.key === "Escape" && convoRef.current) leaveConvo();
     };
     window.addEventListener("keydown", onKey);
     // Session-end debrief (§11): fire-and-forget on the way out (keepalive).
@@ -442,6 +467,28 @@ export default function WorldClient() {
         >
           Talk to <span className="font-bold text-echo">{nearby.name}</span> — press E
         </button>
+      )}
+
+      {/* Portal prompt — only when not already talking to someone */}
+      {portalNear && !nearby && !convo && (
+        <button
+          onClick={enterVenue}
+          className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment hover:text-echo"
+        >
+          Step through the portal — press <span className="font-bold text-echo">O</span>
+        </button>
+      )}
+
+      {/* Fade-to-black portal transition */}
+      <div
+        className={`pointer-events-none absolute inset-0 z-50 bg-black transition-opacity duration-700 ${
+          entering ? "opacity-100" : "opacity-0"
+        }`}
+      />
+      {entering && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center font-mono text-sm italic text-parchment/80">
+          stepping through…
+        </div>
       )}
 
       {/* Conversation */}

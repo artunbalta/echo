@@ -12,15 +12,22 @@ A = os.path.join(os.path.dirname(__file__), "..", "apps", "web", "public", "asse
 PROPS = {"booth": 112, "stage": 160, "portal": 48}
 
 
-def chroma_key(img, tol=70):
+def chroma_key(img):
+    # Magenta is high red+blue with clearly lower green. Keying on that relationship (rather
+    # than only near-pure #ff00ff) also removes the softer magenta halo around glowing props
+    # like the portal, then despills the lingering pink tint on surviving edge pixels.
     img = img.convert("RGBA")
     px = img.load()
     w, h = img.size
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
-            if abs(r - 255) < tol and g < 110 and abs(b - 255) < tol and r > 150 and b > 150:
+            if a == 0:
+                continue
+            if r > 110 and b > 110 and g < min(r, b) - 35:
                 px[x, y] = (r, g, b, 0)
+            elif r > g + 20 and b > g + 20:  # despill magenta fringe toward neutral
+                px[x, y] = (min(r, g + 20), g, min(b, g + 20), a)
     return img
 
 

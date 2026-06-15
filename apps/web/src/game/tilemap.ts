@@ -13,11 +13,20 @@ export interface Decoration {
   y: number;
 }
 
+/** A doorway the player can step into to travel to another scene (e.g. the venue). */
+export interface Portal {
+  x: number; // tile (top-left of the footprint)
+  y: number;
+  w: number; // footprint width in tiles
+  h: number; // footprint height in tiles
+}
+
 export interface TileMap {
   width: number;
   height: number;
   collision: Uint8Array; // width*height, 1 = blocked
   decorations: Decoration[];
+  portal: Portal;
 }
 
 function rng(seed: number) {
@@ -38,16 +47,22 @@ export function generateTileMap(seed = 7): TileMap {
   const collision = new Uint8Array(W * H);
   const decorations: Decoration[] = [];
 
+  // A portal doorway stands at the world's north edge; a clear corridor links it to the plaza.
+  const portal: Portal = { x: Math.round(W / 2) - 1, y: 2, w: 2, h: 1 };
+  const portalOpening = (x: number, y: number) =>
+    x >= portal.x - 2 && x <= portal.x + portal.w + 1 && y >= 0 && y <= Math.round(H / 2);
+
   const keepClear = (x: number, y: number) => {
-    // keep the central spawn plaza open
+    // keep the central spawn plaza and the corridor up to the portal open
     const cx = W / 2,
       cy = H / 2;
-    return Math.hypot(x - cx, y - cy) < 6;
+    return Math.hypot(x - cx, y - cy) < 6 || portalOpening(x, y);
   };
 
-  // Border ring of trees.
+  // Border ring of trees (leaving a gap at the top for the portal doorway).
   for (let x = 0; x < W; x++) {
     for (const y of [0, 1, H - 2, H - 1]) {
+      if (portalOpening(x, y)) continue;
       if (r() < 0.7) {
         decorations.push({ kind: "tree", x, y });
         collision[y * W + x] = 1;
@@ -86,7 +101,7 @@ export function generateTileMap(seed = 7): TileMap {
     }
   }
 
-  return { width: W, height: H, collision, decorations };
+  return { width: W, height: H, collision, decorations, portal };
 }
 
 export function isBlocked(map: TileMap, tileX: number, tileY: number): boolean {
