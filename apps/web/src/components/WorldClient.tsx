@@ -5,7 +5,7 @@ import { config } from "@/lib/config";
 import { PixiWorld } from "@/game/PixiWorld";
 import { NetClient } from "@/game/net";
 import { TelemetryCollector } from "@/game/telemetry";
-import { proposeReply, sendFeedback, type AgentTurn } from "@/lib/agent";
+import { proposeReply, sendFeedback, requestConnectionAnalysis, type AgentTurn, type ConnectionAnalysis } from "@/lib/agent";
 import EchoPanel from "@/components/EchoPanel";
 import OutcomesPanel, { type MetPerson } from "@/components/OutcomesPanel";
 import type { InteractTurnPayload } from "@echo/shared";
@@ -53,6 +53,13 @@ export default function WorldClient() {
   const convoTargetRef = useRef<{ id: string; name: string } | null>(null);
   const metRef = useRef<Map<string, { id: string; name: string; turns: number }>>(new Map());
   const [metCount, setMetCount] = useState(0);
+  // Full transcripts per counterpart, accumulated across the session — fed to the real
+  // end-of-day connection analysis (and stored as training data) instead of a turn-count guess.
+  const transcriptsRef = useRef<Map<string, Line[]>>(new Map());
+  // Grounded, conversation-specific reads keyed by counterpart id, cached by turn count so
+  // reopening the panel doesn't re-hit the model when nothing changed.
+  const [connAnalyses, setConnAnalyses] = useState<Record<string, ConnectionAnalysis & { turns: number }>>({});
+  const [analyzing, setAnalyzing] = useState(false);
 
   // Narrator session digest (Phase 7) — grounded signals for the debrief.
   const digestRef = useRef({ approaches: 0, avoids: 0, dwell: 0, revisits: 0, edits: 0, replyMs: [] as number[] });
@@ -180,6 +187,11 @@ export default function WorldClient() {
       onInteractClosed: () => {
         const t = convoTargetRef.current;
         const counterpart = t ? { name: t.name, turns: metRef.current.get(t.id)?.turns ?? 0 } : undefined;
+        // Keep the transcript (appending if we've spoken with them before) for real analysis.
+        if (t && convoRef.current && convoRef.current.lines.length) {
+          const prev = transcriptsRef.current.get(t.id) ?? [];
+          transcriptsRef.current.set(t.id, [...prev, ...convoRef.current.lines]);
+        }
         interactionRef.current = null;
         convoTargetRef.current = null;
         setConvo(null);
@@ -402,6 +414,40 @@ export default function WorldClient() {
     }
   }
 
+  // Real end-of-day read: send the actual transcripts of the most-engaged people to the
+  // server for a grounded, conversation-specific analysis. Cached by turn count so toggling
+  // the panel open/closed doesn't re-hit the model when nothing has changed.
+  async function runConnectionAnalysis() {
+    const people = [...metRef.current.values()]
+      .sort((a, b) => b.turns - a.turns)
+      .slice(0, 3)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        turns: m.turns,
+        lines: (transcriptsRef.current.get(m.id) ?? []).map((l) => ({ who: l.who, text: l.text })),
+      }));
+    if (people.length === 0) return;
+    const need = people.filter((p) => connAnalyses[p.id]?.turns !== p.turns);
+    if (need.length === 0) return; // already analyzed at this engagement level
+    setAnalyzing(true);
+    try {
+      const res = await requestConnectionAnalysis(uidRef.current, sessionIdRef.current, people);
+      if (res.length) {
+        setConnAnalyses((prev) => {
+          const next = { ...prev };
+          for (const a of res) {
+            const p = people.find((x) => x.id === a.id);
+            next[a.id] = { ...a, turns: p?.turns ?? 0 };
+          }
+          return next;
+        });
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   function speak(text: string, audioDataUrl: string | null) {
     if (!voiceConsentRef.current) return; // respect voice consent (§13)
     if (audioDataUrl) {
@@ -457,7 +503,12 @@ export default function WorldClient() {
           your echo
         </button>
         <button
-          onClick={() => { setShowOutcomes((v) => !v); setShowEcho(false); }}
+          onClick={() => {
+            const open = !showOutcomes;
+            setShowOutcomes(open);
+            setShowEcho(false);
+            if (open) runConnectionAnalysis(); // real read of the actual conversations
+          }}
           className="panel rounded px-3 py-2 text-parchment hover:text-echo"
         >
           connections{metCount > 0 ? ` (${metCount})` : ""}
@@ -473,6 +524,8 @@ export default function WorldClient() {
           userId={uid}
           onClose={() => setShowOutcomes(false)}
           met={[...metRef.current.values()].map((m): MetPerson => ({ ...m, reason: reasonFor(m.turns) }))}
+          analyses={connAnalyses}
+          analyzing={analyzing}
         />
       )}
 
