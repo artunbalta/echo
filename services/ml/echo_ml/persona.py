@@ -28,8 +28,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 import numpy as np
 
-from .config import HYPER
+from .config import HYPER, SETTINGS
 from .persona_axes import AXES, AXIS_INDEX
+from .embeddings import embed
+from .stylometry import stylometry_features, STYLOMETRY_FEATURE_NAMES
 
 D = HYPER.persona_dim
 
@@ -268,6 +270,64 @@ def featurize(text: str, telemetry: Optional[dict] = None) -> tuple[np.ndarray, 
     observed = int(mask.sum())
     r = HYPER.obs_noise * (1.0 + 1.5 / max(1, observed))
     return y, mask, r
+
+
+# ── language-independent raw featurizer (WI-3) ────────────────────────────────────
+# featurize_raw produces a rich, language-agnostic feature vector φ ∈ R^F. The mapping
+# φ → persona-axis evidence is NOT here — it is the *learned* measurement matrix W
+# (WI-2, persona_model.py), applied via kalman_update_general. This separates measurement
+# (what we observe) from calibration (how observations load on traits).
+
+# Fixed seeded Johnson–Lindenstrauss projection embed_dim → embed_proj_dim. It preserves
+# the cosine geometry of the (multilingual) semantic embedding — so Turkish and English
+# paraphrases stay close — while keeping the learned W a small (D × F) matrix.
+_PROJ = (np.random.default_rng(7).standard_normal((HYPER.embed_proj_dim, SETTINGS.embed_dim))
+         / np.sqrt(HYPER.embed_proj_dim))
+
+TELEMETRY_FEATURE_NAMES = ["latency_norm", "has_latency", "edits_norm", "approach"]
+
+
+def _telemetry_features(telemetry: Optional[dict]) -> np.ndarray:
+    """Implicit, inherently language-free signals (reply latency, edit count, approach/
+    avoid). Bounded; absent signals are 0 with an explicit `has_latency` presence flag."""
+    t = telemetry or {}
+    lat = t.get("latencyMs")
+    latency_norm = float(np.tanh((1500.0 - lat) / 1500.0)) if lat is not None else 0.0
+    has_latency = 1.0 if lat is not None else 0.0
+    edits = t.get("editsCount") or 0
+    edits_norm = float(np.tanh(edits * 0.2))
+    approach = t.get("approach")
+    approach_f = 0.0 if approach is None else (1.0 if approach else -1.0)
+    return np.array([latency_norm, has_latency, edits_norm, approach_f], dtype=float)
+
+
+def featurize_raw(text: str, telemetry: Optional[dict] = None,
+                  embedding: Optional[np.ndarray] = None,
+                  length_stats: Optional[tuple[float, float]] = None) -> np.ndarray:
+    """Rich, language-independent measurement vector φ ∈ R^FEATURE_DIM for one behavior:
+
+        φ = concat( JL-projected semantic embedding,  stylometry,  telemetry )
+
+    No axis logic and no English token lists — the semantic block comes from a multilingual
+    embedder (Voyage voyage-3.5) and the rest are ratios/distributions. `embedding` may be
+    passed to avoid a redundant embed() call in the hot path. Always finite.
+    """
+    emb = embedding if embedding is not None else embed(text or "")
+    emb_proj = _PROJ @ np.asarray(emb, dtype=float)
+    sty = stylometry_features(text or "", length_stats=length_stats)
+    tel = _telemetry_features(telemetry)
+    phi = np.concatenate([emb_proj, sty, tel])
+    return np.nan_to_num(phi, nan=0.0, posinf=1.0, neginf=-1.0)
+
+
+FEATURE_NAMES = ([f"emb{i}" for i in range(HYPER.embed_proj_dim)]
+                 + list(STYLOMETRY_FEATURE_NAMES) + TELEMETRY_FEATURE_NAMES)
+FEATURE_DIM = len(FEATURE_NAMES)   # F = embed_proj_dim + len(STYLOMETRY) + len(TELEMETRY)
+
+
+def feature_names() -> list[str]:
+    """Ordered names of the FEATURE_DIM raw features (for W interpretability / the UI)."""
+    return list(FEATURE_NAMES)
 
 
 def observe(post: Posterior, text: str, telemetry: Optional[dict] = None) -> Posterior:
