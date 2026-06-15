@@ -184,6 +184,107 @@ def kalman_update(post: Posterior, y: np.ndarray, mask: np.ndarray, r: float) ->
     return kalman_update_general(post, np.asarray(y, dtype=float), W, Psi)
 
 
+# ── robust observation update (WI-4): innovation gating + Student-t downweighting ─
+
+def _norm_ppf(p: float) -> float:
+    """Standard-normal inverse CDF (Acklam's rational approximation; |err| < 1.2e-9). No
+    scipy — used only to derive the χ²_F gate threshold at runtime."""
+    p = min(max(p, 1e-12), 1 - 1e-12)
+    a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+         1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00]
+    b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+         6.680131188771972e+01, -1.328068155288572e+01]
+    c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+         -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00]
+    d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+         3.754408661907416e+00]
+    plow, phigh = 0.02425, 1 - 0.02425
+    if p < plow:
+        q = np.sqrt(-2 * np.log(p))
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    if p > phigh:
+        q = np.sqrt(-2 * np.log(1 - p))
+        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    q = p - 0.5
+    r = q * q
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+
+
+def chi2_quantile(p: float, df: int) -> float:
+    """χ²_df quantile at probability p via the Wilson–Hilferty normal approximation:
+        χ²_df(p) ≈ df · (1 − 2/(9df) + z_p·√(2/(9df)))³ .
+    Used to translate HYPER.mahalanobis_gate_quantile into a gate threshold scaling with F."""
+    df = max(1, int(df))
+    z = _norm_ppf(p)
+    t = 1.0 - 2.0 / (9 * df) + z * np.sqrt(2.0 / (9 * df))
+    return float(df * t ** 3)
+
+
+def robust_kalman_update(post: Posterior, phi: np.ndarray, W: np.ndarray, Psi: np.ndarray,
+                         nu: Optional[float] = None, gate_chi2: Optional[float] = None,
+                         irls_iters: Optional[int] = None,
+                         trace: Optional[dict] = None) -> Posterior:
+    """Outlier-robust linear-Gaussian update (§9.8). A typo storm, an angry outburst, or a
+    pasted quote should not rewrite the doppelgänger; a naive Kalman swallows outliers.
+
+    Models the measurement noise as Student-t (a Gaussian scale mixture) and solves it by
+    IRLS. Surprise is measured against the *base* predictive innovation covariance
+    S₀ = W Σ Wᵀ + Ψ (a fixed reference — inflating Ψ/w inside the metric would let a true
+    outlier masquerade as in-distribution and the iteration would oscillate):
+
+        Mahalanobis distance   d² = ỹᵀ S₀⁻¹ ỹ          (ỹ = φ − W μ̂, re-linearized each sweep)
+        Student-t weight       w  = min(1, (ν + F)/(ν + d²))    (downweight, never over-trust)
+        effective noise        Ψ_eff = Ψ / w                    (reweight, NOT a hard reject)
+
+    Each IRLS sweep re-solves the provisional downweighted state μ̂ from the prior and
+    recomputes d²; for an atypical message μ̂ barely moves so d² stays large and w→0 — its
+    influence vanishes. The final Joseph-form update uses the converged Ψ_eff. `gate_chi2`
+    (a χ²_F quantile) flags the message as "surprising" in the trace; the response is always
+    the soft downweight. An in-distribution message has d²≲F, w≈1 ⇒ a normal update.
+    """
+    nu = HYPER.student_t_nu if nu is None else nu
+    irls_iters = HYPER.irls_iters if irls_iters is None else irls_iters
+    W = np.atleast_2d(np.asarray(W, dtype=float))
+    phi = np.asarray(phi, dtype=float).reshape(-1)
+    Psi = np.asarray(Psi, dtype=float)
+    if Psi.ndim == 1:
+        Psi = np.diag(Psi)
+    F = W.shape[0]
+    if gate_chi2 is None:
+        gate_chi2 = chi2_quantile(HYPER.mahalanobis_gate_quantile, F)
+
+    Sigma = post.Sigma
+    WSigWt = W @ Sigma @ W.T
+    S0 = WSigWt + Psi                                     # base predictive innovation cov
+    y0 = phi - W @ post.mu
+
+    d2 = float(y0 @ np.linalg.solve(S0, y0))             # prior-predictive surprise (gate)
+    surprising = bool(d2 > gate_chi2)
+    w = min(1.0, (nu + F) / (nu + d2))
+    for _ in range(max(0, irls_iters - 1)):              # IRLS state re-linearization
+        K = np.linalg.solve(WSigWt + Psi / w, W @ Sigma).T
+        mu_hat = post.mu + K @ y0
+        y_hat = phi - W @ mu_hat
+        d2k = float(y_hat @ np.linalg.solve(S0, y_hat))
+        w = min(1.0, (nu + F) / (nu + d2k))
+
+    if trace is not None:
+        trace.update({"mahalanobis_d2": round(d2, 3), "weight": round(w, 4),
+                      "gate_chi2": round(gate_chi2, 3), "surprising": surprising, "F": F})
+
+    return kalman_update_general(post, phi, W, Psi / w)
+
+
+def reliability_noise_scale(text: str, telemetry: Optional[dict] = None) -> float:
+    """Heteroscedastic reliability multiplier (≥ 1) on the measurement noise Ψ (WI-4).
+    Short, low-information, or heavily-edited messages are less reliable ⇒ larger noise ⇒
+    a smaller posterior step. Durable signal accrues from *consistent* drift across many
+    messages, never from one atypical one."""
+    n = len((text or "").split())
+    edits = (telemetry or {}).get("editsCount") or 0
+    return 1.0 + HYPER.het_noise_short / (1.0 + n) + HYPER.het_noise_edit * float(edits)
+
+
 def inflate(post: Posterior, axes: Optional[list[str]] = None, factor: float = 2.0) -> Posterior:
     """Re-open learning on drift (§9.7) by inflating covariance. For the selected axes
     (all if None) scale Σ's rows & columns by √factor — a congruence transform D Σ Dᵀ that
@@ -331,21 +432,24 @@ def feature_names() -> list[str]:
 
 
 def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
-            model: Optional["object"] = None) -> Posterior:
+            model: Optional["object"] = None, trace: Optional[dict] = None) -> Posterior:
     """One online persona update from a single behavior (§9.8 `update persona posterior`).
 
     When a learned measurement model is available (committed artifact, WI-2) the update is
-    the general linear-Gaussian step on the rich features φ = featurize_raw:
-        φ − μ_φ = Wᵀ z + ε  →  kalman_update_general(post, φ−μ_φ, Wᵀ, Ψ).
+    the *robust* general linear-Gaussian step on the rich features φ = featurize_raw, with
+    heteroscedastic reliability noise and Student-t outlier downweighting (WI-4):
+        φ − μ_φ = Wᵀ z + ε  →  robust_kalman_update(post, φ−μ_φ, Wᵀ, Ψ·reliability).
     On a clean checkout with no artifact the model is *untrained* and we fall back to the
     legacy heuristic featurizer — preserving the zero-key / clean-checkout invariant.
+    Pass `trace={}` to capture the gating diagnostics (Mahalanobis d², weight, surprising).
     """
     from .persona_model import get_persona_model
     model = model if model is not None else get_persona_model()
     if model is not None and getattr(model, "trained", False):
         phi = featurize_raw(text, telemetry)
         W_meas, Psi = model.apply(phi)
-        return kalman_update_general(post, model.center(phi), W_meas, Psi)
+        Psi = Psi * reliability_noise_scale(text, telemetry)   # heteroscedastic (WI-4)
+        return robust_kalman_update(post, model.center(phi), W_meas, Psi, trace=trace)
 
     # heuristic fallback (no learned artifact)
     y, mask, r = featurize(text, telemetry)

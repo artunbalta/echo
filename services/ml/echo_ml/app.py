@@ -127,9 +127,10 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
     st = STORE.get(req.userId)
     ctx = str(req.context)
 
-    # 1) update persona posterior from text + telemetry
+    # 1) update persona posterior from text + telemetry (robust; capture the gating trace)
     before = st.posterior.copy()
-    st.posterior = P.observe(st.posterior, req.action, req.telemetry)
+    update_trace: dict = {}
+    st.posterior = P.observe(st.posterior, req.action, req.telemetry, trace=update_trace)
     if st.baseline_mu is None:
         st.baseline_mu = st.posterior.mu.copy()
 
@@ -153,6 +154,7 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
         "uncertainty": float(np.mean(st.posterior.var)),
         "behaviors": len(st.behaviors),
         "drift_kl": round(drift_kl, 3),
+        "update": update_trace or None,   # robust-update trace: d², weight, surprising (WI-4)
     }
 
 
