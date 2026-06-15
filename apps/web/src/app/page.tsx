@@ -29,13 +29,13 @@ export default function Landing() {
     };
   }, []);
 
-  // Spring/inertia scrolling — adds weight & friction as you scroll (desktop + touch).
+  // Spring/inertia scrolling — pointer (mouse) devices only. Touch devices keep native
+  // scroll: no spring, and it avoids the spring fighting iOS's address-bar/viewport behavior.
   useEffect(() => {
+    if (typeof window === "undefined" || window.matchMedia("(pointer: coarse)").matches) return;
     const lenis = new Lenis({
       lerp: 0.085, // lower = more friction / longer spring settle
       smoothWheel: true,
-      syncTouch: true, // carry the spring feel onto mobile touch too
-      syncTouchLerp: 0.08,
       wheelMultiplier: 1,
       anchors: true, // smooth-scroll the in-page nav links (#features, …)
     });
@@ -173,7 +173,7 @@ export default function Landing() {
       </header>
 
       {/* ───────────────────────── HERO ───────────────────────── */}
-      <section id="top" className="relative h-[100svh] min-h-[560px] w-full overflow-hidden bg-ink">
+      <section id="top" className="relative h-[100dvh] min-h-[560px] w-full overflow-hidden bg-ink">
         <img
           src="/landing-back.png"
           alt=""
