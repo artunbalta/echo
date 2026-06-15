@@ -29,6 +29,7 @@ from .policy import generate
 from .llm import complete
 from .autonomy import persona_drift_kl
 from .persona_axes import AXIS_KEYS
+from .persona_model import get_persona_model
 from .cost import METER
 
 app = FastAPI(title="ECHO ML", version="0.1.0")
@@ -290,6 +291,9 @@ def get_persona(uid: str, authorization: str = Header(None)):
         "ece": round(G.expected_calibration_error(confs, corr), 3) if confs else None,
         "buckets": {k: v.to_dict() for k, v in st.buckets.items()},
         "reward_version": st.reward.version,
+        # "which raw features load on each axis" — replaces the hard-coded explanation when a
+        # learned measurement matrix is active; null on a clean checkout (heuristic fallback).
+        "measurement": (lambda m: m.interpretability(top=4) if m.trained else None)(get_persona_model()),
     }
 
 
