@@ -330,8 +330,24 @@ def feature_names() -> list[str]:
     return list(FEATURE_NAMES)
 
 
-def observe(post: Posterior, text: str, telemetry: Optional[dict] = None) -> Posterior:
-    """One online persona update from a single behavior (§9.8 `update persona posterior`)."""
+def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
+            model: Optional["object"] = None) -> Posterior:
+    """One online persona update from a single behavior (§9.8 `update persona posterior`).
+
+    When a learned measurement model is available (committed artifact, WI-2) the update is
+    the general linear-Gaussian step on the rich features φ = featurize_raw:
+        φ − μ_φ = Wᵀ z + ε  →  kalman_update_general(post, φ−μ_φ, Wᵀ, Ψ).
+    On a clean checkout with no artifact the model is *untrained* and we fall back to the
+    legacy heuristic featurizer — preserving the zero-key / clean-checkout invariant.
+    """
+    from .persona_model import get_persona_model
+    model = model if model is not None else get_persona_model()
+    if model is not None and getattr(model, "trained", False):
+        phi = featurize_raw(text, telemetry)
+        W_meas, Psi = model.apply(phi)
+        return kalman_update_general(post, model.center(phi), W_meas, Psi)
+
+    # heuristic fallback (no learned artifact)
     y, mask, r = featurize(text, telemetry)
     if mask.sum() == 0:
         return post
