@@ -139,12 +139,6 @@ img.pixel {
 }
 .btn-pixel:hover .chev { transform: translateX(3px); }
 
-/* Background video crossfades through the start frame on loop so the traveler's
-   reset to the foot of the path reads as a soft dissolve, not a hard cut. */
-.hero-video {
-  transition: opacity 600ms ease;
-}
-
 /* Smooth in-page anchor scrolling for the landing nav. */
 html { scroll-behavior: smooth; }
 

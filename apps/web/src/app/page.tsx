@@ -9,7 +9,6 @@ import { getSupabase } from "@/lib/supabase";
 type Mode = "signin" | "signup";
 
 export default function Landing() {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const lenisRef = useRef<Lenis | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<Mode>("signup");
@@ -61,26 +60,6 @@ export default function Landing() {
     if (authOpen) lenis.stop();
     else lenis.start();
   }, [authOpen]);
-
-  // Background video: autoplay + soft crossfade loop through the start frame.
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-    if (reduce?.matches) {
-      v.pause();
-      v.style.opacity = "0";
-      return;
-    }
-    v.play().catch(() => {});
-    const onTime = () => {
-      if (!v.duration) return;
-      const remaining = v.duration - v.currentTime;
-      v.style.opacity = remaining < 0.55 || v.currentTime < 0.45 ? "0.18" : "1";
-    };
-    v.addEventListener("timeupdate", onTime);
-    return () => v.removeEventListener("timeupdate", onTime);
-  }, []);
 
   // Nav background appears once scrolled off the hero.
   useEffect(() => {
@@ -187,19 +166,12 @@ export default function Landing() {
 
       {/* ───────────────────────── HERO ───────────────────────── */}
       <section id="top" className="relative h-[100svh] min-h-[560px] w-full overflow-hidden bg-ink">
-        <img src="/landing-poster.jpg" alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
-        <video
-          ref={videoRef}
-          className="hero-video absolute inset-0 h-full w-full object-cover"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          poster="/landing-poster.jpg"
-        >
-          <source src="/landing.mp4" type="video/mp4" />
-        </video>
+        <img
+          src="/landing-back.png"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
 
         <div className="hero-scrim absolute inset-0" />
         <div className="world-vignette absolute inset-0" />
