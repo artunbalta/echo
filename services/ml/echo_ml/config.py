@@ -19,6 +19,15 @@ class Hyper:
     embed_proj_dim: int = 32        # JL random-projection dim of the semantic embedding
     # feature_dim F = embed_proj_dim + len(STYLOMETRY) + len(TELEMETRY); see persona.FEATURE_DIM.
 
+    # Robust observation update (WI-4) — innovation gating + Student-t downweighting
+    student_t_nu: float = 4.0          # Student-t dof ν: smaller ⇒ heavier tails ⇒ more robust
+    mahalanobis_gate_quantile: float = 0.99   # χ²_F quantile flagging a "surprising" message
+    irls_iters: int = 3                # IRLS reweighting iterations for the Student-t update
+    # Heteroscedastic reliability: short / low-information / heavily-edited messages get more
+    # measurement noise, so a single message can never move the posterior far (§9.8).
+    het_noise_short: float = 6.0       # noise added ∝ 1/(1+n_words)
+    het_noise_edit: float = 0.5        # noise added ∝ edit count
+
     # Reward model (§9.4)
     reward_hidden: int = 32
     reward_lr: float = 0.05
