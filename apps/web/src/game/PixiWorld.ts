@@ -119,6 +119,12 @@ export class PixiWorld {
   private panY = 0;
   private dragging = false;
   private lastPointer = { x: 0, y: 0 };
+  // Click-to-move (like the venue): a press that doesn't turn into a drag steers the
+  // player toward the clicked tile. `pointerStart`/`pointerMoved` separate a click from a pan.
+  private clickTarget: { x: number; y: number } | null = null;
+  private pointerStart = { x: 0, y: 0 };
+  private pointerMoved = false;
+  private static readonly DRAG_THRESHOLD = 6; // px before a press counts as a drag, not a click
 
   constructor(hooks: WorldHooks) {
     this.hooks = hooks;
@@ -342,16 +348,27 @@ export class PixiWorld {
     canvas.style.cursor = "grab";
   }
 
-  // ── mouse-drag pan ───────────────────────────────────────────────────────────
+  // ── mouse-drag pan + click-to-move ─────────────────────────────────────────────
   private onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     this.dragging = true;
+    this.pointerMoved = false;
+    this.pointerStart = { x: e.clientX, y: e.clientY };
     this.lastPointer = { x: e.clientX, y: e.clientY };
     (this.app.canvas as HTMLCanvasElement).style.cursor = "grabbing";
   };
 
   private onPointerMove = (e: PointerEvent) => {
     if (!this.dragging) return;
+    // Below the threshold the press is still a potential click — don't pan yet.
+    if (
+      !this.pointerMoved &&
+      Math.hypot(e.clientX - this.pointerStart.x, e.clientY - this.pointerStart.y) <=
+        PixiWorld.DRAG_THRESHOLD
+    ) {
+      return;
+    }
+    this.pointerMoved = true;
     const dx = e.clientX - this.lastPointer.x;
     const dy = e.clientY - this.lastPointer.y;
     this.panX += dx;
@@ -360,10 +377,18 @@ export class PixiWorld {
     this.updateCamera();
   };
 
-  private onPointerUp = () => {
+  private onPointerUp = (e: PointerEvent) => {
     if (!this.dragging) return;
     this.dragging = false;
     (this.app.canvas as HTMLCanvasElement).style.cursor = "grab";
+    // A press that never became a drag is a click → walk to that tile (cancels any pan).
+    if (!this.pointerMoved) {
+      const rect = (this.app.canvas as HTMLCanvasElement).getBoundingClientRect();
+      const eff = SCALE * this.zoom;
+      const wx = (e.clientX - rect.left - this.world.x) / eff;
+      const wy = (e.clientY - rect.top - this.world.y) / eff;
+      this.clickTarget = { x: wx / TILE, y: wy / TILE };
+    }
   };
 
   /** Mouse wheel zooms the world in/out around the player, clamped to a sane range. */
@@ -419,16 +444,35 @@ export class PixiWorld {
   }
 
   private stepLocal(dt: number) {
-    const dir = this.readInputDir();
-    const moving = dir.x !== 0 || dir.y !== 0;
+    const kb = this.readInputDir();
+    // Continuous movement direction: keyboard if pressed, else steer toward the click target.
+    let dx: number = kb.x;
+    let dy: number = kb.y;
+    if (dx || dy) this.clickTarget = null; // any key cancels click-to-move
+    if (!dx && !dy && this.clickTarget) {
+      const ddx = this.clickTarget.x - this.localX;
+      const ddy = this.clickTarget.y - this.localY;
+      const d = Math.hypot(ddx, ddy);
+      if (d < 0.15) this.clickTarget = null; // arrived
+      else {
+        dx = ddx / d;
+        dy = ddy / d;
+      }
+    }
+    const moving = dx !== 0 || dy !== 0;
     if (moving) {
-      const len = Math.hypot(dir.x, dir.y) || 1;
-      const nx = this.localX + (dir.x / len) * WORLD.MOVE_SPEED * dt;
-      const ny = this.localY + (dir.y / len) * WORLD.MOVE_SPEED * dt;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = this.localX + (dx / len) * WORLD.MOVE_SPEED * dt;
+      const ny = this.localY + (dy / len) * WORLD.MOVE_SPEED * dt;
+      const beforeX = this.localX;
+      const beforeY = this.localY;
       // client-side collision prediction
       if (!isBlocked(this.map, nx, this.localY)) this.localX = nx;
       if (!isBlocked(this.map, this.localX, ny)) this.localY = ny;
-      this.localFacing = Math.abs(dir.x) > Math.abs(dir.y) ? (dir.x > 0 ? "right" : "left") : dir.y > 0 ? "down" : "up";
+      // Click-to-move into a wall: if we couldn't budge at all, drop the target so we
+      // don't shove into the obstacle forever.
+      if (this.clickTarget && this.localX === beforeX && this.localY === beforeY) this.clickTarget = null;
+      this.localFacing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up";
       // Walking re-centers the camera: ease any drag-pan offset back to zero.
       if (!this.dragging && (this.panX !== 0 || this.panY !== 0)) {
         const ease = Math.min(1, dt * 5);
@@ -438,11 +482,13 @@ export class PixiWorld {
         if (Math.abs(this.panY) < 0.5) this.panY = 0;
       }
     }
-    // Send intent on change (and stop edge).
-    const sig = `${dir.x},${dir.y},${this.localFacing}`;
+    // Send intent on change (and stop edge). Quantize to an 8-way dir so the server and
+    // remote players track our heading even when we steer continuously toward a click.
+    const q = moving ? quantizeDir(dx, dy) : { x: 0 as -1 | 0 | 1, y: 0 as -1 | 0 | 1 };
+    const sig = `${q.x},${q.y},${this.localFacing}`;
     if (sig !== this.lastDirSent) {
       this.seq++;
-      if (moving) this.hooks.onMoveIntent?.(dir, this.localFacing, this.seq);
+      if (moving) this.hooks.onMoveIntent?.(q, this.localFacing, this.seq);
       else this.hooks.onStop?.(this.seq);
       this.lastDirSent = sig;
     }
@@ -586,6 +632,16 @@ export class PixiWorld {
 function nearest(tex: Texture): Texture {
   tex.source.scaleMode = "nearest";
   return tex;
+}
+
+/** Snap a continuous direction to the nearest 8-way cardinal/diagonal (for server intent).
+ *  An axis only counts when it's a meaningful share of the motion (~within 22.5°). */
+function quantizeDir(dx: number, dy: number): { x: -1 | 0 | 1; y: -1 | 0 | 1 } {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  const x = (ax > ay * 0.4 ? Math.sign(dx) : 0) as -1 | 0 | 1;
+  const y = (ay > ax * 0.4 ? Math.sign(dy) : 0) as -1 | 0 | 1;
+  return { x, y };
 }
 
 /** Slice a sprite-sheet texture into per-facing frame arrays. */
