@@ -100,8 +100,16 @@ export default function Landing() {
         }`}
       >
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3 sm:px-8">
-          <a href="#top" className="font-pixel text-2xl font-bold tracking-wide text-[#1f2740]">
-            ECHO
+          <a href="#top" className="flex items-center gap-2.5">
+            <img
+              src="/logo.png"
+              alt=""
+              width={36}
+              height={36}
+              draggable={false}
+              className="h-9 w-9 select-none"
+            />
+            <span className="font-pixel text-2xl font-bold tracking-wide text-[#1f2740]">ECHO</span>
           </a>
 
           <div className="hidden items-center gap-7 md:flex">
@@ -313,9 +321,12 @@ export default function Landing() {
       {/* ─────────────────────── FOOTER ─────────────────────── */}
       <footer className="border-t-2 border-[#e0d4b8] bg-[#f3ecd9] px-6 py-10 sm:px-10">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
-          <div>
-            <p className="font-pixel text-xl font-bold text-[#1f2740]">ECHO</p>
-            <p className="mt-1 font-pixel text-sm text-[#444c66]">A country that does not exist.</p>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="" width={40} height={40} draggable={false} className="h-10 w-10 select-none" />
+            <div>
+              <p className="font-pixel text-xl font-bold text-[#1f2740]">ECHO</p>
+              <p className="mt-1 font-pixel text-sm text-[#444c66]">A country that does not exist.</p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-x-7 gap-y-2">
             <a href="#features" className="nav-link">Product</a>

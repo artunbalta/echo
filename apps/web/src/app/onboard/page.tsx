@@ -126,7 +126,16 @@ export default function Onboard() {
   return (
     <main className="flex min-h-screen w-screen items-center justify-center bg-ink p-4">
       <div className="panel w-full max-w-xl rounded-lg p-6 font-mono text-parchment">
-        <h1 className="mb-1 text-2xl font-bold text-echo">ECHO</h1>
+        <div className="mb-1 flex items-center gap-2.5">
+          <img
+            src="/logo.png"
+            alt=""
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-md bg-[#f3ecd9] p-0.5"
+          />
+          <h1 className="text-2xl font-bold text-echo">ECHO</h1>
+        </div>
         <p className="mb-5 text-xs text-parchment/60">first day · {step}</p>
 
         {error && <div className="mb-3 rounded border border-red-400/40 bg-red-900/20 p-2 text-xs text-red-200">{error}</div>}
