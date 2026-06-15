@@ -11,6 +11,17 @@ and a faithful "echo" of yourself that grows over time.
 This repo is a runnable monorepo. It is being built in phases (§15 of the spec); each
 phase leaves the app runnable.
 
+## Repository
+
+The canonical repository we use is **https://github.com/artunbalta/echo** — push work here:
+
+```bash
+git push echo main
+```
+
+(The `git remote` config also has `origin` → `echo-virtual-world` and `vercelrepo` →
+`echovirtualworld`, kept around historically; `echo` is the one to use.)
+
 ## Status
 
 | Phase | Subsystem | State |
