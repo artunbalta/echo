@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Optional
+import math
 import numpy as np
 
 from .config import HYPER, SETTINGS
@@ -187,8 +188,10 @@ def kalman_update(post: Posterior, y: np.ndarray, mask: np.ndarray, r: float) ->
 # ── robust observation update (WI-4): innovation gating + Student-t downweighting ─
 
 def _norm_ppf(p: float) -> float:
-    """Standard-normal inverse CDF (Acklam's rational approximation; |err| < 1.2e-9). No
-    scipy — used only to derive the χ²_F gate threshold at runtime."""
+    """Standard-normal inverse CDF — Acklam's rational approximation refined by one Halley
+    step (via math.erfc), giving full double precision (|err| < 1e-12 across (0,1); the bare
+    rational form alone is only ~5e-5 in the tails). No scipy — used only to derive the χ²_F
+    gate threshold at runtime."""
     p = min(max(p, 1e-12), 1 - 1e-12)
     a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
          1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00]
@@ -201,13 +204,18 @@ def _norm_ppf(p: float) -> float:
     plow, phigh = 0.02425, 1 - 0.02425
     if p < plow:
         q = np.sqrt(-2 * np.log(p))
-        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
-    if p > phigh:
+        x = (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    elif p > phigh:
         q = np.sqrt(-2 * np.log(1 - p))
-        return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
-    q = p - 0.5
-    r = q * q
-    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+        x = -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)
+    else:
+        q = p - 0.5
+        r = q * q
+        x = (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+    # One Halley refinement step: e = Φ(x) − p, then x ← x − u/(1 + x·u/2), u = e·√(2π)·e^{x²/2}.
+    e = 0.5 * math.erfc(-x / math.sqrt(2)) - p
+    u = e * math.sqrt(2 * math.pi) * math.exp(x * x / 2)
+    return float(x - u / (1 + x * u / 2))
 
 
 def chi2_quantile(p: float, df: int) -> float:
@@ -446,6 +454,11 @@ def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
     from .persona_model import get_persona_model
     model = model if model is not None else get_persona_model()
     if model is not None and getattr(model, "trained", False):
+        # No information at all (empty text AND no telemetry) ⇒ no-op, matching the heuristic
+        # path's mask.sum()==0 short-circuit. Telemetry-only updates (e.g. latency→pace) still
+        # flow through, since their signal lives in the telemetry features of φ.
+        if not (text or "").strip() and not (telemetry or {}):
+            return post
         phi = featurize_raw(text, telemetry)
         W_meas, Psi = model.apply(phi)
         Psi = Psi * reliability_noise_scale(text, telemetry)   # heteroscedastic (WI-4)

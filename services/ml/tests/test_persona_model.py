@@ -108,6 +108,22 @@ def test_committed_artifact_drives_non_degenerate_movement():
     set_persona_model(None)                  # reset cache for other tests
 
 
+def test_empty_observation_is_a_noop_but_telemetry_still_updates():
+    # An observation with no information at all (empty text AND no telemetry) must be a no-op
+    # even on the trained path — matching the heuristic path — while a telemetry-only signal
+    # (e.g. reply latency) still updates the posterior.
+    set_persona_model(None)
+    model = get_persona_model()
+    if not model.trained:
+        set_persona_model(None)
+        pytest.skip("no committed artifact in this checkout")
+    post = P.prior()
+    assert np.allclose(P.observe(post, "", {}).mu, post.mu)
+    assert np.allclose(P.observe(post, "   ", None).mu, post.mu)
+    assert not np.allclose(P.observe(post, "", {"latencyMs": 200}).mu, post.mu)
+    set_persona_model(None)
+
+
 def test_committed_artifact_pace_follows_latency():
     set_persona_model(None)
     model = get_persona_model()
