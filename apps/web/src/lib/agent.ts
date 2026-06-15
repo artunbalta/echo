@@ -78,3 +78,31 @@ export async function approveMeeting(body: {
     body: JSON.stringify(body),
   });
 }
+
+export interface ConnectionAnalysis {
+  id: string;
+  reason: string;
+  recommend: boolean;
+  depth: "brief" | "warming" | "real";
+  mocked?: boolean;
+}
+
+/** Ask the server to read the actual conversation transcripts and return a grounded,
+ *  conversation-specific "why this stood out" per person (real LLM when configured). */
+export async function requestConnectionAnalysis(
+  userId: string,
+  sessionId: string,
+  people: { id: string; name: string; turns: number; lines: { who: "you" | "them"; text: string }[] }[],
+): Promise<ConnectionAnalysis[]> {
+  try {
+    const res = await fetch("/api/connections/analyze", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, sessionId, people }),
+    });
+    const data = (await res.json()) as { analyses?: ConnectionAnalysis[] };
+    return Array.isArray(data.analyses) ? data.analyses : [];
+  } catch {
+    return [];
+  }
+}
