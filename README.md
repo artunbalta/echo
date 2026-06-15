@@ -104,11 +104,22 @@ fill in keys. Each provider is independently swappable:
 | Room capacity / shard | 150 | `world.ts` |
 | Sprite frame | 16×24, 4 frames × 4 facings | `packages/shared/src/sprite.ts` |
 | Persona latent dim `d` | 8 (bipolar axes) | `packages/shared/src/persona.ts` |
-| Context/action embedding | 256-d | `db/migrations`, `.env` |
+| Persona posterior covariance | full `Σ (8×8)` (was diagonal) | `services/ml/echo_ml/persona.py` |
+| Context/action embedding | 256-d, multilingual (Voyage `voyage-3.5`) | `db/migrations`, `.env`, `embeddings.py` |
+| Raw feature dim `F` | 50 = 32 emb-proj + 14 stylometry + 4 telemetry | `persona.FEATURE_DIM` |
+| Learned measurement matrix `W` | `(8×F)` FA + anchoring, committed | `echo_ml/artifacts/measurement.npz` |
+| Robust update | Student-t `ν=4`, χ² gate `q=0.99`, 3 IRLS iters | `persona.robust_kalman_update` |
+| Trait/state split | `K_state=4` transient directions `V` | `persona_model.fit_state_factors` |
+| Reconstruction regularizer `γ` | 0.5 (KL to posterior in CEM) | `reconstruct.refine_latent` |
 | NPC spanning set | 100, deterministic seed=1337 | `packages/shared/src/npcgen.ts` |
 
-Covariance form, promotion thresholds `(α*, n*, e*)`, hysteresis, and stakes/cost values
-are defined in `services/ml` (Phase 5).
+The persona posterior is now a full-covariance linear-Gaussian inverse problem `φ = W·z + ε`
+with a **learned** loading matrix `W` (Factor Analysis + anchoring), **language-independent**
+features (multilingual embedding + stylometry, no English token lists), **robust** Student-t
+updates, **trait/state** separation, and a black-box **reconstruction** objective. The full
+hyperparameter set (`HYPER`) lives in `services/ml/echo_ml/config.py`; promotion thresholds
+`(α*, n*, e*)`, hysteresis, and stakes/cost values are in `services/ml` (Phase 5). To rebuild
+the measurement artifact: `services/ml/scripts/train_measurement.py`.
 
 ## Privacy
 
