@@ -25,4 +25,5 @@ __pycache__/
 
 # generated assets / scratch
 pipeline/assets/out/
+.higgsfield/
 *.tmp

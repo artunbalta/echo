@@ -113,6 +113,12 @@ export class PixiWorld {
   private zoom = 1;
   private static readonly MIN_ZOOM = 0.5;
   private static readonly MAX_ZOOM = 2.5;
+  // Mouse-drag pan: a screen-space offset added on top of the player-centered camera.
+  // Lets the user look around without moving; player movement re-centers it (see stepLocal).
+  private panX = 0;
+  private panY = 0;
+  private dragging = false;
+  private lastPointer = { x: 0, y: 0 };
 
   constructor(hooks: WorldHooks) {
     this.hooks = hooks;
@@ -328,8 +334,37 @@ export class PixiWorld {
   private bindInput() {
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKey);
-    this.app.canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    const canvas = this.app.canvas as HTMLCanvasElement;
+    canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    canvas.addEventListener("pointerdown", this.onPointerDown);
+    window.addEventListener("pointermove", this.onPointerMove);
+    window.addEventListener("pointerup", this.onPointerUp);
+    canvas.style.cursor = "grab";
   }
+
+  // ── mouse-drag pan ───────────────────────────────────────────────────────────
+  private onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    this.dragging = true;
+    this.lastPointer = { x: e.clientX, y: e.clientY };
+    (this.app.canvas as HTMLCanvasElement).style.cursor = "grabbing";
+  };
+
+  private onPointerMove = (e: PointerEvent) => {
+    if (!this.dragging) return;
+    const dx = e.clientX - this.lastPointer.x;
+    const dy = e.clientY - this.lastPointer.y;
+    this.panX += dx;
+    this.panY += dy;
+    this.lastPointer = { x: e.clientX, y: e.clientY };
+    this.updateCamera();
+  };
+
+  private onPointerUp = () => {
+    if (!this.dragging) return;
+    this.dragging = false;
+    (this.app.canvas as HTMLCanvasElement).style.cursor = "grab";
+  };
 
   /** Mouse wheel zooms the world in/out around the player, clamped to a sane range. */
   private onWheel = (e: WheelEvent) => {
@@ -394,6 +429,14 @@ export class PixiWorld {
       if (!isBlocked(this.map, nx, this.localY)) this.localX = nx;
       if (!isBlocked(this.map, this.localX, ny)) this.localY = ny;
       this.localFacing = Math.abs(dir.x) > Math.abs(dir.y) ? (dir.x > 0 ? "right" : "left") : dir.y > 0 ? "down" : "up";
+      // Walking re-centers the camera: ease any drag-pan offset back to zero.
+      if (!this.dragging && (this.panX !== 0 || this.panY !== 0)) {
+        const ease = Math.min(1, dt * 5);
+        this.panX += (0 - this.panX) * ease;
+        this.panY += (0 - this.panY) * ease;
+        if (Math.abs(this.panX) < 0.5) this.panX = 0;
+        if (Math.abs(this.panY) < 0.5) this.panY = 0;
+      }
     }
     // Send intent on change (and stop edge).
     const sig = `${dir.x},${dir.y},${this.localFacing}`;
@@ -473,8 +516,8 @@ export class PixiWorld {
     const eff = SCALE * this.zoom;
     const px = (this.localX * TILE + TILE / 2) * eff;
     const py = (this.localY * TILE + TILE) * eff;
-    this.world.x = Math.round(vw / 2 - px);
-    this.world.y = Math.round(vh / 2 - py);
+    this.world.x = Math.round(vw / 2 - px + this.panX);
+    this.world.y = Math.round(vh / 2 - py + this.panY);
   }
 
   /** Nearest interactable NPC within radius → proximity hook + approach/dwell telemetry. */
@@ -520,7 +563,12 @@ export class PixiWorld {
     this.destroyed = true;
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);
-    if (this.initialized) this.app.canvas.removeEventListener("wheel", this.onWheel);
+    window.removeEventListener("pointermove", this.onPointerMove);
+    window.removeEventListener("pointerup", this.onPointerUp);
+    if (this.initialized) {
+      this.app.canvas.removeEventListener("wheel", this.onWheel);
+      this.app.canvas.removeEventListener("pointerdown", this.onPointerDown);
+    }
     // Only destroy a fully-initialized app; otherwise init() handles teardown once
     // it finishes. Guarded because Pixi's resize plugin can throw on a partial app.
     if (this.initialized) {
