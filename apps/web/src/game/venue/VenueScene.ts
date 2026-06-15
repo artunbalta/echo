@@ -74,6 +74,10 @@ export class VenueScene {
   private panim = 0;
   private keys = new Set<string>();
   private clickTarget: { x: number; y: number } | null = null;
+  // Mouse-wheel zoom: a multiplier on top of the base SCALE, clamped to a sane range.
+  private zoom = 1;
+  private static readonly MIN_ZOOM = 0.7;
+  private static readonly MAX_ZOOM = 2.5;
 
   private visitors = new Map<string, Visitor>();
   private waiting: string[] = [];
@@ -182,6 +186,7 @@ export class VenueScene {
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKey);
     this.app.canvas.addEventListener("pointerdown", this.onPointer);
+    this.app.canvas.addEventListener("wheel", this.onWheel, { passive: false });
   }
   private onKey = (e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement)?.tagName;
@@ -191,9 +196,18 @@ export class VenueScene {
   };
   private onPointer = (e: PointerEvent) => {
     const rect = this.app.canvas.getBoundingClientRect();
-    const wx = (e.clientX - rect.left - this.world.x) / SCALE;
-    const wy = (e.clientY - rect.top - this.world.y) / SCALE;
+    const eff = SCALE * this.zoom;
+    const wx = (e.clientX - rect.left - this.world.x) / eff;
+    const wy = (e.clientY - rect.top - this.world.y) / eff;
     this.clickTarget = { x: wx / TILE, y: wy / TILE };
+  };
+  /** Mouse wheel zooms the venue in/out around the player, clamped to a sane range. */
+  private onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    this.zoom = clamp(this.zoom * factor, VenueScene.MIN_ZOOM, VenueScene.MAX_ZOOM);
+    this.world.scale.set(SCALE * this.zoom);
+    this.camera();
   };
   /** React tells us when the human opens/closes the stand conversation. */
   setHumanEngaged(v: boolean) {
@@ -445,14 +459,15 @@ export class VenueScene {
   }
 
   private camera() {
+    const eff = SCALE * this.zoom;
     const vw = this.app.screen.width;
     const vh = this.app.screen.height;
-    const cx = (this.px * TILE + TILE / 2) * SCALE;
-    const cy = (this.py * TILE + TILE) * SCALE;
+    const cx = (this.px * TILE + TILE / 2) * eff;
+    const cy = (this.py * TILE + TILE) * eff;
     const maxX = 0;
-    const minX = vw - MAPW * TILE * SCALE;
+    const minX = vw - MAPW * TILE * eff;
     const maxY = 0;
-    const minY = vh - MAPH * TILE * SCALE;
+    const minY = vh - MAPH * TILE * eff;
     this.world.x = Math.round(clamp(vw / 2 - cx, Math.min(minX, maxX), maxX));
     this.world.y = Math.round(clamp(vh / 2 - cy, Math.min(minY, maxY), maxY));
   }
@@ -495,6 +510,7 @@ export class VenueScene {
     if (this.initialized) {
       try {
         this.app.canvas.removeEventListener("pointerdown", this.onPointer);
+        this.app.canvas.removeEventListener("wheel", this.onWheel);
         this.app.destroy(true);
       } catch { /* ignore teardown races */ }
     }
