@@ -31,6 +31,9 @@ class Hyper:
     het_noise_short: float = 6.0       # noise added ∝ 1/(1+n_words)
     het_noise_edit: float = 0.5        # noise added ∝ edit count
 
+    # Behavioral-reproducibility latent refinement (WI-6) — the doppelgänger objective
+    gamma_reconstruction: float = 0.5   # weight on KL(z ‖ posterior) regularizer in CEM
+
     # Reward model (§9.4)
     reward_hidden: int = 32
     reward_lr: float = 0.05

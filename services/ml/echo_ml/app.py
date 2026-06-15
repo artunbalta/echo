@@ -30,6 +30,7 @@ from .llm import complete
 from .autonomy import persona_drift_kl
 from .persona_axes import AXIS_KEYS
 from .persona_model import get_persona_model
+from .reconstruct import reconstruction_fidelity
 from .cost import METER
 
 app = FastAPI(title="ECHO ML", version="0.1.0")
@@ -281,6 +282,17 @@ def get_persona(uid: str, authorization: str = Header(None)):
     recent = st.calib[-25:]
     confs = [G.calibrate(c, st.temperature) for c, _ in recent]
     corr = [y for _, y in recent]
+
+    # Behavioral-reproducibility (doppelgänger) score: how well the policy conditioned on the
+    # current latent reproduces the user's own recent messages (WI-6). Read-only, capped, and
+    # best-effort (mock LLM offline) so the observability endpoint stays cheap.
+    recon = None
+    try:
+        held_out = [(b.context, "", b.action_text) for b in st.behaviors[-3:]]
+        if held_out:
+            recon = round(reconstruction_fidelity(st.posterior.mu, held_out, n=1), 4)
+    except Exception:
+        recon = None
     return {
         "userId": uid,
         "persona": st.posterior.to_dict(),
@@ -296,6 +308,7 @@ def get_persona(uid: str, authorization: str = Header(None)):
         # "which raw features load on each axis" — replaces the hard-coded explanation when a
         # learned measurement matrix is active; null on a clean checkout (heuristic fallback).
         "measurement": (lambda m: m.interpretability(top=4) if m.trained else None)(get_persona_model()),
+        "reconstruction": recon,   # doppelgänger fidelity over held-out messages (WI-6)
     }
 
 
