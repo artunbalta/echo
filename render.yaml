@@ -20,3 +20,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Real NPC dialogue (without it, NPCs reply with deterministic mocks). Enter in dashboard.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Curated NPC roster from the DB + session/telemetry persistence (optional).
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://ibinblpqcbrgbndeqtsc.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

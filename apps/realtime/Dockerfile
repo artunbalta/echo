@@ -23,5 +23,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/packages/shared ./packages/shared
 COPY --from=build /app/apps/realtime ./apps/realtime
+# Curated NPC roster (offline fallback when Supabase isn't configured).
+COPY db ./db
 EXPOSE 2567
 CMD ["node", "apps/realtime/dist/index.js"]
