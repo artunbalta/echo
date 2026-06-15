@@ -1,0 +1,22 @@
+# Render Blueprint — deploys the ECHO realtime (Colyseus) websocket world server.
+#
+# Deploy:
+#   1. Push this repo to GitHub.
+#   2. Render dashboard → New → Blueprint → select this repo (it reads render.yaml).
+#   3. After it goes live, copy the service URL (https://echo-realtime-xxxx.onrender.com).
+#   4. In Vercel (the web app) set:  NEXT_PUBLIC_REALTIME_URL = wss://echo-realtime-xxxx.onrender.com
+#      then redeploy the web app. (Note the wss:// — secure WebSocket.)
+#
+# The server reads $PORT (injected by Render) automatically; /health is the health check.
+services:
+  - type: web
+    name: echo-realtime
+    runtime: docker
+    dockerfilePath: apps/realtime/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    plan: starter # "free" also works but cold-starts on idle (~30-60s first hit)
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production

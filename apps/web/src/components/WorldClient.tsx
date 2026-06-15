@@ -32,6 +32,7 @@ export default function WorldClient() {
   const editsRef = useRef<number>(0);
 
   const [status, setStatus] = useState("Connecting…");
+  const [offline, setOffline] = useState(false);
   const [uid, setUid] = useState("");
   const [nearby, setNearby] = useState<{ id: string; name: string; refId: string } | null>(null);
   const [portalNear, setPortalNear] = useState(false);
@@ -197,7 +198,8 @@ export default function WorldClient() {
         // Respect telemetry consent (§2, §13): only collect if the user opted in.
         if (telemetryConsent) tele.start();
       } catch (err) {
-        setStatus("Could not reach the world server. Is @echo/realtime running on :2567?");
+        setStatus("");
+        setOffline(true);
       }
     })();
 
@@ -418,11 +420,26 @@ export default function WorldClient() {
       {/* Atmospheric vignette over the world (below the UI panels in DOM order). */}
       <div className="world-vignette absolute inset-0" />
 
-      {status && (
+      {offline ? (
+        <div className="panel absolute left-1/2 top-1/2 w-[min(420px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-lg px-6 py-5 text-center font-mono text-sm text-parchment">
+          <div className="glow-echo mb-1 text-base font-bold text-echo">The world is resting</div>
+          <p className="mb-4 leading-relaxed text-parchment/70">
+            We couldn&apos;t reach the live world right now — it may be waking up. Try again in a moment.
+          </p>
+          <div className="flex justify-center gap-2">
+            <button onClick={() => window.location.reload()} className="rounded bg-echo px-4 py-2 font-bold text-ink">
+              Try again
+            </button>
+            <a href="/" className="rounded border border-echo/40 px-4 py-2 text-parchment/80 hover:text-parchment">
+              Home
+            </a>
+          </div>
+        </div>
+      ) : status ? (
         <div className="panel absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded px-6 py-4 font-mono text-sm text-parchment">
           {status}
         </div>
-      )}
+      ) : null}
 
       {/* HUD */}
       <div className="panel absolute left-3 top-3 rounded px-3 py-2 font-mono text-[11px] text-parchment/80">

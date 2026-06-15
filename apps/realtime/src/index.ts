@@ -9,7 +9,9 @@ import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { WorldRoom } from "./WorldRoom.js";
 
-const PORT = Number(process.env.REALTIME_PORT ?? 2567);
+// Hosts (Railway/Render/Fly/…) inject PORT; fall back to REALTIME_PORT for local dev.
+const PORT = Number(process.env.PORT ?? process.env.REALTIME_PORT ?? 2567);
+const HOST = process.env.HOST ?? "0.0.0.0";
 
 const httpServer = createServer((req, res) => {
   if (req.url === "/health") {
@@ -27,8 +29,8 @@ const gameServer = new Server({
 
 gameServer.define("world", WorldRoom);
 
-httpServer.listen(PORT, () => {
-  console.log(`[echo-realtime] listening on :${PORT} (ws + /health)`);
+httpServer.listen(PORT, HOST, () => {
+  console.log(`[echo-realtime] listening on ${HOST}:${PORT} (ws + /health)`);
 });
 
 for (const sig of ["SIGINT", "SIGTERM"] as const) {
