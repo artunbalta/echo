@@ -605,6 +605,30 @@ export class PixiWorld {
     return this.nearbyId;
   }
 
+  // ── handover support: let the echo see and walk the world on its own ───────────
+  /** The local player's current tile position. */
+  getSelfTile(): { x: number; y: number } {
+    return { x: this.localX, y: this.localY };
+  }
+
+  /** Snapshot of all NPCs (interpolated positions, tile units) the echo could approach. */
+  listNpcs(): { id: string; refId: string; name: string; x: number; y: number }[] {
+    const out: { id: string; refId: string; name: string; x: number; y: number }[] = [];
+    for (const [id, re] of this.entities) {
+      if (re.kind !== "npc") continue;
+      const x = (re as { _tx?: number })._tx ?? re.targetX;
+      const y = (re as { _ty?: number })._ty ?? re.targetY;
+      out.push({ id, refId: re.refId, name: re.name, x, y });
+    }
+    return out;
+  }
+
+  /** Steer the local avatar toward a tile on the echo's behalf (reuses click-to-move).
+   *  Passing null halts the autonomous walk. Any human key press cancels it (stepLocal). */
+  setAutoWalk(target: { x: number; y: number } | null) {
+    this.clickTarget = target;
+  }
+
   destroy() {
     this.destroyed = true;
     window.removeEventListener("keydown", this.onKey);
