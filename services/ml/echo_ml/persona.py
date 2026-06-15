@@ -2,15 +2,22 @@
 
 We maintain a *distribution* over who the user is, not a point estimate:
 
-    q(z | H) = N(mu, diag(var)),   z in R^8 (the persona axes)
+    q(z | H) = N(mu, Sigma),   z in R^8 (the persona axes)
 
 Prior z ~ N(mu0, Σ0) with Σ0 large (high initial uncertainty everywhere). Each observed
-behavior is treated as a noisy linear measurement of z, and we apply the incremental
-Gaussian (Kalman/Laplace-style) update that §9.2 explicitly permits as the online
-alternative to re-running the amortized encoder over the whole history.
+behavior is treated as a noisy *linear* measurement of z
 
-The uncertainty `var` is load-bearing: it feeds calibration (§9.5) and active learning
-(§9.6). High uncertainty on an axis ⇒ the gate is cautious and BALD seeks to probe it.
+    φ = W z + ε,   ε ~ N(0, Ψ)
+
+and we apply the general linear-Gaussian (Kalman/Laplace-style) conditioning step that
+§9.2 explicitly permits as the online alternative to re-running the amortized encoder over
+the whole history. The loading matrix W is hand-set here only for the legacy diagonal
+featurizer; WI-2 replaces it with a *learned* measurement matrix (see persona_model.py).
+
+The covariance Σ is full (not diagonal): real persona axes co-move (warmth↔affect,
+dominance↔formality), and the cross-terms are load-bearing for calibration (§9.5), active
+learning (§9.6), and the learned W (WI-2). A `var` property exposes diag(Σ) so every
+existing per-axis caller (decode_traits, observability, BALD) keeps working unchanged.
 
 A transparent featurizer maps raw signals (text style + implicit telemetry) into partial
 axis evidence, so every update is inspectable: you can see *which* axis a behavior moved.
@@ -27,61 +34,169 @@ from .persona_axes import AXES, AXIS_INDEX
 D = HYPER.persona_dim
 
 
+# ── numerical helpers ─────────────────────────────────────────────────────────────
+
+def _symmetrize(M: np.ndarray) -> np.ndarray:
+    return 0.5 * (M + M.T)
+
+
+def _floor_eigs(M: np.ndarray, floor: float) -> np.ndarray:
+    """Project a symmetric matrix onto {symmetric PSD with eigenvalues ≥ floor}.
+
+    eig-decompose Σ = V Λ Vᵀ, clamp Λ ≥ floor, reconstruct. Guarantees Σ stays symmetric
+    positive-definite so a bucket can always re-open on drift (no axis collapses to a
+    delta) and Cholesky/Mahalanobis math downstream never fails.
+    """
+    M = _symmetrize(M)
+    vals, vecs = np.linalg.eigh(M)
+    vals = np.maximum(vals, floor)
+    out = (vecs * vals) @ vecs.T
+    return _symmetrize(out)
+
+
+def gaussian_kl(mu1: np.ndarray, Sigma1: np.ndarray,
+                mu2: np.ndarray, Sigma2: np.ndarray) -> float:
+    """KL( N(mu1,Σ1) ‖ N(mu2,Σ2) ) for full-covariance multivariate Gaussians:
+
+        KL = ½ [ tr(Σ2⁻¹ Σ1) + (μ2−μ1)ᵀ Σ2⁻¹ (μ2−μ1) − k + ln(detΣ2 / detΣ1) ]
+
+    Accepts 1-D arrays as shorthand for a diagonal covariance. Always ≥ 0; exactly 0 for
+    identical Gaussians. (Clamped at 0 to absorb float round-off.)
+    """
+    mu1 = np.asarray(mu1, dtype=float).reshape(-1)
+    mu2 = np.asarray(mu2, dtype=float).reshape(-1)
+    S1 = np.asarray(Sigma1, dtype=float)
+    S2 = np.asarray(Sigma2, dtype=float)
+    if S1.ndim == 1:
+        S1 = np.diag(S1)
+    if S2.ndim == 1:
+        S2 = np.diag(S2)
+    k = mu1.shape[0]
+    diff = mu2 - mu1
+    tr = np.trace(np.linalg.solve(S2, S1))
+    quad = float(diff @ np.linalg.solve(S2, diff))
+    _, logdet1 = np.linalg.slogdet(S1)
+    _, logdet2 = np.linalg.slogdet(S2)
+    kl = 0.5 * (tr + quad - k + (logdet2 - logdet1))
+    return float(max(0.0, kl))
+
+
+# ── posterior ─────────────────────────────────────────────────────────────────────
+
 @dataclass
 class Posterior:
     mu: np.ndarray = field(default_factory=lambda: np.zeros(D))
-    var: np.ndarray = field(default_factory=lambda: np.full(D, HYPER.prior_var))
+    Sigma: np.ndarray = field(default_factory=lambda: np.eye(D) * HYPER.prior_var)
     version: int = 0
 
+    def __post_init__(self):
+        # Keep mu a writable float array and Σ a C-contiguous float matrix so the `var`
+        # property below can hand out a *writable* view of the diagonal (legacy callers
+        # do `post.var[i] = x`). A diagonal Σ stored as a 1-D array is promoted to a
+        # full matrix for backward compatibility with old in-memory state.
+        self.mu = np.asarray(self.mu, dtype=float)
+        Sigma = np.asarray(self.Sigma, dtype=float)
+        if Sigma.ndim == 1:
+            Sigma = np.diag(Sigma)
+        self.Sigma = np.ascontiguousarray(Sigma)
+
+    @property
+    def var(self) -> np.ndarray:
+        """Per-axis marginal variance diag(Σ), as a *writable* strided view into Σ so the
+        legacy idiom `post.var[i] = x` still sets Σ[i,i]. Reading behaves like np.diag(Σ)."""
+        return self.Sigma.reshape(-1)[:: D + 1]
+
     def copy(self) -> "Posterior":
-        return Posterior(self.mu.copy(), self.var.copy(), self.version)
+        return Posterior(self.mu.copy(), self.Sigma.copy(), self.version)
 
     def to_dict(self) -> dict:
-        return {"mu": self.mu.tolist(), "var": self.var.tolist(), "version": self.version}
+        return {"mu": self.mu.tolist(), "Sigma": self.Sigma.tolist(), "version": self.version}
 
     @staticmethod
     def from_dict(d: dict) -> "Posterior":
-        return Posterior(
-            np.array(d.get("mu", np.zeros(D)), dtype=float),
-            np.array(d.get("var", np.full(D, HYPER.prior_var)), dtype=float),
-            int(d.get("version", 0)),
-        )
+        """Load persisted state. Accepts the new full-covariance row {mu, Sigma, version}
+        OR a legacy diagonal row {mu, var, version} (var → diag(var)). Round-trips exactly."""
+        mu = np.array(d.get("mu", np.zeros(D)), dtype=float)
+        if d.get("Sigma") is not None:
+            Sigma = np.array(d["Sigma"], dtype=float)
+        elif d.get("var") is not None:
+            Sigma = np.diag(np.array(d["var"], dtype=float))
+        else:
+            Sigma = np.eye(D) * HYPER.prior_var
+        return Posterior(mu, Sigma, int(d.get("version", 0)))
 
 
 def prior() -> Posterior:
-    return Posterior(np.zeros(D), np.full(D, HYPER.prior_var), 0)
+    return Posterior(np.zeros(D), np.eye(D) * HYPER.prior_var, 0)
 
 
-# ── observation update (Kalman, diagonal) ────────────────────────────────────────
+# ── observation update (general linear-Gaussian / Kalman) ─────────────────────────
+
+def kalman_update_general(post: Posterior, phi: np.ndarray, W: np.ndarray,
+                          Psi: np.ndarray) -> Posterior:
+    """General linear-Gaussian conditioning step for the measurement model
+
+        φ = W z + ε,   ε ~ N(0, Ψ)        (Ψ diagonal-as-1D or full matrix)
+
+    with the standard Kalman equations
+
+        innovation     ỹ = φ − W μ
+        innovation cov S = W Σ Wᵀ + Ψ
+        gain           K = Σ Wᵀ S⁻¹
+        mean           μ' = μ + K ỹ
+        covariance     Σ' = (I − K W) Σ (I − K W)ᵀ + K Ψ Kᵀ   (Joseph form, PSD-stable)
+
+    Σ' is symmetrized and its eigenvalues floored at HYPER.min_var. μ is clipped to [-1,1].
+    Gains are solved (np.linalg.solve), never via an explicit inverse.
+    """
+    mu = post.mu
+    Sigma = post.Sigma
+    W = np.atleast_2d(np.asarray(W, dtype=float))
+    phi = np.asarray(phi, dtype=float).reshape(-1)
+    Psi = np.asarray(Psi, dtype=float)
+    if Psi.ndim == 1:
+        Psi = np.diag(Psi)
+
+    y_tilde = phi - W @ mu                      # (F,)
+    S = W @ Sigma @ W.T + Psi                   # (F,F) innovation covariance
+    # K = Σ Wᵀ S⁻¹  ⟺  Kᵀ = solve(S, W Σ)  (S symmetric)
+    K = np.linalg.solve(S, W @ Sigma).T         # (D,F)
+
+    new_mu = mu + K @ y_tilde
+    ImKW = np.eye(D) - K @ W
+    new_Sigma = ImKW @ Sigma @ ImKW.T + K @ Psi @ K.T   # Joseph form
+    new_Sigma = _floor_eigs(new_Sigma, HYPER.min_var)
+
+    return Posterior(np.clip(new_mu, -1.0, 1.0),
+                     np.ascontiguousarray(new_Sigma), post.version + 1)
+
 
 def kalman_update(post: Posterior, y: np.ndarray, mask: np.ndarray, r: float) -> Posterior:
-    """Apply a noisy partial measurement y of z (only where mask==1), measurement
-    variance r. Per-dimension diagonal Kalman update:
-
-        K_i   = var_i / (var_i + r)
-        mu_i  = mu_i + K_i (y_i - mu_i)
-        var_i = (1 - K_i) var_i
-
-    Returns a new Posterior; var is floored at HYPER.min_var so learning can re-open.
+    """Legacy diagonal partial-measurement update, kept as a thin wrapper over the general
+    path: a partial observation y of z (only where mask==1, measurement variance r) is the
+    measurement model W = diag(mask), Ψ = r·I, φ = y. Behaviour is identical to the old
+    per-dimension Kalman update when Σ is diagonal.
     """
-    out = post.copy()
-    for i in range(D):
-        if mask[i] <= 0:
-            continue
-        k = out.var[i] / (out.var[i] + r)
-        out.mu[i] = out.mu[i] + k * (y[i] - out.mu[i])
-        out.var[i] = max(HYPER.min_var, (1.0 - k) * out.var[i])
-    out.mu = np.clip(out.mu, -1.0, 1.0)
-    out.version = post.version + 1
-    return out
+    W = np.diag(np.asarray(mask, dtype=float))
+    Psi = float(r) * np.eye(D)
+    return kalman_update_general(post, np.asarray(y, dtype=float), W, Psi)
 
 
 def inflate(post: Posterior, axes: Optional[list[str]] = None, factor: float = 2.0) -> Posterior:
-    """Re-open learning on drift (§9.7) by inflating variance (all axes, or a subset)."""
+    """Re-open learning on drift (§9.7) by inflating covariance. For the selected axes
+    (all if None) scale Σ's rows & columns by √factor — a congruence transform D Σ Dᵀ that
+    multiplies each selected variance by `factor` while preserving PSD — then clamp the
+    diagonal at prior_var and re-floor eigenvalues."""
     out = post.copy()
-    idxs = range(D) if axes is None else [AXIS_INDEX[a] for a in axes if a in AXIS_INDEX]
+    idxs = list(range(D)) if axes is None else [AXIS_INDEX[a] for a in axes if a in AXIS_INDEX]
+    s = float(np.sqrt(factor))
+    Sigma = out.Sigma
     for i in idxs:
-        out.var[i] = min(HYPER.prior_var, out.var[i] * factor)
+        Sigma[i, :] *= s
+        Sigma[:, i] *= s
+    diag = np.diag(Sigma).copy()
+    np.fill_diagonal(Sigma, np.minimum(diag, HYPER.prior_var))
+    out.Sigma = np.ascontiguousarray(_floor_eigs(Sigma, HYPER.min_var))
     out.version = post.version + 1
     return out
 
@@ -93,8 +208,7 @@ def featurize(text: str, telemetry: Optional[dict] = None) -> tuple[np.ndarray, 
 
     Returns (y, mask, r): y in [-1,1]^8 axis evidence, mask of which axes were observed,
     and measurement noise r (lower = more confident). Heuristic but transparent — this is
-    the deployment featurizer; the population-level amortized encoder (the ELBO objective
-    below) would refine the same mapping offline.
+    the legacy deployment featurizer; WI-2/WI-3 replace it with featurize_raw + a learned W.
     """
     telemetry = telemetry or {}
     y = np.zeros(D)
@@ -186,20 +300,18 @@ def decode_traits(post: Posterior, threshold: float = 0.33) -> list[str]:
 # ── ELBO (the training objective, §9.2) ──────────────────────────────────────────
 
 def elbo(post: Posterior, evidence: list[tuple[np.ndarray, np.ndarray, float]]) -> float:
-    """Evidence Lower BOund for the linear-Gaussian model, for a batch of observations
-    (y, mask, r). Under p(y|z) = N(Hz, rI) (H = mask-selected identity) and prior
-    N(mu0, Σ0):
+    """Evidence Lower BOund for the linear-Gaussian model over a batch of partial
+    observations (y, mask, r). With p(y|z) = N(Hz, rI) (H = diag(mask)) and prior
+    N(0, prior_var·I):
 
-        L = E_q[ Σ_i log p(y_i | z) ] − KL( q || prior )
+        L = E_q[ Σ_i log p(y_i | z) ] − KL( q ‖ prior )
 
-    The expectation under q=N(mu,var) of the Gaussian log-likelihood has a closed form;
-    we include it so the objective in §9.2 is concrete and testable, not just asserted.
+    The Gaussian expectation under q = N(μ, Σ) is closed-form; the per-dim likelihood uses
+    Σ_ii = var_i, and the KL is the full-covariance gaussian_kl above (≡ the diagonal sum
+    when Σ is diagonal). A concrete, testable objective — not asserted in the hot path.
     """
-    mu, var = post.mu, post.var
-    mu0 = np.zeros(D)
-    var0 = np.full(D, HYPER.prior_var)
-
-    # E_q[log p(y|z)] for each masked dimension: -0.5/r * ((y-mu)^2 + var) - 0.5 log(2πr)
+    mu = post.mu
+    var = post.var
     ll = 0.0
     for y, mask, r in evidence:
         for i in range(D):
@@ -207,10 +319,6 @@ def elbo(post: Posterior, evidence: list[tuple[np.ndarray, np.ndarray, float]]) 
                 continue
             ll += -0.5 / r * ((y[i] - mu[i]) ** 2 + var[i]) - 0.5 * np.log(2 * np.pi * r)
 
-    # KL( N(mu,var) || N(mu0,var0) ) for diagonal Gaussians.
-    kl = 0.0
-    for i in range(D):
-        kl += 0.5 * (
-            np.log(var0[i] / var[i]) + (var[i] + (mu[i] - mu0[i]) ** 2) / var0[i] - 1.0
-        )
+    Sigma0 = np.eye(D) * HYPER.prior_var
+    kl = gaussian_kl(mu, post.Sigma, np.zeros(D), Sigma0)
     return float(ll - kl)

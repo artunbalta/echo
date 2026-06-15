@@ -120,14 +120,11 @@ class Bucket:
 
 
 def persona_drift_kl(mu_recent: np.ndarray, mu_prior: np.ndarray,
-                     var_recent: np.ndarray, var_prior: np.ndarray) -> float:
-    """KL( recent behavior posterior || persona prior ) for diagonal Gaussians (§9.7).
-    A large value signals the user's recent behavior diverged from their established model."""
-    kl = 0.0
-    for i in range(len(mu_recent)):
-        kl += 0.5 * (
-            np.log(var_prior[i] / var_recent[i])
-            + (var_recent[i] + (mu_recent[i] - mu_prior[i]) ** 2) / var_prior[i]
-            - 1.0
-        )
-    return float(kl)
+                     cov_recent: np.ndarray, cov_prior: np.ndarray) -> float:
+    """KL( recent behavior posterior ‖ persona prior ) for **full-covariance** Gaussians
+    (§9.7). A large value signals the user's recent behavior diverged from their
+    established model. `cov_*` may be a full (D,D) covariance matrix or a 1-D diagonal
+    (legacy callers) — gaussian_kl handles both and reduces to the diagonal KL when both
+    covariances are diagonal."""
+    from .persona import gaussian_kl
+    return gaussian_kl(mu_recent, cov_recent, mu_prior, cov_prior)
