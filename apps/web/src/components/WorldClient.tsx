@@ -8,7 +8,13 @@ import { TelemetryCollector } from "@/game/telemetry";
 import { proposeReply, sendFeedback, requestConnectionAnalysis, type AgentTurn, type ConnectionAnalysis } from "@/lib/agent";
 import EchoPanel from "@/components/EchoPanel";
 import OutcomesPanel, { type MetPerson } from "@/components/OutcomesPanel";
+import RecognitionMeter from "@/components/RecognitionMeter";
+import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
+import { useEcho } from "@/lib/useEcho";
+import { markFunnel } from "@/lib/funnel";
 import type { InteractTurnPayload } from "@echo/shared";
+
+const prettyBucket = (b: string) => b.replace(/_/g, " ");
 
 interface Line {
   who: "you" | "them";
@@ -51,7 +57,7 @@ export default function WorldClient() {
   const [showOutcomes, setShowOutcomes] = useState(false);
   const editFromRef = useRef<string | null>(null); // original proposal when editing
   const convoTargetRef = useRef<{ id: string; name: string } | null>(null);
-  const metRef = useRef<Map<string, { id: string; name: string; turns: number }>>(new Map());
+  const metRef = useRef<Map<string, { id: string; name: string; turns: number; auto?: boolean }>>(new Map());
   const [metCount, setMetCount] = useState(0);
   // Full transcripts per counterpart, accumulated across the session — fed to the real
   // end-of-day connection analysis (and stored as training data) instead of a turn-count guess.
@@ -60,6 +66,52 @@ export default function WorldClient() {
   // reopening the panel doesn't re-hit the model when nothing changed.
   const [connAnalyses, setConnAnalyses] = useState<Record<string, ConnectionAnalysis & { turns: number }>>({});
   const [analyzing, setAnalyzing] = useState(false);
+
+  // ── recognition + handover (the learning made felt; the echo taking over) ──────
+  // A transient, in-tone acknowledgement shown near the meter when learning genuinely moves.
+  const [recognitionBeat, setRecognitionBeat] = useState<string | null>(null);
+  const beatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function showBeat(text: string) {
+    setRecognitionBeat(text);
+    if (beatTimer.current) clearTimeout(beatTimer.current);
+    beatTimer.current = setTimeout(() => setRecognitionBeat(null), 6000);
+  }
+  // The earned graduation moment (a context reaching `auto`) — the on-ramp to the handover.
+  const [gradMoment, setGradMoment] = useState<{ bucket: string } | null>(null);
+  // Autonomous mode: the echo wanders and converses on its own in a promoted context.
+  const [handoverOn, setHandoverOn] = useState(false);
+  const handoverOnRef = useRef(false);
+  handoverOnRef.current = handoverOn;
+  const handoverBucketRef = useRef<string>("");
+  const [echoStatus, setEchoStatus] = useState<string | null>(null); // banner while wandering
+  const [acts, setActs] = useState<EchoAct[]>([]); // autonomous utterances (rationale + veto)
+  const [showActs, setShowActs] = useState(false);
+  // Live, in-conversation handover orchestration state (refs to survive network callbacks).
+  const autoConvoRef = useRef(false);
+  const autoTurnsRef = useRef(0);
+  const autoTargetRef = useRef<{ id: string; name: string } | null>(null);
+  const autoMetRef = useRef(0);
+  const autoLoopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The shared persona poll: drives the meter, the in-the-moment beats, and graduation.
+  const echo = useEcho(uid, {
+    onTraitResolved: (trait) => showBeat(`your echo is starting to see you as ${trait}.`),
+    onPromotion: (bucket, level) => {
+      if (level === "auto") setGradMoment({ bucket });
+      else showBeat(`your echo can act in ${prettyBucket(bucket)} now — you'll still see everything.`);
+    },
+  });
+  const echoRef = useRef(echo);
+  echoRef.current = echo;
+  const handoverAvailable = echo.autoBuckets.length > 0;
+
+  // Cold-start orientation + discoverability + touch awareness.
+  const [orientDismissed, setOrientDismissed] = useState(false);
+  const [usedEcho, setUsedEcho] = useState(false);
+  const [touch, setTouch] = useState(false);
+  useEffect(() => {
+    setTouch(typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches);
+  }, []);
 
   // Narrator session digest (Phase 7) — grounded signals for the debrief.
   const digestRef = useRef({ approaches: 0, avoids: 0, dwell: 0, revisits: 0, edits: 0, replyMs: [] as number[] });
@@ -120,7 +172,10 @@ export default function WorldClient() {
 
     let disposed = false;
     const world = new PixiWorld({
-      onNearbyChange: (t) => setNearby(t),
+      onNearbyChange: (t) => {
+        setNearby(t);
+        if (t) markFunnel(uidRef.current, "first_nearby");
+      },
       onMoveIntent: (dir, facing, seq) => netRef.current?.sendMove({ dir, facing, seq }),
       onStop: (seq) => netRef.current?.sendStop(seq),
       emitTelemetry: (type, payload) => {
@@ -144,6 +199,7 @@ export default function WorldClient() {
       onWelcome: (w) => {
         world.setSelf(w.entityId, w.spawn.x, w.spawn.y);
         setStatus("");
+        markFunnel(uidRef.current, "world_enter");
       },
       onSnapshot: (snaps, _tick) => {
         world.applySnapshot(snaps, net.lastAckSeq());
@@ -176,15 +232,33 @@ export default function WorldClient() {
         setConvo({ name: p.target.name, lines: [] });
         setProposal(null);
         if (!metRef.current.has(p.target.id)) {
-          metRef.current.set(p.target.id, { id: p.target.id, name: p.target.name, turns: 0 });
+          metRef.current.set(p.target.id, { id: p.target.id, name: p.target.name, turns: 0, auto: autoConvoRef.current });
           setMetCount(metRef.current.size);
         }
         tele.emit("interaction_start", { targetId: p.target.id });
+        if (autoConvoRef.current && handoverOnRef.current) {
+          // The echo opens the conversation itself.
+          autoMetRef.current += 1;
+          autoLoopTimer.current = setTimeout(() => autoEchoTurnRef.current("(you walk up to them)"), 600);
+        } else {
+          markFunnel(uidRef.current, "first_conversation");
+        }
       },
       onInteractTurn: (p: InteractTurnPayload) => {
         setConvo((c) => (c ? { ...c, lines: [...c.lines, { who: "them", name: p.speakerName, text: p.text }] } : c));
+        if (autoConvoRef.current && handoverOnRef.current) {
+          const npcText = p.text;
+          if (autoTurnsRef.current < MAX_AUTO_TURNS) {
+            autoLoopTimer.current = setTimeout(() => autoEchoTurnRef.current(npcText), 1600);
+          } else {
+            autoLoopTimer.current = setTimeout(() => {
+              if (interactionRef.current) netRef.current?.interactEnd(interactionRef.current);
+            }, 1600);
+          }
+        }
       },
       onInteractClosed: () => {
+        const wasAuto = autoConvoRef.current;
         const t = convoTargetRef.current;
         const counterpart = t ? { name: t.name, turns: metRef.current.get(t.id)?.turns ?? 0 } : undefined;
         // Keep the transcript (appending if we've spoken with them before) for real analysis.
@@ -197,7 +271,14 @@ export default function WorldClient() {
         setConvo(null);
         setProposal(null);
         tele.emit("interaction_end", {});
-        narrateNow("encounter", counterpart);
+        if (wasAuto) {
+          // The echo's own encounter: continue the loop; the activity feed + recap cover it
+          // (skip the human-attributed narrator debrief).
+          setAutoConvoActive(false);
+          if (handoverOnRef.current) autoLoopTimer.current = setTimeout(() => approachNextRef.current(), 1800);
+        } else {
+          narrateNow("encounter", counterpart);
+        }
       },
       onError: (e) => setStatus(e.message),
     });
@@ -227,6 +308,14 @@ export default function WorldClient() {
   // Space/E to talk; Esc to leave.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Sovereignty: any move/act/Esc while the echo is wandering reclaims control instantly.
+      if (handoverOnRef.current) {
+        const k = e.key.toLowerCase();
+        if (["escape", "w", "a", "s", "d", "e", " ", "o", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) {
+          stopHandoverRef.current();
+          return; // movement keys still reach the world's own listener
+        }
+      }
       // Esc must end a conversation even while the chat input is focused — handle it first.
       if (e.key === "Escape" && convoRef.current) {
         e.preventDefault();
@@ -320,6 +409,8 @@ export default function WorldClient() {
   async function askEcho() {
     const target = convoTargetRef.current;
     if (!target || proposing) return;
+    markFunnel(uid, "first_let_echo_answer");
+    setUsedEcho(true);
     setProposing(true);
     try {
       const lastThem = [...(convoRef.current?.lines ?? [])].reverse().find((l) => l.who === "them");
@@ -351,6 +442,7 @@ export default function WorldClient() {
     const bucket = bucketFor();
     sendText(turn.action, true);
     setProposal(null);
+    markFunnel(uid, "first_feedback");
     await sendFeedback({ userId: uid, bucket, confidence: turn.confidence, agreed: true, context: `talking with ${target.name}` });
   }
 
@@ -366,6 +458,7 @@ export default function WorldClient() {
     const target = convoTargetRef.current;
     if (!turn || !target) return;
     setProposal(null);
+    markFunnel(uid, "first_feedback");
     await sendFeedback({
       userId: uid,
       bucket: bucketFor(),
@@ -375,6 +468,151 @@ export default function WorldClient() {
       context: `talking with ${target.name}`,
     });
   }
+
+  // ── the handover (§10): in a promoted context, the echo acts on its own ────────
+  // It walks up to people and converses via the real /agent/turn gate, while you watch or
+  // idle. Every act is surfaced with its rationale and a "that wasn't me" veto; the human
+  // stays sovereign — this is delegation you can revoke, not loss of control.
+  const MAX_AUTO_TURNS = 3;
+  const [autoConvo, setAutoConvo] = useState(false);
+
+  function setAutoConvoActive(v: boolean) {
+    autoConvoRef.current = v;
+    setAutoConvo(v);
+  }
+
+  /** Nearest NPC we didn't just leave — who the echo approaches next. */
+  function pickNextNpc(): { id: string; name: string } | null {
+    const world = worldRef.current;
+    if (!world) return null;
+    const me = world.getSelfTile();
+    const npcs = world.listNpcs();
+    if (!npcs.length) return null;
+    const recent = autoTargetRef.current?.id;
+    const sorted = npcs
+      .map((n) => ({ ...n, d: Math.hypot(n.x - me.x, n.y - me.y) }))
+      .sort((a, b) => a.d - b.d);
+    const choice = sorted.find((n) => n.id !== recent) ?? sorted[0];
+    return { id: choice.id, name: choice.name };
+  }
+
+  function startHandover() {
+    const bucket = echoRef.current.autoBuckets[0];
+    if (!bucket) return;
+    handoverBucketRef.current = bucket;
+    setGradMoment(null);
+    setHandoverOn(true);
+    handoverOnRef.current = true;
+    autoMetRef.current = 0;
+    markFunnel(uidRef.current, "handover_start");
+    setEchoStatus(`your echo is carrying ${prettyBucket(bucket)} on its own — wandering and meeting people for you.`);
+    approachNext();
+  }
+
+  function stopHandover() {
+    setHandoverOn(false);
+    handoverOnRef.current = false;
+    if (autoLoopTimer.current) clearTimeout(autoLoopTimer.current);
+    worldRef.current?.setAutoWalk(null);
+    if (autoConvoRef.current && interactionRef.current) netRef.current?.interactEnd(interactionRef.current);
+    setAutoConvoActive(false);
+    setEchoStatus(null);
+    const met = autoMetRef.current;
+    if (met > 0) {
+      showBeat(`your echo met ${met} ${met === 1 ? "person" : "people"} while it wandered — see who's worth meeting yourself.`);
+      runConnectionAnalysis(); // ready the payoff
+    }
+  }
+
+  function approachNext() {
+    if (!handoverOnRef.current) return;
+    if (convoRef.current && !autoConvoRef.current) return; // never hijack a manual chat
+    const target = pickNextNpc();
+    if (!target) {
+      autoLoopTimer.current = setTimeout(approachNext, 1500); // nobody near — wait
+      return;
+    }
+    autoTargetRef.current = target;
+    steerToTarget();
+  }
+
+  function steerToTarget() {
+    if (!handoverOnRef.current) return;
+    const world = worldRef.current;
+    const target = autoTargetRef.current;
+    if (!world || !target) return;
+    const npc = world.listNpcs().find((n) => n.id === target.id);
+    if (npc) world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
+    const nearbyId = world.getNearbyId();
+    if (nearbyId) {
+      world.setAutoWalk(null);
+      setAutoConvoActive(true);
+      autoTurnsRef.current = 0;
+      netRef.current?.interactStart(nearbyId); // → onInteractOpened kicks the first echo turn
+      return;
+    }
+    autoLoopTimer.current = setTimeout(steerToTarget, 350);
+  }
+
+  /** One autonomous turn: the echo proposes and — only where it's truly earned (decision
+   *  `auto`) — speaks. It never self-confirms agreement; silence is not consent. The sole
+   *  feedback signal is the human's veto. */
+  async function autoEchoTurn(userMessage: string) {
+    if (!handoverOnRef.current || !autoConvoRef.current) return;
+    const target = convoTargetRef.current;
+    const bucket = handoverBucketRef.current;
+    if (!target || !bucket) return;
+    try {
+      const turn = await proposeReply(uidRef.current, `talking with ${target.name}`, userMessage, bucket, "low");
+      if (!handoverOnRef.current || !autoConvoRef.current) return; // stopped mid-flight
+      if (turn.decision === "auto") {
+        sendText(turn.action, true);
+        autoTurnsRef.current += 1;
+        const act: EchoAct = {
+          id: `act_${performance.now().toFixed(0)}_${Math.random().toString(36).slice(2, 6)}`,
+          npcName: target.name,
+          text: turn.action,
+          rationale: turn.rationale,
+          bucket,
+          context: `talking with ${target.name}`,
+        };
+        setActs((a) => [...a, act]);
+      } else {
+        setEchoStatus(`your echo held back — it hasn't earned ${prettyBucket(bucket)} here.`);
+        endAutoEncounter();
+      }
+    } catch {
+      endAutoEncounter();
+    }
+  }
+
+  function endAutoEncounter() {
+    if (interactionRef.current) netRef.current?.interactEnd(interactionRef.current);
+    // onInteractClosed continues the loop (and resets convo state).
+  }
+
+  /** The human reclaims an autonomous action: "that wasn't me" → demote signal (§9.7). */
+  async function vetoAct(act: EchoAct) {
+    setActs((list) => list.map((a) => (a.id === act.id ? { ...a, vetoed: true } : a)));
+    markFunnel(uidRef.current, "first_feedback");
+    await sendFeedback({
+      userId: uidRef.current,
+      bucket: act.bucket,
+      confidence: 0.5,
+      agreed: false,
+      rejected: act.text,
+      context: act.context,
+    });
+    showBeat(`noted — that wasn't you. Your echo will step back from ${prettyBucket(act.bucket)}.`);
+  }
+
+  // Keep the orchestration callable from the mount-time network callbacks.
+  const autoEchoTurnRef = useRef(autoEchoTurn);
+  autoEchoTurnRef.current = autoEchoTurn;
+  const approachNextRef = useRef(approachNext);
+  approachNextRef.current = approachNext;
+  const stopHandoverRef = useRef(stopHandover);
+  stopHandoverRef.current = stopHandover;
 
   // Grounded debrief (§11): runs AFTER an encounter/session, never live. Stays silent
   // unless the signals support something specific.
@@ -490,14 +728,14 @@ export default function WorldClient() {
       {/* HUD */}
       <div className="panel absolute left-3 top-3 rounded px-3 py-2 font-mono text-[11px] text-parchment/80">
         <div className="glow-echo font-bold text-echo">ECHO — first day</div>
-        <div>WASD / arrows to move</div>
-        <div>E or Space to talk · Esc to leave</div>
+        <div>{touch ? "tap or drag to move" : "WASD / arrows to move"}</div>
+        <div>{touch ? "tap someone to talk" : "E or Space to talk · Esc to leave"}</div>
       </div>
 
       {/* Toolbar */}
       <div className="absolute right-3 top-3 z-20 flex gap-2 font-mono text-[11px]">
         <button
-          onClick={() => { setShowEcho((v) => !v); setShowOutcomes(false); }}
+          onClick={() => { setShowEcho((v) => !v); setShowOutcomes(false); setShowActs(false); }}
           className="panel rounded px-3 py-2 text-parchment hover:text-echo"
         >
           your echo
@@ -507,18 +745,48 @@ export default function WorldClient() {
             const open = !showOutcomes;
             setShowOutcomes(open);
             setShowEcho(false);
+            setShowActs(false);
             if (open) runConnectionAnalysis(); // real read of the actual conversations
           }}
           className="panel rounded px-3 py-2 text-parchment hover:text-echo"
         >
           connections{metCount > 0 ? ` (${metCount})` : ""}
         </button>
+        {acts.length > 0 && (
+          <button
+            onClick={() => { setShowActs((v) => !v); setShowEcho(false); setShowOutcomes(false); }}
+            className="panel rounded px-3 py-2 text-parchment hover:text-echo"
+          >
+            echo log ({acts.length})
+          </button>
+        )}
         <a href="/account" className="panel rounded px-3 py-2 text-parchment hover:text-echo">
           data
         </a>
       </div>
 
-      {showEcho && uid && <EchoPanel userId={uid} onClose={() => setShowEcho(false)} />}
+      {/* Recognition meter — the always-glanceable "your echo knows you" signal. */}
+      {uid && (
+        <>
+          <RecognitionMeter
+            recognition={echo.recognition}
+            parts={echo.parts}
+            offline={echo.offline}
+            loaded={echo.loaded}
+            onOpen={() => { setShowEcho((v) => !v); setShowOutcomes(false); setShowActs(false); }}
+          />
+          {recognitionBeat && (
+            <div className="pointer-events-none absolute left-1/2 top-[88px] z-20 w-[min(280px,80vw)] -translate-x-1/2 text-center font-mono text-[11px] italic text-echo/90 echo-rise">
+              {recognitionBeat}
+            </div>
+          )}
+        </>
+      )}
+
+      {showEcho && uid && (
+        <EchoPanel snap={echo.snap} parts={echo.parts} offline={echo.offline} onClose={() => setShowEcho(false)} />
+      )}
+      {showActs && <EchoActivityPanel acts={acts} onVeto={vetoAct} onClose={() => setShowActs(false)} />}
       {showOutcomes && uid && (
         <OutcomesPanel
           userId={uid}
@@ -529,8 +797,70 @@ export default function WorldClient() {
         />
       )}
 
+      {/* Cold-start orientation (M2): re-plant the hook, give one soft pull, then get out of
+          the way. Hidden the moment the first real conversation happens (metCount > 0). */}
+      {uid && !offline && metCount === 0 && !orientDismissed && !convo && !handoverOn && (
+        <div className="panel echo-rise absolute bottom-24 left-1/2 z-10 w-[min(440px,92vw)] -translate-x-1/2 rounded-lg p-4 text-center font-mono text-parchment">
+          <p className="mb-2 text-sm leading-relaxed text-parchment/85">
+            It&apos;s your first day. No one here knows you — <span className="text-echo">not even your echo</span>.
+            It learns only from what you do.
+          </p>
+          <p className="mb-3 text-xs text-parchment/60">
+            Someone is nearby. {touch ? "Tap toward them" : "Walk over"} and be seen — watch the meter
+            above begin to fill.
+          </p>
+          <button
+            onClick={() => setOrientDismissed(true)}
+            className="text-[11px] text-parchment/50 underline-offset-2 hover:text-parchment hover:underline"
+          >
+            I&apos;ll find my own way
+          </button>
+        </div>
+      )}
+
+      {/* The graduation moment (M4) — calm, earned; also the on-ramp to the handover (B1). */}
+      {gradMoment && (
+        <div className="panel graduation-rise absolute left-1/2 top-1/3 z-40 w-[min(440px,92vw)] -translate-x-1/2 rounded-lg p-5 text-center font-mono text-parchment">
+          <div className="glow-echo mb-2 text-base font-bold text-echo">your echo has earned this</div>
+          <p className="mb-4 text-sm leading-relaxed text-parchment/80">
+            Enough of its calls have matched yours that it can carry{" "}
+            <span className="text-echo">{prettyBucket(gradMoment.bucket)}</span> on its own now. Want to let it
+            take the lead? You can watch, and take back control anytime.
+          </p>
+          <div className="flex justify-center gap-2">
+            <button onClick={startHandover} className="rounded bg-echo px-4 py-2 text-sm font-bold text-ink">
+              let it take the lead
+            </button>
+            <button onClick={() => setGradMoment(null)} className="rounded border border-echo/40 px-4 py-2 text-sm text-parchment/80">
+              not yet
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Handover banner — visible while the echo wanders between people (sovereign stop). */}
+      {handoverOn && !autoConvo && (
+        <div className="panel absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2 font-mono text-xs text-parchment">
+          <span className="echo-pulse text-echo" aria-hidden>●</span>
+          <span>{echoStatus ?? "your echo is acting on your behalf…"}</span>
+          <button onClick={stopHandover} className="rounded border border-echo/40 px-2 py-1 text-parchment/80 hover:text-parchment">
+            take back control
+          </button>
+        </div>
+      )}
+
+      {/* A quiet on-ramp once any context is earned, if the user dismissed the moment. */}
+      {handoverAvailable && !handoverOn && !gradMoment && !convo && (
+        <button
+          onClick={startHandover}
+          className="panel absolute bottom-4 right-4 z-20 rounded-lg px-3 py-2 font-mono text-[11px] text-echo hover:bg-echo/10"
+        >
+          ↪ let your echo wander
+        </button>
+      )}
+
       {/* Proximity prompt */}
-      {nearby && !convo && (
+      {nearby && !convo && !handoverOn && (
         <button
           onClick={startInteraction}
           className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment hover:text-echo"
@@ -565,9 +895,15 @@ export default function WorldClient() {
       {convo && (
         <div className="panel absolute bottom-4 left-1/2 w-[min(560px,92vw)] -translate-x-1/2 rounded-lg p-3 font-mono">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-bold text-echo">{convo.name}</span>
-            <button onClick={leaveConvo} className="text-xs text-parchment/50 hover:text-parchment">
-              leave (Esc)
+            <span className="font-bold text-echo">
+              {convo.name}
+              {autoConvo && <span className="ml-2 rounded bg-echo/25 px-1 text-[10px] font-normal text-echo">your echo is speaking</span>}
+            </span>
+            <button
+              onClick={autoConvo ? stopHandover : leaveConvo}
+              className="text-xs text-parchment/50 hover:text-parchment"
+            >
+              {autoConvo ? "stop (Esc)" : "leave (Esc)"}
             </button>
           </div>
           <div className="mb-2 max-h-48 space-y-1 overflow-y-auto text-sm">
@@ -580,57 +916,75 @@ export default function WorldClient() {
               </div>
             ))}
           </div>
-          {/* Co-pilot proposal (§10): the agent drafts the user's reply; the human
-              approves/edits/rejects — each verdict is a label feeding the learner. */}
-          {proposal && (
-            <div className="mb-2 rounded border-2 border-echo/40 bg-echo/10 p-2 text-sm">
-              <div className="mb-1 flex items-center gap-2 text-[10px] text-parchment/60">
-                <span className="rounded bg-echo/30 px-1 font-bold text-echo">your echo suggests</span>
-                <span>{proposal.decision}</span>
-                <span>· conf {Math.round(proposal.p_hat * 100)}% / need {Math.round(proposal.tau * 100)}%</span>
-                {proposal.explored && <span className="text-yellow-300">· exploring</span>}
-              </div>
-              <div className="mb-1 text-parchment">&ldquo;{proposal.action}&rdquo;</div>
-              <div className="mb-2 text-[10px] italic text-parchment/50">why: {proposal.rationale}</div>
-              <div className="flex gap-2">
-                <button onClick={approveProposal} className="rounded bg-echo px-2 py-1 text-xs font-bold text-ink">approve</button>
-                <button onClick={editProposal} className="rounded border border-echo/40 px-2 py-1 text-xs">edit</button>
-                <button onClick={rejectProposal} className="rounded border border-echo/40 px-2 py-1 text-xs text-parchment/60">reject</button>
-              </div>
+          {autoConvo ? (
+            /* The echo is driving this conversation itself — read-only, revocable. */
+            <div className="flex items-center justify-between rounded border border-echo/30 bg-echo/5 px-2 py-1.5 text-[11px] text-parchment/70">
+              <span><span className="text-echo">your echo</span> is carrying this for you…</span>
+              <button onClick={stopHandover} className="rounded border border-echo/40 px-2 py-0.5 text-parchment/80 hover:text-parchment">
+                take back control
+              </button>
             </div>
+          ) : (
+            <>
+              {/* Co-pilot proposal (§10): the agent drafts the user's reply; the human
+                  approves/edits/rejects — each verdict is a label feeding the learner. */}
+              {proposal && (
+                <div className="mb-2 rounded border-2 border-echo/40 bg-echo/10 p-2 text-sm">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] text-parchment/60">
+                    <span className="rounded bg-echo/30 px-1 font-bold text-echo">your echo suggests</span>
+                    <span>{proposal.decision}</span>
+                    <span>· conf {Math.round(proposal.p_hat * 100)}% / need {Math.round(proposal.tau * 100)}%</span>
+                    {proposal.explored && <span className="text-yellow-300">· exploring</span>}
+                  </div>
+                  <div className="mb-1 text-parchment">&ldquo;{proposal.action}&rdquo;</div>
+                  <div className="mb-2 text-[10px] italic text-parchment/50">why: {proposal.rationale}</div>
+                  <div className="flex gap-2">
+                    <button onClick={approveProposal} className="rounded bg-echo px-2 py-1 text-xs font-bold text-ink">approve</button>
+                    <button onClick={editProposal} className="rounded border border-echo/40 px-2 py-1 text-xs">edit</button>
+                    <button onClick={rejectProposal} className="rounded border border-echo/40 px-2 py-1 text-xs text-parchment/60">reject</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Discoverability (M3): first-timers learn the core action *teaches* the echo. */}
+              {!usedEcho && !proposal && (
+                <div className="mb-1 text-[10px] italic text-parchment/45">
+                  tip: let your echo try a reply — every approve / edit / reject teaches it who you are.
+                </div>
+              )}
+              <div className="mb-2">
+                <button
+                  onClick={askEcho}
+                  disabled={proposing || !!proposal}
+                  className="rounded border border-echo/40 px-2 py-1 text-[11px] text-echo hover:bg-echo/10 disabled:opacity-40"
+                >
+                  {proposing ? "your echo is thinking…" : "↪ let my echo answer"}
+                </button>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  value={draft}
+                  onFocus={() => {
+                    if (!inputFocusedAt.current) inputFocusedAt.current = Date.now();
+                  }}
+                  onChange={(e) => {
+                    if (e.target.value.length < draft.length) editsRef.current++;
+                    setDraft(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") sendChat();
+                  }}
+                  autoFocus
+                  placeholder="type…"
+                  className="flex-1 rounded border-2 border-echo/30 bg-ink px-2 py-1 text-sm text-parchment outline-none focus:border-echo"
+                />
+                <button onClick={sendChat} className="rounded bg-echo px-3 py-1 text-sm font-bold text-ink">
+                  say
+                </button>
+              </div>
+            </>
           )}
-
-          <div className="mb-2">
-            <button
-              onClick={askEcho}
-              disabled={proposing || !!proposal}
-              className="rounded border border-echo/40 px-2 py-1 text-[11px] text-echo hover:bg-echo/10 disabled:opacity-40"
-            >
-              {proposing ? "your echo is thinking…" : "↪ let my echo answer"}
-            </button>
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              value={draft}
-              onFocus={() => {
-                if (!inputFocusedAt.current) inputFocusedAt.current = Date.now();
-              }}
-              onChange={(e) => {
-                if (e.target.value.length < draft.length) editsRef.current++;
-                setDraft(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") sendChat();
-              }}
-              autoFocus
-              placeholder="type…"
-              className="flex-1 rounded border-2 border-echo/30 bg-ink px-2 py-1 text-sm text-parchment outline-none focus:border-echo"
-            />
-            <button onClick={sendChat} className="rounded bg-echo px-3 py-1 text-sm font-bold text-ink">
-              say
-            </button>
-          </div>
         </div>
       )}
 

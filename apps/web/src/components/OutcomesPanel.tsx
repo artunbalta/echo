@@ -8,6 +8,8 @@ export interface MetPerson {
   name: string;
   turns: number;
   reason: string;
+  /** Met by your echo while it wandered on its own (the handover payoff). */
+  auto?: boolean;
 }
 
 /** Outcome surfacing (§10): the agent met people on your behalf; the human makes the final
@@ -89,6 +91,9 @@ export default function OutcomesPanel({
               <div key={p.id} className="mb-2 rounded border-2 border-echo/20 p-3">
                 <div className="mb-1 flex items-center gap-2">
                   <span className="font-bold text-echo">{p.name}</span>
+                  {p.auto && (
+                    <span className="rounded bg-echo/15 px-1 text-[10px] text-parchment/60">met by your echo</span>
+                  )}
                   {a?.recommend && (
                     <span className="rounded bg-echo/20 px-1 text-[10px] text-echo">your echo: worth it</span>
                   )}
