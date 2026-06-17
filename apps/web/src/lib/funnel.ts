@@ -16,7 +16,13 @@ export type FunnelStage =
   | "first_let_echo_answer"
   | "first_feedback"
   | "first_promotion"
-  | "handover_start";
+  | "handover_start"
+  // ── Phase 0 island (BUILD-PLAN §0.F) — the proof-of-magic activation funnel ──
+  | "island_enter"
+  | "first_pet_talk"
+  | "first_fork"
+  | "reached_dusk"
+  | "reading_submitted";
 
 interface FunnelRecord {
   t: number; // epoch ms of first occurrence

@@ -91,6 +91,57 @@ def synthetic_corpus(n: int, seed: int):
     return texts, teles, np.array(targets, dtype=float)
 
 
+def behavioral_corpus(n: int, seed: int):
+    """Return (texts, telemetries, Z_target) anchoring the §3.2 BEHAVIORAL features to the
+    persona axes — the Phase 0 spine. Each row is a telemetry-only "choice" (empty text) whose
+    behavioral signals map onto axes per the §3.3/D4 *semantic remap* (axes kept; meaning moved
+    via these anchors, not renames): save-rate→−pace (future-orientation), risk→+dominance,
+    persistence→+formality (conscientiousness), pet-attach→+warmth/+affect, solitude-tol→
+    −energy/−warmth (social need), time-share social→+warmth / learn→+intellect / build→
+    +dominance / leisure→−energy, deliberate latency→−pace/+intellect. A few hundred rows pin
+    W's new columns to the named directions, so a played day moves the right traits."""
+    rng = np.random.default_rng(seed + 101)
+    teles, targets = [], []
+    iz = AXIS_INDEX
+    for _ in range(n):
+        z = np.zeros(len(AXIS_KEYS))
+        tele: dict = {}
+
+        sr = float(rng.random()); tele["save_rate"] = sr
+        z[iz["pace"]] += -(sr - 0.5) * 1.4                     # save ⇒ unhurried, future-oriented
+
+        ri = float(rng.random()); tele["risk_index"] = ri
+        z[iz["dominance"]] += (ri - 0.5) * 1.2                 # risk-taking ⇒ assertive
+
+        pe = float(rng.random()); tele["persistence"] = pe
+        z[iz["formality"]] += (pe - 0.5) * 1.2                 # follow-through ⇒ conscientious
+
+        alloc = rng.dirichlet(np.ones(5))
+        for k, v in zip(["ts_earn", "ts_learn", "ts_social", "ts_leisure", "ts_build"], alloc):
+            tele[k] = float(v)
+        z[iz["warmth"]] += (alloc[2] - 0.2) * 1.0              # social hours ⇒ warm/affiliative
+        z[iz["intellect"]] += (alloc[1] - 0.2) * 1.0          # study hours ⇒ cerebral
+        z[iz["dominance"]] += (alloc[4] - 0.2) * 0.6          # build hours ⇒ achievement
+        z[iz["energy"]] += -(alloc[3] - 0.2) * 0.8            # leisure hours ⇒ calm
+
+        st = float(rng.random()); tele["solitude_tol"] = st
+        z[iz["energy"]] += -(st - 0.5) * 0.8                  # comfortable alone ⇒ lower social energy
+        z[iz["warmth"]] += -(st - 0.5) * 0.5
+
+        pa = float(rng.random()); tele["pet_attach"] = pa
+        z[iz["warmth"]] += (pa - 0.5) * 0.8                   # attachment ⇒ warm
+        z[iz["affect"]] += (pa - 0.5) * 0.6                   # and expressive
+
+        dl = int(rng.choice([200, 800, 2000, 5000])); tele["decision_latency"] = dl
+        delib = float(np.tanh(dl / 3000.0))
+        z[iz["pace"]] += -(delib - 0.4) * 0.6                 # deliberate ⇒ unhurried
+        z[iz["intellect"]] += (delib - 0.4) * 0.4
+
+        teles.append(tele)
+        targets.append(np.clip(z, -1, 1))
+    return [""] * n, teles, np.array(targets, dtype=float)
+
+
 def load_anchor_corpus(path: Path):
     texts, teles, targets = [], [], []
     for line in path.read_text().splitlines():
@@ -121,7 +172,12 @@ def main():
     if args.anchors:
         texts, teles, Z = load_anchor_corpus(Path(args.anchors))
     else:
-        texts, teles, Z = synthetic_corpus(args.n, args.seed)
+        # Default keyless bootstrap: synthetic TEXT rows anchor the style/embedding features
+        # (legacy behaviour, preserved) AND behavioral rows anchor the §3.2 choice features
+        # (the Phase 0 spine). Together they pin both halves of the grown W in one fit.
+        t_s, tl_s, Z_s = synthetic_corpus(args.n, args.seed)
+        t_b, tl_b, Z_b = behavioral_corpus(max(1, args.n // 2), args.seed)
+        texts, teles, Z = t_s + t_b, tl_s + tl_b, np.vstack([Z_s, Z_b])
 
     Phi = np.array([P.featurize_raw(t, tl) for t, tl in zip(texts, teles)], dtype=float)
     print(f"[train] corpus: N={Phi.shape[0]}  F={Phi.shape[1]}  D={len(AXIS_KEYS)}")

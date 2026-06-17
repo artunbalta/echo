@@ -110,7 +110,8 @@ fill in keys. Each provider is independently swappable:
 | Persona latent dim `d` | 8 (bipolar axes) | `packages/shared/src/persona.ts` |
 | Persona posterior covariance | full `Σ (8×8)` (was diagonal) | `services/ml/echo_ml/persona.py` |
 | Context/action embedding | 256-d, multilingual (Voyage `voyage-3.5`) | `db/migrations`, `.env`, `embeddings.py` |
-| Raw feature dim `F` | 50 = 32 emb-proj + 14 stylometry + 4 telemetry | `persona.FEATURE_DIM` |
+| Raw feature dim `F` | 62 = 32 emb-proj + 14 stylometry + 16 telemetry/behavioral | `persona.FEATURE_DIM` |
+| Behavioral block (Phase 0 spine, §3.2) | 12 dims: time-share[5] + save_rate + risk_index + solitude_tol + pet_attach + decision_latency + persistence + consistency | `persona.TELEMETRY_FEATURE_NAMES` |
 | Learned measurement matrix `W` | `(8×F)` FA + anchoring, committed | `echo_ml/artifacts/measurement.npz` |
 | Robust update | Student-t `ν=4`, χ² gate `q=0.99`, 3 IRLS iters | `persona.robust_kalman_update` |
 | Trait/state split | `K_state=4` transient directions `V` | `persona_model.fit_state_factors` |
@@ -124,6 +125,16 @@ updates, **trait/state** separation, and a black-box **reconstruction** objectiv
 hyperparameter set (`HYPER`) lives in `services/ml/echo_ml/config.py`; promotion thresholds
 `(α*, n*, e*)`, hysteresis, and stakes/cost values are in `services/ml` (Phase 5). To rebuild
 the measurement artifact: `services/ml/scripts/train_measurement.py`.
+
+**Phase 0 axis-semantics decision (§3.3 / open-decision D4).** The 8 axis *names* are kept
+(`warmth, dominance, openness, energy, formality, intellect, pace, affect`) — renaming would
+break the order-synced `persona_axes.py`, the committed `measurement.npz`, and the 100 seeded
+NPCs. Instead the sim's value-dimensions are mapped onto existing axes via the `train_measurement`
+behavioral *anchors* (semantics, not labels): **save-rate → −pace** (future-orientation),
+**risk → +dominance**, **persistence → +formality** (conscientiousness), **pet-attach →
++warmth/+affect**, **solitude-tolerance → −energy/−warmth** (social need), and time-share
+social/learn/build/leisure onto warmth/intellect/dominance/energy. Reversible if Phase 0
+validation fails specifically on risk/future-orientation.
 
 ## Privacy
 

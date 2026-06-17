@@ -15,7 +15,18 @@ export type TelemetryType =
   | "interaction_end"
   | "portal_enter" // stepped through a portal to another scene (e.g. the venue)
   | "gesture"
-  | "idle";
+  | "idle"
+  // ── Phase 0 behavioral spine (BUILD-PLAN §3.1): signal moves from words to choices. ──
+  // The whole vision rides on reading what you *choose*. These are emitted by the island
+  // day-loop and featurized by the ML service (persona.TELEMETRY_FEATURE_NAMES). Payloads
+  // are derived scalars — never raw text — so the deletion cascade stays simple (§4.4).
+  | "choice_made" // a fork resolved   payload: { forkKey, option, optionsShown, latencyMs, dayIndex, irreversible }
+  | "allocation" // budget spent       payload: { earn, learn, social, leisure, build } (fractions ~sum 1)
+  | "resource_bet" // risky/safe bet    payload: { stake, expectedValue, variance, chosenRisk: "safe"|"risky" }
+  | "pet_talk" // a turn to the pet     payload: { chars, valence, turnIndex, underStress } (NO raw text)
+  | "leave_intent" // progress to leave payload: { stage, dayIndex, shipProgress01, secondsAlone }
+  | "structure_progress" // building     payload: { structure, delta01, sessionSeconds, started, finished }
+  | "fork_deliberation"; // hover/undo before commit  payload: { forkKey, hovers, msDeliberated }
 
 export interface TelemetryEvent {
   type: TelemetryType;

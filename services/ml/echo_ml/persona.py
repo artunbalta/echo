@@ -393,12 +393,29 @@ def featurize(text: str, telemetry: Optional[dict] = None) -> tuple[np.ndarray, 
 _PROJ = (np.random.default_rng(7).standard_normal((HYPER.embed_proj_dim, SETTINGS.embed_dim))
          / np.sqrt(HYPER.embed_proj_dim))
 
-TELEMETRY_FEATURE_NAMES = ["latency_norm", "has_latency", "edits_norm", "approach"]
+TELEMETRY_FEATURE_NAMES = [
+    "latency_norm", "has_latency", "edits_norm", "approach",
+    # ── Phase 0 behavioral spine (§3.1/§3.2): revealed preference from *choices*, not words.
+    # The whole vision rides on reading what you choose; these grow F from 50 → 62 so allocation,
+    # timing, risk, and solitude choices move the persona posterior. Populated by the island
+    # day-loop (allocation, resource_bet, choice_made, structure_progress) via /observe, and by
+    # pet_talk/leave_intent via /telemetry. All bounded; absent ⇒ 0 (neutral).
+    "ts_earn", "ts_learn", "ts_social", "ts_leisure", "ts_build",  # time-share (revealed priorities)
+    "save_rate",          # saved / earned — future-orientation / delay discounting
+    "risk_index",         # E[chosen variance] — risk tolerance
+    "solitude_tol",       # comfort being alone — social need / introversion (from leave_intent)
+    "pet_attach",         # volume × frequency of pet talk — attachment / coping
+    "decision_latency",   # choice deliberation (distinct from reply latency)
+    "persistence",        # finished / started structures — conscientiousness / grit
+    "consistency",        # stability of choices across days (0 within a single session)
+]
 
 
 def _telemetry_features(telemetry: Optional[dict]) -> np.ndarray:
-    """Implicit, inherently language-free signals (reply latency, edit count, approach/
-    avoid). Bounded; absent signals are 0 with an explicit `has_latency` presence flag."""
+    """Implicit, inherently language-free signals. The first four are the legacy reply/approach
+    signals; the rest are the §3.2 behavioral block. Bounded; absent signals are 0 with an
+    explicit `has_latency` presence flag. A single weird day can't dominate — the robust,
+    heteroscedastic update + trait/state split marginalize a bad day (§3.2.4)."""
     t = telemetry or {}
     lat = t.get("latencyMs")
     latency_norm = float(np.tanh((1500.0 - lat) / 1500.0)) if lat is not None else 0.0
@@ -407,7 +424,20 @@ def _telemetry_features(telemetry: Optional[dict]) -> np.ndarray:
     edits_norm = float(np.tanh(edits * 0.2))
     approach = t.get("approach")
     approach_f = 0.0 if approach is None else (1.0 if approach else -1.0)
-    return np.array([latency_norm, has_latency, edits_norm, approach_f], dtype=float)
+
+    # Behavioral block — each read bounded so no NaN/inf ever reaches W @ z.
+    def b(key: str, lo: float = 0.0, hi: float = 1.0) -> float:
+        return float(np.clip(t.get(key, 0.0) or 0.0, lo, hi))
+
+    dl = t.get("decision_latency")
+    decision_latency = float(np.tanh((dl or 0.0) / 3000.0)) if dl is not None else 0.0
+
+    return np.array([
+        latency_norm, has_latency, edits_norm, approach_f,
+        b("ts_earn"), b("ts_learn"), b("ts_social"), b("ts_leisure"), b("ts_build"),
+        b("save_rate"), b("risk_index"), b("solitude_tol"), b("pet_attach"),
+        decision_latency, b("persistence"), b("consistency"),
+    ], dtype=float)
 
 
 def featurize_raw(text: str, telemetry: Optional[dict] = None,
@@ -453,7 +483,16 @@ def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
     """
     from .persona_model import get_persona_model
     model = model if model is not None else get_persona_model()
-    if model is not None and getattr(model, "trained", False):
+    # A trained artifact whose feature width no longer matches FEATURE_DIM (e.g. F grew in §0.D
+    # but the committed measurement.npz predates the re-anchor) must degrade to the heuristic
+    # featurizer, never shape-crash the online loop. The artifact is re-fit to close this gap.
+    trained_and_compatible = (
+        model is not None
+        and getattr(model, "trained", False)
+        and getattr(model, "mu_phi", None) is not None
+        and model.mu_phi.shape[0] == FEATURE_DIM
+    )
+    if trained_and_compatible:
         # No information at all (empty text AND no telemetry) ⇒ no-op, matching the heuristic
         # path's mask.sum()==0 short-circuit. Telemetry-only updates (e.g. latency→pace) still
         # flow through, since their signal lives in the telemetry features of φ.

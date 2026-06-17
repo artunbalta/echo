@@ -16,7 +16,8 @@
     "build": "npm run build:shared && npm run build -w @echo/realtime && npm run build -w @echo/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "seed": "node db/seed/seed.mjs",
-    "gen:assets": "node pipeline/generate-venue-assets.mjs"
+    "gen:assets": "node pipeline/generate-venue-assets.mjs",
+    "gen:island-assets": "node pipeline/generate-island-assets.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

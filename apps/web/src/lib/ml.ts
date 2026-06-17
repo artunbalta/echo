@@ -70,6 +70,33 @@ export function agentFeedback(body: Record<string, unknown>): Promise<unknown> {
   return call("/feedback", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
 }
 
+/**
+ * Push a user action (with derived behavioral telemetry) into the persona posterior
+ * (BUILD-PLAN §0.D). The ML `/observe` update reads `telemetry` via persona._telemetry_features,
+ * so behavioral choices move the posterior — the spine that turns choices into signal (§3).
+ */
+export function observeEvent(body: {
+  userId: string;
+  context?: Record<string, unknown>;
+  action?: string;
+  telemetry?: Record<string, unknown>;
+}): Promise<{ ok: boolean; mocked?: boolean }> {
+  return call(
+    "/observe",
+    { method: "POST", body: JSON.stringify({ context: {}, action: "", telemetry: {}, ...body }) },
+    { ok: true, mocked: true },
+  );
+}
+
+/** Forward one implicit telemetry event ({type, payload}) to the ML revealed-preference path. */
+export function telemetryEvent(body: {
+  userId: string;
+  sessionId?: string;
+  event: { type: string; payload?: Record<string, unknown> };
+}): Promise<{ ok: boolean; mocked?: boolean }> {
+  return call("/telemetry", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
+}
+
 export function meetingOutcome(body: Record<string, unknown>): Promise<unknown> {
   return call("/meeting-outcome", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
 }
