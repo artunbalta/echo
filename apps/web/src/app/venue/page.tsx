@@ -139,7 +139,7 @@ export default function VenuePage() {
 
       {/* HUD */}
       <div className="panel absolute left-3 top-3 rounded px-3 py-2 font-mono text-[11px] text-parchment/80">
-        <div className="glow-echo font-bold text-echo">ECHO × THY — fuar standı</div>
+        <div className="glow-echo font-bold text-echo">echo × THY — fuar standı</div>
         <div>WASD / ok tuşları ya da tıkla · standa yaklaş, E ile konuş</div>
         <div className="text-parchment/50">canlı: {booked}/{total} rezervasyon</div>
       </div>

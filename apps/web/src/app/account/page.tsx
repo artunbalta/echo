@@ -64,7 +64,7 @@ export default function Account() {
       <div className="panel w-full max-w-lg rounded-lg p-6">
         <h1 className="mb-1 text-2xl font-bold text-echo">your data</h1>
         <p className="mb-5 text-xs text-parchment/60">
-          What ECHO may learn is yours to control. Selfies are never stored — only derived style.
+          What echo may learn is yours to control. Selfies are never stored — only derived style.
         </p>
 
         <div className="mb-5">
