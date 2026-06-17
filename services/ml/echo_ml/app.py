@@ -172,9 +172,32 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
         tele["approach"] = True
     elif t == "avoid":
         tele["approach"] = False
+    elif t == "dwell":
+        tele["approach"] = True            # lingering near someone is approach-like warmth
     elif t == "reply_latency":
         tele["latencyMs"] = payload.get("ms")
         tele["editsCount"] = payload.get("edits")
+    # ── Phase 0 behavioral spine (§3.1): choices/companionship move the right axes ──
+    elif t == "pet_talk":
+        # Attachment grows with sustained companionship; turnIndex is the volume proxy.
+        turn = float(payload.get("turnIndex", 0) or 0)
+        tele["pet_attach"] = min(1.0, 0.3 + 0.12 * turn)
+    elif t == "leave_intent":
+        # Staying (stage "none") reveals comfort with solitude; moving to leave reveals low tolerance.
+        tele["solitude_tol"] = 0.8 if payload.get("stage") == "none" else 0.2
+    elif t == "allocation":
+        for k in ("earn", "learn", "social", "leisure", "build"):
+            tele["ts_" + k] = payload.get(k, 0.0)
+    elif t == "resource_bet":
+        tele["risk_index"] = payload.get("variance", 0.0)
+    elif t == "structure_progress":
+        tele["persistence"] = 1.0 if payload.get("finished") else (0.5 if payload.get("started") else 0.0)
+    elif t == "choice_made":
+        opt = payload.get("option")
+        if opt in ("save", "spend"):
+            tele["save_rate"] = 1.0 if opt == "save" else 0.0
+        if payload.get("latencyMs") is not None:
+            tele["decision_latency"] = payload.get("latencyMs")
     if tele:
         st.posterior = P.observe(st.posterior, "", tele)
     return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}

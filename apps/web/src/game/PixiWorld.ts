@@ -31,8 +31,12 @@ import {
   buildTreeTexture,
   buildBushTexture,
   buildPortalTexture,
+  buildWaterTexture,
+  buildSandTexture,
+  buildFlowerTexture,
   styleFromId,
 } from "./art";
+import { buildPropSheet, isPropUrl, propKindFromUrl } from "./props";
 
 /**
  * Generated atmospheric pixel-art world art (Higgsfield, §3). These replace the
@@ -47,7 +51,7 @@ const ART_URLS = {
   // Same Higgsfield-generated portal the venue uses, so both sides show the identical door.
   portal: "/assets/venue/portal.png",
 } as const;
-import { generateTileMap, isBlocked, type TileMap } from "./tilemap";
+import { generateTileMap, isBlocked, isWater, isBeach, type TileMap } from "./tilemap";
 
 const TILE = WORLD.TILE_SIZE;
 const SCALE = WORLD.RENDER_SCALE;
@@ -92,11 +96,15 @@ export class PixiWorld {
   private world = new Container();
   private entityLayer = new Container();
   private map: TileMap;
+  private proceduralArt: boolean;
+  private artDir: string | null;
   private entities = new Map<string, RenderEntity>();
   private grassTex!: Texture;
   private treeTex!: Texture;
   private bushTex!: Texture;
   private flowerTex!: Texture;
+  private waterTex!: Texture;
+  private sandTex!: Texture;
   private portalTex!: Texture;
 
   private selfId = "";
@@ -119,11 +127,13 @@ export class PixiWorld {
   private locOffX = 0;
   private locOffY = 0;
   private destroyed = false;
+  /** When set, the sea is passable (the player has built a raft and can sail between islands). */
+  private canSail = false;
   private portalCenter = { x: 0, y: 0 };
   private portalNear = false;
   // Mouse-wheel zoom: a multiplier on top of the base RENDER_SCALE, clamped.
   private zoom = 1;
-  private static readonly MIN_ZOOM = 0.5;
+  private static readonly MIN_ZOOM = 0.32; // zoom out far enough to survey the archipelago
   private static readonly MAX_ZOOM = 2.5;
   // Mouse-drag pan: a screen-space offset added on top of the player-centered camera.
   // Lets the user look around without moving; player movement re-centers it (see stepLocal).
@@ -138,16 +148,24 @@ export class PixiWorld {
   private pointerMoved = false;
   private static readonly DRAG_THRESHOLD = 6; // px before a press counts as a drag, not a click
 
-  constructor(hooks: WorldHooks) {
+  constructor(hooks: WorldHooks, opts: { map?: TileMap; proceduralArt?: boolean; artDir?: string } = {}) {
     this.hooks = hooks;
-    this.map = generateTileMap();
+    this.map = opts.map ?? generateTileMap();
+    // `artDir` (e.g. "/assets/island") loads a committed PNG set (grass/water/sand/tree/bush/
+    // flower), each falling back to its vivid procedural builder if missing — so the island
+    // shows the generated art but still runs key-free. `proceduralArt` forces pure procedural.
+    this.proceduralArt = opts.proceduralArt ?? false;
+    this.artDir = opts.artDir ?? null;
+    this.localX = this.map.width / 2;
+    this.localY = this.map.height / 2;
   }
 
   private initialized = false;
 
   async init(canvasParent: HTMLElement) {
     await this.app.init({
-      background: "#74c365",
+      // Island → deep-sea blue beyond the shore; main world → grass.
+      background: this.map.water ? "#1f5e95" : "#74c365",
       resizeTo: canvasParent,
       antialias: false,
       roundPixels: true,
@@ -185,25 +203,51 @@ export class PixiWorld {
    * procedural builder independently, so a missing/failed asset never blanks the world.
    */
   private async loadWorldArt() {
-    const load = async (url: string): Promise<Texture | null> => {
+    const proc = {
+      grass: () => nearest(Texture.from(buildGrassTexture(TILE))),
+      tree: () => nearest(Texture.from(buildTreeTexture(TILE))),
+      bush: () => nearest(Texture.from(buildBushTexture(TILE))),
+      flower: () => nearest(Texture.from(buildFlowerTexture(TILE))),
+      water: () => nearest(Texture.from(buildWaterTexture(TILE))),
+      sand: () => nearest(Texture.from(buildSandTexture(TILE))),
+      portal: () => nearest(Texture.from(buildPortalTexture(TILE))),
+    };
+
+    // Pure-procedural mode: skip all network loads.
+    if (this.proceduralArt && !this.artDir) {
+      this.grassTex = proc.grass();
+      this.treeTex = proc.tree();
+      this.bushTex = proc.bush();
+      this.flowerTex = proc.flower();
+      this.waterTex = proc.water();
+      this.sandTex = proc.sand();
+      this.portalTex = proc.portal();
+      return;
+    }
+
+    const load = async (url: string | null): Promise<Texture | null> => {
+      if (!url) return null;
       try {
         return nearest(await Assets.load(url));
       } catch {
         return null;
       }
     };
-    const [grass, tree, bush, flower, portal] = await Promise.all([
-      load(ART_URLS.grass),
-      load(ART_URLS.tree),
-      load(ART_URLS.bush),
-      load(ART_URLS.flower),
-      load(ART_URLS.portal),
+    // The island loads its committed PNG set; the main world loads ART_URLS (no water/sand/PNG portal there).
+    const urls = this.artDir
+      ? { grass: `${this.artDir}/grass.png`, tree: `${this.artDir}/tree.png`, bush: `${this.artDir}/bush.png`, flower: `${this.artDir}/flower.png`, water: `${this.artDir}/water.png`, sand: `${this.artDir}/sand.png`, portal: null }
+      : { grass: ART_URLS.grass, tree: ART_URLS.tree, bush: ART_URLS.bush, flower: ART_URLS.flower, water: null, sand: null, portal: ART_URLS.portal };
+
+    const [grass, tree, bush, flower, water, sand, portal] = await Promise.all([
+      load(urls.grass), load(urls.tree), load(urls.bush), load(urls.flower), load(urls.water), load(urls.sand), load(urls.portal),
     ]);
-    this.grassTex = grass ?? nearest(Texture.from(buildGrassTexture(TILE)));
-    this.treeTex = tree ?? nearest(Texture.from(buildTreeTexture(TILE)));
-    this.bushTex = bush ?? nearest(Texture.from(buildBushTexture(TILE)));
-    this.flowerTex = flower ?? this.bushTex;
-    this.portalTex = portal ?? nearest(Texture.from(buildPortalTexture(TILE)));
+    this.grassTex = grass ?? proc.grass();
+    this.treeTex = tree ?? proc.tree();
+    this.bushTex = bush ?? proc.bush();
+    this.flowerTex = flower ?? proc.flower();
+    this.waterTex = water ?? proc.water();
+    this.sandTex = sand ?? proc.sand();
+    this.portalTex = portal ?? proc.portal();
   }
 
   setSelf(id: string, x: number, y: number) {
@@ -214,12 +258,44 @@ export class PixiWorld {
 
   // ── tilemap rendering ─────────────────────────────────────────────────────────
   private buildGround() {
-    const ground = new TilingSprite({
-      texture: this.grassTex,
-      width: WORLD.MAP_WIDTH * TILE,
-      height: WORLD.MAP_HEIGHT * TILE,
-    });
-    this.world.addChild(ground);
+    const W = this.map.width;
+    const H = this.map.height;
+    const px = W * TILE;
+    const py = H * TILE;
+
+    if (!this.map.water) {
+      this.world.addChild(new TilingSprite({ texture: this.grassTex, width: px, height: py }));
+      return;
+    }
+
+    // Island: an ocean base, then grass masked to the land shape, then a sand beach masked to
+    // the shoreline. Masks keep each tiling texture varied (no per-tile squashing).
+    this.world.addChild(new TilingSprite({ texture: this.waterTex, width: px, height: py }));
+
+    const landMask = new Graphics();
+    const beachMask = new Graphics();
+    let anyBeach = false;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (isWater(this.map, x, y)) continue;
+        landMask.rect(x * TILE, y * TILE, TILE, TILE);
+        if (isBeach(this.map, x, y)) {
+          beachMask.rect(x * TILE, y * TILE, TILE, TILE);
+          anyBeach = true;
+        }
+      }
+    }
+    landMask.fill(0xffffff);
+    const land = new TilingSprite({ texture: this.grassTex, width: px, height: py });
+    land.mask = landMask;
+    this.world.addChild(landMask, land);
+
+    if (anyBeach) {
+      beachMask.fill(0xffffff);
+      const beach = new TilingSprite({ texture: this.sandTex, width: px, height: py });
+      beach.mask = beachMask;
+      this.world.addChild(beachMask, beach);
+    }
   }
 
   private buildDecorations() {
@@ -248,6 +324,7 @@ export class PixiWorld {
   /** Render the portal doorway and cache its center (tile units) for proximity checks. */
   private buildPortal() {
     const p = this.map.portal;
+    if (!p) return; // the island has no venue portal
     const s = new Sprite(this.portalTex);
     s.anchor.set(0.5, 1);
     s.x = (p.x + p.w / 2) * TILE;
@@ -261,8 +338,12 @@ export class PixiWorld {
   private ensureEntity(snap: EntitySnapshot): RenderEntity {
     let re = this.entities.get(snap.id);
     if (re) return re;
-    const style = styleFromId(snap.refId || snap.id);
-    const sheet = nearest(Texture.from(buildCharacterSheet(style)));
+    // A `proc:<kind>` spriteUrl renders a procedural prop (the dog pet, the day's stations)
+    // instead of a humanoid character sheet — same texture seam, different silhouette.
+    const propKind = isPropUrl(snap.spriteUrl) ? propKindFromUrl(snap.spriteUrl) : null;
+    const sheet = propKind
+      ? nearest(Texture.from(buildPropSheet(propKind)))
+      : nearest(Texture.from(buildCharacterSheet(styleFromId(snap.refId || snap.id))));
     const frames = sliceFrames(sheet);
     const sprite = new Sprite(frames[snap.facing][0]);
     sprite.anchor.set(0.5, 1);
@@ -310,7 +391,7 @@ export class PixiWorld {
 
   /** Async-load a real sprite sheet (http or data URL) and swap procedural frames out. */
   private maybeLoadSheet(re: RenderEntity, url: string | undefined) {
-    if (!url || re.loadedSpriteUrl === url) return;
+    if (!url || isPropUrl(url) || re.loadedSpriteUrl === url) return; // proc:* stays procedural
     re.loadedSpriteUrl = url;
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -481,6 +562,7 @@ export class PixiWorld {
 
   /** Toggle the portal-nearby hook as the player crosses its interaction radius. */
   private detectPortal() {
+    if (!this.map.portal) return; // no portal on the island
     const d = Math.hypot(this.localX - this.portalCenter.x, this.localY - this.portalCenter.y);
     const near = d <= WORLD.INTERACTION_RADIUS + 0.8;
     if (near !== this.portalNear) {
@@ -516,9 +598,9 @@ export class PixiWorld {
       const ny = this.localY + (dy / len) * WORLD.MOVE_SPEED * dt;
       const beforeX = this.localX;
       const beforeY = this.localY;
-      // client-side collision prediction
-      if (!isBlocked(this.map, nx, this.localY)) this.localX = nx;
-      if (!isBlocked(this.map, this.localX, ny)) this.localY = ny;
+      // client-side collision prediction (the sea is passable once sailing is unlocked)
+      if (!this.blockedAt(nx, this.localY)) this.localX = nx;
+      if (!this.blockedAt(this.localX, ny)) this.localY = ny;
       // Click-to-move into a wall: if we couldn't budge at all, drop the target so we
       // don't shove into the obstacle forever.
       if (this.clickTarget && this.localX === beforeX && this.localY === beforeY) this.clickTarget = null;
@@ -712,6 +794,46 @@ export class PixiWorld {
    *  Passing null halts the autonomous walk. Any human key press cancels it (stepLocal). */
   setAutoWalk(target: { x: number; y: number } | null) {
     this.clickTarget = target;
+  }
+
+  /** Collision-with-sailing: trees/rocks always block; the sea blocks only until you can sail. */
+  private blockedAt(x: number, y: number): boolean {
+    if (!isBlocked(this.map, x, y)) return false;
+    return !(this.canSail && isWater(this.map, x, y));
+  }
+
+  /** Unlock sailing — the sea becomes traversable so the player can reach the other islands. */
+  setSailing(on: boolean) {
+    this.canSail = on;
+  }
+
+  /** Move a non-local entity toward a tile (the wandering pet). Interpolates + animates. */
+  moveEntity(id: string, x: number, y: number, facing?: Facing) {
+    const re = this.entities.get(id);
+    if (!re || id === this.selfId) return;
+    re.targetX = x;
+    re.targetY = y;
+    re.moving = true;
+    if (facing) re.facing = facing;
+    re.buf.push({ t: performance.now(), x, y, facing: re.facing, moving: true });
+    if (re.buf.length > 20) re.buf.shift();
+  }
+
+  /** Re-skin a live entity to a new procedural prop (e.g. grain sprout → ripe as it grows). */
+  setEntitySprite(id: string, spriteUrl: string) {
+    const re = this.entities.get(id);
+    const kind = isPropUrl(spriteUrl) ? propKindFromUrl(spriteUrl) : null;
+    if (!re || !kind) return;
+    re.frames = sliceFrames(nearest(Texture.from(buildPropSheet(kind))));
+    re.sprite.texture = re.frames[re.facing][0];
+  }
+
+  /** Update an entity's display name label in place (e.g. a station's prompt-y caption). */
+  setEntityName(id: string, name: string) {
+    const re = this.entities.get(id);
+    if (!re) return;
+    re.name = name;
+    re.label.text = name;
   }
 
   destroy() {

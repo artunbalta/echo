@@ -7,15 +7,28 @@
  */
 import { SPRITE, FACINGS } from "@echo/shared";
 
+// Vivid, saturated island palette (the washed-out Higgsfield PNGs read too pale). Warm grass,
+// bright sea, sunlit sand — picked to sing under the dusk-blue chrome rather than disappear.
 const PALETTE = {
-  grass: ["#74c365", "#6bbb5c", "#7ec96f", "#69b85b"],
-  grassBlade: "#5aa64f",
+  grass: ["#57c357", "#4fb94f", "#65d066", "#46ad49"],
+  grassBlade: "#37a043",
+  grassHi: "#86e07f",
+  water: ["#2f93dd", "#2a86cf", "#3aa0e6", "#2680c6"],
+  waterFoam: "#bfe9fb",
+  waterDeep: "#226fb0",
+  sand: ["#ecd79b", "#e3cb86"],
+  sandDark: "#cdb06e",
   treeTrunk: "#7a4a2b",
-  treeLeafA: "#3f8f3a",
-  treeLeafB: "#4fa047",
-  bushA: "#5aa64f",
-  bushB: "#6fbf63",
-  flower: "#b06cd5",
+  treeTrunkHi: "#9a6238",
+  treeLeafA: "#2faa42",
+  treeLeafB: "#49c659",
+  treeLeafHi: "#82e57c",
+  bushA: "#3fae4c",
+  bushB: "#5fce5f",
+  berry: "#e2466a",
+  // A handful of flower colours so the meadow reads bright and varied, not one purple dot.
+  flowers: ["#ef6f9a", "#f4c64e", "#a06cd5", "#ff8a5c", "#f4f0e6", "#5ac8e0"],
+  flowerLeaf: "#3f9e44",
   outline: "#22311f",
 };
 
@@ -301,16 +314,77 @@ export function buildGrassTexture(tile: number): HTMLCanvasElement {
   const ctx = c.getContext("2d")!;
   for (let ty = 0; ty < 4; ty++) {
     for (let tx = 0; tx < 4; tx++) {
-      const base = PALETTE.grass[(tx + ty) % PALETTE.grass.length];
+      const base = PALETTE.grass[(tx * 2 + ty) % PALETTE.grass.length];
       px(ctx, tx * tile, ty * tile, tile, tile, base);
-      // sprinkle a few blades deterministically
-      for (let i = 0; i < 5; i++) {
+      // Sprinkle blades + a few bright highlights so the meadow reads lush, not flat.
+      for (let i = 0; i < 7; i++) {
         const r1 = hash01(`${tx},${ty},${i}`, 11);
         const r2 = hash01(`${tx},${ty},${i}`, 22);
-        px(ctx, tx * tile + Math.floor(r1 * tile), ty * tile + Math.floor(r2 * tile), 1, 2, PALETTE.grassBlade);
+        const hi = hash01(`${tx},${ty},${i}`, 33) > 0.7;
+        px(ctx, tx * tile + Math.floor(r1 * tile), ty * tile + Math.floor(r2 * tile), 1, 2, hi ? PALETTE.grassHi : PALETTE.grassBlade);
       }
     }
   }
+  return c;
+}
+
+/** A bright sea tile with deep patches and foam flecks — the ocean ringing the island. */
+export function buildWaterTexture(tile: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = tile * 4;
+  c.height = tile * 4;
+  const ctx = c.getContext("2d")!;
+  for (let ty = 0; ty < 4; ty++) {
+    for (let tx = 0; tx < 4; tx++) {
+      px(ctx, tx * tile, ty * tile, tile, tile, PALETTE.water[(tx + ty * 2) % PALETTE.water.length]);
+      for (let i = 0; i < 6; i++) {
+        const r1 = hash01(`${tx},${ty},${i}`, 41);
+        const r2 = hash01(`${tx},${ty},${i}`, 52);
+        const k = hash01(`${tx},${ty},${i}`, 63);
+        const col = k > 0.78 ? PALETTE.waterFoam : k < 0.3 ? PALETTE.waterDeep : PALETTE.water[1];
+        px(ctx, tx * tile + Math.floor(r1 * tile), ty * tile + Math.floor(r2 * (tile - 1)), k > 0.78 ? 2 : 1, 1, col);
+      }
+    }
+  }
+  return c;
+}
+
+/** A warm sand tile for the beach ring where land meets sea. */
+export function buildSandTexture(tile: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = tile * 2;
+  c.height = tile * 2;
+  const ctx = c.getContext("2d")!;
+  for (let ty = 0; ty < 2; ty++) {
+    for (let tx = 0; tx < 2; tx++) {
+      px(ctx, tx * tile, ty * tile, tile, tile, PALETTE.sand[(tx + ty) % 2]);
+      for (let i = 0; i < 5; i++) {
+        const r1 = hash01(`${tx},${ty},${i}`, 71);
+        const r2 = hash01(`${tx},${ty},${i}`, 82);
+        px(ctx, tx * tile + Math.floor(r1 * tile), ty * tile + Math.floor(r2 * tile), 1, 1, PALETTE.sandDark);
+      }
+    }
+  }
+  return c;
+}
+
+/** A small wildflower clump on grass — varied colours so the meadow looks bright. */
+export function buildFlowerTexture(tile: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = tile;
+  c.height = tile;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  const spots: [number, number][] = [
+    [4, 7], [9, 5], [6, 11], [11, 10], [3, 12],
+  ];
+  spots.forEach(([x, y], i) => {
+    const col = PALETTE.flowers[i % PALETTE.flowers.length];
+    px(ctx, x, y + 2, 1, 2, PALETTE.flowerLeaf); // stem
+    px(ctx, x - 1, y, 3, 1, col); // petals
+    px(ctx, x, y - 1, 1, 3, col);
+    px(ctx, x, y, 1, 1, "#fff3b0"); // bright centre
+  });
   return c;
 }
 
@@ -321,12 +395,14 @@ export function buildTreeTexture(tile: number): HTMLCanvasElement {
   c.width = w;
   c.height = h;
   const ctx = c.getContext("2d")!;
-  // trunk
+  // trunk with a lit side
   px(ctx, w / 2 - 3, h - tile, 6, tile, PALETTE.treeTrunk);
-  // canopy — layered circles
+  px(ctx, w / 2 - 3, h - tile, 2, tile, PALETTE.treeTrunkHi);
+  // canopy — layered circles with a sunlit cap
   blob(ctx, w / 2, tile + 4, tile, PALETTE.treeLeafA);
   blob(ctx, w / 2 - 5, tile + 2, tile - 3, PALETTE.treeLeafB);
   blob(ctx, w / 2 + 5, tile + 6, tile - 4, PALETTE.treeLeafB);
+  blob(ctx, w / 2 - 3, tile - 1, tile - 6, PALETTE.treeLeafHi);
   return c;
 }
 
@@ -338,6 +414,10 @@ export function buildBushTexture(tile: number): HTMLCanvasElement {
   blob(ctx, tile, tile + 4, tile - 1, PALETTE.bushA);
   blob(ctx, tile - 4, tile + 2, tile - 5, PALETTE.bushB);
   blob(ctx, tile + 4, tile + 4, tile - 5, PALETTE.bushB);
+  // a few bright berries
+  px(ctx, tile - 3, tile + 3, 1, 1, PALETTE.berry);
+  px(ctx, tile + 3, tile + 5, 1, 1, PALETTE.berry);
+  px(ctx, tile + 1, tile + 1, 1, 1, PALETTE.berry);
   return c;
 }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabaseAdmin";
+import { claimIslandForUser } from "@/lib/islands";
 
 export const runtime = "nodejs";
 
@@ -34,12 +35,24 @@ export async function POST(req: Request) {
   }
 
   const authId = data.user?.id;
+  let island: { q: number; r: number; seed: number } | null = null;
   if (authId) {
     // Link an identity row (real table data). Best-effort — auth already succeeded.
-    await admin
+    const { data: row } = await admin
       .from("users")
-      .upsert({ auth_ref: authId, locale: "en" }, { onConflict: "auth_ref" });
+      .upsert({ auth_ref: authId, locale: "en" }, { onConflict: "auth_ref" })
+      .select("id")
+      .single();
+    // Claim the empty island nearest the most-recent signup (the endless-world placement).
+    // Best-effort: a missing islands table (migration not run) just leaves island null.
+    if (row?.id) {
+      try {
+        island = await claimIslandForUser(admin, row.id as string, String(email).split("@")[0]);
+      } catch {
+        island = null;
+      }
+    }
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, island });
 }
