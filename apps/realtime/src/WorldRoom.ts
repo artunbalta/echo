@@ -35,13 +35,35 @@ interface JoinOptions {
 
 interface ActiveInteraction {
   id: string;
-  userEntityId: string;
-  npcEntityId: string;
+  /** `npc` = a user talking to an NPC (server brokers replies); `user` = two live players
+   *  talking to each other (the server relays each turn to the other). */
+  kind: "npc" | "user";
+  /** The user entity that opened the interaction. */
+  initiatorEntityId: string;
+  /** The other side: an NPC entity id, or the second user's entity id. */
+  partnerEntityId: string;
   history: Turn[];
   startedAt: number;
+  /** Per-sender timestamp of the last relayed turn (server-side rate limiting). */
+  lastTurnAt: Record<string, number>;
+  /** Count of echo-drafted (viaEcho) turns relayed — hard ceiling on auto ping-pong cost. */
+  echoTurns: number;
 }
 
 const NPC_SPEED = WORLD.MOVE_SPEED * 0.5;
+
+// ── player↔player guardrails (server-authoritative; never trust the client) ──────────
+/** Min gap between two relayed turns from the SAME sender — bounds spam/flood. */
+const MIN_PEER_TURN_INTERVAL_MS = 600;
+/** Hard ceiling on echo-drafted turns per conversation — bounds auto ping-pong model cost
+ *  even against a modified client (the browser's own MAX_PEER_ECHO_TURNS is just UX). */
+const MAX_ECHO_RELAYS = 12;
+/** Trim relayed chat history so a long-lived room can't grow it without bound. */
+const PEER_HISTORY_CAP = 60;
+/** Beyond this distance the two players have walked apart → the chat closes (and frees both). */
+const USER_INTERACTION_RANGE = WORLD.INTERACTION_RADIUS + 2;
+/** No turns for this long → auto-close so neither player stays locked "busy". */
+const USER_INTERACTION_IDLE_MS = 120_000;
 
 export class WorldRoom extends Room<WorldState> {
   maxClients = WORLD.ROOM_CAPACITY;
@@ -63,10 +85,9 @@ export class WorldRoom extends Room<WorldState> {
 
   // ── presence ───────────────────────────────────────────────────────────────
   onJoin(client: Client, options: JoinOptions) {
-    const spawn = clampToMap(
-      Math.floor(WORLD.MAP_WIDTH / 2),
-      Math.floor(WORLD.MAP_HEIGHT / 2),
-    );
+    // Live players should find each other: spawn a newcomer a couple of tiles from an
+    // existing live player when there is one, otherwise at the map centre.
+    const spawn = this.pickSpawn();
     const e = new Entity();
     e.id = client.sessionId;
     e.kind = "user";
@@ -94,6 +115,14 @@ export class WorldRoom extends Room<WorldState> {
     const e = this.state.entities.get(client.sessionId);
     if (e) e.moving = false; // freeze in place while we wait for a possible reconnect
 
+    // A live chat must not freeze the OTHER human for the whole reconnection window — end any
+    // player↔player conversation this client was in right away (NPC chats can survive a blip).
+    for (const [iid, it] of this.interactions) {
+      if (it.kind === "user" && (it.initiatorEntityId === client.sessionId || it.partnerEntityId === client.sessionId)) {
+        this.closeInteraction(iid, "left");
+      }
+    }
+
     // Brief reconnection window so a flaky connection doesn't evict the player (§7).
     if (!consented) {
       try {
@@ -104,12 +133,38 @@ export class WorldRoom extends Room<WorldState> {
       }
     }
 
-    // Close any open interaction for this client, then remove presence.
+    // Close any open interaction this client was part of (as initiator OR partner, so a
+    // live player leaving mid-chat cleanly closes the conversation on the other side too).
     for (const [iid, it] of this.interactions) {
-      if (it.userEntityId === client.sessionId) this.closeInteraction(iid, "left");
+      if (it.initiatorEntityId === client.sessionId || it.partnerEntityId === client.sessionId) {
+        this.closeInteraction(iid, "left");
+      }
     }
     this.state.entities.delete(client.sessionId);
     this.clientSessions.delete(client.sessionId);
+  }
+
+  /** Spawn point for a newcomer: near an existing live player if any, else map centre. */
+  private pickSpawn(): { x: number; y: number } {
+    const centre = clampToMap(Math.floor(WORLD.MAP_WIDTH / 2), Math.floor(WORLD.MAP_HEIGHT / 2));
+    const others = [...this.state.entities.values()].filter((e) => e.kind === "user");
+    if (others.length === 0) return centre;
+    // Anchor on the most-recently-seen live player and offset by a couple of tiles.
+    const anchor = others.reduce((a, b) => (b.lastSeen > a.lastSeen ? b : a));
+    const angle = (this.state.tick % 360) * (Math.PI / 180);
+    return clampToMap(anchor.x + Math.cos(angle) * 2, anchor.y + Math.sin(angle) * 2);
+  }
+
+  /** The interaction (if any) this entity is currently part of — used to gate double-opens. */
+  private interactionFor(entityId: string): ActiveInteraction | undefined {
+    for (const it of this.interactions.values()) {
+      if (it.initiatorEntityId === entityId || it.partnerEntityId === entityId) return it;
+    }
+    return undefined;
+  }
+
+  private clientFor(entityId: string): Client | undefined {
+    return this.clients.find((c) => c.sessionId === entityId);
   }
 
   // ── message handlers ────────────────────────────────────────────────────────
@@ -149,6 +204,10 @@ export class WorldRoom extends Room<WorldState> {
     });
 
     this.onMessage(C2S.INTERACT_END, (client, msg: { interactionId: string }) => {
+      const it = this.interactions.get(msg.interactionId);
+      if (!it) return;
+      // Only a participant can end it (either live player, or the NPC chat's owner).
+      if (it.initiatorEntityId !== client.sessionId && it.partnerEntityId !== client.sessionId) return;
       this.closeInteraction(msg.interactionId, "ended");
     });
 
@@ -169,13 +228,51 @@ export class WorldRoom extends Room<WorldState> {
       client.send(S2C.ERROR, { code: "too_far", message: "Move closer to talk." });
       return;
     }
+    // Don't open a second conversation for someone already in one.
+    if (this.interactionFor(user.id)) return;
+
     const id = `it_${client.sessionId}_${target.id}_${this.state.tick}`;
+
+    if (target.kind === "user") {
+      // Two live players. Refuse if the other person is already talking to someone.
+      if (this.interactionFor(target.id)) {
+        client.send(S2C.ERROR, { code: "busy", message: `${target.name} is already talking with someone.` });
+        return;
+      }
+      const it: ActiveInteraction = {
+        id,
+        kind: "user",
+        initiatorEntityId: user.id,
+        partnerEntityId: target.id,
+        history: [],
+        startedAt: Date.now(),
+        lastTurnAt: {},
+        echoTurns: 0,
+      };
+      this.interactions.set(id, it);
+      // Open the conversation on BOTH sides — each describing the other participant.
+      client.send(S2C.INTERACT_OPENED, {
+        interactionId: id,
+        target: { id: target.id, name: target.name, kind: "user" },
+      });
+      this.clientFor(target.id)?.send(S2C.INTERACT_OPENED, {
+        interactionId: id,
+        target: { id: user.id, name: user.name, kind: "user" },
+      });
+      console.log(`[WorldRoom] user↔user ${user.name} ↔ ${target.name}`);
+      return;
+    }
+
+    // User ↔ NPC: the server brokers the NPC's replies.
     const it: ActiveInteraction = {
       id,
-      userEntityId: user.id,
-      npcEntityId: target.id,
+      kind: "npc",
+      initiatorEntityId: user.id,
+      partnerEntityId: target.id,
       history: [],
       startedAt: Date.now(),
+      lastTurnAt: {},
+      echoTurns: 0,
     };
     this.interactions.set(id, it);
     // Face each other; NPC pauses wandering while talking.
@@ -193,16 +290,29 @@ export class WorldRoom extends Room<WorldState> {
       client.send(S2C.ERROR, { code: "no_interaction", message: "Conversation not open." });
       return;
     }
+    // Only a participant may speak into an interaction (prevents injecting a turn into a
+    // conversation between two other players by guessing its id).
+    if (it.initiatorEntityId !== client.sessionId && it.partnerEntityId !== client.sessionId) {
+      client.send(S2C.ERROR, { code: "not_participant", message: "Not your conversation." });
+      return;
+    }
+
+    // Two live players: relay this turn straight to the other person (no NPC model).
+    if (it.kind === "user") {
+      this.relayPeerChat(client, it, msg);
+      return;
+    }
+
     it.history.push({ role: "user", text: msg.text });
 
-    const npcEntity = this.state.entities.get(it.npcEntityId);
+    const npcEntity = this.state.entities.get(it.partnerEntityId);
     const npc = loadNpcs().find((n) => n.id === npcEntity?.refId);
     if (!npc || !npcEntity) {
       this.closeInteraction(it.id, "ended");
       return;
     }
 
-    const userId = this.state.entities.get(it.userEntityId)?.refId;
+    const userId = this.state.entities.get(it.initiatorEntityId)?.refId;
     const sustained = it.history.length > 4;
     const reply = await npcReply(npc, it.history, sustained);
     it.history.push({ role: "assistant", text: reply.text });
@@ -228,12 +338,60 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
+  /** Relay one live-player turn to the other participant (no NPC model involved). The
+   *  client constants are UX only; these server caps are the real ceiling on flood/cost. */
+  private relayPeerChat(client: Client, it: ActiveInteraction, msg: ChatMessage) {
+    const sender = this.state.entities.get(client.sessionId);
+    if (!sender) return;
+    const partnerId = it.initiatorEntityId === client.sessionId ? it.partnerEntityId : it.initiatorEntityId;
+    const partner = this.state.entities.get(partnerId);
+    const partnerClient = this.clientFor(partnerId);
+    if (!partner || !partnerClient) {
+      // The other player is gone — close cleanly so the sender isn't stuck.
+      this.closeInteraction(it.id, "left");
+      return;
+    }
+    const now = Date.now();
+    // Rate-limit per sender: silently drop turns that arrive faster than a human could type
+    // (and that a flooding/looping client would emit). Never trust the browser's own cap.
+    if (now - (it.lastTurnAt[sender.id] ?? 0) < MIN_PEER_TURN_INTERVAL_MS) return;
+    it.lastTurnAt[sender.id] = now;
+    // Hard ceiling on echo-drafted turns: bounds autonomous echo-to-echo cost. Human-typed
+    // turns are never blocked — only the auto (viaEcho) ones are capped.
+    if (msg.viaEcho) {
+      if (it.echoTurns >= MAX_ECHO_RELAYS) return;
+      it.echoTurns++;
+    }
+    it.history.push({ role: "user", text: msg.text });
+    if (it.history.length > PEER_HISTORY_CAP) it.history.splice(0, it.history.length - PEER_HISTORY_CAP);
+    partnerClient.send(S2C.INTERACT_TURN, {
+      interactionId: it.id,
+      speaker: msg.viaEcho ? "peer_echo" : "peer",
+      speakerName: sender.name,
+      text: msg.text,
+    });
+    // Persist the exchange for the end-of-day connection read (fire-and-forget).
+    logInteraction({
+      worldId: this.state.worldId,
+      actorId: sender.refId,
+      targetId: partner.refId,
+      userText: msg.text,
+      npcText: "",
+      latencyMs: msg.latencyMs,
+      editsCount: msg.editsCount,
+    }).catch(() => {});
+  }
+
   private closeInteraction(id: string, reason: string) {
     const it = this.interactions.get(id);
     if (!it) return;
     this.interactions.delete(id);
-    const client = this.clients.find((c) => c.sessionId === it.userEntityId);
-    client?.send(S2C.INTERACT_CLOSED, { interactionId: id, reason });
+    // Notify everyone in the conversation. For an NPC chat that's just the initiator;
+    // for a live pair it's both players.
+    this.clientFor(it.initiatorEntityId)?.send(S2C.INTERACT_CLOSED, { interactionId: id, reason });
+    if (it.kind === "user") {
+      this.clientFor(it.partnerEntityId)?.send(S2C.INTERACT_CLOSED, { interactionId: id, reason });
+    }
   }
 
   // ── simulation ────────────────────────────────────────────────────────────────
@@ -248,6 +406,28 @@ export class WorldRoom extends Room<WorldState> {
       } else {
         this.stepNpc(e, now, dt);
       }
+    }
+    this.enforceUserInteractions(now);
+  }
+
+  /** Keep live-player conversations honest: end them when the two walk apart (so neither is
+   *  locked "busy"), and as an idle backstop. A victim of an open-and-idle grief just steps
+   *  away to free themselves; the opener can't hold them from across the map. */
+  private enforceUserInteractions(now: number) {
+    for (const [iid, it] of this.interactions) {
+      if (it.kind !== "user") continue;
+      const a = this.state.entities.get(it.initiatorEntityId);
+      const b = this.state.entities.get(it.partnerEntityId);
+      if (!a || !b) {
+        this.closeInteraction(iid, "left");
+        continue;
+      }
+      if (tileDistance(a.x, a.y, b.x, b.y) > USER_INTERACTION_RANGE) {
+        this.closeInteraction(iid, "walked_away");
+        continue;
+      }
+      const lastActivity = Math.max(it.startedAt, ...Object.values(it.lastTurnAt));
+      if (now - lastActivity > USER_INTERACTION_IDLE_MS) this.closeInteraction(iid, "idle");
     }
   }
 
@@ -270,7 +450,7 @@ export class WorldRoom extends Room<WorldState> {
   /** Lightweight wander FSM (§8): idle at home, occasionally drift to a new point. */
   private stepNpc(e: Entity, now: number, dt: number) {
     // Don't wander while in a conversation.
-    const inConvo = [...this.interactions.values()].some((it) => it.npcEntityId === e.id);
+    const inConvo = [...this.interactions.values()].some((it) => it.kind === "npc" && it.partnerEntityId === e.id);
     if (inConvo) {
       e.moving = false;
       e.dir = { x: 0, y: 0 };

@@ -123,8 +123,8 @@ export class NetClient {
   interactEnd(interactionId: string) {
     this.room?.send(C2S.INTERACT_END, { interactionId });
   }
-  chat(interactionId: string, text: string, latencyMs?: number, editsCount?: number) {
-    this.room?.send(C2S.CHAT, { interactionId, text, latencyMs, editsCount });
+  chat(interactionId: string, text: string, latencyMs?: number, editsCount?: number, viaEcho?: boolean) {
+    this.room?.send(C2S.CHAT, { interactionId, text, latencyMs, editsCount, viaEcho });
   }
 
   leave() {
