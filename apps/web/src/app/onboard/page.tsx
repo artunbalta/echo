@@ -134,7 +134,7 @@ export default function Onboard() {
             height={36}
             className="h-9 w-9 rounded-md bg-[#f3ecd9] p-0.5"
           />
-          <h1 className="text-2xl font-bold text-echo">ECHO</h1>
+          <h1 className="font-pixel text-2xl font-bold text-echo glow-echo">echo</h1>
         </div>
         <p className="mb-5 text-xs text-parchment/60">first day · {step}</p>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Lenis from "lenis";
 import AuthModal from "@/components/AuthModal";
+import Splash from "@/components/Splash";
 import { getSupabase } from "@/lib/supabase";
 
 type Mode = "signin" | "signup";
@@ -93,6 +94,8 @@ export default function Landing() {
 
   return (
     <div className="relative bg-[#f3ecd9] text-[#1f2740] [color-scheme:light]">
+      <Splash />
+
       {/* ───────────────────────── NAV ───────────────────────── */}
       <header
         className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
@@ -109,7 +112,7 @@ export default function Landing() {
               draggable={false}
               className="h-9 w-9 select-none"
             />
-            <span className="font-pixel text-2xl font-bold tracking-wide text-[#1f2740]">ECHO</span>
+            <span className="font-pixel text-2xl font-bold tracking-wide text-[#1f2740]">echo</span>
           </a>
 
           <div className="hidden items-center gap-7 md:flex">
@@ -283,7 +286,7 @@ export default function Landing() {
               <span className="h-3 w-3 rounded-full bg-grass" />
               <span className="ml-2 font-pixel text-xs text-[#444c66]">echo://world</span>
             </div>
-            <img src="/demo.png" alt="A live look at the ECHO world" className="block w-full" />
+            <img src="/demo.png" alt="A live look at the echo world" className="block w-full" />
           </div>
 
           <div className="mx-auto mt-8 flex max-w-xl flex-wrap justify-center gap-3 font-pixel text-sm text-[#1f2740]">
@@ -324,7 +327,7 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="" width={40} height={40} draggable={false} className="h-10 w-10 select-none" />
             <div>
-              <p className="font-pixel text-xl font-bold text-[#1f2740]">ECHO</p>
+              <p className="font-pixel text-xl font-bold text-[#1f2740]">echo</p>
               <p className="mt-1 font-pixel text-sm text-[#444c66]">A country that does not exist.</p>
             </div>
           </div>
@@ -388,9 +391,9 @@ function IconShield() {
 }
 
 const FEATURES = [
-  { title: "Learns your way", icon: <IconBook />, body: "ECHO observes, adapts, and gets better over time." },
-  { title: "Makes connections", icon: <IconConnect />, body: "ECHO reaches the right people, information, and tools for you." },
-  { title: "You stay in control", icon: <IconShield />, body: "You guide ECHO. It acts with your goals in mind." },
+  { title: "Learns your way", icon: <IconBook />, body: "echo observes, adapts, and gets better over time." },
+  { title: "Makes connections", icon: <IconConnect />, body: "echo reaches the right people, information, and tools for you." },
+  { title: "You stay in control", icon: <IconShield />, body: "You guide echo. It acts with your goals in mind." },
 ];
 
 const STEPS = [
