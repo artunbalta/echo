@@ -27,7 +27,7 @@ git push echo main
 | Phase | Subsystem | State |
 |------|-----------|-------|
 | 1 | Foundation: monorepo, shared protocol, PixiJS world, Colyseus server, Supabase schema | ✅ runnable & verified |
-| 2 | Authoritative multiplayer: prediction, reconciliation, interpolation, reconnect | ✅ prediction + snapshot-interpolation buffer + 20s reconnection window; verified 2-client |
+| 2 | Authoritative multiplayer: prediction, reconciliation, interpolation, reconnect; live player↔player chat + presence | ✅ prediction + snapshot-interpolation buffer + 20s reconnection window; verified 2-client. Player↔player chat, "live now" roster + glow markers, echo-to-echo past the autonomy threshold ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)) |
 | 3 | Asset pipeline: consent → selfie→attributes→avatar / premade gallery, Fal+Higgsfield (verified contracts) | ✅ no-key paths verified |
 | 4 | NPCs: spanning probe set, movement AI, event-driven LLM dialogue, telemetry, DB persistence | ✅ 100-NPC spanning set, wander AI, dialogue, telemetry; room loads from Supabase→JSON→generation |
 | 5 | ML learning engine (§9): persona posterior, reward model, autonomy gate, BALD | ✅ 25 tests + live e2e |
@@ -77,8 +77,12 @@ npm run dev:web               # Next.js on :3000
 ```
 
 Open <http://localhost:3000>, pick a name, **Step through**. Move with **WASD / arrows**,
-walk up to anyone and press **E** to talk. Open a second browser tab to see multiplayer
-presence — both players share one world.
+walk up to anyone and press **E** to talk. Open a **second browser tab** to play live with
+yourself: each tab is a separate player — they spawn near each other, carry a glow marker +
+a "live now" roster entry, and can walk up and chat in real time. Once your echo has earned
+autonomy, two live players can even talk **echo-to-echo**. To put two *real people on two
+devices* in one world, see **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)** (deploy the
+realtime server + set `NEXT_PUBLIC_REALTIME_URL`).
 
 ## Enabling real services
 

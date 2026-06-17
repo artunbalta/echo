@@ -7,6 +7,7 @@ import { NetClient } from "@/game/net";
 import { TelemetryCollector } from "@/game/telemetry";
 import { proposeReply, sendFeedback, requestConnectionAnalysis, type AgentTurn, type ConnectionAnalysis } from "@/lib/agent";
 import EchoPanel from "@/components/EchoPanel";
+import LiveRoster from "@/components/LiveRoster";
 import OutcomesPanel, { type MetPerson } from "@/components/OutcomesPanel";
 import RecognitionMeter from "@/components/RecognitionMeter";
 import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
@@ -28,6 +29,13 @@ function reasonFor(turns: number): string {
   return "a brief hello";
 }
 
+/** Shallow id-set equality so the live roster only re-renders when the set actually changes. */
+function sameIds(a: { id: string }[], b: { id: string }[]): boolean {
+  if (a.length !== b.length) return false;
+  const s = new Set(a.map((x) => x.id));
+  return b.every((x) => s.has(x.id));
+}
+
 export default function WorldClient() {
   const mountRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PixiWorld | null>(null);
@@ -40,7 +48,25 @@ export default function WorldClient() {
   const [status, setStatus] = useState("Connecting…");
   const [offline, setOffline] = useState(false);
   const [uid, setUid] = useState("");
-  const [nearby, setNearby] = useState<{ id: string; name: string; refId: string } | null>(null);
+  const [nearby, setNearby] = useState<{ id: string; name: string; refId: string; kind: "user" | "npc" } | null>(null);
+
+  // ── live multiplayer: other real players in the world right now ──────────────────
+  const [liveUsers, setLiveUsers] = useState<{ id: string; name: string; refId: string }[]>([]);
+  const [showLive, setShowLive] = useState(false);
+  const prevLiveRef = useRef<Set<string>>(new Set());
+  // Whether the open conversation is with a live player (vs an NPC) — gates peer relay,
+  // "let our echoes talk", and the post-encounter behaviour.
+  const convoKindRef = useRef<"user" | "npc">("npc");
+  // Echo-to-echo: once your echo has earned autonomy, it can carry a chat with another
+  // live player on its own. Bounded to a few volleys, fully revocable.
+  const MAX_PEER_ECHO_TURNS = 4;
+  const [peerEcho, setPeerEcho] = useState(false);
+  const peerEchoRef = useRef(false);
+  peerEchoRef.current = peerEcho;
+  const peerEchoTurnsRef = useRef(0);
+  // The OTHER player has handed their side to their echo — surfaced persistently so you
+  // always know when you're talking to a person vs. their echo (not just a per-line tag).
+  const [peerUsingEcho, setPeerUsingEcho] = useState(false);
   const [portalNear, setPortalNear] = useState(false);
   const [entering, setEntering] = useState(false);
   const portalNearRef = useRef(false);
@@ -203,6 +229,21 @@ export default function WorldClient() {
       },
       onSnapshot: (snaps, _tick) => {
         world.applySnapshot(snaps, net.lastAckSeq());
+        // Derive the "who's live now" roster straight from the synced state, and announce
+        // a genuinely new arrival so two players notice each other.
+        const live: { id: string; name: string; refId: string }[] = [];
+        snaps.forEach((s) => {
+          if (s.kind === "user" && s.id !== net.selfId) live.push({ id: s.id, name: s.name, refId: s.refId });
+        });
+        const liveIds = new Set(live.map((u) => u.id));
+        const prev = prevLiveRef.current;
+        if (prev.size > 0) {
+          for (const u of live) {
+            if (!prev.has(u.id)) showBeat(`${u.name} just came online — walk over and say hi.`);
+          }
+        }
+        prevLiveRef.current = liveIds;
+        setLiveUsers((cur) => (sameIds(cur, live) ? cur : live));
         if (typeof window !== "undefined") {
           let npc = 0;
           let user = 0;
@@ -228,6 +269,10 @@ export default function WorldClient() {
       },
       onInteractOpened: (p) => {
         interactionRef.current = p.interactionId;
+        convoKindRef.current = (p.target.kind as "user" | "npc") ?? "npc";
+        peerEchoTurnsRef.current = 0;
+        setPeerEchoMode(false);
+        setPeerUsingEcho(false);
         convoTargetRef.current = { id: p.target.id, name: p.target.name };
         setConvo({ name: p.target.name, lines: [] });
         setProposal(null);
@@ -245,8 +290,15 @@ export default function WorldClient() {
         }
       },
       onInteractTurn: (p: InteractTurnPayload) => {
-        setConvo((c) => (c ? { ...c, lines: [...c.lines, { who: "them", name: p.speakerName, text: p.text }] } : c));
-        if (autoConvoRef.current && handoverOnRef.current) {
+        const fromEcho = p.speaker === "peer_echo";
+        const name = fromEcho ? `${p.speakerName} (their echo)` : p.speakerName;
+        setConvo((c) => (c ? { ...c, lines: [...c.lines, { who: "them", name, text: p.text }] } : c));
+        // Track whether the live partner is speaking as themselves or via their echo, so we
+        // can show a persistent, honest "their echo is answering" notice (not just a tag).
+        if (p.speaker === "peer_echo") setPeerUsingEcho(true);
+        else if (p.speaker === "peer") setPeerUsingEcho(false);
+        // NPC handover: the echo replies to the NPC, then bows out after a few turns.
+        if (convoKindRef.current === "npc" && autoConvoRef.current && handoverOnRef.current) {
           const npcText = p.text;
           if (autoTurnsRef.current < MAX_AUTO_TURNS) {
             autoLoopTimer.current = setTimeout(() => autoEchoTurnRef.current(npcText), 1600);
@@ -254,6 +306,14 @@ export default function WorldClient() {
             autoLoopTimer.current = setTimeout(() => {
               if (interactionRef.current) netRef.current?.interactEnd(interactionRef.current);
             }, 1600);
+          }
+        }
+        // Player↔player echo-to-echo: our earned echo answers the other live player itself.
+        else if (convoKindRef.current === "user" && peerEchoRef.current) {
+          if (peerEchoTurnsRef.current < MAX_PEER_ECHO_TURNS) {
+            autoLoopTimer.current = setTimeout(() => peerEchoTurnRef.current(p.text), 1400);
+          } else {
+            setPeerEchoMode(false); // a few volleys, then hand the conversation back to you
           }
         }
       },
@@ -270,6 +330,9 @@ export default function WorldClient() {
         convoTargetRef.current = null;
         setConvo(null);
         setProposal(null);
+        setPeerEchoMode(false);
+        setPeerUsingEcho(false);
+        peerEchoTurnsRef.current = 0;
         tele.emit("interaction_end", {});
         if (wasAuto) {
           // The echo's own encounter: continue the loop; the activity feed + recap cover it
@@ -315,6 +378,12 @@ export default function WorldClient() {
           stopHandoverRef.current();
           return; // movement keys still reach the world's own listener
         }
+      }
+      // While your echoes are talking, Esc reclaims the conversation instead of leaving it.
+      if (peerEchoRef.current && e.key === "Escape") {
+        e.preventDefault();
+        stopPeerEcho();
+        return;
       }
       // Esc must end a conversation even while the chat input is focused — handle it first.
       if (e.key === "Escape" && convoRef.current) {
@@ -366,7 +435,9 @@ export default function WorldClient() {
     if (!text.trim() || !iid) return;
     const latencyMs = inputFocusedAt.current ? Date.now() - inputFocusedAt.current : undefined;
     setConvo((c) => (c ? { ...c, lines: [...c.lines, { who: "you", name: "You", text }] } : c));
-    netRef.current?.chat(iid, text, latencyMs, editsRef.current);
+    // For a player↔player chat, `fromAgent` flags the turn as echo-drafted so the other
+    // person sees it as "your echo" rather than you typing. NPC chats ignore the flag.
+    netRef.current?.chat(iid, text, latencyMs, editsRef.current, fromAgent);
     teleRef.current?.emit("reply_latency", { ms: latencyMs ?? 0, edits: editsRef.current, agent: fromAgent });
     // accumulate grounded narrator signals (only human-typed replies, not agent ones)
     if (!fromAgent) {
@@ -469,6 +540,66 @@ export default function WorldClient() {
     });
   }
 
+  // ── echo-to-echo (the threshold unlock): when your echo has earned autonomy, it can
+  //    carry a conversation with ANOTHER live player on its own. Bounded volleys, every
+  //    line surfaced with its rationale + veto, revocable at any time. Below the threshold
+  //    this is unavailable and two players simply chat human-to-human. ───────────────────
+  function setPeerEchoMode(v: boolean) {
+    peerEchoRef.current = v;
+    setPeerEcho(v);
+  }
+
+  function startPeerEcho() {
+    if (convoKindRef.current !== "user" || !handoverAvailable || !interactionRef.current) return;
+    markFunnel(uidRef.current, "first_let_echo_answer");
+    peerEchoTurnsRef.current = 0;
+    setPeerEchoMode(true);
+    // Your echo opens the exchange; the other side's reply re-enters via onInteractTurn.
+    autoLoopTimer.current = setTimeout(() => peerEchoTurnRef.current("(you meet them)"), 500);
+  }
+
+  function stopPeerEcho() {
+    setPeerEchoMode(false);
+    if (autoLoopTimer.current) clearTimeout(autoLoopTimer.current);
+  }
+
+  /** One autonomous echo turn against a live player — speaks only where the echo has truly
+   *  earned it (decision `auto`); otherwise it steps back and hands you the keyboard. */
+  async function peerEchoTurn(theirMessage: string) {
+    if (!peerEchoRef.current || convoKindRef.current !== "user") return;
+    const target = convoTargetRef.current;
+    const bucket = echoRef.current.autoBuckets[0] ?? bucketFor();
+    if (!target) return;
+    try {
+      const turn = await proposeReply(uidRef.current, `talking with ${target.name}`, theirMessage, bucket, "low");
+      if (!peerEchoRef.current) return; // reclaimed mid-flight
+      if (turn.decision === "auto") {
+        sendText(turn.action, true);
+        peerEchoTurnsRef.current += 1;
+        setActs((a) => [
+          ...a,
+          {
+            id: `act_${performance.now().toFixed(0)}_${Math.random().toString(36).slice(2, 6)}`,
+            npcName: target.name,
+            text: turn.action,
+            rationale: turn.rationale,
+            bucket,
+            context: `talking with ${target.name}`,
+          },
+        ]);
+      } else {
+        setPeerEchoMode(false);
+        setNarration("your echo stepped back — this one's yours to answer.");
+        setTimeout(() => setNarration(null), 4500);
+      }
+    } catch {
+      setPeerEchoMode(false);
+    }
+  }
+
+  const peerEchoTurnRef = useRef(peerEchoTurn);
+  peerEchoTurnRef.current = peerEchoTurn;
+
   // ── the handover (§10): in a promoted context, the echo acts on its own ────────
   // It walks up to people and converses via the real /agent/turn gate, while you watch or
   // idle. Every act is surfaced with its rationale and a "that wasn't me" veto; the human
@@ -544,7 +675,8 @@ export default function WorldClient() {
     const npc = world.listNpcs().find((n) => n.id === target.id);
     if (npc) world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
     const nearbyId = world.getNearbyId();
-    if (nearbyId) {
+    // Only auto-open with an NPC — the wandering echo never barges into a real player.
+    if (nearbyId && world.getNearbyKind() === "npc") {
       world.setAutoWalk(null);
       setAutoConvoActive(true);
       autoTurnsRef.current = 0;
@@ -727,15 +859,23 @@ export default function WorldClient() {
 
       {/* HUD */}
       <div className="panel absolute left-3 top-3 rounded px-3 py-2 font-mono text-[11px] text-parchment/80">
-        <div className="glow-echo font-bold text-echo">ECHO — first day</div>
+        <div className="glow-echo font-bold text-echo">echo — first day</div>
         <div>{touch ? "tap or drag to move" : "WASD / arrows to move"}</div>
         <div>{touch ? "tap someone to talk" : "E or Space to talk · Esc to leave"}</div>
       </div>
 
       {/* Toolbar */}
       <div className="absolute right-3 top-3 z-20 flex gap-2 font-mono text-[11px]">
+        {liveUsers.length > 0 && (
+          <button
+            onClick={() => { setShowLive((v) => !v); setShowEcho(false); setShowOutcomes(false); setShowActs(false); }}
+            className="panel rounded px-3 py-2 text-echo hover:bg-echo/10"
+          >
+            <span className="echo-pulse mr-1" aria-hidden>●</span>live ({liveUsers.length})
+          </button>
+        )}
         <button
-          onClick={() => { setShowEcho((v) => !v); setShowOutcomes(false); setShowActs(false); }}
+          onClick={() => { setShowEcho((v) => !v); setShowOutcomes(false); setShowActs(false); setShowLive(false); }}
           className="panel rounded px-3 py-2 text-parchment hover:text-echo"
         >
           your echo
@@ -783,6 +923,13 @@ export default function WorldClient() {
         </>
       )}
 
+      {showLive && (
+        <LiveRoster
+          users={liveUsers}
+          onLocate={(id) => worldRef.current?.pingEntity(id)}
+          onClose={() => setShowLive(false)}
+        />
+      )}
       {showEcho && uid && (
         <EchoPanel snap={echo.snap} parts={echo.parts} offline={echo.offline} onClose={() => setShowEcho(false)} />
       )}
@@ -865,7 +1012,8 @@ export default function WorldClient() {
           onClick={startInteraction}
           className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment hover:text-echo"
         >
-          Talk to <span className="font-bold text-echo">{nearby.name}</span> — press E
+          Talk to <span className="font-bold text-echo">{nearby.name}</span>
+          {nearby.kind === "user" && <span className="ml-1 rounded bg-echo/20 px-1 text-[10px] text-echo">live</span>} — press E
         </button>
       )}
 
@@ -897,13 +1045,20 @@ export default function WorldClient() {
           <div className="mb-2 flex items-center justify-between">
             <span className="font-bold text-echo">
               {convo.name}
+              {convoKindRef.current === "user" && !peerEcho && !peerUsingEcho && (
+                <span className="ml-2 rounded bg-echo/20 px-1 text-[10px] font-normal text-echo">live player</span>
+              )}
+              {peerUsingEcho && !peerEcho && (
+                <span className="ml-2 rounded bg-yellow-400/20 px-1 text-[10px] font-normal text-yellow-200">their echo is answering</span>
+              )}
               {autoConvo && <span className="ml-2 rounded bg-echo/25 px-1 text-[10px] font-normal text-echo">your echo is speaking</span>}
+              {peerEcho && <span className="ml-2 rounded bg-echo/25 px-1 text-[10px] font-normal text-echo">your echoes are talking</span>}
             </span>
             <button
-              onClick={autoConvo ? stopHandover : leaveConvo}
+              onClick={autoConvo ? stopHandover : peerEcho ? stopPeerEcho : leaveConvo}
               className="text-xs text-parchment/50 hover:text-parchment"
             >
-              {autoConvo ? "stop (Esc)" : "leave (Esc)"}
+              {autoConvo ? "stop (Esc)" : peerEcho ? "take back (Esc)" : "leave (Esc)"}
             </button>
           </div>
           <div className="mb-2 max-h-48 space-y-1 overflow-y-auto text-sm">
@@ -916,11 +1071,17 @@ export default function WorldClient() {
               </div>
             ))}
           </div>
-          {autoConvo ? (
-            /* The echo is driving this conversation itself — read-only, revocable. */
+          {autoConvo || peerEcho ? (
+            /* An echo is driving this conversation itself — read-only, revocable. */
             <div className="flex items-center justify-between rounded border border-echo/30 bg-echo/5 px-2 py-1.5 text-[11px] text-parchment/70">
-              <span><span className="text-echo">your echo</span> is carrying this for you…</span>
-              <button onClick={stopHandover} className="rounded border border-echo/40 px-2 py-0.5 text-parchment/80 hover:text-parchment">
+              <span>
+                <span className="text-echo">{peerEcho ? "your echoes" : "your echo"}</span>{" "}
+                {peerEcho ? `are talking with ${convo.name}…` : "is carrying this for you…"}
+              </span>
+              <button
+                onClick={peerEcho ? stopPeerEcho : stopHandover}
+                className="rounded border border-echo/40 px-2 py-0.5 text-parchment/80 hover:text-parchment"
+              >
                 take back control
               </button>
             </div>
@@ -952,7 +1113,7 @@ export default function WorldClient() {
                   tip: let your echo try a reply — every approve / edit / reject teaches it who you are.
                 </div>
               )}
-              <div className="mb-2">
+              <div className="mb-2 flex flex-wrap gap-2">
                 <button
                   onClick={askEcho}
                   disabled={proposing || !!proposal}
@@ -960,6 +1121,16 @@ export default function WorldClient() {
                 >
                   {proposing ? "your echo is thinking…" : "↪ let my echo answer"}
                 </button>
+                {/* Threshold unlock: only with another live player, only once your echo has
+                    earned autonomy somewhere. Below the threshold this never appears. */}
+                {convoKindRef.current === "user" && handoverAvailable && (
+                  <button
+                    onClick={startPeerEcho}
+                    className="rounded border border-echo/40 px-2 py-1 text-[11px] text-echo hover:bg-echo/10"
+                  >
+                    ⇄ let our echoes talk
+                  </button>
+                )}
               </div>
 
               <div className="flex gap-2">

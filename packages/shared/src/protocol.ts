@@ -23,7 +23,7 @@ export const C2S = {
 export const S2C = {
   WELCOME: "welcome",
   INTERACT_OPENED: "interact_opened",
-  INTERACT_TURN: "interact_turn", // an NPC/agent reply for the active interaction
+  INTERACT_TURN: "interact_turn", // an NPC/agent reply OR a relayed turn from another live player
   INTERACT_CLOSED: "interact_closed",
   PONG: "pong",
   ERROR: "error",
@@ -43,6 +43,9 @@ export interface ChatMessage {
   /** ms from when the input was focused to send — a latency telemetry signal. */
   latencyMs?: number;
   editsCount?: number;
+  /** Player↔player only: this turn was drafted by the sender's echo, not typed by hand.
+   *  Lets the recipient render it as "their echo" and lets two earned echoes converse. */
+  viaEcho?: boolean;
 }
 
 export interface WelcomePayload {
@@ -54,7 +57,9 @@ export interface WelcomePayload {
 
 export interface InteractTurnPayload {
   interactionId: string;
-  speaker: "npc" | "agent";
+  /** `npc`/`agent` are server-authored; `peer`/`peer_echo` are relayed from another live
+   *  player (peer_echo = their reply was drafted by their echo). */
+  speaker: "npc" | "agent" | "peer" | "peer_echo";
   speakerName: string;
   text: string;
   audioUrl?: string;

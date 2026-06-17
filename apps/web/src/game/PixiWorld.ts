@@ -16,6 +16,7 @@ import {
   Rectangle,
   TilingSprite,
   Text,
+  Graphics,
 } from "pixi.js";
 import {
   WORLD,
@@ -54,6 +55,8 @@ const SCALE = WORLD.RENDER_SCALE;
 interface RenderEntity {
   sprite: Sprite;
   label: Text;
+  /** Soft glow ring beneath live players (not NPCs) so real humans stand out on the map. */
+  ring?: Graphics;
   frames: Record<Facing, Texture[]>;
   // interpolation buffer (remote)
   prevX: number;
@@ -63,6 +66,7 @@ interface RenderEntity {
   facing: Facing;
   moving: boolean;
   animTime: number;
+  id: string;
   kind: "user" | "npc";
   name: string;
   refId: string;
@@ -75,7 +79,7 @@ interface RenderEntity {
 const INTERP_DELAY = 100;
 
 export interface WorldHooks {
-  onNearbyChange?: (target: { id: string; name: string; refId: string } | null) => void;
+  onNearbyChange?: (target: { id: string; name: string; refId: string; kind: "user" | "npc" } | null) => void;
   onMoveIntent?: (dir: { x: -1 | 0 | 1; y: -1 | 0 | 1 }, facing: Facing, seq: number) => void;
   onStop?: (seq: number) => void;
   emitTelemetry?: (type: string, payload: Record<string, unknown>) => void;
@@ -105,7 +109,15 @@ export class PixiWorld {
   private lastDirSent = "";
   private hooks: WorldHooks;
   private nearbyId: string | null = null;
+  private nearbyKind: "user" | "npc" | null = null;
   private dwellTimer = 0;
+  // "Locate" a live player from the roster: pan the camera toward them and pulse their
+  // ring for a moment, then ease back to the player. Separate from drag-pan so the two
+  // don't fight (drag-pan resets on walk; this eases on its own timer).
+  private locateId: string | null = null;
+  private locateUntil = 0;
+  private locOffX = 0;
+  private locOffY = 0;
   private destroyed = false;
   private portalCenter = { x: 0, y: 0 };
   private portalNear = false;
@@ -273,12 +285,22 @@ export class PixiWorld {
       facing: snap.facing,
       moving: snap.moving,
       animTime: 0,
+      id: snap.id,
       kind: snap.kind,
       name: snap.name,
       refId: snap.refId,
       buf: [],
     };
     this.entities.set(snap.id, re);
+    // Live players get a soft glow ring beneath them so a real human reads differently
+    // from the 100 wandering NPCs. It draws under the sprite via its zIndex (py - 0.1,
+    // set in drawEntity) — entityLayer.sortableChildren sorts by zIndex, not insert order.
+    if (snap.kind === "user") {
+      const ring = new Graphics();
+      ring.ellipse(0, 0, SPRITE.FRAME_W * 0.5, SPRITE.FRAME_W * 0.28).fill({ color: 0xa06cd5, alpha: 0.5 });
+      re.ring = ring;
+      this.entityLayer.addChild(ring);
+    }
     this.entityLayer.addChild(sprite);
     this.entityLayer.addChild(label);
     // If the entity has a real generated/uploaded sheet, swap it in once loaded.
@@ -331,6 +353,7 @@ export class PixiWorld {
         const re = this.entities.get(id)!;
         re.sprite.destroy();
         re.label.destroy();
+        re.ring?.destroy();
         this.entities.delete(id);
       }
     }
@@ -424,9 +447,36 @@ export class PixiWorld {
     const dt = dtMs / 1000;
     this.stepLocal(dt);
     this.stepRemotes(dt);
+    this.stepLocate(dt);
     this.updateCamera();
     this.detectProximity(dt);
     this.detectPortal();
+  }
+
+  /** Ease the camera toward a located player while a ping is active, then back to self. */
+  private stepLocate(dt: number) {
+    let desiredX = 0;
+    let desiredY = 0;
+    if (this.locateId && performance.now() < this.locateUntil) {
+      const re = this.entities.get(this.locateId);
+      if (re) {
+        const tx = (re as { _tx?: number })._tx ?? re.targetX;
+        const ty = (re as { _ty?: number })._ty ?? re.targetY;
+        const eff = SCALE * this.zoom;
+        // Offset that shifts the view from the player to the target (centres them).
+        desiredX = -(tx - this.localX) * TILE * eff;
+        desiredY = -(ty - this.localY) * TILE * eff;
+      } else {
+        this.locateId = null;
+      }
+    }
+    const ease = Math.min(1, dt * 4);
+    this.locOffX += (desiredX - this.locOffX) * ease;
+    this.locOffY += (desiredY - this.locOffY) * ease;
+    if (Math.abs(this.locOffX) < 0.5 && Math.abs(this.locOffY) < 0.5 && desiredX === 0 && desiredY === 0) {
+      this.locOffX = 0;
+      this.locOffY = 0;
+    }
   }
 
   /** Toggle the portal-nearby hook as the player crosses its interaction radius. */
@@ -545,6 +595,19 @@ export class PixiWorld {
     re.label.y = py - SPRITE.FRAME_H - 2;
     (re.label as any).zIndex = py + 0.1;
 
+    if (re.ring) {
+      re.ring.x = px;
+      re.ring.y = py - 1;
+      (re.ring as any).zIndex = py - 0.1; // just under the sprite's feet
+      // Gentle idle shimmer; a stronger pulse while this player is being "located".
+      const pulsing = this.locateId === re.id && performance.now() < this.locateUntil;
+      const t = performance.now() / 1000;
+      const base = pulsing ? 0.85 : 0.45;
+      const amp = pulsing ? 0.3 : 0.12;
+      re.ring.alpha = base + Math.sin(t * (pulsing ? 6 : 2)) * amp;
+      re.ring.scale.set(pulsing ? 1.25 + Math.sin(t * 6) * 0.15 : 1);
+    }
+
     const frameArr = re.frames[facing];
     if (moving) {
       re.animTime += dt;
@@ -562,17 +625,18 @@ export class PixiWorld {
     const eff = SCALE * this.zoom;
     const px = (this.localX * TILE + TILE / 2) * eff;
     const py = (this.localY * TILE + TILE) * eff;
-    this.world.x = Math.round(vw / 2 - px + this.panX);
-    this.world.y = Math.round(vh / 2 - py + this.panY);
+    this.world.x = Math.round(vw / 2 - px + this.panX + this.locOffX);
+    this.world.y = Math.round(vh / 2 - py + this.panY + this.locOffY);
   }
 
-  /** Nearest interactable NPC within radius → proximity hook + approach/dwell telemetry. */
+  /** Nearest interactable entity (NPC *or* live player) within radius → proximity hook +
+   *  approach/dwell telemetry. Live players are interactable too, so two humans can talk. */
   private detectProximity(dt: number) {
     let best: RenderEntity | null = null;
     let bestId: string | null = null;
     let bestDist = Infinity;
     for (const [id, re] of this.entities) {
-      if (re.kind !== "npc") continue;
+      if (id === this.selfId) continue; // never "near" yourself
       const tx = (re as any)._tx ?? re.targetX;
       const ty = (re as any)._ty ?? re.targetY;
       const d = Math.hypot(this.localX - tx, this.localY - ty);
@@ -586,9 +650,11 @@ export class PixiWorld {
     if (within !== this.nearbyId) {
       if (within && best) {
         this.hooks.emitTelemetry?.("approach", { targetId: best.refId, dist: Number(bestDist.toFixed(2)) });
-        this.hooks.onNearbyChange?.({ id: within, name: best.name, refId: best.refId });
+        this.hooks.onNearbyChange?.({ id: within, name: best.name, refId: best.refId, kind: best.kind });
+        this.nearbyKind = best.kind;
       } else {
         this.hooks.onNearbyChange?.(null);
+        this.nearbyKind = null;
       }
       this.nearbyId = within;
       this.dwellTimer = 0;
@@ -603,6 +669,25 @@ export class PixiWorld {
 
   getNearbyId(): string | null {
     return this.nearbyId;
+  }
+
+  /** Whether the currently-nearby entity is a live player or an NPC (null if none). */
+  getNearbyKind(): "user" | "npc" | null {
+    return this.nearbyKind;
+  }
+
+  /** Locate a live player from the roster: pan toward them, pulse their ring, AND start
+   *  walking your avatar toward them so the action actually helps you reach them. Their
+   *  position moves as they wander; this gets you close, then proximity + the Talk prompt
+   *  take over. Any movement key cancels the walk (stepLocal). */
+  pingEntity(id: string) {
+    const re = this.entities.get(id);
+    if (!re) return;
+    this.locateId = id;
+    this.locateUntil = performance.now() + 3000;
+    const tx = (re as { _tx?: number })._tx ?? re.targetX;
+    const ty = (re as { _ty?: number })._ty ?? re.targetY;
+    this.clickTarget = { x: tx, y: ty };
   }
 
   // ── handover support: let the echo see and walk the world on its own ───────────
