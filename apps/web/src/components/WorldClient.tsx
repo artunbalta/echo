@@ -171,7 +171,8 @@ export default function WorldClient() {
   useEffect(() => {
     // `?u=<name>` overrides identity from the URL — so two tabs in ONE browser (which share
     // localStorage) can join as two DIFFERENT users on adjacent islands for the co-presence test.
-    const override = new URLSearchParams(window.location.search).get("u");
+    // Normalize "" → null so an empty `?u=` falls through consistently for BOTH userId and name.
+    const override = (new URLSearchParams(window.location.search).get("u") || "").trim() || null;
     const userId = override
       ? "u_" + override
       : localStorage.getItem("echo.userId") ?? "u_" + Math.random().toString(36).slice(2, 10);
