@@ -312,6 +312,10 @@ export class WorldRoom extends Room<WorldState> {
    * /observe/behavioral ingress. Two real users, two independent reads — never co-mingled.
    */
   private emitFirstContact(a: Entity, b: Entity) {
+    // Never let a user first-contact themselves: two tabs of ONE browser (shared localStorage →
+    // same userId → same refId) would otherwise fold both reads into a single posterior, breaking
+    // strict per-actor siloing. The authoritative server is the right chokepoint to enforce this.
+    if (a.refId === b.refId) return;
     // Audience = other live players who could observe this dyad (excludes the two participants).
     const audience = [...this.state.entities.values()].filter(
       (e) => e.kind === "user" && e.id !== a.id && e.id !== b.id,
