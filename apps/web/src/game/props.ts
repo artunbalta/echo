@@ -24,6 +24,13 @@ export const PROP_KINDS = [
   "book_cairn",
   "bedroll",
   "campfire",
+  // ── Flow 0 ("Waking Alone") objects (ECHO_level_design_7flows.md). Procedural stand-ins in the
+  //    16-bit palette; Higgsfield art overrides these via artDir in Step 6. ──
+  "hill",          // climbable hill (back-center); the easter-egg horizon reveal is from its top
+  "thicket",       // unmarked bush cluster (west); hides the carved hollow
+  "driftwood",     // the one odd far thing on the west shore
+  "shell",         // the 5 scattered beach objects (collect / stack / ignore)
+  "path_marker",   // the obvious worn path east (a weak, low-weight openness cue)
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -208,6 +215,62 @@ function drawCampfire(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f:
   p(7, 8 - tall, 1, 2, "#fde6a0"); // tip
 }
 
+// ── Flow 0 objects ─────────────────────────────────────────────────────────────────
+function drawHill(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 13);
+  // a green mound with a worn switchback path up it; the "slip-back" reads as the path shifting
+  const slip = frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  p(2, 16, 12, 5, "#46ad49"); // base
+  p(3, 13, 10, 4, "#57c357");
+  p(4, 10, 8, 4, "#65d066");
+  p(6, 8, 4, 3, "#74c365"); // crown
+  p(7, 7, 2, 1, "#86e07f");
+  // the switchback path (bark) the player climbs
+  p(7, 18, 2, 2, "#7a4a2b");
+  p(5 + slip, 15, 2, 2, "#7a4a2b");
+  p(8 - slip, 12, 2, 2, "#7a4a2b");
+  p(7, 9, 1, 2, "#8a5733");
+}
+function drawThicket(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 12);
+  // dense, dark, unkempt brush — no path, no berries (distinct from berry_bush)
+  p(1, 11, 14, 10, "#2f8a3a");
+  p(2, 10, 12, 3, "#3fae4c");
+  p(0, 15, 16, 5, "#26702f");
+  // tangled twigs poking out
+  for (const [tx, ty] of [[3, 9], [7, 8], [11, 9], [13, 11]] as const) p(tx, ty, 1, 3, "#5d3a22");
+}
+function drawDriftwood(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 11);
+  // a single bleached, weathered log lying on the sand
+  p(2, 17, 12, 3, "#caa873");
+  p(2, 17, 12, 1, "#e3d3aa");
+  p(3, 20, 10, 1, "#9a7e54");
+  p(5, 16, 1, 1, "#9a7e54"); // a broken stub
+  p(10, 16, 1, 1, "#9a7e54");
+}
+function drawShell(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 6);
+  // a small shell/pebble — one of the five strewn things
+  p(6, 17, 4, 3, "#f4e9d0");
+  p(6, 17, 4, 1, "#fbf4e4");
+  p(7, 18, 2, 1, "#e0cda0");
+  p(7, 16, 2, 1, "#f4e9d0");
+}
+function drawPathMarker(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 9);
+  // a trodden, obvious dirt path with a guiding cairn-stone — the paved-road affordance
+  p(2, 19, 12, 2, "#a98a5e");
+  p(3, 18, 10, 1, "#bb9c70");
+  p(6, 13, 4, 5, "#8a8780"); // a small marker stone
+  p(6, 13, 4, 1, "#a9a59c");
+}
+
 const DRAW: Record<PropKind, Draw> = {
   dog: drawDog,
   grain_sprout: (c, x, y) => drawGrainSprout(c, x, y),
@@ -218,4 +281,9 @@ const DRAW: Record<PropKind, Draw> = {
   book_cairn: (c, x, y) => drawBookCairn(c, x, y),
   bedroll: (c, x, y) => drawBedroll(c, x, y),
   campfire: drawCampfire,
+  hill: drawHill,
+  thicket: (c, x, y) => drawThicket(c, x, y),
+  driftwood: (c, x, y) => drawDriftwood(c, x, y),
+  shell: (c, x, y) => drawShell(c, x, y),
+  path_marker: (c, x, y) => drawPathMarker(c, x, y),
 };
