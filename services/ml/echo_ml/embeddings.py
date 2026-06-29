@@ -49,7 +49,14 @@ def _hash_embed(text: str, dim: int) -> np.ndarray:
             sign = 1.0 if h[(k + 16) % 20] & 1 else -1.0
             vec[idx] += sign
     norm = np.linalg.norm(vec)
-    return vec / norm if norm > 0 else vec
+    if norm > 0:
+        return vec / norm
+    # Degenerate: all ±1 contributions cancelled (a token whose 4 hash windows collide with
+    # opposing signs). Fall back to a deterministic non-zero unit vector so the contract —
+    # finite, L2-normalized, non-zero — always holds and _PROJ @ emb never sees a null vector.
+    idx = int.from_bytes(hashlib.sha1(text.encode("utf-8")).digest()[:4], "little") % dim
+    vec[idx] = 1.0
+    return vec
 
 
 def _l2(vec: np.ndarray) -> np.ndarray:
