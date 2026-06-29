@@ -57,6 +57,67 @@ def _clip01(x: float) -> float:
     return float(min(1.0, max(0.0, x)))
 
 
+def _flow0_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
+    """Flow 0 (solitary shore, ECHO_level_design_7flows.md) cues → the EXISTING telemetry
+    feature that best matches each cue's *signal type* (latency, grit, risk/cost, inward
+    dwell, approach). Which axis each feature loads on stays LEARNED in W (persona_model) —
+    the design-doc cue→axis lines are priors/hypotheses, not hardcodes (cross-cutting rule
+    #1). Purely additive: returns True iff `action` is a Flow-0 cue, so the caller can skip
+    the generic per-channel blocks and existing behaviour stays byte-identical.
+
+    Where the committed W (trained on the island day-loop economy) has no strong telemetry
+    path to the doc's intended axis (the *openness* exploration cues — enter_unmarked,
+    approach_distant_lone, the horizon/hollow eggs), the cue still moves the posterior via the
+    closest signal-type feature + the action embedding; the routing sharpens onto openness
+    once W is re-anchored on Flow-0 exploration data (the doc's learned-loadings mechanism)."""
+    if action == "first_move":
+        # tempo of the very first input — a pure latency signal (→ pace via W). latencyMs is
+        # already set from raw_signals at the top of event_to_observation.
+        return True
+    if action == "take_marked_path":
+        # the obvious, paved choice — deliberately LOW weight (obvious ⇒ weak signal): carried
+        # only by the action embedding, with no strong implicit feature attached.
+        return True
+    if action == "enter_unmarked":
+        tel["risk_index"] = 0.75 if take else 0.1     # off-trail, no visible reward = costly/uncertain
+        return True
+    if action == "climb_hill":
+        tel["persistence"] = 0.45 if take else 0.0    # bothering to climb at all = mild effort
+        return True
+    if action == "climb_persist":
+        tel["persistence"] = 0.9 if take else 0.0     # retrying after each slip = strong grit
+        return True
+    if action == "gaze_reflection":
+        dwell = float(rs.get("dwell_ms", 0.0) or 0.0)
+        tel["solitude_tol"] = _clip01(dwell / 4000.0) if take else 0.0   # inward, self-focused dwell
+        return True
+    if action == "collect":
+        tel["persistence"] = 0.4 if take else 0.0     # gathering the strewn objects
+        return True
+    if action == "stack_tidy":
+        tel["persistence"] = 0.85 if take else 0.0    # ORDERING them (not just collecting) → conscientiousness
+        tel["editsCount"] = 2.0 if take else 0.0
+        return True
+    if action == "ignore_all":
+        # leaving them scattered — the Channel-K refusal twin below makes this move the
+        # posterior (non-action is data); relative to a tidier player, formality does not rise.
+        return True
+    if action == "approach_distant_lone":
+        tel["approach"] = True if take else False     # crossing to the one odd far thing
+        tel["risk_index"] = 0.5 if take else 0.1      # distance = cost = validity
+        return True
+    if action == "egg_horizon_seen":
+        tel["risk_index"] = 0.4 if take else 0.0      # climbed high enough to glimpse the far isle
+        return True
+    if action == "egg_reflection":
+        tel["solitude_tol"] = 0.7 if take else 0.0    # the uncanny self-recognition beat
+        return True
+    if action == "egg_hollow":
+        tel["risk_index"] = 0.5 if take else 0.0      # the hidden carved mark — pure curiosity, zero reward
+        return True
+    return False
+
+
 def event_to_observation(ev: dict) -> dict[str, Any]:
     """Map one BehavioralEvent → {userId, action, telemetry, context, cond_key, polarity}.
 
@@ -87,21 +148,27 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
     if rs.get("decision_latency_ms") is not None:
         tel["decision_latency"] = float(rs["decision_latency_ms"])
 
+    # — Flow 0 (solitary shore) cues — purely additive; when a cue is Flow-0 specific we skip
+    #   the generic per-channel blocks below so existing behaviour stays byte-identical.
+    flow0 = _flow0_features(action, take, rs, tel)
+
     # — locomotion / approach (Channel A, G1) —
-    if channel in ("A", "G"):
+    if not flow0 and channel in ("A", "G"):
         # approach is the engine's ±1 proximity feature; a refusal (avoid / hang back) is −1,
         # which is DISTINCT from "absent ⇒ 0" so the non-action actually moves the posterior.
         if "distance" in rs or action in ("approach", "initiate", "greet") or channel == "A":
-            tel["approach"] = 1.0 if take else -1.0
+            # boolean so persona._telemetry_features reads the sign correctly (it binarizes by
+            # truthiness — a float −1.0 is truthy and was being mis-read as approach=+1).
+            tel["approach"] = bool(take)
     # dwell → time-share (cue A4/A5)
-    if rs.get("dwell_ms") is not None:
+    if not flow0 and rs.get("dwell_ms") is not None:
         key = _DWELL_TS.get(str(target.get("id", "")), None) or _DWELL_TS.get(str(target.get("kind", "")), None)
         if key:
             share = _clip01(float(rs["dwell_ms"]) / 8000.0)
             tel[key] = share if take else 0.0
 
     # — economic / resource (Channel F) —
-    if channel == "F":
+    if not flow0 and channel == "F":
         if cue.startswith("F1") or "save" in action or "spend" in action:
             tel["save_rate"] = 0.85 if take else 0.15            # save seed vs eat now
         if cue.startswith("F3") or "wager" in action or "bet" in action:
@@ -113,27 +180,27 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
             tel["risk_index"] = _clip01(float(rs.get("amount", 0.6)) if take else 0.2)
 
     # — pet / disclosure (Channel D) —
-    if cue.startswith("D11") or action == "pet_talk":
+    if not flow0 and (cue.startswith("D11") or action == "pet_talk"):
         tel["pet_attach"] = _clip01(float(rs.get("amount", abs(float(rs.get("valence", 0.5))))))
-    if channel in ("D", "G") and ("server" in str(target.get("kind", "")) or cue.startswith("G11")):
+    if not flow0 and channel in ("D", "G") and ("server" in str(target.get("kind", "")) or cue.startswith("G11")):
         # courtesy to a low-status server who cannot reciprocate (top individuating cue)
         tel["ts_social"] = 0.85 if take else 0.1
 
     # — normative / queue (Channel H) —
-    if cue.startswith("H1") or "queue" in action:
+    if not flow0 and (cue.startswith("H1") or "queue" in action):
         if take:
             tel["persistence"] = 0.8
             tel["consistency"] = 0.85
         else:                                                    # cut / skip the queue
             tel["consistency"] = 0.1
-            tel["approach"] = -1.0
+            tel["approach"] = False
 
     # — non-action twins (Channel K): guarantee a concrete signal so refusal is data —
     if channel == "K" or not take:
         if "social" in action or cue in ("K1", "K11") or channel == "K":
-            tel.setdefault("approach", -1.0)
+            tel.setdefault("approach", False)
             tel.setdefault("solitude_tol", 0.85)
-        tel.setdefault("approach", -1.0)
+        tel.setdefault("approach", False)
 
     # conditional-bucket key: social events condition on counterpart status; otherwise on stakes.
     if channel in _SOCIAL_CHANNELS and ctx.get("counterpart_status") not in (None, "none"):
