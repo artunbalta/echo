@@ -41,7 +41,7 @@ export class NetClient {
   private reconnecting = false;
   private left = false;
 
-  async connect(opts: { userId: string; name: string; spriteUrl: string; sessionId: string }) {
+  async connect(opts: { userId: string; name: string; spriteUrl: string; sessionId: string; slotIndex?: number }) {
     this.room = await this.client.joinOrCreate("world", opts);
     this.selfId = this.room.sessionId;
     this.bindRoom();

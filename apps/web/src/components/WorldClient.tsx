@@ -169,10 +169,15 @@ export default function WorldClient() {
   }, []);
 
   useEffect(() => {
-    const userId = localStorage.getItem("echo.userId") ?? "u_" + Math.random().toString(36).slice(2, 10);
-    const name = localStorage.getItem("echo.name") ?? "Newcomer";
+    // `?u=<name>` overrides identity from the URL — so two tabs in ONE browser (which share
+    // localStorage) can join as two DIFFERENT users on adjacent islands for the co-presence test.
+    const override = new URLSearchParams(window.location.search).get("u");
+    const userId = override
+      ? "u_" + override
+      : localStorage.getItem("echo.userId") ?? "u_" + Math.random().toString(36).slice(2, 10);
+    const name = override ?? localStorage.getItem("echo.name") ?? "Newcomer";
     const sessionId = "s_" + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem("echo.userId", userId);
+    if (!override) localStorage.setItem("echo.userId", userId);
     setUid(userId);
     uidRef.current = userId;
     sessionIdRef.current = sessionId;
@@ -349,8 +354,21 @@ export default function WorldClient() {
     (async () => {
       await world.init(mountRef.current!);
       if (disposed) return;
+      // Resolve this user's archipelago slot so they cross into the shared ocean AT their own
+      // island's coordinate (Step-1 clustering → an adjacent, reachable neighbour). Zero-key: the
+      // in-memory registry answers; offline → undefined → server cluster-spawn fallback.
+      let slotIndex: number | undefined;
       try {
-        await net.connect({ userId, name, spriteUrl, sessionId });
+        const r = await fetch("/api/island/assign", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+        const placement = (await r.json()) as { slotIndex?: number };
+        if (typeof placement.slotIndex === "number") slotIndex = placement.slotIndex;
+      } catch { /* offline → fallback spawn */ }
+      if (disposed) return;
+      try {
+        await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
         // Respect telemetry consent (§2, §13): only collect if the user opted in.
         if (telemetryConsent) tele.start();
       } catch (err) {
