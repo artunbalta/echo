@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminClient, anonServer } from "@/lib/supabaseAdmin";
+import { assignIslandForUser } from "@/lib/island-registry";
 
 export const runtime = "nodejs";
 
@@ -32,5 +33,9 @@ export async function POST(req: Request) {
     if (row?.id) userId = row.id as string;
   }
 
-  return NextResponse.json({ userId, email: user.email });
+  // Place this user on their home island in the shared archipelago (the 7-flow front door):
+  // the empty slot nearest the most-recently-joined arrival, stable across returns (§2).
+  const island = await assignIslandForUser(userId);
+
+  return NextResponse.json({ userId, email: user.email, island });
 }
