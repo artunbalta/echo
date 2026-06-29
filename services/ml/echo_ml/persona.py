@@ -33,6 +33,7 @@ from .config import HYPER, SETTINGS
 from .persona_axes import AXES, AXIS_INDEX
 from .embeddings import embed
 from .stylometry import stylometry_features, STYLOMETRY_FEATURE_NAMES
+from ._numerics import quiet_fp
 
 D = HYPER.persona_dim
 
@@ -43,6 +44,7 @@ def _symmetrize(M: np.ndarray) -> np.ndarray:
     return 0.5 * (M + M.T)
 
 
+@quiet_fp
 def _floor_eigs(M: np.ndarray, floor: float) -> np.ndarray:
     """Project a symmetric matrix onto {symmetric PSD with eigenvalues ≥ floor}.
 
@@ -57,6 +59,7 @@ def _floor_eigs(M: np.ndarray, floor: float) -> np.ndarray:
     return _symmetrize(out)
 
 
+@quiet_fp
 def gaussian_kl(mu1: np.ndarray, Sigma1: np.ndarray,
                 mu2: np.ndarray, Sigma2: np.ndarray) -> float:
     """KL( N(mu1,Σ1) ‖ N(mu2,Σ2) ) for full-covariance multivariate Gaussians:
@@ -135,6 +138,7 @@ def prior() -> Posterior:
 
 # ── observation update (general linear-Gaussian / Kalman) ─────────────────────────
 
+@quiet_fp
 def kalman_update_general(post: Posterior, phi: np.ndarray, W: np.ndarray,
                           Psi: np.ndarray) -> Posterior:
     """General linear-Gaussian conditioning step for the measurement model
@@ -174,6 +178,7 @@ def kalman_update_general(post: Posterior, phi: np.ndarray, W: np.ndarray,
                      np.ascontiguousarray(new_Sigma), post.version + 1)
 
 
+@quiet_fp
 def kalman_update(post: Posterior, y: np.ndarray, mask: np.ndarray, r: float) -> Posterior:
     """Legacy diagonal partial-measurement update, kept as a thin wrapper over the general
     path: a partial observation y of z (only where mask==1, measurement variance r) is the
@@ -228,6 +233,7 @@ def chi2_quantile(p: float, df: int) -> float:
     return float(df * t ** 3)
 
 
+@quiet_fp
 def robust_kalman_update(post: Posterior, phi: np.ndarray, W: np.ndarray, Psi: np.ndarray,
                          nu: Optional[float] = None, gate_chi2: Optional[float] = None,
                          irls_iters: Optional[int] = None,
@@ -293,6 +299,7 @@ def reliability_noise_scale(text: str, telemetry: Optional[dict] = None) -> floa
     return 1.0 + HYPER.het_noise_short / (1.0 + n) + HYPER.het_noise_edit * float(edits)
 
 
+@quiet_fp
 def inflate(post: Posterior, axes: Optional[list[str]] = None, factor: float = 2.0) -> Posterior:
     """Re-open learning on drift (§9.7) by inflating covariance. For the selected axes
     (all if None) scale Σ's rows & columns by √factor — a congruence transform D Σ Dᵀ that
@@ -314,6 +321,7 @@ def inflate(post: Posterior, axes: Optional[list[str]] = None, factor: float = 2
 
 # ── signal → axis evidence featurizer ────────────────────────────────────────────
 
+@quiet_fp
 def featurize(text: str, telemetry: Optional[dict] = None) -> tuple[np.ndarray, np.ndarray, float]:
     """Map a behavior into partial persona-axis evidence.
 
@@ -440,6 +448,7 @@ def _telemetry_features(telemetry: Optional[dict]) -> np.ndarray:
     ], dtype=float)
 
 
+@quiet_fp
 def featurize_raw(text: str, telemetry: Optional[dict] = None,
                   embedding: Optional[np.ndarray] = None,
                   length_stats: Optional[tuple[float, float]] = None) -> np.ndarray:
@@ -469,6 +478,7 @@ def feature_names() -> list[str]:
     return list(FEATURE_NAMES)
 
 
+@quiet_fp
 def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
             model: Optional["object"] = None, trace: Optional[dict] = None) -> Posterior:
     """One online persona update from a single behavior (§9.8 `update persona posterior`).

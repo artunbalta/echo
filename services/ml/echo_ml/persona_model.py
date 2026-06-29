@@ -32,6 +32,7 @@ import numpy as np
 
 from .config import HYPER
 from .persona_axes import AXIS_KEYS
+from ._numerics import quiet_fp
 
 ARTIFACT_PATH = Path(__file__).resolve().parent / "artifacts" / "measurement.npz"
 MODEL_VERSION = 1
@@ -60,6 +61,7 @@ class PersonaModel:
     def center(self, phi: np.ndarray) -> np.ndarray:
         return np.asarray(phi, dtype=float) - self.mu_phi
 
+    @quiet_fp
     def apply(self, phi: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Return (measurement matrix Wᵀ ∈ R^{F×D}, measurement covariance Ψ_total ∈ R^{F×F})
         for the centered observation φ − μ_φ. Ψ_total folds in the marginalized transient
@@ -140,6 +142,7 @@ def set_persona_model(model: Optional[PersonaModel]) -> None:
 
 # ── offline fitting (called only by scripts/train_measurement.py and unit tests) ──
 
+@quiet_fp
 def fa_em(Phi: np.ndarray, K: int, iters: int = 100, seed: int = 0,
           tol: float = 1e-6) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[float]]:
     """Factor Analysis by EM (pure NumPy). Fits φ = L z + μ + ε, z~N(0,I), ε~N(0,diag(Ψ)).
@@ -193,6 +196,7 @@ def fa_em(Phi: np.ndarray, K: int, iters: int = 100, seed: int = 0,
     return L, Psi, mu, lls
 
 
+@quiet_fp
 def anchor_alignment(Phi_centered: np.ndarray, Z_target: np.ndarray,
                      ridge: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
     """Resolve FA's rotation/scale indeterminacy by a regularized alignment to the named
@@ -221,6 +225,7 @@ def anchor_alignment(Phi_centered: np.ndarray, Z_target: np.ndarray,
     return W, Psi
 
 
+@quiet_fp
 def fit_state_factors(residual: np.ndarray, k_state: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Separate the durable trait from transient state (WI-5). The model is
 
