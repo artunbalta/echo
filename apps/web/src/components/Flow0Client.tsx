@@ -19,6 +19,7 @@
  * when services/ml is up (offline → events still flow, mocked).
  */
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { PixiWorld } from "@/game/PixiWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import {
@@ -26,7 +27,9 @@ import {
   FLOW0_EGGS,
   FLOW0_FIRST_MOVE,
   FLOW0_TO_FLOW1,
+  FLOW2_CROSS,
   buildFlow0Event,
+  buildFlow2Event,
   type Flow0Affordance,
   type EntitySnapshot,
   type BehavioralEvent,
@@ -35,6 +38,7 @@ import {
 interface LiveResult { delta_mu?: number; mocked?: boolean; cond_key?: string }
 
 export default function Flow0Client() {
+  const router = useRouter();
   const mountRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PixiWorld | null>(null);
   const uidRef = useRef("");
@@ -254,6 +258,32 @@ export default function Flow0Client() {
     }
   }, [emit, hillTries, visitRegion]);
 
+  // ── the crossing (F1→F2 seam): leave the private island for the shared ocean ────────────────
+  // The decision to cross is itself F2's first, high-validity sociability cue (single actor, no
+  // counterpart yet). Then hand off — via client-side nav, no reload/"Level 2" — into the shared
+  // Colyseus room where other live players are visible. We carry the userId; the shared scene
+  // resolves the same archipelago slot so the player appears at their island's ocean coordinate.
+  const cross = useCallback(async () => {
+    if (!uidRef.current) return;
+    const event: BehavioralEvent = buildFlow2Event({
+      actorId: uidRef.current,
+      sessionId: sessionRef.current,
+      channel: FLOW2_CROSS.channel,
+      cue: FLOW2_CROSS.cue,
+      action: FLOW2_CROSS.action,
+      targetId: "open_water",
+      targetKind: "place",
+      counterpartStatus: "none",
+    });
+    try {
+      await fetch("/api/observe/behavioral", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ event }),
+      });
+    } catch { /* best-effort */ }
+    router.push("/world");
+  }, [router]);
+
   // ── presentation ──────────────────────────────────────────────────────────────────────────
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-[#f4e9d0]">
@@ -322,10 +352,19 @@ export default function Flow0Client() {
         </div>
       )}
 
-      {/* the F0→F1 seep: the tide receded, a seed waits (no notification, no "Level 1") */}
+      {/* the F0→F1 seep: the tide receded, a seed waits (no notification, no "Level 1"). Once the
+          horizon island has been seen, the shallows become crossable — the F1→F2 seam. */}
       {seeped && (
         <div className="absolute bottom-16 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-2xl border border-[#a06cd5]/20 bg-black/55 p-4 text-center backdrop-blur">
-          <p className="text-sm italic text-[#f4e9d0]/85">a seed lies in the wet sand. you bend to pick it up.</p>
+          <p className="mb-3 text-sm italic text-[#f4e9d0]/85">
+            a seed lies in the wet sand. {horizon ? "across the water, that other island waits." : "the water is shallow here now."}
+          </p>
+          <button
+            onClick={cross}
+            className="rounded-lg border border-[#a06cd5]/50 px-4 py-1.5 text-xs text-[#f4e9d0] transition hover:border-[#a06cd5] hover:bg-[#a06cd5]/10"
+          >
+            wade into the shallows, toward the far shore
+          </button>
         </div>
       )}
 

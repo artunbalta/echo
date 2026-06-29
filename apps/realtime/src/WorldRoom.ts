@@ -15,6 +15,10 @@ import {
   tileDistance,
   C2S,
   S2C,
+  islandSlot,
+  OCEAN,
+  buildFlow2Event,
+  FLOW2_FIRST_CONTACT,
   type MoveIntent,
   type ChatMessage,
   type WelcomePayload,
@@ -24,13 +28,16 @@ import {
 import { WorldState, Entity } from "./state.js";
 import { loadNpcs, loadNpcsAsync } from "./npcs.js";
 import { npcReply, type Turn } from "./dialogue.js";
-import { logInteraction, logTelemetry } from "./persistence.js";
+import { logInteraction, logTelemetry, observeBehavioral } from "./persistence.js";
 
 interface JoinOptions {
   userId: string;
   name?: string;
   spriteUrl?: string;
   sessionId?: string;
+  /** The player's archipelago slot (ECHO §1–2). When present, they appear at their island's
+   *  ocean coordinate so Step-1-clustered neighbours are spatially adjacent in the shared room. */
+  slotIndex?: number;
 }
 
 interface ActiveInteraction {
@@ -85,9 +92,11 @@ export class WorldRoom extends Room<WorldState> {
 
   // ── presence ───────────────────────────────────────────────────────────────
   onJoin(client: Client, options: JoinOptions) {
-    // Live players should find each other: spawn a newcomer a couple of tiles from an
-    // existing live player when there is one, otherwise at the map centre.
-    const spawn = this.pickSpawn();
+    // Crossing in from your own island (F2): appear at your archipelago slot's ocean coordinate so
+    // Step-1-clustered neighbours land adjacent and mutually visible. Fall back to the cluster-spawn
+    // (near the most-recently-seen live player) when no slot is carried.
+    const spawn =
+      typeof options.slotIndex === "number" ? this.spawnForSlot(options.slotIndex) : this.pickSpawn();
     const e = new Entity();
     e.id = client.sessionId;
     e.kind = "user";
@@ -142,6 +151,16 @@ export class WorldRoom extends Room<WorldState> {
     }
     this.state.entities.delete(client.sessionId);
     this.clientSessions.delete(client.sessionId);
+  }
+
+  /** Map an archipelago slot's ocean coordinate (0..OCEAN.EXTENT) into the shared room's tile
+   *  grid (0..MAP_WIDTH). Adjacent slots (the Step-1 cluster) map to adjacent room tiles, so two
+   *  neighbours who both cross land within sight of each other. */
+  private spawnForSlot(slotIndex: number): { x: number; y: number } {
+    const s = islandSlot(slotIndex);
+    const sx = WORLD.MAP_WIDTH / OCEAN.EXTENT;
+    const sy = WORLD.MAP_HEIGHT / OCEAN.EXTENT;
+    return clampToMap(s.x * sx, s.y * sy);
   }
 
   /** Spawn point for a newcomer: near an existing live player if any, else map centre. */
@@ -259,6 +278,7 @@ export class WorldRoom extends Room<WorldState> {
         interactionId: id,
         target: { id: user.id, name: user.name, kind: "user" },
       });
+      this.emitFirstContact(user, target);
       console.log(`[WorldRoom] user↔user ${user.name} ↔ ${target.name}`);
       return;
     }
@@ -282,6 +302,37 @@ export class WorldRoom extends Room<WorldState> {
       interactionId: id,
       target: { id: target.id, name: target.name, kind: target.kind },
     });
+  }
+
+  /**
+   * First contact between two LIVE players (F2). The server is authoritative — it knows both
+   * actors, their proxemic distance, and the audience — so it emits a SEPARATE per-actor
+   * BehavioralEvent for EACH participant, each from that actor's own vantage (counterpart = the
+   * other player, status peer), routed strictly into that actor's own posterior via the proven
+   * /observe/behavioral ingress. Two real users, two independent reads — never co-mingled.
+   */
+  private emitFirstContact(a: Entity, b: Entity) {
+    // Audience = other live players who could observe this dyad (excludes the two participants).
+    const audience = [...this.state.entities.values()].filter(
+      (e) => e.kind === "user" && e.id !== a.id && e.id !== b.id,
+    ).length;
+    const distance = tileDistance(a.x, a.y, b.x, b.y); // proxemics: the gap at first contact
+    for (const [actor, counterpart] of [[a, b], [b, a]] as const) {
+      void observeBehavioral(
+        buildFlow2Event({
+          actorId: actor.refId,
+          sessionId: this.clientSessions.get(actor.id) ?? actor.id,
+          channel: FLOW2_FIRST_CONTACT.channel,
+          cue: FLOW2_FIRST_CONTACT.cue,
+          action: FLOW2_FIRST_CONTACT.action,
+          targetId: counterpart.refId,
+          targetKind: "player",
+          counterpartStatus: "peer",
+          audienceSize: audience,
+          raw: { distance },
+        }),
+      );
+    }
   }
 
   private async handleChat(client: Client, msg: ChatMessage) {
