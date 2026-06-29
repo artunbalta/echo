@@ -101,6 +101,34 @@ export function meetingOutcome(body: Record<string, unknown>): Promise<unknown> 
   return call("/meeting-outcome", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
 }
 
+export interface BehavioralObserveResult {
+  ok?: boolean;
+  mocked?: boolean;
+  userId?: string;
+  polarity?: "take" | "refuse";
+  cond_key?: string;
+  persona?: { mu: number[]; Sigma?: number[][]; version?: number };
+  delta_mu?: number;
+  cond_persona?: { mu: number[] };
+}
+
+/**
+ * Forward one BehavioralEvent envelope to the engine's instrumentation ingress
+ * (ML POST /observe/behavioral → ingest → persona.observe → featurize_raw). The ML
+ * endpoint reads actor_id from the event, enforces mandatory context, folds the cue
+ * into the pooled + conditional posteriors, and reports how far the posterior moved —
+ * including for Channel-K refusals (non-action is data). Mocks gracefully when ML is down.
+ */
+export function observeBehavioralEvent(body: {
+  event: Record<string, unknown>;
+}): Promise<BehavioralObserveResult> {
+  return call<BehavioralObserveResult>(
+    "/observe/behavioral",
+    { method: "POST", body: JSON.stringify(body) },
+    { ok: true, mocked: true },
+  );
+}
+
 export interface PersonaSnapshot {
   userId: string;
   traits: string[];
