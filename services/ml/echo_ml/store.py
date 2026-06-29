@@ -31,6 +31,10 @@ class UserState:
     reward: RewardModel = field(default_factory=RewardModel.init)
     behaviors: list[BehaviorEntry] = field(default_factory=list)
     buckets: dict[str, Bucket] = field(default_factory=dict)
+    # Per-context conditional posteriors (event-schema.md): a separate Posterior per context
+    # value (e.g. "counterpart:server", "stakes:high") so the conditional signature — where
+    # individuation lives — is recoverable. Keyed by the ingress cond_key.
+    cond: dict[str, Posterior] = field(default_factory=dict)
     temperature: float = HYPER.temperature_init
     # calibration training data: (raw_confidence, agreed)
     calib: list[tuple[float, int]] = field(default_factory=list)

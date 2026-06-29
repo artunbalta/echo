@@ -21,6 +21,7 @@ from pydantic import BaseModel
 
 from .config import SETTINGS
 from .store import STORE, BehaviorEntry
+from . import ingest
 from .embeddings import embed
 from . import persona as P
 from . import gate as G
@@ -74,6 +75,10 @@ class TelemetryReq(BaseModel):
     userId: str
     sessionId: Optional[str] = None
     event: dict
+
+
+class BehavioralEventReq(BaseModel):
+    event: dict  # a BehavioralEvent envelope (packages/shared/src/telemetry.ts)
 
 
 class NpcTurnReq(BaseModel):
@@ -156,6 +161,44 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
         "behaviors": len(st.behaviors),
         "drift_kl": round(drift_kl, 3),
         "update": update_trace or None,   # robust-update trace: d², weight, surprising (WI-4)
+    }
+
+
+@app.post("/observe/behavioral")
+def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None)):
+    """Ingest one BehavioralEvent envelope (the world-design instrumentation contract).
+
+    Enforces mandatory context (422 if incomplete), routes per actor_id (multi-tenant
+    siloing), folds the derived cue into BOTH the pooled posterior AND the matching
+    conditional-context posterior, and reports how far each moved — including for
+    Channel-K *refusals*, which carry a concrete signal so non-action is data.
+    """
+    _auth(authorization)
+    try:
+        obs = ingest.event_to_observation(req.event)
+    except ingest.MissingContext as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    st = STORE.get(obs["userId"])
+    before = st.posterior.mu.copy()
+    st.posterior = P.observe(st.posterior, obs["action"], obs["telemetry"])
+
+    ck = obs["cond_key"]
+    cond_before = st.cond.get(ck)
+    cp = cond_before.copy() if cond_before is not None else P.prior()
+    cp = P.observe(cp, obs["action"], obs["telemetry"])
+    st.cond[ck] = cp
+
+    return {
+        "userId": obs["userId"],
+        "polarity": obs["polarity"],
+        "cond_key": ck,
+        "persona": st.posterior.to_dict(),
+        "delta_mu": float(np.linalg.norm(st.posterior.mu - before)),
+        "cond_persona": cp.to_dict(),
+        "telemetry_used": obs["telemetry"],
     }
 
 
@@ -327,6 +370,11 @@ def get_persona(uid: str, authorization: str = Header(None)):
         "temperature": round(st.temperature, 3),
         "ece": round(G.expected_calibration_error(confs, corr), 3) if confs else None,
         "buckets": {k: v.to_dict() for k, v in st.buckets.items()},
+        # Per-context conditional posteriors (the conditional signature, where individuation
+        # lives): the key per context value and that bucket's mean. Empty until BehavioralEvents
+        # with context flow through /observe/behavioral.
+        "conditional_keys": sorted(st.cond.keys()),
+        "conditional": {k: v.mu.tolist() for k, v in st.cond.items()},
         "reward_version": st.reward.version,
         # "which raw features load on each axis" — replaces the hard-coded explanation when a
         # learned measurement matrix is active; null on a clean checkout (heuristic fallback).
