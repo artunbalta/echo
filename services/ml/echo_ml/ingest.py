@@ -118,6 +118,86 @@ def _flow0_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     return False
 
 
+def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
+    """Flow 2 dialogue + Flow 3 clearing cues (packages/shared/src/social.ts) → the EXISTING
+    telemetry feature that matches each cue's signal type. Which axis each loads on stays LEARNED
+    in W (cross-cutting rule #1). Returns True iff `action` is a known social cue (so the caller
+    skips the generic per-channel blocks). Cues whose doc-intended axis is *openness* have no
+    telemetry→openness path in the committed W and are flagged ⚑ in docs/known-gaps.md — they still
+    move the posterior (via the closest signal-type feature + the action embedding), never silently
+    re-routed.
+
+    The conditional-bucket key (set later) conditions social channels on counterpart_status, so the
+    courtesy gradient (warmth to a low-status server vs a high-status figure) is recoverable."""
+    a = action
+
+    # — warmth / approach-driving (approach=+1 → warmth via W) —
+    if a in ("opener_warm", "cold_response_deescalate", "group_join", "include_marginal",
+             "let_others_ahead", "proxemics_close", "opener_neutral", "transact_neutral"):
+        tel["approach"] = True
+        return True
+    if a == "group_initiate":
+        tel["approach"] = True
+        tel["ts_social"] = 0.7              # initiating a group reads energy/sociability
+        return True
+    if a in ("courtesy_warm_server", "courtesy_to_high"):
+        # courtesy to one who cannot repay (top individuating cue); the gradient lives in the
+        # counterpart_status carried in context, not in the feature value.
+        tel["ts_social"] = 0.85
+        tel["approach"] = True
+        return True
+    if a in ("fairness_split_fair", "egg_gift_given"):
+        tel["ts_social"] = 0.8
+        tel["approach"] = True
+        return True
+    if a == "close_graceful":
+        tel["approach"] = True
+        tel["persistence"] = 0.5            # a clean, considerate close = conscientiousness
+        return True
+
+    # — dominance-driving (risk_index → dominance via W) —
+    if a in ("asserts", "interrupt", "cold_response_persist", "bargain_hard", "join_exclusion",
+             "deviate_custom", "fairness_split_greedy", "close_abrupt"):
+        tel["risk_index"] = 0.7
+        if a in ("close_abrupt", "join_exclusion"):
+            tel["approach"] = False
+        return True
+
+    # — withdrawal / low-warmth (approach=−1 → warmth−) —
+    if a in ("opener_curt", "opener_silent", "curt_to_server", "cold_response_withdraw",
+             "group_avoid", "ignore_marginal", "close_ghost", "proxemics_far"):
+        tel["approach"] = False
+        if a in ("opener_silent", "cold_response_withdraw", "group_avoid"):
+            tel["solitude_tol"] = 0.8       # withdrawing reads as solitude-tolerance
+        if a == "curt_to_server":
+            tel["ts_social"] = 0.1
+        return True
+
+    # — norm / fairness / formality —
+    if a == "wait_in_queue":
+        tel["persistence"] = 0.8
+        tel["consistency"] = 0.85
+        return True
+    if a == "cut_queue":
+        tel["consistency"] = 0.1
+        tel["approach"] = False
+        return True
+    if a == "conform_custom":
+        tel["consistency"] = 0.85
+        return True
+
+    # — openness-intended dialogue (⚑ no telemetry→openness path in W; carried by embedding +
+    #   a mild engaged-disclosure signal). Flagged in docs/known-gaps.md. —
+    if a in ("asks_question", "self_disclosure"):
+        tel["ts_social"] = 0.4
+        return True
+    if a == "group_observe":
+        tel["solitude_tol"] = 0.5           # watching rather than joining
+        return True
+
+    return False
+
+
 def event_to_observation(ev: dict) -> dict[str, Any]:
     """Map one BehavioralEvent → {userId, action, telemetry, context, cond_key, polarity}.
 
@@ -148,12 +228,14 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
     if rs.get("decision_latency_ms") is not None:
         tel["decision_latency"] = float(rs["decision_latency_ms"])
 
-    # — Flow 0 (solitary shore) cues — purely additive; when a cue is Flow-0 specific we skip
-    #   the generic per-channel blocks below so existing behaviour stays byte-identical.
+    # — Flow 0 (solitary shore) + Flow 2/3 (social) cues — purely additive; when a cue is handled
+    #   here we skip the generic per-channel blocks below so existing behaviour stays byte-identical.
     flow0 = _flow0_features(action, take, rs, tel)
+    social = (not flow0) and _social_features(action, take, rs, tel)
+    handled = flow0 or social
 
     # — locomotion / approach (Channel A, G1) —
-    if not flow0 and channel in ("A", "G"):
+    if not handled and channel in ("A", "G"):
         # approach is the engine's ±1 proximity feature; a refusal (avoid / hang back) is −1,
         # which is DISTINCT from "absent ⇒ 0" so the non-action actually moves the posterior.
         if "distance" in rs or action in ("approach", "initiate", "greet") or channel == "A":
@@ -161,14 +243,14 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
             # truthiness — a float −1.0 is truthy and was being mis-read as approach=+1).
             tel["approach"] = bool(take)
     # dwell → time-share (cue A4/A5)
-    if not flow0 and rs.get("dwell_ms") is not None:
+    if not handled and rs.get("dwell_ms") is not None:
         key = _DWELL_TS.get(str(target.get("id", "")), None) or _DWELL_TS.get(str(target.get("kind", "")), None)
         if key:
             share = _clip01(float(rs["dwell_ms"]) / 8000.0)
             tel[key] = share if take else 0.0
 
     # — economic / resource (Channel F) —
-    if not flow0 and channel == "F":
+    if not handled and channel == "F":
         if cue.startswith("F1") or "save" in action or "spend" in action:
             tel["save_rate"] = 0.85 if take else 0.15            # save seed vs eat now
         if cue.startswith("F3") or "wager" in action or "bet" in action:
@@ -180,14 +262,14 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
             tel["risk_index"] = _clip01(float(rs.get("amount", 0.6)) if take else 0.2)
 
     # — pet / disclosure (Channel D) —
-    if not flow0 and (cue.startswith("D11") or action == "pet_talk"):
+    if not handled and (cue.startswith("D11") or action == "pet_talk"):
         tel["pet_attach"] = _clip01(float(rs.get("amount", abs(float(rs.get("valence", 0.5))))))
-    if not flow0 and channel in ("D", "G") and ("server" in str(target.get("kind", "")) or cue.startswith("G11")):
+    if not handled and channel in ("D", "G") and ("server" in str(target.get("kind", "")) or cue.startswith("G11")):
         # courtesy to a low-status server who cannot reciprocate (top individuating cue)
         tel["ts_social"] = 0.85 if take else 0.1
 
     # — normative / queue (Channel H) —
-    if not flow0 and (cue.startswith("H1") or "queue" in action):
+    if not handled and (cue.startswith("H1") or "queue" in action):
         if take:
             tel["persistence"] = 0.8
             tel["consistency"] = 0.85

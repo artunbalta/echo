@@ -50,6 +50,28 @@ why we are not fixing it now, the resolution criterion, and status.
   with no measurable ML load regression in local two-tab runs.
 - **Status:** OPEN — co-deferred to the **W re-anchor milestone**.
 
+## 3. F2/F3 openness-intended social cues route to other axes (same W gap as #1)
+
+- **Opened:** 2026-06-29 (Step 4, F2 dialogue + F3 clearing).
+- **What:** Several Flow-2/Flow-3 cues whose design-doc prior is **openness** load elsewhere under
+  the committed W: `asks_question` and `self_disclosure` (F2) → affect/pace (carried by reply
+  latency + a mild `ts_social`, not openness); `deviate_custom` (F3) → dominance (via `risk_index`).
+  They move the posterior and are bucketed on the right `counterpart_status`, but the openness
+  direction the doc intends is not yet expressed. Flagged ⚑ in `scripts/flow2_dialogue_walkthrough.py`
+  / `flow3_clearing_walkthrough.py` and in `social.ts`.
+- **Root cause:** identical to #1 — W has **no telemetry→openness path** (anchored on the day-loop
+  economy). Openness is carried mostly by the semantic embedding channel, which is a hash offline.
+- **Why we are NOT fixing it now:** same as #1 — re-anchor W **once** on the full multi-flow cue set
+  (F0 exploration + F2/F3 openness dialogue) with real behavioral data, not piecemeal.
+- **Note (turn latency can dominate the implicit read):** F2 dialogue cues carry reply-latency as an
+  implicit signal; on a fast turn the strong `latency_norm→pace` loading can dominate the dominance
+  signal of `asserts`/`interrupt` in the *implicit→axis* read. This is faithful (a fast curt turn is
+  high-pace), not a bug; the dominance signal (`risk_index`) is still present, just not the top axis.
+- **Resolution criterion:** after the multi-flow re-anchor, `asks_question`/`self_disclosure`/
+  `deviate_custom` load predominantly onto openness in their walkthroughs; numerics gate + the F2/F3
+  regression tests stay green.
+- **Status:** OPEN — folded into the **W re-anchor milestone** (same one as #1 and #2).
+
 ---
 
 _Decision recorded for Step 3: the passive sampler is left here (not built this turn) for the two
