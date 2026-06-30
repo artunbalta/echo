@@ -157,6 +157,77 @@ export default function WorldClient() {
     netRef.current?.interactStart(n.id);
   }, []);
 
+  // Latest synced entity snapshots — so the render can read a station NPC's role/status (which the
+  // onNearbyChange payload doesn't carry) to surface the right Flow-3 action menu.
+  const snapsRef = useRef<Map<string, { role?: string; status?: string; name: string; kind: string }>>(new Map());
+
+  // Flow 2/3 — report a social choice to the authoritative server, which stamps the context and
+  // emits the per-actor BehavioralEvent. Reply-latency rides along where the input was focused.
+  const socialCue = useCallback((targetId: string, action: string) => {
+    const latency = inputFocusedAt.current ? Date.now() - inputFocusedAt.current : undefined;
+    netRef.current?.sendSocialCue(targetId, action, latency, editsRef.current || undefined);
+    const log = (window as unknown as { __echoSocial?: unknown[] }).__echoSocial ?? [];
+    log.push({ targetId, action, t: Date.now() });
+    (window as unknown as { __echoSocial?: unknown[] }).__echoSocial = log;
+    setSocialBeat(action.replace(/_/g, " "));
+  }, []);
+  const [socialBeat, setSocialBeat] = useState<string | null>(null);
+
+  // The clearing's station action menus (Flow 3), keyed by the NPC's role. Each option is a
+  // social.ts SOCIAL_CUES action; the server stamps counterpart_status from the NPC's status.
+  const STATION_ACTIONS: Record<string, { action: string; label: string }[]> = {
+    service: [
+      { action: "courtesy_warm_server", label: "thank them warmly" },
+      { action: "transact_neutral", label: "just transact" },
+      { action: "curt_to_server", label: "be curt" },
+    ],
+    elder: [
+      { action: "courtesy_to_high", label: "pay your respects" },
+      { action: "transact_neutral", label: "keep it brief" },
+    ],
+    queue: [
+      { action: "wait_in_queue", label: "wait your turn" },
+      { action: "let_others_ahead", label: "let others ahead" },
+      { action: "cut_queue", label: "cut to the front" },
+    ],
+    group: [
+      { action: "group_join", label: "join in" },
+      { action: "group_initiate", label: "take the lead" },
+      { action: "group_observe", label: "hang back & watch" },
+      { action: "conform_custom", label: "copy their gesture" },
+      { action: "deviate_custom", label: "do your own thing" },
+      { action: "group_avoid", label: "keep away" },
+    ],
+    marginal: [
+      { action: "include_marginal", label: "draw them in" },
+      { action: "ignore_marginal", label: "ignore them" },
+      { action: "join_exclusion", label: "side with the group" },
+    ],
+    trader: [
+      { action: "bargain_hard", label: "haggle hard" },
+      { action: "fairness_split_fair", label: "split it fairly" },
+      { action: "fairness_split_greedy", label: "take the larger share" },
+    ],
+  };
+
+  // Flow 2 dialogue register choices, shown when talking to a live player (the doc's opener set,
+  // turn dynamics, the cold-response dilemma, and close styles — every one a wired per-actor cue).
+  const F2_REGISTERS: { action: string; label: string }[] = [
+    { action: "opener_warm", label: "warm" },
+    { action: "opener_neutral", label: "neutral" },
+    { action: "opener_curt", label: "curt" },
+    { action: "opener_silent", label: "say nothing" },
+    { action: "asks_question", label: "ask about them" },
+    { action: "asserts", label: "assert" },
+    { action: "self_disclosure", label: "open up" },
+    { action: "interrupt", label: "cut in" },
+    { action: "cold_response_deescalate", label: "↳ stay warm" },
+    { action: "cold_response_persist", label: "↳ push back" },
+    { action: "cold_response_withdraw", label: "↳ withdraw" },
+    { action: "close_graceful", label: "close kindly" },
+    { action: "close_abrupt", label: "close abruptly" },
+  ];
+
   // Step through the portal → fade to black, then travel to the venue.
   const enterVenue = useCallback(() => {
     if (enteringRef.current) return;
@@ -235,6 +306,7 @@ export default function WorldClient() {
       },
       onSnapshot: (snaps, _tick) => {
         world.applySnapshot(snaps, net.lastAckSeq());
+        snapsRef.current = snaps; // keep role/status available for the Flow-3 station menus
         // Derive the "who's live now" roster straight from the synced state, and announce
         // a genuinely new arrival so two players notice each other.
         const live: { id: string; name: string; refId: string }[] = [];
@@ -1026,14 +1098,53 @@ export default function WorldClient() {
       )}
 
       {/* Proximity prompt */}
-      {nearby && !convo && !handoverOn && (
-        <button
-          onClick={startInteraction}
-          className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment hover:text-echo"
-        >
-          Talk to <span className="font-bold text-echo">{nearby.name}</span>
-          {nearby.kind === "user" && <span className="ml-1 rounded bg-echo/20 px-1 text-[10px] text-echo">live</span>} — press E
-        </button>
+      {(() => {
+        if (!nearby || convo || handoverOn) return null;
+        // Flow 3 — a clearing station NPC: surface its by-status action menu (the cue carries the
+        // NPC's counterpart_status, so courtesy-to-server vs courtesy-to-elder form the gradient).
+        const snap = nearby.kind === "npc" ? snapsRef.current.get(nearby.id) : undefined;
+        const role = snap?.role;
+        const opts = role ? STATION_ACTIONS[role] : undefined;
+        if (opts) {
+          return (
+            <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 font-mono">
+              <div className="mb-2 text-sm">
+                <span className="font-bold text-echo">{nearby.name}</span>
+                {snap?.status && snap.status !== "none" && (
+                  <span className="ml-2 rounded bg-parchment/10 px-1 text-[10px] text-parchment/60">{snap.status}-status</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {opts.map((o) => (
+                  <button
+                    key={o.action}
+                    onClick={() => socialCue(nearby.id, o.action)}
+                    className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo"
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        // otherwise: the ordinary talk-to (a live player or a wander NPC)
+        return (
+          <button
+            onClick={startInteraction}
+            className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment hover:text-echo"
+          >
+            Talk to <span className="font-bold text-echo">{nearby.name}</span>
+            {nearby.kind === "user" && <span className="ml-1 rounded bg-echo/20 px-1 text-[10px] text-echo">live</span>} — press E
+          </button>
+        );
+      })()}
+
+      {/* a transient, non-game acknowledgement that a social choice registered (no score) */}
+      {socialBeat && (
+        <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/40 px-3 py-1 font-mono text-[11px] italic text-parchment/60">
+          {socialBeat}
+        </div>
       )}
 
       {/* Portal prompt — only when not already talking to someone */}
@@ -1151,6 +1262,24 @@ export default function WorldClient() {
                   </button>
                 )}
               </div>
+
+              {/* Flow 2 — dialogue register: the doc's opener set, turn dynamics, the cold-response
+                  dilemma (↳), and close styles. Each is a wired per-actor cue toward the live
+                  counterpart; the words you type are relayed separately. Only with a live player. */}
+              {convoKindRef.current === "user" && convoTargetRef.current && (
+                <div className="mb-2 flex flex-wrap gap-1.5 border-t border-echo/15 pt-2">
+                  {F2_REGISTERS.map((r) => (
+                    <button
+                      key={r.action}
+                      onClick={() => convoTargetRef.current && socialCue(convoTargetRef.current.id, r.action)}
+                      className="rounded border border-echo/25 px-2 py-0.5 text-[10px] text-parchment/80 hover:border-echo hover:text-echo"
+                      title={r.action}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <input

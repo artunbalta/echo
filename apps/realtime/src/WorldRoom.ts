@@ -19,11 +19,15 @@ import {
   OCEAN,
   buildFlow2Event,
   FLOW2_FIRST_CONTACT,
+  buildSocialEvent,
+  SOCIAL_CUES,
   type MoveIntent,
   type ChatMessage,
+  type SocialCueMsg,
   type WelcomePayload,
   type Facing,
   type TelemetryEvent,
+  type CounterpartStatus,
 } from "@echo/shared";
 import { WorldState, Entity } from "./state.js";
 import { loadNpcs, loadNpcsAsync } from "./npcs.js";
@@ -83,6 +87,7 @@ export class WorldRoom extends Room<WorldState> {
 
     await loadNpcsAsync(); // prefer the persisted spanning set; populates the sync cache
     this.spawnNpcs();
+    this.spawnClearingStations(); // Flow 3 — the clearing's status/service/queue/group/marginal/bargain
     this.registerHandlers();
 
     // Fixed-tick authoritative simulation.
@@ -236,6 +241,52 @@ export class WorldRoom extends Room<WorldState> {
         client.send(S2C.ERROR, { code: "chat_failed", message: "NPC did not respond." });
       });
     });
+
+    this.onMessage(C2S.SOCIAL_CUE, (client, msg: SocialCueMsg) => this.handleSocialCue(client, msg));
+  }
+
+  /**
+   * A Flow 2/3 social choice (opener register, turn dynamic, cold-response reaction, or a clearing
+   * station action). The client reports WHICH choice the player made; the authoritative server
+   * stamps the mandatory context from what it knows — counterpart_status (peer for a live player,
+   * the station NPC's status otherwise), audience_size (other live players present), and the
+   * proxemic distance — and emits ONE per-actor BehavioralEvent into THIS actor's own posterior via
+   * the proven /observe/behavioral ingress. Each player reports their own turns, so the dyad's two
+   * posteriors stay siloed; the conditional bucket keys on counterpart_status (the F3 gradient).
+   */
+  private handleSocialCue(client: Client, msg: SocialCueMsg) {
+    const actor = this.state.entities.get(client.sessionId);
+    const target = this.state.entities.get(msg?.targetId ?? "");
+    if (!actor || !target || !msg?.action || !(msg.action in SOCIAL_CUES)) return;
+    // Proximity guard: you can only socially measure someone you're actually near (also stops a
+    // modified client from emitting cues about a player across the map).
+    if (tileDistance(actor.x, actor.y, target.x, target.y) > WORLD.INTERACTION_RADIUS + 2) return;
+
+    const counterpartStatus: CounterpartStatus =
+      target.kind === "user"
+        ? "peer"
+        : target.status === "low" || target.status === "high" || target.status === "peer"
+          ? (target.status as CounterpartStatus)
+          : "stranger";
+    const audience = [...this.state.entities.values()].filter(
+      (e) => e.kind === "user" && e.id !== actor.id && e.id !== target.id,
+    ).length;
+    const raw: Record<string, number> = { distance: tileDistance(actor.x, actor.y, target.x, target.y) };
+    if (typeof msg.latencyMs === "number") raw.latency_ms = msg.latencyMs;
+    if (typeof msg.editsCount === "number") raw.edits = msg.editsCount;
+
+    void observeBehavioral(
+      buildSocialEvent({
+        actorId: actor.refId,
+        sessionId: this.clientSessions.get(actor.id) ?? actor.id,
+        action: msg.action,
+        counterpartId: target.refId,
+        counterpartStatus,
+        targetKind: target.kind === "user" ? "player" : "npc",
+        audienceSize: audience,
+        raw,
+      }),
+    );
   }
 
   // ── interactions ─────────────────────────────────────────────────────────────
@@ -321,17 +372,33 @@ export class WorldRoom extends Room<WorldState> {
       (e) => e.kind === "user" && e.id !== a.id && e.id !== b.id,
     ).length;
     const distance = tileDistance(a.x, a.y, b.x, b.y); // proxemics: the gap at first contact
+    // Proxemics (the doc's continuous distance cue) derived authoritatively from positions: the
+    // distance the player settled at when they opened contact — close reads warmth, far avoidance.
+    const proxemics = distance <= 2 ? "proxemics_close" : "proxemics_far";
     for (const [actor, counterpart] of [[a, b], [b, a]] as const) {
+      const sessionId = this.clientSessions.get(actor.id) ?? actor.id;
       void observeBehavioral(
         buildFlow2Event({
           actorId: actor.refId,
-          sessionId: this.clientSessions.get(actor.id) ?? actor.id,
+          sessionId,
           channel: FLOW2_FIRST_CONTACT.channel,
           cue: FLOW2_FIRST_CONTACT.cue,
           action: FLOW2_FIRST_CONTACT.action,
           targetId: counterpart.refId,
           targetKind: "player",
           counterpartStatus: "peer",
+          audienceSize: audience,
+          raw: { distance },
+        }),
+      );
+      void observeBehavioral(
+        buildSocialEvent({
+          actorId: actor.refId,
+          sessionId,
+          action: proxemics,
+          counterpartId: counterpart.refId,
+          counterpartStatus: "peer",
+          targetKind: "player",
           audienceSize: audience,
           raw: { distance },
         }),
@@ -504,6 +571,13 @@ export class WorldRoom extends Room<WorldState> {
 
   /** Lightweight wander FSM (§8): idle at home, occasionally drift to a new point. */
   private stepNpc(e: Entity, now: number, dt: number) {
+    // Flow 3 station NPCs (a server, an elder, a queue, a group, a marginal figure, a trader) stay
+    // put so the clearing is a stable place the player can navigate and treat by status.
+    if (e.role) {
+      e.moving = false;
+      e.dir = { x: 0, y: 0 };
+      return;
+    }
     // Don't wander while in a conversation.
     const inConvo = [...this.interactions.values()].some((it) => it.kind === "npc" && it.partnerEntityId === e.id);
     if (inConvo) {
@@ -551,6 +625,45 @@ export class WorldRoom extends Room<WorldState> {
     e.dir = { x: Math.sign(ddx), y: Math.sign(ddy) };
     e.facing = pickFacing(ddx, ddy);
     this.integrate(e, dt, NPC_SPEED);
+  }
+
+  /**
+   * Flow 3 — the clearing. A small, stable cluster of station NPCs the dyad seeps into after F2
+   * (the seep is geographic: the player walks over; no scene wall). Each carries a `role` (which
+   * action menu the client shows) and a `status` (which counterpart_status the server stamps on the
+   * social event), so the courtesy gradient — warmth to the low-status server vs the high-status
+   * elder — is recoverable as a conditional. Placed just north of the slot-spawn cluster.
+   */
+  private spawnClearingStations() {
+    const cx = Math.floor(WORLD.MAP_WIDTH / 2);
+    const cy = 20;
+    const stations: { id: string; name: string; role: string; status: string; dx: number; dy: number }[] = [
+      { id: "stn_server", name: "the keeper of the stall", role: "service", status: "low", dx: -3, dy: 1 },
+      { id: "stn_elder", name: "the elder", role: "elder", status: "high", dx: 3, dy: 1 },
+      { id: "stn_queue", name: "the line at the well", role: "queue", status: "peer", dx: 0, dy: 3 },
+      { id: "stn_group", name: "a knot of talkers", role: "group", status: "peer", dx: -2, dy: -3 },
+      { id: "stn_marginal", name: "the one apart", role: "marginal", status: "low", dx: 5, dy: -2 },
+      { id: "stn_trader", name: "the trader", role: "trader", status: "peer", dx: 1, dy: -1 },
+    ];
+    for (const s of stations) {
+      const e = new Entity();
+      e.id = s.id;
+      e.kind = "npc";
+      e.refId = s.id;
+      e.name = s.name;
+      e.spriteUrl = "";
+      const p = clampToMap(cx + s.dx, cy + s.dy);
+      e.x = p.x;
+      e.y = p.y;
+      e.homeX = p.x;
+      e.homeY = p.y;
+      e.wanderTargetX = p.x;
+      e.wanderTargetY = p.y;
+      e.facing = "down";
+      e.role = s.role;
+      e.status = s.status;
+      this.state.entities.set(e.id, e);
+    }
   }
 
   private spawnNpcs() {

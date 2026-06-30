@@ -73,6 +73,8 @@ export class NetClient {
           y: e.y,
           facing: e.facing as Facing,
           moving: e.moving,
+          role: e.role ?? "",
+          status: e.status ?? "none",
         });
       });
       this.cbs.onSnapshot?.(map, state.tick);
@@ -125,6 +127,11 @@ export class NetClient {
   }
   chat(interactionId: string, text: string, latencyMs?: number, editsCount?: number, viaEcho?: boolean) {
     this.room?.send(C2S.CHAT, { interactionId, text, latencyMs, editsCount, viaEcho });
+  }
+  /** Report a Flow 2/3 social choice toward `targetId` (a live player or a clearing station NPC).
+   *  The server stamps the authoritative context and emits the per-actor BehavioralEvent. */
+  sendSocialCue(targetId: string, action: string, latencyMs?: number, editsCount?: number) {
+    this.room?.send(C2S.SOCIAL_CUE, { targetId, action, latencyMs, editsCount });
   }
 
   leave() {
