@@ -217,6 +217,19 @@ export default function WorldClient() {
     setPrepared(false);
   }, []);
   const [prepared, setPrepared] = useState(false);
+
+  // Board a raft / drop anchor — the crossing affordance. Toggling sets the client prediction
+  // (PixiWorld.canSail) AND syncs the authoritative server (SET_SAIL), so the open sea becomes
+  // traversable; without it the sea is a wall and you're confined to your island on foot.
+  const [sailing, setSailing] = useState(false);
+  const toggleSail = useCallback(() => {
+    setSailing((on) => {
+      const next = !on;
+      worldRef.current?.setSailing(next);
+      netRef.current?.sendSetSail(next);
+      return next;
+    });
+  }, []);
   const [socialBeat, setSocialBeat] = useState<string | null>(null);
 
   // The clearing's station action menus (Flow 3), keyed by the NPC's role. Each option is a
@@ -1034,6 +1047,17 @@ export default function WorldClient() {
       <div ref={mountRef} className="absolute inset-0" />
       {/* Atmospheric vignette over the world (below the UI panels in DOM order). */}
       <div className="world-vignette absolute inset-0" />
+
+      {/* The crossing affordance: board a raft to set sail (the open sea is a wall on foot). */}
+      {!offline && (
+        <button
+          onClick={toggleSail}
+          className="panel absolute bottom-4 left-4 z-30 rounded-lg px-3 py-2 font-mono text-[11px] text-parchment hover:text-echo"
+          title="The open sea is a wall on foot — board a raft to cross to another island."
+        >
+          {sailing ? "⚓ drop anchor" : "⛵ board a raft — set sail"}
+        </button>
+      )}
 
       {offline ? (
         <div className="panel absolute left-1/2 top-1/2 w-[min(420px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-lg px-6 py-5 text-center font-mono text-sm text-parchment">
