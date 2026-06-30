@@ -22,6 +22,8 @@ import {
   WORLD,
   SPRITE,
   FACING_ROW,
+  presenceAlpha,
+  presenceTier,
   type EntitySnapshot,
   type Facing,
 } from "@echo/shared";
@@ -697,7 +699,23 @@ export class PixiWorld {
     re.label.y = py - SPRITE.FRAME_H - 2;
     (re.label as any).zIndex = py + 0.1;
 
+    // ── distance-based presence LOD (world-unify §2): far = faint anonymous silhouette, near =
+    //    full sharp named avatar. Self is at distance 0 → always sharp. The name appears only as a
+    //    remote resolves (Tier 2/1); at Tier 3 it is an anonymous ink-tinted silhouette; beyond the
+    //    horizon it is culled. (Social interaction is gated separately, in detectNearby below, at
+    //    exactly Tier 1 — so seeing a silhouette can never start measurement.) ──
+    const dist = Math.hypot(this.localX - tileX, this.localY - tileY);
+    const tier = presenceTier(dist);
+    const a = presenceAlpha(dist);
+    re.sprite.visible = a > 0.001;
+    re.sprite.alpha = a;
+    re.sprite.tint = tier === "distant" ? 0x2a2340 : 0xffffff; // ink-mauve silhouette far; sharp near
+    const named = tier === "close" || tier === "approaching"; // anonymous until it resolves
+    re.label.visible = named && a > 0.001;
+    re.label.alpha = a;
+
     if (re.ring) {
+      re.ring.visible = a > 0.001; // the echo-violet "someone is out there" glint — culled past horizon
       re.ring.x = px;
       re.ring.y = py - 1;
       (re.ring as any).zIndex = py - 0.1; // just under the sprite's feet

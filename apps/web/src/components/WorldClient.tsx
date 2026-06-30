@@ -13,8 +13,13 @@ import RecognitionMeter from "@/components/RecognitionMeter";
 import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
 import { useEcho } from "@/lib/useEcho";
 import { markFunnel } from "@/lib/funnel";
-import type { InteractTurnPayload } from "@echo/shared";
-import { nearestSlot } from "@echo/shared";
+import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent } from "@echo/shared";
+import {
+  nearestSlot, islandSlot,
+  FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event,
+  type Flow0Affordance,
+} from "@echo/shared";
+import { generateOcean } from "@/game/tilemap";
 
 const prettyBucket = (b: string) => b.replace(/_/g, " ");
 
@@ -40,6 +45,14 @@ function sameIds(a: { id: string }[], b: { id: string }[]): boolean {
 export default function WorldClient() {
   const mountRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PixiWorld | null>(null);
+  // ── Flow 0 own-island layer (world-unify §3): the solitary baseline lives on YOUR island in the
+  //    one ocean — client-local affordance entities (role "flow0", not room state) that emit SOLO
+  //    cues (audience 0, private, no counterpart). Other players are atmosphere until Tier 1. ──
+  const f0EntsRef = useRef<EntitySnapshot[]>([]);
+  const f0ByIdRef = useRef<Map<string, Flow0Affordance>>(new Map());
+  const f0DoneRef = useRef<Set<string>>(new Set());
+  const f0SpawnAtRef = useRef(0);
+  const firstMoveDoneRef = useRef(false);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
   const interactionRef = useRef<string | null>(null);
@@ -272,6 +285,42 @@ export default function WorldClient() {
   ];
 
 
+  // Emit ONE solo Flow-0 BehavioralEvent (audience 0, private, no counterpart — buildFlow0Event
+  // stamps FLOW0_CONTEXT) through the proven /observe/behavioral ingress. This is the solitary
+  // baseline; it never touches the social path and can only fire from your own-island affordances.
+  const emitFlow0 = useCallback(
+    async (channel: any, cue: any, action: string, targetId: string, targetKind: any, raw?: any) => {
+      if (!uidRef.current) return;
+      const event: BehavioralEvent = buildFlow0Event({
+        actorId: uidRef.current, sessionId: sessionIdRef.current, channel, cue, action, targetId, targetKind, raw,
+      });
+      try {
+        await fetch("/api/observe/behavioral", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event }),
+        });
+      } catch { /* best-effort; never block the player */ }
+    },
+    [],
+  );
+
+  // Use a Flow-0 affordance on your own island → its solo cue, plus the tied curiosity egg.
+  const f0Use = useCallback(
+    (aff: Flow0Affordance, action?: string) => {
+      f0DoneRef.current.add(aff.id);
+      void emitFlow0(aff.channel, aff.cue, action ?? aff.action, aff.id, aff.targetKind, aff.raw);
+      const egg =
+        aff.id === "thicket" ? FLOW0_EGGS.find((e) => e.id === "egg_hollow")
+        : aff.id === "tidepool" ? FLOW0_EGGS.find((e) => e.id === "egg_reflection")
+        : aff.id === "hill" ? FLOW0_EGGS.find((e) => e.id === "egg_horizon")
+        : undefined;
+      if (egg && !f0DoneRef.current.has(egg.id)) {
+        f0DoneRef.current.add(egg.id);
+        void emitFlow0(egg.channel, egg.cue, egg.action, egg.id, "place");
+      }
+    },
+    [emitFlow0],
+  );
+
   useEffect(() => {
     // `?u=<name>` overrides identity from the URL — so two tabs in ONE browser (which share
     // localStorage) can join as two DIFFERENT users on adjacent islands for the co-presence test.
@@ -312,7 +361,15 @@ export default function WorldClient() {
         setNearby(t);
         if (t) markFunnel(uidRef.current, "first_nearby");
       },
-      onMoveIntent: (dir, facing, seq) => netRef.current?.sendMove({ dir, facing, seq }),
+      onMoveIntent: (dir, facing, seq) => {
+        netRef.current?.sendMove({ dir, facing, seq });
+        // The very first input is the clean Flow-0 tempo cue (solo; no one is near yet).
+        if (!firstMoveDoneRef.current && f0SpawnAtRef.current) {
+          firstMoveDoneRef.current = true;
+          void emitFlow0(FLOW0_FIRST_MOVE.channel, FLOW0_FIRST_MOVE.cue, FLOW0_FIRST_MOVE.action,
+            "shore", "place", { latency_ms: Date.now() - f0SpawnAtRef.current });
+        }
+      },
       onStop: (seq) => netRef.current?.sendStop(seq),
       emitTelemetry: (type, payload) => {
         teleRef.current?.emit(type as any, payload);
@@ -322,7 +379,7 @@ export default function WorldClient() {
         else if (type === "dwell") d.dwell++;
         else if (type === "revisit") d.revisits++;
       },
-    }, { artDir: "/assets/island" }); // bible ground tiles (grass/water/sand/tree/bush) for the shared zone
+    }, { map: generateOcean(), artDir: "/assets/island" }); // ONE shared ocean: 100 islands in one sea
     worldRef.current = world;
 
     const net = new NetClient(config.realtimeUrl);
@@ -337,8 +394,11 @@ export default function WorldClient() {
         markFunnel(uidRef.current, "world_enter");
       },
       onSnapshot: (snaps, _tick) => {
+        // Merge in this player's own-island Flow-0 affordances (client-local; not room state) so
+        // they render + become "nearby" alongside the live room entities.
+        for (const e of f0EntsRef.current) snaps.set(e.id, e);
         world.applySnapshot(snaps, net.lastAckSeq());
-        snapsRef.current = snaps; // keep role/status available for the Flow-3 station menus
+        snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
         // Derive the "who's live now" roster straight from the synced state, and announce
         // a genuinely new arrival so two players notice each other.
         const live: { id: string; name: string; refId: string }[] = [];
@@ -472,6 +532,18 @@ export default function WorldClient() {
         if (typeof placement.slotIndex === "number") slotIndex = placement.slotIndex;
       } catch { /* offline → fallback spawn */ }
       slotIndexRef.current = slotIndex; // the travel stand reads this to offer near/far destinations
+      // Place the Flow-0 solitary affordances on THIS player's own island (their slot coordinate in
+      // the one ocean), as client-local entities (role "flow0") — never room state, so other players
+      // don't see or interact with your island's affordances. Using them emits SOLO Flow-0 cues.
+      const home = islandSlot(slotIndex ?? 0); // offline (no slot) → centre island, matching pickSpawn
+      f0EntsRef.current = FLOW0_AFFORDANCES.map((a) => {
+        f0ByIdRef.current.set(`f0_${a.id}`, a);
+        return {
+          id: `f0_${a.id}`, kind: "npc", refId: `f0_${a.id}`, name: a.label, spriteUrl: a.sprite,
+          x: home.x + a.dx, y: home.y + a.dy, facing: "down", moving: false, role: "flow0", status: "none",
+        } as EntitySnapshot;
+      });
+      f0SpawnAtRef.current = Date.now();
       if (disposed) return;
       try {
         await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
@@ -1162,6 +1234,37 @@ export default function WorldClient() {
               </button>
             </div>
           );
+        }
+        // Flow 0 — a solitary affordance on YOUR OWN island. Using it emits a SOLO cue (audience 0,
+        // no counterpart); this is the pre-social baseline. The distant others remain atmosphere.
+        if (role === "flow0") {
+          const aff = f0ByIdRef.current.get(nearby.id);
+          if (aff) {
+            const buttons =
+              aff.id === "scatter"
+                ? [{ a: "stack_tidy", l: "stack them neatly" }, { a: "collect", l: "pocket them" }, { a: "ignore_all", l: "leave them" }]
+                : aff.id === "hill" ? [{ a: aff.action, l: "climb it" }]
+                : aff.id === "tidepool" ? [{ a: aff.action, l: "look into the water" }]
+                : aff.id === "thicket" ? [{ a: aff.action, l: "push through" }]
+                : aff.id === "driftwood" ? [{ a: aff.action, l: "go to it" }]
+                : [{ a: aff.action, l: "follow the path" }];
+            return (
+              <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 font-mono">
+                <div className="mb-2 text-sm italic text-parchment/80">{aff.label}</div>
+                <div className="flex flex-wrap gap-2">
+                  {buttons.map((b) => (
+                    <button
+                      key={b.a}
+                      onClick={() => f0Use(aff, b.a)}
+                      className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo"
+                    >
+                      {b.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          }
         }
         const opts = role ? STATION_ACTIONS[role] : undefined;
         if (opts) {

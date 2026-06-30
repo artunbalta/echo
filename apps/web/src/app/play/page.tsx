@@ -2,10 +2,11 @@
 
 import dynamic from "next/dynamic";
 
-// PixiJS touches the DOM/WebGL — load the Flow 0 scene only in the browser.
-// /play is the canonical front door of the 7-flow archipelago: sign in → your own island → Flow 0.
-const Flow0Client = dynamic(() => import("@/components/Flow0Client"), { ssr: false });
+// PixiJS touches the DOM/WebGL — load the world scene only in the browser.
+// /play is the canonical front door: ONE shared ocean. You spawn on your own island (Flow 0,
+// solitary) and sense others as distant silhouettes that sharpen into people as you sail closer.
+const WorldClient = dynamic(() => import("@/components/WorldClient"), { ssr: false });
 
 export default function PlayPage() {
-  return <Flow0Client />;
+  return <WorldClient />;
 }
