@@ -258,6 +258,9 @@ export class WorldRoom extends Room<WorldState> {
     const actor = this.state.entities.get(client.sessionId);
     const target = this.state.entities.get(msg?.targetId ?? "");
     if (!actor || !target || !msg?.action || !(msg.action in SOCIAL_CUES)) return;
+    // Strict per-actor siloing: a user can never socially measure themselves (two tabs of one
+    // browser share a userId → same refId). Mirrors emitFirstContact's guard.
+    if (actor.refId === target.refId) return;
     // Proximity guard: you can only socially measure someone you're actually near (also stops a
     // modified client from emitting cues about a player across the map).
     if (tileDistance(actor.x, actor.y, target.x, target.y) > WORLD.INTERACTION_RADIUS + 2) return;
@@ -294,6 +297,10 @@ export class WorldRoom extends Room<WorldState> {
     const user = this.state.entities.get(client.sessionId);
     const target = this.state.entities.get(targetId);
     if (!user || !target) return;
+    // Flow 3 station NPCs are not chat partners — they're acted on via SOCIAL_CUE (the action
+    // menu). Opening a chat with one would dead-end (no NPC dialogue spec), so refuse it here too
+    // (belt-and-suspenders for the no-key / modified-client path; the client also guards this).
+    if (target.role) return;
     if (tileDistance(user.x, user.y, target.x, target.y) > WORLD.INTERACTION_RADIUS + 0.5) {
       client.send(S2C.ERROR, { code: "too_far", message: "Move closer to talk." });
       return;
@@ -372,9 +379,12 @@ export class WorldRoom extends Room<WorldState> {
       (e) => e.kind === "user" && e.id !== a.id && e.id !== b.id,
     ).length;
     const distance = tileDistance(a.x, a.y, b.x, b.y); // proxemics: the gap at first contact
-    // Proxemics (the doc's continuous distance cue) derived authoritatively from positions: the
-    // distance the player settled at when they opened contact — close reads warmth, far avoidance.
-    const proxemics = distance <= 2 ? "proxemics_close" : "proxemics_far";
+    // Proxemics (the doc's distance cue) derived authoritatively from positions: the distance the
+    // player settled at when they opened contact — intimate (≤1 tile) reads warmth, a kept gap
+    // (1–2 tiles, the rest of the open window) reads reserve/avoidance. Both branches are live
+    // within the interaction-open window (≤ INTERACTION_RADIUS+0.5 = 2.0). NOTE: this is sampled at
+    // contact, a coarse read of the doc's *continuous* settle-distance — see known-gaps #4.
+    const proxemics = distance <= 1 ? "proxemics_close" : "proxemics_far";
     for (const [actor, counterpart] of [[a, b], [b, a]] as const) {
       const sessionId = this.clientSessions.get(actor.id) ?? actor.id;
       void observeBehavioral(

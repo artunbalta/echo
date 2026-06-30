@@ -50,7 +50,7 @@ CUES = {
     "bargain_hard": ("F", "F9", "dominance/economic-aggression"),
     "fairness_split_fair": ("F", "F7", "fairness/warmth"),
 }
-POLARITY = {"curt_to_server", "cut_queue", "ignore_marginal", "deviate_custom"}
+POLARITY = {"curt_to_server", "cut_queue", "ignore_marginal"}  # deviate/greedy are affirmative "take"
 
 
 def ev(actor, action, counterpart_status, *, target_id="npc", raw=None, bad=False):

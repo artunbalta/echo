@@ -154,6 +154,9 @@ export default function WorldClient() {
   const startInteraction = useCallback(() => {
     const n = nearbyRef.current;
     if (!n || convoRef.current) return;
+    // Flow 3 station NPCs aren't chat partners — they're acted on via the action menu (SOCIAL_CUE).
+    // Opening a chat with one would dead-end, so the E/Space "talk" key skips them.
+    if (n.kind === "npc" && (snapsRef.current.get(n.id)?.role ?? "") !== "") return;
     netRef.current?.interactStart(n.id);
   }, []);
 
@@ -162,14 +165,18 @@ export default function WorldClient() {
   const snapsRef = useRef<Map<string, { role?: string; status?: string; name: string; kind: string }>>(new Map());
 
   // Flow 2/3 — report a social choice to the authoritative server, which stamps the context and
-  // emits the per-actor BehavioralEvent. Reply-latency rides along where the input was focused.
-  const socialCue = useCallback((targetId: string, action: string) => {
+  // emits the per-actor BehavioralEvent. Reply-latency rides along where the input was focused. The
+  // wire carries the raw action id (the cue routing); the banner shows the human label only (tone).
+  const socialBeatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const socialCue = useCallback((targetId: string, action: string, label?: string) => {
     const latency = inputFocusedAt.current ? Date.now() - inputFocusedAt.current : undefined;
     netRef.current?.sendSocialCue(targetId, action, latency, editsRef.current || undefined);
     const log = (window as unknown as { __echoSocial?: unknown[] }).__echoSocial ?? [];
     log.push({ targetId, action, t: Date.now() });
     (window as unknown as { __echoSocial?: unknown[] }).__echoSocial = log;
-    setSocialBeat(action.replace(/_/g, " "));
+    setSocialBeat(label ?? action.replace(/_/g, " "));
+    if (socialBeatTimer.current) clearTimeout(socialBeatTimer.current);
+    socialBeatTimer.current = setTimeout(() => setSocialBeat(null), 4000);
   }, []);
   const [socialBeat, setSocialBeat] = useState<string | null>(null);
 
@@ -1118,7 +1125,7 @@ export default function WorldClient() {
                 {opts.map((o) => (
                   <button
                     key={o.action}
-                    onClick={() => socialCue(nearby.id, o.action)}
+                    onClick={() => socialCue(nearby.id, o.action, o.label)}
                     className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo"
                   >
                     {o.label}
@@ -1271,7 +1278,7 @@ export default function WorldClient() {
                   {F2_REGISTERS.map((r) => (
                     <button
                       key={r.action}
-                      onClick={() => convoTargetRef.current && socialCue(convoTargetRef.current.id, r.action)}
+                      onClick={() => convoTargetRef.current && socialCue(convoTargetRef.current.id, r.action, r.label)}
                       className="rounded border border-echo/25 px-2 py-0.5 text-[10px] text-parchment/80 hover:border-echo hover:text-echo"
                       title={r.action}
                     >

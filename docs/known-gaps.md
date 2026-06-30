@@ -72,6 +72,45 @@ why we are not fixing it now, the resolution criterion, and status.
   regression tests stay green.
 - **Status:** OPEN — folded into the **W re-anchor milestone** (same one as #1 and #2).
 
+## 4. F2 proxemics sampled at contact (coarse), not continuously
+
+- **Opened:** 2026-06-29 (Step 4).
+- **What:** The doc's proxemics beat is the interpersonal distance "measured **continuously** →
+  warmth(+ close) / dominance-or-avoidance (far)". Step 4 derives proxemics authoritatively from
+  positions, but only **at the moment of opening contact**, where the interaction-open gate clamps
+  distance to ≤ 2.0 tiles. So it is a coarse binary read (intimate ≤1 tile → `proxemics_close`; a
+  kept gap 1–2 tiles → `proxemics_far`), not the full continuous settle-distance (which would also
+  capture "watches from afar / never approaches", a distance > 2 the open gate excludes).
+- **Why deferred:** a true continuous proximity sampler is the same debounced-emitter machinery as
+  gap #2 (the F0 passive sampler) and carries the same flood considerations; build both together.
+- **Resolution criterion:** a debounced proximity sampler emits the settled distance while a player
+  lingers near another (including > 2 tiles = hang-back), not only at interaction-open.
+- **Status:** OPEN — co-deferred with the passive-sampler work (gap #2).
+
+## 5. Flow 3 staging / eggs / dilemma-b deferred (measurement wired; theatre + later-flow hooks not)
+
+- **Opened:** 2026-06-29 (Step 4).
+- **What (all measurement is wired + proven; these are theatre or later-flow hooks):**
+  - **F2→F3 seep is geographic** — the clearing station NPCs are present in the shared room and the
+    player walks to them; there is no scripted "the figure gestures and 2–3 others fade into view"
+    reveal. No wall, no "Level 3" (the invariant holds), but not the doc's staged reveal.
+  - **Conform/deviate has no visible group ritual; the marginal NPC has no visible exclusion
+    posture; stations are NPCs without bespoke stall/queue/table props** — text action menus only.
+    Art/animation is Step 6 (Higgsfield) + later polish.
+  - **Dilemma (b) watched-vs-unwatched queue** is not wired (the doc itself defers it to F5);
+    `public_or_private` is currently fixed to "public" for social cues. The basic queue choice
+    (wait/cut/let) IS wired.
+  - **Eggs** `egg_server_bond` (reciprocity across visits) and the F0-mirroring echo cameo are not
+    wired (require world-memory across sessions); `egg_gift_given`/`prepare_before_crossing`/
+    `close_ghost` exist in the cue catalog but are not yet reachable from gameplay (F1 economy /
+    multi-session not built).
+  - **Continuous "whom approached first" / preferred group size** not tracked (audience_size IS
+    carried in context).
+- **Why deferred:** these are staging/world-memory/later-flow concerns; the per-actor measurement,
+  counterpart-status conditionals, and the courtesy gradient — the scientific core of F2/F3 — are
+  wired and proven (flow2_dialogue / flow3_clearing walkthroughs + copresence integration test).
+- **Status:** OPEN — theatre to Step 6 + polish; dilemma-b to F5; eggs to F4/multi-session.
+
 ---
 
 _Decision recorded for Step 3: the passive sampler is left here (not built this turn) for the two
