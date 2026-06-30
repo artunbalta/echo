@@ -17,6 +17,11 @@ export const C2S = {
   INTERACT_END: "interact_end",
   CHAT: "chat",
   PING: "ping",
+  /** A Flow 2/3 social choice (opener register, turn dynamic, cold-response reaction, or a clearing
+   *  station action). The client reports WHICH choice the player made on/near a target; the
+   *  authoritative server stamps the mandatory context (counterpart_status, audience, distance,
+   *  stage) and emits ONE per-actor BehavioralEvent to /observe/behavioral (social.ts). */
+  SOCIAL_CUE: "social_cue",
 } as const;
 
 /** Server → client message names. */
@@ -46,6 +51,16 @@ export interface ChatMessage {
   /** Player↔player only: this turn was drafted by the sender's echo, not typed by hand.
    *  Lets the recipient render it as "their echo" and lets two earned echoes converse. */
   viaEcho?: boolean;
+}
+
+/** A Flow 2/3 social choice. `action` is a key in social.ts SOCIAL_CUES; `targetId` is the
+ *  counterpart entity (a live player, or a clearing station NPC). Reply-composition meta-cues ride
+ *  along as implicit signals where the client captured them. */
+export interface SocialCueMsg {
+  targetId: string;
+  action: string;
+  latencyMs?: number;
+  editsCount?: number;
 }
 
 export interface WelcomePayload {
@@ -88,4 +103,9 @@ export interface EntitySnapshot {
   y: number;
   facing: Facing;
   moving: boolean;
+  /** Flow 3 clearing station NPCs: their social station role (service/elder/queue/group/marginal/
+   *  trader) and status (low/high/peer) so the client shows the right action menu. "" for ordinary
+   *  entities. */
+  role?: string;
+  status?: string;
 }

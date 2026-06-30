@@ -17,6 +17,12 @@ export class Entity extends Schema {
   @type("boolean") moving = false;
   /** Last processed client input seq — clients use this to reconcile prediction. */
   @type("number") lastSeq = 0;
+  /** Flow 3 clearing station role (service/elder/queue/group/marginal/trader) — "" for ordinary
+   *  wander NPCs and users. The client reads it to surface the right station action menu. */
+  @type("string") role = "";
+  /** Counterpart status FROM a player's vantage (low/high/peer) — set on station NPCs so the
+   *  server can stamp counterpart_status authoritatively on social events. */
+  @type("string") status = "none";
 
   // ── server-only fields (not synced) ──
   dir = { x: 0, y: 0 };
