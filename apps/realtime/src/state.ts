@@ -17,6 +17,9 @@ export class Entity extends Schema {
   @type("boolean") moving = false;
   /** Last processed client input seq — clients use this to reconcile prediction. */
   @type("number") lastSeq = 0;
+  /** Sailing: when true the open sea is traversable (you've boarded a raft). Synced so remote
+   *  clients can render a boat under a sailing player. Off = the sea is a wall (you're on foot). */
+  @type("boolean") sailing = false;
   /** Flow 3 clearing station role (service/elder/queue/group/marginal/trader) — "" for ordinary
    *  wander NPCs and users. The client reads it to surface the right station action menu. */
   @type("string") role = "";

@@ -12,8 +12,8 @@ export const WORLD = {
    *  archipelago.ts), so the 100 phyllotaxis island slots sit at their RAW coordinates in one sea
    *  (no compression) — one continuous ocean, not 100 maps. (The retired 64-tile main-world/venue/
    *  town scenes generate their own dimensions, so this only resizes the shared world.) */
-  MAP_WIDTH: 128,
-  MAP_HEIGHT: 128,
+  MAP_WIDTH: 512,
+  MAP_HEIGHT: 512,
   /** Client-side integer upscale factor for the pixel-art look. */
   RENDER_SCALE: 3,
   /** Player movement speed, tiles per second. */
