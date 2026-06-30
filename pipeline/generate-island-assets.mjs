@@ -20,19 +20,24 @@ const OUT = resolve(ROOT, "apps/web/public/assets/island");
 
 const JOBS = [
   {
+    // CALM ground tiles (Step-6 polish #3): the ground reads by value + texture, NOT by baked light.
+    // Art bible §2/§4: ground tiles are "evenly lit, flat top-down", carry NO outline, and the long
+    // upper-left dusk shadows belong on raised OBJECTS — never stamped into the ground. So: flat,
+    // shadowless, low-contrast, muted dusk palette, so the map is easy on the eyes and land/water
+    // read instantly.
     name: "grass", aspect: "1:1", key: false,
     prompt:
-      "Seamless tileable top-down 16-bit pixel-art lush green grass meadow texture, vivid saturated fresh greens with subtle blade detail, evenly lit, tiles perfectly when repeated with no visible seam, flat top-down orthographic view, crisp pixels nearest-neighbor, cohesive limited palette, NO text, NO logos.",
+      "Seamless tileable top-down 16-bit pixel-art grass ground texture, calm and evenly lit, FLAT even lighting with NO directional shadows and NO diagonal shading or shadow stripes, low-contrast muted dusk greens (#3f8a45 #57b257 #74c365), only a very faint 1px ordered-dither grain, reads instantly as calm grass and easy on the eyes, tiles perfectly when repeated with no visible seam, flat top-down orthographic view, crisp pixels nearest-neighbor, cohesive limited dusk palette, NO outline, NO text, NO logos, NO watermark, NO border.",
   },
   {
     name: "water", aspect: "1:1", key: false,
     prompt:
-      "Seamless tileable top-down 16-bit pixel-art shallow tropical sea water texture, bright turquoise and ocean blue with gentle ripples and small white foam flecks, evenly lit, tiles perfectly when repeated with no visible seam, flat top-down orthographic view, crisp pixels nearest-neighbor, cohesive limited palette, NO text.",
+      "Seamless tileable top-down 16-bit pixel-art calm sea water texture, evenly lit, FLAT even lighting with NO directional shadows, NO sun-glint streaks and NO diagonal shading or shadow stripes, low-contrast muted dusk blues (#2680c6 #1f5a8f #1c3a5e) with only the faintest gentle ripple, reads instantly as calm open water and easy on the eyes, tiles perfectly when repeated with no visible seam, flat top-down orthographic view, crisp pixels nearest-neighbor, cohesive limited dusk palette, NO outline, NO text, NO logos, NO watermark, NO border.",
   },
   {
     name: "sand", aspect: "1:1", key: false,
     prompt:
-      "Seamless tileable top-down 16-bit pixel-art warm beach sand texture, sunlit golden tan with faint speckles and tiny pebbles, evenly lit, tiles perfectly when repeated with no visible seam, flat top-down orthographic view, crisp pixels nearest-neighbor, cohesive limited palette, NO text.",
+      "Seamless tileable top-down 16-bit pixel-art calm beach sand texture, evenly lit, FLAT even lighting with NO directional shadows and NO diagonal shading or shadow stripes, low-contrast muted dusk tan (#9a7e54 #c9ad79 #e8d3a0) with only a faint fine speckle, reads instantly as a calm sandy shore and easy on the eyes, tiles perfectly when repeated with no visible seam, flat top-down orthographic view, crisp pixels nearest-neighbor, cohesive limited dusk palette, NO outline, NO text, NO logos, NO watermark, NO border.",
   },
   {
     name: "tree", aspect: "2:3", key: true,
@@ -66,9 +71,13 @@ if (!has("higgsfield")) {
 }
 
 mkdirSync(OUT, { recursive: true });
-console.log("[gen:island] generating island art via Higgsfield CLI (nano_banana_2)…");
+// ONLY=grass,water,sand → regenerate just those jobs (e.g. refresh the ground tiles without
+// re-rolling the committed props). Empty/unset → all jobs.
+const ONLY = (process.env.ONLY || "").split(",").map((s) => s.trim()).filter(Boolean);
+const RUN = ONLY.length ? JOBS.filter((j) => ONLY.includes(j.name)) : JOBS;
+console.log(`[gen:island] generating ${RUN.map((j) => j.name).join(", ")} via Higgsfield CLI (nano_banana_2)…`);
 
-for (const job of JOBS) {
+for (const job of RUN) {
   try {
     const out = execFileSync(
       "higgsfield",

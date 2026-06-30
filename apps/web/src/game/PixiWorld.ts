@@ -22,8 +22,8 @@ import {
   WORLD,
   SPRITE,
   FACING_ROW,
-  presenceAlpha,
   presenceTier,
+  oceanLandAt,
   OCEAN_BEACH_W,
   type EntitySnapshot,
   type Facing,
@@ -278,7 +278,7 @@ export class PixiWorld {
     this.world.addChild(new TilingSprite({ texture: this.waterTex, width: px, height: py }));
 
     const isles = this.map.islands;
-    if (isles && isles.length > 4) {
+    if (this.isSharedOcean() && isles) {
       // sand discs (radius r + beach) behind, grass discs (radius r) on top → a sand ring shoreline
       const sandMask = new Graphics();
       const grassMask = new Graphics();
@@ -721,25 +721,26 @@ export class PixiWorld {
     re.label.y = py - SPRITE.FRAME_H - 2;
     (re.label as any).zIndex = py + 0.1;
 
-    // ── distance-based presence LOD (world-unify §2): far = faint anonymous silhouette, near =
-    //    full sharp named avatar. Self is at distance 0 → always sharp. The name appears only as a
-    //    remote resolves (Tier 2/1); at Tier 3 it is an anonymous ink-tinted silhouette; beyond the
-    //    horizon it is culled. (Social interaction is gated separately, in detectProximity below, at
-    //    exactly Tier 1 — so seeing a silhouette can never start measurement.)
-    //    YOUR OWN island's Flow-0 affordances ("f0_*", client-local) are NOT distant strangers —
-    //    they sit ~6 tiles away but belong to you, so they always render sharp + named (distance 0). ──
+    // ── distance presence: distance hides IDENTITY, not VISIBILITY. Every player/NPC renders as a
+    //    full, SHARP, fully-visible avatar at ANY distance — so you can see who's out there across
+    //    the water clearly, never as a dim ghost. Only the NAME is distance-gated: it appears within
+    //    near range (Tier 1 / interaction range) and is hidden farther out — far = a clear person
+    //    with no name, near = their name resolves in. This is purely a render rule; social cues +
+    //    posterior movement are gated SEPARATELY in detectProximity (and authoritatively on the
+    //    server) at exactly Tier 1, so seeing a sharp distant player changes nothing about
+    //    measurement — they stay non-interactable until you sail close.
+    //    YOUR OWN island's Flow-0 affordances ("f0_*", client-local) belong to you, so they always
+    //    render sharp + named (distance 0 → Tier 1). ──
     const dist = re.id.startsWith("f0_") ? 0 : Math.hypot(this.localX - tileX, this.localY - tileY);
-    const tier = presenceTier(dist);
-    const a = presenceAlpha(dist);
-    re.sprite.visible = a > 0.001;
-    re.sprite.alpha = a;
-    re.sprite.tint = tier === "distant" ? 0x2a2340 : 0xffffff; // ink-mauve silhouette far; sharp near
-    const named = tier === "close" || tier === "approaching"; // anonymous until it resolves
-    re.label.visible = named && a > 0.001;
-    re.label.alpha = a;
+    const named = presenceTier(dist) === "close"; // identity only at near/interaction range
+    re.sprite.visible = true;
+    re.sprite.alpha = 1; // sharp at every distance — no silhouette, no alpha-dim
+    re.sprite.tint = 0xffffff; // no ink-mauve silhouette tint
+    re.label.visible = named;
+    re.label.alpha = 1;
 
     if (re.ring) {
-      re.ring.visible = a > 0.001; // the echo-violet "someone is out there" glint — culled past horizon
+      re.ring.visible = true; // the echo-violet glint marks every live human on the map, near or far
       re.ring.x = px;
       re.ring.y = py - 1;
       (re.ring as any).zIndex = py - 0.1; // just under the sprite's feet
@@ -859,8 +860,26 @@ export class PixiWorld {
     this.clickTarget = target;
   }
 
-  /** Collision-with-sailing: trees/rocks always block; the sea blocks only until you can sail. */
+  /** True when this is THE shared ocean (generateOcean: the 100 disc-islands at the shared slot
+   *  geometry) — its only barrier is open water, so collision is purely geometric (oceanLandAt). The
+   *  other maps (main world, the wobbly archipelago, the single island) carry tree/rock collision in
+   *  the array and use the tile-based test below. Keyed off the explicit map flag so it can never
+   *  misfire on another watered map (e.g. generateArchipelago, which also has >4 islands). */
+  private isSharedOcean(): boolean {
+    return !!this.map.sharedOcean;
+  }
+
+  /** Collision-with-sailing: trees/rocks always block; the sea blocks only until you can sail.
+   *  On the shared ocean we test the SAME continuous geometry the server enforces (oceanLandAt with
+   *  the beach pad) rather than the tile-rounded collision array — so the client prediction and the
+   *  authoritative server agree exactly at the shoreline. That exact agreement is what removes the
+   *  boundary rebound: walking into the sea stops cleanly at the last land (the sand's outer edge),
+   *  with no reconcile snap-back. Sailing makes the whole sea passable. */
   private blockedAt(x: number, y: number): boolean {
+    if (this.isSharedOcean()) {
+      if (this.canSail) return false; // sailing: sea + land all passable
+      return !oceanLandAt(x, y, OCEAN_BEACH_W); // on foot: only the open sea (beyond grass+beach) blocks
+    }
     if (!isBlocked(this.map, x, y)) return false;
     return !(this.canSail && isWater(this.map, x, y));
   }

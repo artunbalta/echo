@@ -19,6 +19,7 @@ import {
   slotDistance,
   oceanLandAt,
   oceanIslandCenter,
+  OCEAN_BEACH_W,
   OCEAN,
   buildFlow2Event,
   FLOW2_FIRST_CONTACT,
@@ -260,7 +261,8 @@ export class WorldRoom extends Room<WorldState> {
       if (!e) return;
       const on = !!msg?.on;
       // You can only DROP ANCHOR on land — anchoring mid-sea would strand you (water blocks on foot).
-      if (!on && !oceanLandAt(e.x, e.y)) return;
+      // Land includes the beach ring (same pad as the movement barrier), so anchoring at the shore works.
+      if (!on && !oceanLandAt(e.x, e.y, OCEAN_BEACH_W)) return;
       e.sailing = on;
     });
   }
@@ -666,8 +668,12 @@ export class WorldRoom extends Room<WorldState> {
     // AUTHORITATIVE water barrier: the open sea blocks movement unless this entity is sailing.
     // Per-axis so you slide along a coastline instead of sticking. This is what makes each island a
     // real bounded space and confines NPCs to their own island — the server, not just the client.
+    // Walkable land includes the SAND RING (pad = OCEAN_BEACH_W): the beach is land you can stand on,
+    // and — critically — this matches EXACTLY the land the client renders + predicts against (the
+    // collision array / oceanLandAt with the same pad), so the authority and the prediction agree at
+    // the shoreline and there is no reconcile snap-back / rebound when you walk into the sea edge.
     const c = clampToMap(nx, ny);
-    const passable = (x: number, y: number) => e.sailing || oceanLandAt(x, y);
+    const passable = (x: number, y: number) => e.sailing || oceanLandAt(x, y, OCEAN_BEACH_W);
     if (passable(c.x, e.y)) e.x = c.x;
     if (passable(e.x, c.y)) e.y = c.y;
     e.moving = true;

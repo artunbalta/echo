@@ -23,7 +23,7 @@ import { strict as assert } from "node:assert";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { Client } from "colyseus.js";
-import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, presenceTier, type EventContext } from "@echo/shared";
+import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, presenceTier, oceanLandAt, OCEAN_BEACH_W, type EventContext } from "@echo/shared";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function waitFor(pred: () => boolean, timeoutMs = 8000, label = "condition"): Promise<void> {
@@ -109,7 +109,8 @@ async function main() {
 
   // steer A toward a target tile until within `within` tiles (poll the authoritative state)
   async function steerA(tx: () => number, ty: () => number, within: number, label: string) {
-    for (let i = 0; i < 200 && tileDistance(A().x, A().y, tx(), ty()) > within; i++) {
+    // cap generous enough for a long sail across the widened ocean (≈47 tiles after the #4 detour).
+    for (let i = 0; i < 360 && tileDistance(A().x, A().y, tx(), ty()) > within; i++) {
       const dx = tx() - A().x, dy = ty() - A().y;
       roomA.send("move_intent", {
         dir: { x: Math.abs(dx) > 0.4 ? Math.sign(dx) : 0, y: Math.abs(dy) > 0.4 ? Math.sign(dy) : 0 },
@@ -126,7 +127,7 @@ async function main() {
   await waitFor(() => !!A() && !!B() && !!ent(roomB, roomA.sessionId) && !!ent(roomA, roomB.sessionId), 8000, "mutual visibility");
   const gap0 = tileDistance(A().x, A().y, B().x, B().y);
   log(`\n[1/2] both in room "world"; slot spawn A=(${A().x.toFixed(1)},${A().y.toFixed(1)}) B=(${B().x.toFixed(1)},${B().y.toFixed(1)}) gap=${gap0.toFixed(2)}`);
-  assert.ok(gap0 < 30, "Step-1 neighbours spawn on adjacent islands (a short sail apart)");
+  assert.ok(gap0 < 45, "Step-1 neighbours spawn on adjacent islands (a short sail apart, ~36 tiles)");
   const ax0 = A().x;
   roomA.send("move_intent", { dir: { x: 1, y: 0 }, facing: "right", seq: 1 });
   await waitFor(() => A().x > ax0 + 0.5 && Math.abs(ent(roomB, roomA.sessionId).x - A().x) < 0.05, 5000, "B sees A move");
@@ -135,10 +136,16 @@ async function main() {
   assert.equal(A().lastSeq, 2, "server acked A's last input seq");
   log(`      A moved → B mirrors A.x=${ent(roomB, roomA.sessionId).x.toFixed(2)} (|Δ|<0.05); lastSeq=${A().lastSeq}`);
 
-  // ── world-unify §3: while only DISTANT, the Flow-0 baseline cannot leak — ZERO social emission ──
-  assert.equal(presenceTier(gap0), "distant", "adjacent-slot neighbours spawn at the DISTANT silhouette tier");
-  assert.equal(captured.length, 0, "ZERO social events while only distant (no leak below Tier 1 / CLOSE)");
-  log(`      presenceTier(gap ${gap0.toFixed(1)}) = "distant" (anonymous silhouette); social events so far = ${captured.length}`);
+  // ── presence #5: distance hides IDENTITY, not VISIBILITY. The render makes distant players SHARP +
+  //    fully visible (no silhouette) — but the MEASUREMENT gate is unchanged: social cues fire ONLY at
+  //    Tier 1 (CLOSE). So while A & B are merely distant, the Flow-0 baseline cannot leak — ZERO social.
+  //    (Names are gated the same way: shown only within CLOSE; see the name-gate assertion below.) ──
+  assert.notEqual(presenceTier(gap0), "close", "adjacent-slot neighbours spawn FAR (not at the interactable CLOSE tier)");
+  assert.equal(captured.length, 0, "ZERO social events while not CLOSE (a sharp distant player never starts measurement)");
+  // name-gate (#5): identity (the name label) appears ONLY within near/interaction range, never far.
+  assert.notEqual(presenceTier(gap0), "close", "#5 a distant player is anonymous — no name shown far (name gate = tier 'close')");
+  assert.equal(presenceTier(0.5), "close", "#5 a near player IS named — the name resolves in only within CLOSE");
+  log(`      presenceTier(gap ${gap0.toFixed(1)}) = "${presenceTier(gap0)}" → sharp+visible but anonymous & non-interactable; name gate close-only; social events so far = ${captured.length}`);
 
   // ── WATER IS A WALL: on foot (not sailing), A cannot cross the open sea to B's island ──
   for (let i = 0; i < 70; i++) {
@@ -152,6 +159,37 @@ async function main() {
   assert.notEqual(presenceTier(walkedGap), "close", `on foot A cannot reach B across water (gap ${walkedGap.toFixed(1)}, ${presenceTier(walkedGap)})`);
   assert.equal(captured.length, 0, "still ZERO social events — the water barrier kept A off B's island");
   log(`\n[barrier] A walked straight at B for ~3s WITHOUT sailing → gap ${walkedGap.toFixed(1)} (${presenceTier(walkedGap)}); the sea held.`);
+
+  // ── #4 SHORELINE CLAMP, NO REBOUND (clean pure-axis test): the barrier walk above pushed A
+  //    diagonally, so A slid ALONG its curved coast (sliding ≠ rebound — the server only ever clamps,
+  //    never shoves back). To isolate the wall, walk A back to its island centre and then push DUE
+  //    EAST straight into the open sea. A must stop CLEANLY at the last walkable tile (the sand's
+  //    outer edge) and STAY there under continued push — no drift, no snap-back, never onto the water.
+  //    Because the server's barrier predicate is oceanLandAt(x,y,beach) — the SAME function
+  //    PixiWorld.blockedAt uses for the shared ocean — the client's predicted wall and the server's
+  //    authoritative wall are identical, so the client is never reconciled backward (the judder). ──
+  const sxA = WORLD.MAP_WIDTH / OCEAN.EXTENT, syA = WORLD.MAP_HEIGHT / OCEAN.EXTENT;
+  const homeC = { x: islandSlot(0).x * sxA, y: islandSlot(0).y * syA }; // A's island centre
+  await steerA(() => homeC.x, () => homeC.y, 0.6, "back to its island centre");
+  // push due east until A is jammed against the wall (x stops advancing for several ticks).
+  let prevX = -1, stuck = 0;
+  for (let i = 0; i < 140 && stuck < 6; i++) {
+    roomA.send("move_intent", { dir: { x: 1, y: 0 }, facing: "right", seq: 600 + i });
+    await sleep(45);
+    if (A().x - prevX < 0.02) stuck++; else stuck = 0;
+    prevX = A().x;
+  }
+  roomA.send("stop", { seq: 699 });
+  await sleep(120);
+  const eastStop = { x: A().x, y: A().y };
+  assert.ok(oceanLandAt(eastStop.x, eastStop.y, OCEAN_BEACH_W), "#4 A stopped ON LAND at the east shoreline (never on the open sea)");
+  assert.ok(!oceanLandAt(eastStop.x + 0.6, eastStop.y, OCEAN_BEACH_W), "#4 one step further east is open sea — A is parked at the LAST walkable tile (a clean wall)");
+  for (let i = 0; i < 16; i++) { roomA.send("move_intent", { dir: { x: 1, y: 0 }, facing: "right", seq: 700 + i }); await sleep(45); }
+  roomA.send("stop", { seq: 799 });
+  await sleep(120);
+  const eastDrift = tileDistance(eastStop.x, eastStop.y, A().x, A().y);
+  assert.ok(eastDrift < 0.05, `#4 no rebound — A held exactly at the shoreline under continued push (drift ${eastDrift.toFixed(4)} tiles, no snap-back)`);
+  log(`[#4 no-rebound] A walked due east into the sea → stopped cleanly on land at the shore (${eastStop.x.toFixed(2)},${eastStop.y.toFixed(2)}); one step further = open sea; stayed put under continued push (drift ${eastDrift.toFixed(4)}). Client+server share oceanLandAt(beach) ⇒ no reconcile snap-back / judder.`);
 
   // ── SAIL ACROSS: board a raft (set_sail) → the sea becomes traversable → reach B at Tier 1 ──
   roomA.send("set_sail", { on: true });

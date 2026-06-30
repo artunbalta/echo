@@ -6,17 +6,18 @@
  * coastline you see, the wall you bump, and the wall the server enforces can never disagree.
  *
  * The archipelago slots (archipelago.ts) live in a 128-unit coordinate field; the shared ocean is
- * WORLD.MAP_WIDTH tiles, so slots are scaled up by SCALE = MAP/EXTENT. At the shipped 512-tile ocean
- * that spaces neighbours ~24 tiles apart with radius-10 islands (~4 tiles of clear water between) —
- * each island big enough to play Flow 0 on, separated by sea you must SAIL across (water is a
- * movement barrier; see WorldRoom.integrate + PixiWorld.blockedAt).
+ * WORLD.MAP_WIDTH tiles, so slots are scaled up by SCALE = MAP/EXTENT. At the shipped 768-tile ocean
+ * that spaces neighbours ~36 tiles apart with radius-13 islands (~10 tiles of clear water between) —
+ * each island a real place to roam (room for the Flow-0 affordances with space to move), separated
+ * by an open stretch of sea you must SAIL across (water is a movement barrier; see
+ * WorldRoom.integrate + PixiWorld.blockedAt).
  */
 import { WORLD } from "./world.js";
 import { archipelagoSlots, islandSlot, OCEAN as ARCH } from "./archipelago.js";
 
-/** Island land radius, in shared-ocean (WORLD.MAP) tiles. Diameter 20 → room for the Flow-0 hill,
- *  thicket, tide pool, and scattered objects with space to move. */
-export const OCEAN_ISLAND_R = 10;
+/** Island land radius, in shared-ocean (WORLD.MAP) tiles. Diameter 26 → room for the Flow-0 hill,
+ *  thicket, tide pool, and scattered objects with comfortable space to move between them. */
+export const OCEAN_ISLAND_R = 13;
 /** The sand-ring coastline width (tiles) drawn around each island's grass. */
 export const OCEAN_BEACH_W = 1.5;
 
