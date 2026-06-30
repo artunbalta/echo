@@ -37,6 +37,7 @@ import {
   styleFromId,
 } from "./art";
 import { buildPropSheet, isPropUrl, propKindFromUrl } from "./props";
+import { PROP_ASSETS } from "./propAssets";
 
 /**
  * Generated atmospheric pixel-art world art (Higgsfield, §3). These replace the
@@ -391,7 +392,26 @@ export class PixiWorld {
 
   /** Async-load a real sprite sheet (http or data URL) and swap procedural frames out. */
   private maybeLoadSheet(re: RenderEntity, url: string | undefined) {
-    if (!url || isPropUrl(url) || re.loadedSpriteUrl === url) return; // proc:* stays procedural
+    if (!url || re.loadedSpriteUrl === url) return;
+    // A `proc:<kind>` prop: swap in the committed bible PNG (a single static sprite) when one
+    // exists in the registry, else stay procedural (ensureEntity already built the proc/character
+    // sheet). The PNG renders for all facings/frames (props don't animate), with procedural fallback.
+    if (isPropUrl(url)) {
+      const assetUrl = PROP_ASSETS[url.slice("proc:".length)];
+      if (!assetUrl) return; // no committed PNG → keep the procedural sheet
+      re.loadedSpriteUrl = url;
+      const pimg = new Image();
+      pimg.onload = () => {
+        try {
+          re.frames = staticFrames(nearest(Texture.from(pimg)));
+          re.sprite.texture = re.frames[re.facing][0];
+        } catch {
+          /* keep procedural frames on failure */
+        }
+      };
+      pimg.src = assetUrl;
+      return;
+    }
     re.loadedSpriteUrl = url;
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -876,6 +896,12 @@ function quantizeDir(dx: number, dy: number): { x: -1 | 0 | 1; y: -1 | 0 | 1 } {
 }
 
 /** Slice a sprite-sheet texture into per-facing frame arrays. */
+/** A static prop PNG used for every facing/frame (props don't animate or face). */
+function staticFrames(tex: Texture): Record<Facing, Texture[]> {
+  const arr = Array.from({ length: SPRITE.FRAME_COUNT }, () => tex);
+  return { down: arr, up: arr, left: arr, right: arr };
+}
+
 function sliceFrames(sheet: Texture): Record<Facing, Texture[]> {
   const out = {} as Record<Facing, Texture[]>;
   (["down", "up", "left", "right"] as Facing[]).forEach((facing) => {

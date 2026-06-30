@@ -241,6 +241,16 @@ export default function WorldClient() {
       { action: "fairness_split_fair", label: "split it fairly" },
       { action: "fairness_split_greedy", label: "take the larger share" },
     ],
+    food: [
+      { action: "treat_other", label: "treat someone" },
+      { action: "host_table", label: "host a table" },
+      { action: "eat_meal", label: "just eat" },
+    ],
+    workplace: [
+      { action: "work_shift", label: "work a shift" },
+      { action: "take_vocation", label: "take up a craft" },
+      { action: "shirk_work", label: "not today" },
+    ],
   };
 
   // Flow 2 dialogue register choices, shown when talking to a live player (the doc's opener set,
@@ -312,7 +322,7 @@ export default function WorldClient() {
         else if (type === "dwell") d.dwell++;
         else if (type === "revisit") d.revisits++;
       },
-    });
+    }, { artDir: "/assets/island" }); // bible ground tiles (grass/water/sand/tree/bush) for the shared zone
     worldRef.current = world;
 
     const net = new NetClient(config.realtimeUrl);

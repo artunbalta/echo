@@ -198,6 +198,32 @@ def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
         tel["persistence"] = 0.6            # planning before the crossing
         return True
 
+    # — food/dining stand (warmth / generosity / hosting) —
+    if a == "treat_other":
+        tel["ts_social"] = 0.85             # treating others vs self = generosity → warmth
+        tel["approach"] = True
+        return True
+    if a == "host_table":
+        tel["ts_social"] = 0.7              # hosting a table → warmth/energy
+        tel["approach"] = True
+        return True
+    if a == "eat_meal":
+        tel["ts_leisure"] = 0.5             # feeding yourself — low-signal self-care
+        return True
+
+    # — workplace/business stand (industriousness / time-allocation / vocation) —
+    if a == "work_shift":
+        tel["persistence"] = 0.8            # putting in the labour
+        tel["ts_build"] = 0.6
+        return True
+    if a == "take_vocation":
+        tel["persistence"] = 0.75           # committing to a craft → grit + a build/earn lean
+        tel["ts_build"] = 0.7
+        return True
+    if a == "shirk_work":
+        # refuse: the K-twin below makes non-action data (avoidance / low-industriousness)
+        return True
+
     # — openness-intended dialogue (⚑ no telemetry→openness path in W; carried by embedding +
     #   a mild engaged-disclosure signal). Flagged in docs/known-gaps.md. —
     if a in ("asks_question", "self_disclosure"):

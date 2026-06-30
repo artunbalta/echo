@@ -726,16 +726,24 @@ export class WorldRoom extends Room<WorldState> {
   private spawnClearingStations() {
     const cx = Math.floor(WORLD.MAP_WIDTH / 2);
     const cy = 20;
-    const stations: { id: string; name: string; role: string; status: string; dx: number; dy: number }[] = [
-      { id: "stn_server", name: "the keeper of the stall", role: "service", status: "low", dx: -3, dy: 1 },
-      { id: "stn_elder", name: "the elder", role: "elder", status: "high", dx: 3, dy: 1 },
-      { id: "stn_queue", name: "the line at the well", role: "queue", status: "peer", dx: 0, dy: 3 },
-      { id: "stn_group", name: "a knot of talkers", role: "group", status: "peer", dx: -2, dy: -3 },
-      { id: "stn_marginal", name: "the one apart", role: "marginal", status: "low", dx: 5, dy: -2 },
-      { id: "stn_trader", name: "the trader", role: "trader", status: "peer", dx: 1, dy: -1 },
+    // Each Stand = a role'd station NPC you walk up to (no separate screen), skinned by a bible PNG
+    // (`sprite`), emitting per-actor cues for its role. The market is FOLDED into this same primitive
+    // (the trader = bargain, the keeper = courtesy-to-low-status); food + workplace are the new Stands.
+    const stations: { id: string; name: string; role: string; status: string; sprite: string; dx: number; dy: number }[] = [
+      { id: "stn_server", name: "the keeper of the stall", role: "service", status: "low", sprite: "proc:stall_keeper", dx: -3, dy: 1 },
+      { id: "stn_elder", name: "the elder", role: "elder", status: "high", sprite: "proc:elder", dx: 3, dy: 1 },
+      { id: "stn_queue", name: "the line at the well", role: "queue", status: "peer", sprite: "", dx: 0, dy: 3 },
+      { id: "stn_group", name: "a knot of talkers", role: "group", status: "peer", sprite: "proc:group_npcs", dx: -2, dy: -3 },
+      { id: "stn_marginal", name: "the one apart", role: "marginal", status: "low", sprite: "proc:marginal_npc", dx: 5, dy: -2 },
+      // market (folded): the trader is the bargain/trade Stand — same primitive as the others.
+      { id: "stn_trader", name: "the trader", role: "trader", status: "peer", sprite: "proc:trader", dx: 1, dy: -1 },
       // the travel stand — a ferry/harbour at the water's edge; the co-presence amplifier that
       // carries a player to far, non-adjacent islands (and other players' regions).
-      { id: "stn_travel", name: "the ferry stand", role: "travel", status: "none", dx: 0, dy: 8 },
+      { id: "stn_travel", name: "the ferry stand", role: "travel", status: "none", sprite: "proc:travel_stand", dx: 0, dy: 8 },
+      // ── Part 2 stands ── food (F3/F4/F6 — eat / treat / host) and workplace (F1/F5 — work /
+      //    vocation; placed here in the shared clearing until the F1/F5 vocation zone is built).
+      { id: "stn_food", name: "the cookfire stall", role: "food", status: "peer", sprite: "proc:food_stand", dx: -5, dy: 4 },
+      { id: "stn_workplace", name: "the workshop", role: "workplace", status: "none", sprite: "proc:workplace_stand", dx: 5, dy: 5 },
     ];
     for (const s of stations) {
       const e = new Entity();
@@ -743,7 +751,7 @@ export class WorldRoom extends Room<WorldState> {
       e.kind = "npc";
       e.refId = s.id;
       e.name = s.name;
-      e.spriteUrl = "";
+      e.spriteUrl = s.sprite;
       const p = clampToMap(cx + s.dx, cy + s.dy);
       e.x = p.x;
       e.y = p.y;
