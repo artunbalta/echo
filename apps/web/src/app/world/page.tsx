@@ -1,10 +1,8 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import dynamic from "next/dynamic";
-
-// PixiJS touches the DOM/WebGL — load the world client only in the browser.
-const WorldClient = dynamic(() => import("@/components/WorldClient"), { ssr: false });
-
+// Route consolidation (Step 5): the standalone main-world demo is retired as an entry point. The
+// canonical front door is /play (sign in → your own island → Flow 0); its shared realtime zone now
+// lives at /play/crossing, reached by the in-world crossing. A direct /world hit lands at Flow 0.
 export default function WorldPage() {
-  return <WorldClient />;
+  redirect("/play");
 }

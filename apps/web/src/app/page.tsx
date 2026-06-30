@@ -336,7 +336,7 @@ export default function Landing() {
             <a href="#how" className="nav-link">How it works</a>
             <a href="#world" className="nav-link">World</a>
             <Link href="/account" className="nav-link">Account</Link>
-            <Link href="/venue" className="nav-link">✈ THY demo</Link>
+            <Link href="/play" className="nav-link">▶ Enter</Link>
           </div>
         </div>
       </footer>

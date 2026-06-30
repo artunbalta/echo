@@ -119,7 +119,7 @@ export default function Onboard() {
       "echo.character",
       JSON.stringify({ spriteUrl: result.spriteUrl, attributes: result.attributes, source: result.source }),
     );
-    router.push("/world");
+    router.push("/play"); // canonical entry: your own island, Flow 0 ("Waking Alone")
   }
 
   // ── render ──────────────────────────────────────────────────────────────────

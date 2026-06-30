@@ -1,10 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import dynamic from "next/dynamic";
-
-// PixiJS touches the DOM/WebGL — load the island client only in the browser.
-const IslandClient = dynamic(() => import("@/components/IslandClient"), { ssr: false });
-
+// Route consolidation (Step 5): the standalone Phase-0 island proof is retired as an entry point —
+// Flow 0 ("Waking Alone") at /play is its canonical successor. Redirect to the front door.
 export default function IslandPage() {
-  return <IslandClient />;
+  redirect("/play");
 }

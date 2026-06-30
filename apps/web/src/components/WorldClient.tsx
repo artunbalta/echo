@@ -67,11 +67,6 @@ export default function WorldClient() {
   // The OTHER player has handed their side to their echo — surfaced persistently so you
   // always know when you're talking to a person vs. their echo (not just a per-line tag).
   const [peerUsingEcho, setPeerUsingEcho] = useState(false);
-  const [portalNear, setPortalNear] = useState(false);
-  const [entering, setEntering] = useState(false);
-  const portalNearRef = useRef(false);
-  portalNearRef.current = portalNear;
-  const enteringRef = useRef(false);
   const [convo, setConvo] = useState<{ name: string; lines: Line[] } | null>(null);
   const [draft, setDraft] = useState("");
   const [narration, setNarration] = useState<string | null>(null);
@@ -235,16 +230,6 @@ export default function WorldClient() {
     { action: "close_abrupt", label: "close abruptly" },
   ];
 
-  // Step through the portal → fade to black, then travel to the venue.
-  const enterVenue = useCallback(() => {
-    if (enteringRef.current) return;
-    enteringRef.current = true;
-    setEntering(true);
-    teleRef.current?.emit("portal_enter", { to: "venue" });
-    window.setTimeout(() => {
-      window.location.href = "/venue";
-    }, 700);
-  }, []);
 
   useEffect(() => {
     // `?u=<name>` overrides identity from the URL — so two tabs in ONE browser (which share
@@ -296,7 +281,6 @@ export default function WorldClient() {
         else if (type === "dwell") d.dwell++;
         else if (type === "revisit") d.revisits++;
       },
-      onPortalChange: (near) => setPortalNear(near),
     });
     worldRef.current = world;
 
@@ -494,9 +478,6 @@ export default function WorldClient() {
       if ((e.key === "e" || e.key === " ") && nearbyRef.current && !convoRef.current) {
         e.preventDefault();
         startInteraction();
-      } else if ((e.key === "o" || e.key === "O") && portalNearRef.current && !convoRef.current) {
-        e.preventDefault();
-        enterVenue();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1151,28 +1132,6 @@ export default function WorldClient() {
       {socialBeat && (
         <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/40 px-3 py-1 font-mono text-[11px] italic text-parchment/60">
           {socialBeat}
-        </div>
-      )}
-
-      {/* Portal prompt — only when not already talking to someone */}
-      {portalNear && !nearby && !convo && (
-        <button
-          onClick={enterVenue}
-          className="panel absolute bottom-24 left-1/2 -translate-x-1/2 rounded px-4 py-2 font-mono text-sm text-parchment hover:text-echo"
-        >
-          Step through the portal — press <span className="font-bold text-echo">O</span>
-        </button>
-      )}
-
-      {/* Fade-to-black portal transition */}
-      <div
-        className={`pointer-events-none absolute inset-0 z-50 bg-black transition-opacity duration-700 ${
-          entering ? "opacity-100" : "opacity-0"
-        }`}
-      />
-      {entering && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center font-mono text-sm italic text-parchment/80">
-          stepping through…
         </div>
       )}
 
