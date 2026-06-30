@@ -257,7 +257,11 @@ export class WorldRoom extends Room<WorldState> {
     // Board a raft / drop anchor — toggle whether the open sea is traversable for this player.
     this.onMessage(C2S.SET_SAIL, (client, msg: { on?: boolean }) => {
       const e = this.state.entities.get(client.sessionId);
-      if (e) e.sailing = !!msg?.on;
+      if (!e) return;
+      const on = !!msg?.on;
+      // You can only DROP ANCHOR on land — anchoring mid-sea would strand you (water blocks on foot).
+      if (!on && !oceanLandAt(e.x, e.y)) return;
+      e.sailing = on;
     });
   }
 
