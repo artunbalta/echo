@@ -281,7 +281,7 @@ export default function Flow0Client() {
         body: JSON.stringify({ event }),
       });
     } catch { /* best-effort */ }
-    router.push("/world");
+    router.push("/play/crossing"); // the shared realtime zone, under the canonical /play namespace
   }, [router]);
 
   // ── presentation ──────────────────────────────────────────────────────────────────────────

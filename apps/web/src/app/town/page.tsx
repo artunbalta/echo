@@ -1,10 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import dynamic from "next/dynamic";
-
-// PixiJS touches the DOM/WebGL — load the town client only in the browser.
-const TownClient = dynamic(() => import("@/components/TownClient"), { ssr: false });
-
+// Route consolidation (Step 5): the Stage-4 town is retired as an entry point — its social cue
+// ecology now lives in the canonical Flow 3 clearing. Redirect to the front door.
 export default function TownPage() {
-  return <TownClient />;
+  redirect("/play");
 }

@@ -185,7 +185,15 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
     before = st.posterior.mu.copy()
     st.posterior = P.observe(st.posterior, obs["action"], obs["telemetry"])
 
+    # Record the cue in the behavior index too (retrieval + the observable `behaviors` count) so the
+    # behavioral path is consistent with /observe — a social cue ("warm to the server", "waited in
+    # the queue") IS a retrievable behavior. Posterior math is unchanged; this is index/observability
+    # only (fixes the EchoPanel showing behaviors:0 while the posterior moves).
     ck = obs["cond_key"]
+    emb = embed(f"{ck} || {obs['action']}", input_type="document")
+    st.behaviors.append(BehaviorEntry(emb, obs["action"], ck))
+    st.behaviors = st.behaviors[-500:]
+
     cond_before = st.cond.get(ck)
     cp = cond_before.copy() if cond_before is not None else P.prior()
     cp = P.observe(cp, obs["action"], obs["telemetry"])

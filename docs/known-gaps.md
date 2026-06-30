@@ -5,6 +5,32 @@ why we are not fixing it now, the resolution criterion, and status.
 
 ---
 
+## ★ SCHEDULED MILESTONE — the one-time W re-anchor (after Step 6/7)
+
+**openness is, as of Step 4, effectively UNMEASURED across the whole product.** The ⚑ routing gap
+is now **cross-flow**, not an F0 quirk: every cue whose design-doc prior is *openness* loads off-axis
+because the committed `W` (`services/ml/echo_ml/artifacts/measurement.npz`) has **no
+telemetry→openness path** (it was anchored on the island day-loop economy only). Affected, confirmed:
+- **F0 locomotion/curiosity:** `enter_unmarked`, `approach_distant_lone`, `egg_horizon_seen`,
+  `egg_hollow` → dominance/warmth (gap #1).
+- **F2 social openness:** `asks_question`, `self_disclosure` → affect/pace; `deviate_custom` →
+  dominance (gap #3).
+
+warmth, dominance, pace, formality, affect all measure cleanly and are validated end-to-end
+(Steps 2–4 walkthroughs + the live courtesy gradient). **openness is the one axis with no working
+implicit path.**
+
+**Resolution (scheduled, ONE-TIME, do NOT fix piecemeal):** re-anchor `W` exactly once on the
+**full multi-flow cue set** (F0 + F2 + F3, and F4–F6 once they exist) with **real user behavioral
+data**, via `scripts/train_measurement.py` + `anchor_alignment`. **Scheduled right after Step 6/7**
+(all flows + Higgsfield assets in), so the corpus is complete and the calibration is done once, not
+re-done per flow (cross-cutting rule #1: loadings are learned, the tables are priors).
+**Acceptance:** after the re-anchor, the ⚑ cues above load predominantly onto openness in their
+walkthroughs, the numerics regression gate stays green, and the individuation eval still passes.
+Gaps #1 and #3 below are the per-flow detail of this single milestone.
+
+---
+
 ## 1. F0 exploration cues route to dominance/warmth instead of openness
 
 - **Opened:** 2026-06-29 (Step 2, the 7-flow archipelago build).
