@@ -3,7 +3,7 @@
  * renderer only needs the {ground, decorations, collision} shape this produces.
  * Deterministic from a seed so client and (future) server agree on collision.
  */
-import { WORLD, archipelagoSlots } from "@echo/shared";
+import { WORLD, oceanIslandCenters, OCEAN_ISLAND_R, OCEAN_BEACH_W } from "@echo/shared";
 
 export type DecoKind = "tree" | "bush" | "flower";
 
@@ -227,42 +227,44 @@ export function generateArchipelago(seed = 7): TileMap {
 }
 
 /**
- * THE ONE SHARED OCEAN (world-unify §1). A single 128×128 sea holding all 100 archipelago islands
- * as real, positioned landmasses at their Vogel-phyllotaxis slot coordinates (archipelago.ts) — not
- * 100 separate maps. Every player lives on one of these islands and shares this coordinate space.
+ * THE ONE SHARED OCEAN. A single WORLD.MAP-tile sea holding the 100 archipelago islands as REAL,
+ * BOUNDED, contiguous landmasses (smooth discs at their scaled slot coordinates, ringed by a sand
+ * beach), separated by open water. Each island is big enough to play Flow 0 on; the open sea between
+ * them is a MOVEMENT BARRIER — `collision[]=1` on water (so PixiWorld.blockedAt blocks it unless
+ * sailing) and the authoritative server enforces the same wall in WorldRoom.integrate via the SAME
+ * shared geometry (ocean.ts oceanLandAt). You don't walk the sea; you sail across it.
  *
- * Fully sailable: collision is left clear everywhere (you sail the sea and walk the islands freely;
- * the "crossing" is just distance closing, not a wall). The water mask drives the ocean/beach
- * rendering; `islands` carries every slot's centre+radius for the client's distance-LOD + the local
- * player's own-island feature placement. Deterministic — the layout is a pure function of the slots.
+ * Land/water are derived from the shared ocean geometry, so the rendered coastline, the client wall,
+ * and the server wall are one source of truth. Deterministic — a pure function of the slot layout.
  */
 export function generateOcean(): TileMap {
   const W = WORLD.MAP_WIDTH;
   const H = WORLD.MAP_HEIGHT;
-  const collision = new Uint8Array(W * H); // 0 everywhere — the whole ocean is sailable
+  const collision = new Uint8Array(W * H).fill(1); // 1 = blocked: the open sea is a wall (unless sailing)
   const water = new Uint8Array(W * H).fill(1); // 1 = sea; islands punch land (0) into it
   const decorations: Decoration[] = [];
   const islands: IslandInfo[] = [];
-  const ISLAND_R = 3.4; // land radius per slot (small, distinct islands packed in one sea)
+  const R = OCEAN_ISLAND_R; // land radius (grass); sand ring extends OCEAN_BEACH_W beyond
+  const reach = Math.ceil(R + OCEAN_BEACH_W) + 1;
 
-  for (const slot of archipelagoSlots()) {
-    const cx = slot.x;
-    const cy = slot.y;
-    islands.push({ x: cx, y: cy, r: ISLAND_R });
-    const ri = Math.ceil(ISLAND_R) + 1;
-    for (let dy = -ri; dy <= ri; dy++) {
-      for (let dx = -ri; dx <= ri; dx++) {
-        // wobble the coastline a touch per slot so islands read organic, not as perfect discs
-        const wob = 0.5 * Math.sin((dx + dy + slot.index) * 1.3);
-        if (Math.hypot(dx, dy) > ISLAND_R + wob) continue;
-        const x = Math.round(cx) + dx;
-        const y = Math.round(cy) + dy;
+  for (const c of oceanIslandCenters()) {
+    islands.push({ x: c.x, y: c.y, r: R });
+    const cx = Math.round(c.x);
+    const cy = Math.round(c.y);
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
         if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        water[y * W + x] = 0; // land
+        // exact distance to the (fractional) centre keeps the coastline a smooth contiguous circle
+        const d = Math.hypot(x - c.x, y - c.y);
+        if (d <= R + OCEAN_BEACH_W) {
+          water[y * W + x] = 0; // land (grass core + sand ring): renders as island, not sea
+          collision[y * W + x] = 0; // walkable — only the open sea blocks
+        }
       }
     }
-    // one tree as a non-blocking island landmark (collision stays clear — sail/walk freely)
-    decorations.push({ kind: "tree", x: Math.round(cx), y: Math.round(cy) });
+    decorations.push({ kind: "tree", x: cx, y: cy }); // a centre landmark
   }
 
   return { width: W, height: H, collision, water, decorations, portal: null, islands };

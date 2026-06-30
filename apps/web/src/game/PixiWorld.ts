@@ -24,6 +24,7 @@ import {
   FACING_ROW,
   presenceAlpha,
   presenceTier,
+  OCEAN_BEACH_W,
   type EntitySnapshot,
   type Facing,
 } from "@echo/shared";
@@ -271,10 +272,31 @@ export class PixiWorld {
       return;
     }
 
-    // Island: an ocean base, then grass masked to the land shape, then a sand beach masked to
-    // the shoreline. Masks keep each tiling texture varied (no per-tile squashing).
+    // Ocean base, then each island drawn as a CONTIGUOUS landmass: a sand disc (the beach) with a
+    // grass disc on top, so the uncovered ring reads as a clean sand coastline and the open sea
+    // reads clearly as water — no per-tile mosaic. Cheap: a handful of circles, built once.
     this.world.addChild(new TilingSprite({ texture: this.waterTex, width: px, height: py }));
 
+    const isles = this.map.islands;
+    if (isles && isles.length > 4) {
+      // sand discs (radius r + beach) behind, grass discs (radius r) on top → a sand ring shoreline
+      const sandMask = new Graphics();
+      const grassMask = new Graphics();
+      for (const i of isles) {
+        sandMask.circle(i.x * TILE, i.y * TILE, (i.r + OCEAN_BEACH_W) * TILE);
+        grassMask.circle(i.x * TILE, i.y * TILE, i.r * TILE);
+      }
+      sandMask.fill(0xffffff);
+      grassMask.fill(0xffffff);
+      const sand = new TilingSprite({ texture: this.sandTex, width: px, height: py });
+      sand.mask = sandMask;
+      const grass = new TilingSprite({ texture: this.grassTex, width: px, height: py });
+      grass.mask = grassMask;
+      this.world.addChild(sandMask, sand, grassMask, grass);
+      return;
+    }
+
+    // Small single-island map (organic coastline): per-tile mask (grass on land, sand at the shore).
     const landMask = new Graphics();
     const beachMask = new Graphics();
     let anyBeach = false;

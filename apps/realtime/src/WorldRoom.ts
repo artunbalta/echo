@@ -17,6 +17,8 @@ import {
   S2C,
   islandSlot,
   slotDistance,
+  oceanLandAt,
+  oceanIslandCenter,
   OCEAN,
   buildFlow2Event,
   FLOW2_FIRST_CONTACT,
@@ -251,6 +253,12 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(C2S.SOCIAL_CUE, (client, msg: SocialCueMsg) => this.handleSocialCue(client, msg));
 
     this.onMessage(C2S.TRAVEL, (client, msg: TravelMsg) => this.handleTravel(client, msg));
+
+    // Board a raft / drop anchor — toggle whether the open sea is traversable for this player.
+    this.onMessage(C2S.SET_SAIL, (client, msg: { on?: boolean }) => {
+      const e = this.state.entities.get(client.sessionId);
+      if (e) e.sailing = !!msg?.on;
+    });
   }
 
   /**
@@ -651,9 +659,13 @@ export class WorldRoom extends Room<WorldState> {
     const len = Math.hypot(e.dir.x, e.dir.y) || 1;
     const nx = e.x + (e.dir.x / len) * speed * dt;
     const ny = e.y + (e.dir.y / len) * speed * dt;
+    // AUTHORITATIVE water barrier: the open sea blocks movement unless this entity is sailing.
+    // Per-axis so you slide along a coastline instead of sticking. This is what makes each island a
+    // real bounded space and confines NPCs to their own island — the server, not just the client.
     const c = clampToMap(nx, ny);
-    e.x = c.x;
-    e.y = c.y;
+    const passable = (x: number, y: number) => e.sailing || oceanLandAt(x, y);
+    if (passable(c.x, e.y)) e.x = c.x;
+    if (passable(e.x, c.y)) e.y = c.y;
     e.moving = true;
     e.lastSeen = Date.now();
   }
@@ -724,8 +736,12 @@ export class WorldRoom extends Room<WorldState> {
    * elder — is recoverable as a conditional. Placed just north of the slot-spawn cluster.
    */
   private spawnClearingStations() {
-    const cx = Math.floor(WORLD.MAP_WIDTH / 2);
-    const cy = 20;
+    // The shared commons (F3 clearing + the stands) lives on the "far gathering" island (slot 60) —
+    // a real landmass players SAIL to (the travel stand's far-gathering destination + manual sail),
+    // away from the low-slot cluster where new players wake solitary. Centre the stations on it.
+    const commons = oceanIslandCenter(60);
+    const cx = Math.round(commons.x);
+    const cy = Math.round(commons.y);
     // Each Stand = a role'd station NPC you walk up to (no separate screen), skinned by a bible PNG
     // (`sprite`), emitting per-actor cues for its role. The market is FOLDED into this same primitive
     // (the trader = bargain, the keeper = courtesy-to-low-status); food + workplace are the new Stands.
@@ -767,25 +783,32 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   private spawnNpcs() {
-    for (const spec of loadNpcs()) {
+    const npcs = loadNpcs();
+    npcs.forEach((spec, i) => {
       const e = new Entity();
       e.id = spec.id;
       e.kind = "npc";
       e.refId = spec.id;
       e.name = spec.name;
       e.spriteUrl = spec.spriteUrl ?? "";
-      e.x = spec.homeX;
-      e.y = spec.homeY;
-      e.homeX = spec.homeX;
-      e.homeY = spec.homeY;
-      // Seed the wander target at home so the first ticks (before the first wander
-      // pick) don't steer toward the default 0,0.
-      e.wanderTargetX = spec.homeX;
-      e.wanderTargetY = spec.homeY;
+      // Place each NPC ON an island (their old seed coords were for the 64-tile map = now open sea).
+      // Use the OUTER slots (30..99) so the low-slot cluster where new players wake stays solitary;
+      // the population lives on the further islands (distant silhouettes you can sail out to meet).
+      const c = oceanIslandCenter(30 + (i % 70));
+      const a = (i * 2.39996) % (Math.PI * 2);
+      const r = 2 + (i % 4); // a little spread within the island (radius 10), well clear of water
+      const hx = c.x + Math.cos(a) * r;
+      const hy = c.y + Math.sin(a) * r;
+      e.x = hx;
+      e.y = hy;
+      e.homeX = hx;
+      e.homeY = hy;
+      e.wanderTargetX = hx;
+      e.wanderTargetY = hy;
       e.facing = "down";
       e.nextWanderAt = 0;
       this.state.entities.set(e.id, e);
-    }
+    });
   }
 }
 

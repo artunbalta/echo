@@ -126,7 +126,7 @@ async function main() {
   await waitFor(() => !!A() && !!B() && !!ent(roomB, roomA.sessionId) && !!ent(roomA, roomB.sessionId), 8000, "mutual visibility");
   const gap0 = tileDistance(A().x, A().y, B().x, B().y);
   log(`\n[1/2] both in room "world"; slot spawn A=(${A().x.toFixed(1)},${A().y.toFixed(1)}) B=(${B().x.toFixed(1)},${B().y.toFixed(1)}) gap=${gap0.toFixed(2)}`);
-  assert.ok(gap0 < 8, "Step-1 neighbours spawn adjacent");
+  assert.ok(gap0 < 30, "Step-1 neighbours spawn on adjacent islands (a short sail apart)");
   const ax0 = A().x;
   roomA.send("move_intent", { dir: { x: 1, y: 0 }, facing: "right", seq: 1 });
   await waitFor(() => A().x > ax0 + 0.5 && Math.abs(ent(roomB, roomA.sessionId).x - A().x) < 0.05, 5000, "B sees A move");
@@ -136,14 +136,31 @@ async function main() {
   log(`      A moved → B mirrors A.x=${ent(roomB, roomA.sessionId).x.toFixed(2)} (|Δ|<0.05); lastSeq=${A().lastSeq}`);
 
   // ── world-unify §3: while only DISTANT, the Flow-0 baseline cannot leak — ZERO social emission ──
-  // Adjacent-slot neighbours spawn ~6 tiles apart = the DISTANT silhouette tier (seen from their own
-  // islands, anonymous). No proximity → no interaction → the server emits NO BehavioralEvent at all.
   assert.equal(presenceTier(gap0), "distant", "adjacent-slot neighbours spawn at the DISTANT silhouette tier");
   assert.equal(captured.length, 0, "ZERO social events while only distant (no leak below Tier 1 / CLOSE)");
   log(`      presenceTier(gap ${gap0.toFixed(1)}) = "distant" (anonymous silhouette); social events so far = ${captured.length}`);
 
+  // ── WATER IS A WALL: on foot (not sailing), A cannot cross the open sea to B's island ──
+  for (let i = 0; i < 70; i++) {
+    const dx = B().x - A().x, dy = B().y - A().y;
+    roomA.send("move_intent", { dir: { x: Math.sign(dx), y: Math.sign(dy) }, facing: "right", seq: 200 + i });
+    await sleep(45);
+  }
+  roomA.send("stop", { seq: 299 });
+  await sleep(150);
+  const walkedGap = tileDistance(A().x, A().y, B().x, B().y);
+  assert.notEqual(presenceTier(walkedGap), "close", `on foot A cannot reach B across water (gap ${walkedGap.toFixed(1)}, ${presenceTier(walkedGap)})`);
+  assert.equal(captured.length, 0, "still ZERO social events — the water barrier kept A off B's island");
+  log(`\n[barrier] A walked straight at B for ~3s WITHOUT sailing → gap ${walkedGap.toFixed(1)} (${presenceTier(walkedGap)}); the sea held.`);
+
+  // ── SAIL ACROSS: board a raft (set_sail) → the sea becomes traversable → reach B at Tier 1 ──
+  roomA.send("set_sail", { on: true });
+  await sleep(100);
+  await steerA(() => B().x, () => B().y, 1.3, "interaction range of B (by sailing across the water)");
+  assert.equal(presenceTier(tileDistance(A().x, A().y, B().x, B().y)), "close", "sailing let A cross to Tier 1");
+  log(`[crossing] A boarded a raft (set_sail) and sailed across to B → Tier 1 (CLOSE).`);
+
   // ── (3) first contact at Tier 1: per-actor first_contact + proxemics (social begins ONLY here) ──
-  await steerA(() => B().x, () => B().y, 1.3, "interaction range of B");
   roomA.send("interact_start", { targetId: roomB.sessionId });
   await waitFor(() => evsBy("first_contact").length >= 2 && evsBy("proxemics_close").length + evsBy("proxemics_far").length >= 2, 5000, "first-contact pair + proxemics pair");
   const fc = evsBy("first_contact");
@@ -163,20 +180,7 @@ async function main() {
   assertFullContext(ow, 2, "opener_warm");
   log(`[4] F2 SOCIAL_CUE opener_warm → actor=${ow.actor_id} counterpart=${ow.target.id}(${ow.target.status}) stage=${ow.context.stage}`);
 
-  // ── (5) F3 CLEARING: walk to the low-status server NPC and be courteous ──────────────────────
-  const server = () => ent(roomA, "stn_server");
-  await waitFor(() => !!server(), 4000, "clearing server NPC present in shared room");
-  await steerA(() => server().x, () => server().y, 1.4, "the stall server");
-  roomA.send("social_cue", { targetId: "stn_server", action: "courtesy_warm_server", latencyMs: 900 });
-  await waitFor(() => evsBy("courtesy_warm_server").length >= 1, 4000, "courtesy_warm_server emitted");
-  const cs = evsBy("courtesy_warm_server").find((e) => e.actor_id === "userA")!;
-  assert.ok(cs, "courtesy_warm_server emitted");
-  assert.equal(cs.target.id, "stn_server");
-  assert.equal(cs.context.counterpart_status, "low", "server is low-status → counterpart:low (the gradient anchor)");
-  assertFullContext(cs, 3, "courtesy_warm_server");
-  log(`[5] F3 station courtesy_warm_server → actor=${cs.actor_id} counterpart=${cs.target.id}(${cs.context.counterpart_status}) stage=${cs.context.stage}`);
-
-  // ── (6) TRAVEL STAND — the co-presence amplifier: reach a FAR, non-adjacent island ───────────
+  // ── (5) TRAVEL STAND — the co-presence amplifier: reach a FAR, non-adjacent island ───────────
   const FAR = 60; // a fixed distant landmark (A is on slot 0, B on slot 1 — both near the centre)
   const sx = WORLD.MAP_WIDTH / OCEAN.EXTENT, sy = WORLD.MAP_HEIGHT / OCEAN.EXTENT;
   const farTile = clampToMap(islandSlot(FAR).x * sx, islandSlot(FAR).y * sy);
@@ -191,7 +195,21 @@ async function main() {
   assert.ok(evsBy("prepare_before_travel").length >= 1, "prepare_before_travel emitted (kit readied)");
   const hopHome = tileDistance(aBefore.x, aBefore.y, A().x, A().y);
   assert.ok(hopHome > 8, `A travelled a long way from its home region (${hopHome.toFixed(1)} tiles)`);
-  log(`\n[6] travel stand → A sailed to a non-adjacent island (slot ${FAR}): (${aBefore.x.toFixed(1)},${aBefore.y.toFixed(1)}) → (${A().x.toFixed(1)},${A().y.toFixed(1)}), hop ${hopHome.toFixed(1)} tiles; cue travel_far stage ${tv.context.stage}`);
+  log(`\n[5] travel stand → A sailed to a non-adjacent island (slot ${FAR}): (${aBefore.x.toFixed(1)},${aBefore.y.toFixed(1)}) → (${A().x.toFixed(1)},${A().y.toFixed(1)}), hop ${hopHome.toFixed(1)} tiles; cue travel_far stage ${tv.context.stage}`);
+
+  // ── (6) F3 CLEARING (on the commons island, slot 60, where A just arrived): be courteous to the
+  //    low-status server NPC → counterpart:low (the courtesy-gradient anchor) ──
+  const server = () => ent(roomA, "stn_server");
+  await waitFor(() => !!server(), 4000, "clearing server NPC present on the commons");
+  await steerA(() => server().x, () => server().y, 1.4, "the stall server");
+  roomA.send("social_cue", { targetId: "stn_server", action: "courtesy_warm_server", latencyMs: 900 });
+  await waitFor(() => evsBy("courtesy_warm_server").length >= 1, 4000, "courtesy_warm_server emitted");
+  const cs = evsBy("courtesy_warm_server").find((e) => e.actor_id === "userA")!;
+  assert.ok(cs, "courtesy_warm_server emitted");
+  assert.equal(cs.target.id, "stn_server");
+  assert.equal(cs.context.counterpart_status, "low", "server is low-status → counterpart:low (the gradient anchor)");
+  assertFullContext(cs, 3, "courtesy_warm_server");
+  log(`[6] F3 station courtesy_warm_server → actor=${cs.actor_id} counterpart=${cs.target.id}(${cs.context.counterpart_status}) stage=${cs.context.stage}`);
 
   // B follows to the SAME far island → the two reach the same distant shore and see each other.
   roomB.send("travel", { destinationSlot: FAR });

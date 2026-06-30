@@ -15,7 +15,7 @@ import { useEcho } from "@/lib/useEcho";
 import { markFunnel } from "@/lib/funnel";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent } from "@echo/shared";
 import {
-  nearestSlot, islandSlot, clampToMap,
+  nearestSlot, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R,
   FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event,
   type Flow0Affordance,
 } from "@echo/shared";
@@ -535,10 +535,14 @@ export default function WorldClient() {
       // Place the Flow-0 solitary affordances on THIS player's own island (their slot coordinate in
       // the one ocean), as client-local entities (role "flow0") — never room state, so other players
       // don't see or interact with your island's affordances. Using them emits SOLO Flow-0 cues.
-      const home = islandSlot(slotIndex ?? 0); // offline (no slot) → centre island, matching pickSpawn
+      const home = oceanIslandCenter(slotIndex ?? 0); // YOUR island's centre in ocean tiles (= spawn)
+      const lim = OCEAN_ISLAND_R - 2; // keep affordances on the grass, off the sand/water edge
       f0EntsRef.current = FLOW0_AFFORDANCES.map((a) => {
         f0ByIdRef.current.set(`f0_${a.id}`, a);
-        const p = clampToMap(home.x + a.dx, home.y + a.dy); // keep outer-ring island offsets on-map
+        // clamp the offset VECTOR to the island so even the far driftwood stays on your own land
+        const m = Math.hypot(a.dx, a.dy) || 1;
+        const k = Math.min(1, lim / m);
+        const p = clampToMap(home.x + a.dx * k, home.y + a.dy * k);
         return {
           id: `f0_${a.id}`, kind: "npc", refId: `f0_${a.id}`, name: a.label, spriteUrl: a.sprite,
           x: p.x, y: p.y, facing: "down", moving: false, role: "flow0", status: "none",

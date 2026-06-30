@@ -26,6 +26,9 @@ export const C2S = {
    *  clusters). The server moves the actor to that island's ocean coordinate in the shared room
    *  (co-presence amplifier — reach far communities) and emits the per-actor travel cue. */
   TRAVEL: "travel",
+  /** Board a raft / drop anchor: toggle whether the open sea is traversable. Off (default) = the sea
+   *  is a wall and you're confined to your island on foot; on = you can sail across to a neighbour. */
+  SET_SAIL: "set_sail",
 } as const;
 
 /** Server → client message names. */
