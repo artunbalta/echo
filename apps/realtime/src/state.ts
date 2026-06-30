@@ -27,6 +27,9 @@ export class Entity extends Schema {
   // ── server-only fields (not synced) ──
   dir = { x: 0, y: 0 };
   lastSeen = 0;
+  /** The archipelago slot this user owns (their home island), carried at join. −1 = unknown.
+   *  Used by the travel stand to read far-vs-near (the novelty/risk cue) from slot geometry. */
+  homeSlot = -1;
   // NPC movement scratch
   wanderTargetX = 0;
   wanderTargetY = 0;

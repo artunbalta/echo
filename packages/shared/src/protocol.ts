@@ -22,6 +22,10 @@ export const C2S = {
    *  authoritative server stamps the mandatory context (counterpart_status, audience, distance,
    *  stage) and emits ONE per-actor BehavioralEvent to /observe/behavioral (social.ts). */
   SOCIAL_CUE: "social_cue",
+  /** Use the travel stand: sail/fly to a destination archipelago slot (incl. NON-adjacent / far
+   *  clusters). The server moves the actor to that island's ocean coordinate in the shared room
+   *  (co-presence amplifier — reach far communities) and emits the per-actor travel cue. */
+  TRAVEL: "travel",
 } as const;
 
 /** Server → client message names. */
@@ -61,6 +65,14 @@ export interface SocialCueMsg {
   action: string;
   latencyMs?: number;
   editsCount?: number;
+}
+
+/** Travel-stand request: go to `destinationSlot` (an archipelago slot index). `prepared` = the
+ *  player gathered/planned before leaving (a conscientiousness cue). The server decides far-vs-near
+ *  authoritatively from the slot geometry and emits the travel cue. */
+export interface TravelMsg {
+  destinationSlot: number;
+  prepared?: boolean;
 }
 
 export interface WelcomePayload {

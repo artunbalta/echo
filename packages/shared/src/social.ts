@@ -85,6 +85,12 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   include_marginal: { channel: "G", cue: "G1", stage: 3, polarity: "take", axisPrior: "warmth(HIGH) — moral-social" },
   ignore_marginal: { channel: "G", cue: "G1", stage: 3, polarity: "refuse", axisPrior: "low warmth" },
   join_exclusion: { channel: "D", cue: "D9", stage: 3, polarity: "take", axisPrior: "dominance/low-warmth" },
+  // ── STAND cues — the travel stand (the co-presence amplifier; F2+ and F6). A single-actor
+  //    choice (counterpart "none"); far/near is the openness/risk read. ⚑ openness routes off-axis
+  //    under the committed W (the cross-flow gap) — flagged in known-gaps, not silently re-routed. ──
+  travel_near: { channel: "A", cue: "A9", stage: 2, polarity: "take", axisPrior: "conventional / low novelty (the known shore)" },
+  travel_far: { channel: "A", cue: "A12", stage: 2, polarity: "take", axisPrior: "openness/novelty-seeking + risk — leave the familiar ⚑" },
+  prepare_before_travel: { channel: "C", cue: "C7", stage: 2, polarity: "take", axisPrior: "planning/conscientiousness" },
   bargain_hard: { channel: "F", cue: "F9", stage: 3, polarity: "take", axisPrior: "dominance/economic-aggression" },
   fairness_split_fair: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "fairness/warmth" },
   // grabbing the larger share is an AFFIRMATIVE self-interested act — "take", not a refusal twin.

@@ -16,6 +16,7 @@ import {
   C2S,
   S2C,
   islandSlot,
+  slotDistance,
   OCEAN,
   buildFlow2Event,
   FLOW2_FIRST_CONTACT,
@@ -24,6 +25,7 @@ import {
   type MoveIntent,
   type ChatMessage,
   type SocialCueMsg,
+  type TravelMsg,
   type WelcomePayload,
   type Facing,
   type TelemetryEvent,
@@ -112,6 +114,7 @@ export class WorldRoom extends Room<WorldState> {
     e.y = spawn.y;
     e.facing = "down";
     e.lastSeen = Date.now();
+    e.homeSlot = typeof options.slotIndex === "number" ? options.slotIndex : -1;
     this.state.entities.set(e.id, e);
     if (options.sessionId) this.clientSessions.set(e.id, options.sessionId);
 
@@ -243,6 +246,61 @@ export class WorldRoom extends Room<WorldState> {
     });
 
     this.onMessage(C2S.SOCIAL_CUE, (client, msg: SocialCueMsg) => this.handleSocialCue(client, msg));
+
+    this.onMessage(C2S.TRAVEL, (client, msg: TravelMsg) => this.handleTravel(client, msg));
+  }
+
+  /**
+   * Travel stand (the co-presence amplifier). Carry the player to a destination archipelago slot —
+   * including FAR, non-adjacent clusters and other players' regions — by moving their avatar to that
+   * island's ocean coordinate in the shared room (reuses spawnForSlot; NO new transport). The server
+   * reads far-vs-near AUTHORITATIVELY from slot geometry (vs the player's home slot) and emits the
+   * per-actor travel cue (travel_far = novelty/risk, travel_near = the known) into the actor's own
+   * posterior via the proven ingress. A `prepared` flag emits the planning cue first.
+   */
+  private handleTravel(client: Client, msg: TravelMsg) {
+    const e = this.state.entities.get(client.sessionId);
+    const dest = Math.trunc(Number(msg?.destinationSlot));
+    if (!e || !Number.isFinite(dest) || dest < 0) return;
+
+    const sessionId = this.clientSessions.get(e.id) ?? e.id;
+    // far-vs-near from slot geometry: a long ocean hop from home reads as novelty/risk.
+    const hop = e.homeSlot >= 0 ? slotDistance(e.homeSlot, dest) : Infinity;
+    const far = hop > OCEAN.SPACING * 4; // ≈ 4+ slot-spacings out = a distant, non-adjacent shore
+    const audience = [...this.state.entities.values()].filter((o) => o.kind === "user" && o.id !== e.id).length;
+
+    const emit = (action: string, raw: Record<string, number> = {}) =>
+      void observeBehavioral(
+        buildSocialEvent({
+          actorId: e.refId,
+          sessionId,
+          action,
+          counterpartId: `island_${dest}`,
+          counterpartStatus: "none",
+          targetKind: "place",
+          audienceSize: audience,
+          raw,
+        }),
+      );
+
+    if (msg.prepared) emit("prepare_before_travel");
+    emit(far ? "travel_far" : "travel_near", { distance: Number.isFinite(hop) ? Number(hop.toFixed(2)) : 0, amount: dest });
+
+    // Arrive at the destination island's ocean coordinate in the shared room.
+    const arrive = this.spawnForSlot(dest);
+    e.x = arrive.x;
+    e.y = arrive.y;
+    e.dir = { x: 0, y: 0 };
+    e.moving = false;
+    e.lastSeen = Date.now();
+    const welcome: WelcomePayload = {
+      entityId: e.id,
+      worldId: this.state.worldId,
+      spawn: arrive,
+      serverTickHz: WORLD.TICK_HZ,
+    };
+    client.send(S2C.WELCOME, welcome);
+    console.log(`[WorldRoom] ${e.name} travelled → slot ${dest} (${far ? "far" : "near"}) @ (${arrive.x.toFixed(1)},${arrive.y.toFixed(1)})`);
   }
 
   /**
@@ -654,6 +712,9 @@ export class WorldRoom extends Room<WorldState> {
       { id: "stn_group", name: "a knot of talkers", role: "group", status: "peer", dx: -2, dy: -3 },
       { id: "stn_marginal", name: "the one apart", role: "marginal", status: "low", dx: 5, dy: -2 },
       { id: "stn_trader", name: "the trader", role: "trader", status: "peer", dx: 1, dy: -1 },
+      // the travel stand — a ferry/harbour at the water's edge; the co-presence amplifier that
+      // carries a player to far, non-adjacent islands (and other players' regions).
+      { id: "stn_travel", name: "the ferry stand", role: "travel", status: "none", dx: 0, dy: 8 },
     ];
     for (const s of stations) {
       const e = new Entity();

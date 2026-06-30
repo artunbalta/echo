@@ -173,6 +173,33 @@ export default function WorldClient() {
     if (socialBeatTimer.current) clearTimeout(socialBeatTimer.current);
     socialBeatTimer.current = setTimeout(() => setSocialBeat(null), 4000);
   }, []);
+
+  // ── the travel stand (the co-presence amplifier) ──────────────────────────────────────────────
+  // Destinations are archipelago slots. "The far gathering" is a FIXED distant landmark so two
+  // players who both choose it arrive at the same far island and meet (reach beyond your cluster).
+  const slotIndexRef = useRef<number | undefined>(undefined);
+  const preparedRef = useRef(false);
+  const FAR_GATHERING = 60;
+  const travelDestinations = () => {
+    const home = slotIndexRef.current ?? 0;
+    return [
+      { slot: (home + 2) % 100, label: "a near shore" },
+      { slot: FAR_GATHERING, label: "the far gathering ⟡" },
+      { slot: (FAR_GATHERING + 25) % 100, label: "a distant stranger's island" },
+    ];
+  };
+  const travel = useCallback((slot: number, label: string) => {
+    netRef.current?.sendTravel(slot, preparedRef.current);
+    const log = (window as unknown as { __echoSocial?: unknown[] }).__echoSocial ?? [];
+    log.push({ travel: slot, prepared: preparedRef.current, t: Date.now() });
+    (window as unknown as { __echoSocial?: unknown[] }).__echoSocial = log;
+    setSocialBeat(`setting out for ${label}…`);
+    if (socialBeatTimer.current) clearTimeout(socialBeatTimer.current);
+    socialBeatTimer.current = setTimeout(() => setSocialBeat(null), 4000);
+    preparedRef.current = false;
+    setPrepared(false);
+  }, []);
+  const [prepared, setPrepared] = useState(false);
   const [socialBeat, setSocialBeat] = useState<string | null>(null);
 
   // The clearing's station action menus (Flow 3), keyed by the NPC's role. Each option is a
@@ -430,6 +457,7 @@ export default function WorldClient() {
         const placement = (await r.json()) as { slotIndex?: number };
         if (typeof placement.slotIndex === "number") slotIndex = placement.slotIndex;
       } catch { /* offline → fallback spawn */ }
+      slotIndexRef.current = slotIndex; // the travel stand reads this to offer near/far destinations
       if (disposed) return;
       try {
         await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
@@ -1092,6 +1120,35 @@ export default function WorldClient() {
         // NPC's counterpart_status, so courtesy-to-server vs courtesy-to-elder form the gradient).
         const snap = nearby.kind === "npc" ? snapsRef.current.get(nearby.id) : undefined;
         const role = snap?.role;
+        // Travel stand: a destination menu (archipelago slots), not social cues. Far choices read
+        // novelty/openness; the far gathering is a shared landmark so players can rendezvous there.
+        if (role === "travel") {
+          return (
+            <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 font-mono">
+              <div className="mb-2 text-sm">
+                <span className="font-bold text-echo">{nearby.name}</span>
+                <span className="ml-2 text-[10px] text-parchment/50">sail to another island</span>
+              </div>
+              <div className="mb-2 flex flex-wrap gap-2">
+                {travelDestinations().map((d) => (
+                  <button
+                    key={d.slot}
+                    onClick={() => travel(d.slot, d.label)}
+                    className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo"
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => { preparedRef.current = !preparedRef.current; setPrepared(preparedRef.current); }}
+                className={`rounded border px-2 py-0.5 text-[10px] ${prepared ? "border-echo bg-echo/10 text-echo" : "border-echo/25 text-parchment/70 hover:text-echo"}`}
+              >
+                {prepared ? "✓ kit readied" : "ready a kit before you go"}
+              </button>
+            </div>
+          );
+        }
         const opts = role ? STATION_ACTIONS[role] : undefined;
         if (opts) {
           return (
