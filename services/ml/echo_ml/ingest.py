@@ -221,8 +221,8 @@ def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
         tel["ts_build"] = 0.7
         return True
     if a == "shirk_work":
-        # refuse: the K-twin below makes non-action data (avoidance / low-industriousness)
-        return True
+        tel["ts_leisure"] = 0.6             # declining the shift = time NOT working (an own-axis read,
+        return True                         # so the K-twin doesn't cross-load it onto warmth/dominance)
 
     # — openness-intended dialogue (⚑ no telemetry→openness path in W; carried by embedding +
     #   a mild engaged-disclosure signal). Flagged in docs/known-gaps.md. —
@@ -320,7 +320,11 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
         if "social" in action or cue in ("K1", "K11") or channel == "K":
             tel.setdefault("approach", False)
             tel.setdefault("solitude_tol", 0.85)
-        tel.setdefault("approach", False)
+        # Catch-all: a refusal that produced NO own signal still moves the posterior as withdrawal.
+        # Gated on emptiness so a handled refusal that DID set its own-axis feature (e.g. shirk_work
+        # → ts_leisure, cut_queue → consistency) is NOT cross-loaded onto warmth/dominance.
+        if not tel:
+            tel["approach"] = False
 
     # conditional-bucket key: social events condition on counterpart status; otherwise on stakes.
     if channel in _SOCIAL_CHANNELS and ctx.get("counterpart_status") not in (None, "none"):

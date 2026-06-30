@@ -26,6 +26,11 @@ def test_host_diverges_from_worker(report):
     assert report["checks"]["host_diverges_from_worker"]
 
 
+def test_shirk_work_routes_on_own_axis_not_warmth(report):
+    # declining a shift must read as leisure/low-industriousness, not a warmth/dominance withdrawal
+    assert report["checks"]["shirk_work_no_approach_cross_load"], report["shirk_tel"]
+
+
 def test_mandatory_context_enforced(report):
     assert report["missing_context_status"] == 422
 
