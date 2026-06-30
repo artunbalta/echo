@@ -249,16 +249,27 @@ async function main() {
   assertFullContext(cs, 3, "courtesy_warm_server");
   log(`[6] F3 station courtesy_warm_server → actor=${cs.actor_id} counterpart=${cs.target.id}(${cs.context.counterpart_status}) stage=${cs.context.stage}`);
 
-  // B follows to the SAME far island → the two reach the same distant shore and see each other.
+  // B follows to the SAME far island, sees A, then WALKS across the commons (same island → all land,
+  // no sailing needed) to stand with A at the stall. An ACTIVE rendezvous: B closes the gap itself, so
+  // the proof doesn't depend on where A incidentally parked relative to the slot centre (the old
+  // `< 2` co-location gate was fragile — A rests at the stall ~3 tiles off the centre where B lands).
   roomB.send("travel", { destinationSlot: FAR });
   await waitFor(() => tileDistance(B().x, B().y, farTile.x, farTile.y) < 0.6, 5000, "B arrives at the same far island");
-  await waitFor(() => {
-    const aSeenByB = ent(roomB, roomA.sessionId), bSeenByA = ent(roomA, roomB.sessionId);
-    return aSeenByB && bSeenByA && tileDistance(aSeenByB.x, aSeenByB.y, B().x, B().y) < 2;
-  }, 5000, "A and B co-located at the far island");
+  await waitFor(() => !!ent(roomB, roomA.sessionId) && !!ent(roomA, roomB.sessionId), 5000, "A and B mutually visible at the far island");
+  for (let i = 0; i < 140 && tileDistance(B().x, B().y, A().x, A().y) > 1.4; i++) {
+    const dx = A().x - B().x, dy = A().y - B().y;
+    roomB.send("move_intent", {
+      dir: { x: Math.abs(dx) > 0.4 ? Math.sign(dx) : 0, y: Math.abs(dy) > 0.4 ? Math.sign(dy) : 0 },
+      facing: Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : dy > 0 ? "down" : "up",
+      seq: 3000 + i,
+    });
+    await sleep(60);
+  }
+  roomB.send("stop", { seq: 3999 });
+  await sleep(150);
   const reunion = tileDistance(A().x, A().y, B().x, B().y);
-  assert.ok(reunion < 2, `two players rendezvous at the far island (gap ${reunion.toFixed(2)})`);
-  log(`    two players both travelled to slot ${FAR} → co-located at the far shore (gap ${reunion.toFixed(2)} tiles) — co-presence amplified beyond the home cluster`);
+  assert.ok(reunion < 2, `two players rendezvous at the far island (B walked to A; gap ${reunion.toFixed(2)})`);
+  log(`    both travelled to slot ${FAR}; B walked across the commons to A → standing together (gap ${reunion.toFixed(2)} tiles) — co-presence amplified beyond the home cluster`);
 
   // ── teardown ─────────────────────────────────────────────────────────────────────────────────
   await roomA.leave(true);
