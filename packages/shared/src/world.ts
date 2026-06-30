@@ -8,12 +8,14 @@
 export const WORLD = {
   /** Logical tile size in source pixels. Upscaled on the client for crisp pixels. */
   TILE_SIZE: 16,
-  /** Map dimensions in tiles. The shared ocean is the archipelago extent (= OCEAN.EXTENT in
-   *  archipelago.ts), so the 100 phyllotaxis island slots sit at their RAW coordinates in one sea
-   *  (no compression) — one continuous ocean, not 100 maps. (The retired 64-tile main-world/venue/
-   *  town scenes generate their own dimensions, so this only resizes the shared world.) */
-  MAP_WIDTH: 512,
-  MAP_HEIGHT: 512,
+  /** Map dimensions in tiles. The shared ocean holds the 100 phyllotaxis island slots scaled up from
+   *  the archipelago extent (OCEAN.EXTENT, archipelago.ts) by SCALE = MAP/EXTENT = 768/128 = 6. At
+   *  this size adjacent islands sit ~36 tiles apart with radius-13 land (OCEAN_ISLAND_R) — ~10 tiles
+   *  of open water between their grass edges, a clearly readable stretch of sea you SAIL across, with
+   *  each island a real place to roam. (The retired 64-tile main-world/venue/town scenes generate
+   *  their own dimensions, so this only resizes the shared world.) */
+  MAP_WIDTH: 768,
+  MAP_HEIGHT: 768,
   /** Client-side integer upscale factor for the pixel-art look. */
   RENDER_SCALE: 3,
   /** Player movement speed, tiles per second. */
@@ -51,42 +53,33 @@ export function tileDistance(ax: number, ay: number, bx: number, by: number): nu
   return Math.hypot(ax - bx, ay - by);
 }
 
-// ── distance-based presence (the one shared ocean, ECHO build prompt §2) ─────────────────────────
-// Presence falls off with distance: far life is an anonymous silhouette; it resolves into a real,
-// named, interactable person as you approach. CLOSE is pinned to the server's interaction-open gate
-// (INTERACTION_RADIUS + 0.5) so the client's "social enabled" boundary is EXACTLY where the server
-// would allow an interaction — the Flow-0 solitary baseline cannot leak (no social below CLOSE).
-// Tunable here; distances are in tiles on the 128-tile ocean (cluster neighbours sit ~6 tiles apart).
+// ── distance-based presence (the one shared ocean, ECHO build prompt §2 + Step-6 polish #5) ────────
+// Presence gates IDENTITY and MEASUREMENT by distance — NEVER visibility. Every player/NPC renders as
+// a full, SHARP, fully-visible avatar at any distance (you see who's out there across the water, not a
+// dim ghost); only the NAME resolves in within near range, and social cues / posterior movement fire
+// ONLY at Tier 1 (CLOSE). CLOSE is pinned to the server's interaction-open gate (INTERACTION_RADIUS +
+// 0.5) so the client's "named + social" boundary is EXACTLY where the server would allow an
+// interaction — the Flow-0 solitary baseline cannot leak (no naming/social below CLOSE). Tunable here;
+// distances are in tiles on the 128-tile slot field (cluster neighbours sit ~6 slot-tiles apart).
 export const PRESENCE = {
-  /** Tier 1 — full sharp named avatar + interaction + social ENABLED. */
+  /** Tier 1 — named + interaction + social ENABLED (the ONLY tier that names or measures). */
   CLOSE: WORLD.INTERACTION_RADIUS + 0.5, // = 2.0
-  /** Tier 2 — sprite + name resolve in (alpha lerp CLOSE..APPROACH); NO social. */
+  /** Tier 2 — near band (held for future near-range affordances); still no naming/social. */
   APPROACH: 5.0,
-  /** Tier 3 — faint anonymous silhouette (no name, no interaction); the "someone is out there"
-   *  band runs APPROACH..HORIZON. Beyond HORIZON, cull entirely (over the horizon). */
+  /** Tier 3 — the far band ("someone is out there"): a sharp, fully visible, but ANONYMOUS and
+   *  non-interactable person. Runs APPROACH..HORIZON; beyond HORIZON is "over the horizon" — still
+   *  rendered sharp (no cull; see PixiWorld.drawEntity), just the outer label for the partition. */
   HORIZON: 40.0,
-  /** Silhouette opacity at Tier 3 (lerps up to 1.0 across Tier 2). */
-  SILHOUETTE_ALPHA: 0.22,
 } as const;
 
 export type PresenceTier = "close" | "approaching" | "distant" | "over_horizon";
 
-/** The presence tier of something `d` tiles from the local player (pure; client + tests share it). */
+/** The presence tier of something `d` tiles from the local player (pure; client + tests share it).
+ *  Drives the name gate (a remote is named only at "close") and mirrors the server-authoritative
+ *  social gate (interactions/cues only at CLOSE). Render is sharp at every tier — see #5. */
 export function presenceTier(d: number): PresenceTier {
   if (d <= PRESENCE.CLOSE) return "close";
   if (d <= PRESENCE.APPROACH) return "approaching";
   if (d <= PRESENCE.HORIZON) return "distant";
   return "over_horizon";
-}
-
-/** Render opacity for a remote at distance `d`: full when CLOSE, lerps down through APPROACH, holds
- *  at SILHOUETTE_ALPHA through DISTANT, 0 beyond the horizon. */
-export function presenceAlpha(d: number): number {
-  if (d <= PRESENCE.CLOSE) return 1;
-  if (d > PRESENCE.HORIZON) return 0;
-  if (d <= PRESENCE.APPROACH) {
-    const t = (d - PRESENCE.CLOSE) / (PRESENCE.APPROACH - PRESENCE.CLOSE); // 0 at CLOSE → 1 at APPROACH
-    return 1 - t * (1 - PRESENCE.SILHOUETTE_ALPHA);
-  }
-  return PRESENCE.SILHOUETTE_ALPHA;
 }

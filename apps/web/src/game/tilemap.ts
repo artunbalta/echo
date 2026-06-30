@@ -43,6 +43,11 @@ export interface TileMap {
    *  station placement, and "sail to the nearest island"). */
   homeCenter?: { x: number; y: number };
   islands?: IslandInfo[];
+  /** True ONLY for THE shared ocean (generateOcean): its islands are perfect discs at the shared
+   *  ocean.ts slot geometry, so collision + the coastline render use the continuous oceanLandAt
+   *  geometry rather than the per-tile array. Other watered maps (the wobbly generateArchipelago,
+   *  the single generateIslandMap) leave this unset and use the per-tile masks/collision. */
+  sharedOcean?: boolean;
 }
 
 function rng(seed: number) {
@@ -267,7 +272,7 @@ export function generateOcean(): TileMap {
     decorations.push({ kind: "tree", x: cx, y: cy }); // a centre landmark
   }
 
-  return { width: W, height: H, collision, water, decorations, portal: null, islands };
+  return { width: W, height: H, collision, water, decorations, portal: null, islands, sharedOcean: true };
 }
 
 export function isBlocked(map: TileMap, tileX: number, tileY: number): boolean {

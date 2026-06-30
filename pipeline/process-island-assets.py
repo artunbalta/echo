@@ -4,7 +4,7 @@ of the decoration props, autocrop, and downscale to committed sizes; the ground 
 (grass/water/sand) are kept opaque and resized to a tile multiple so they stay seamless under
 TilingSprite. Requires Pillow. Idempotent: consumes *_raw.png, writes <name>.png, removes raws."""
 import os
-from PIL import Image
+from PIL import Image, ImageEnhance
 
 A = os.path.join(os.path.dirname(__file__), "..", "apps", "web", "public", "assets", "island")
 
@@ -61,9 +61,13 @@ def main():
         l = (im.width - side) // 2
         t = (im.height - side) // 2
         im = im.crop((l, t, l + side, t + side)).resize((s, s), Image.LANCZOS)
+        # CALM ground (Step-6 polish #3): pull contrast down so any residual baked shading/diagonal
+        # stripes flatten out — the map should read by hue, not by harsh light. Safety net on top of
+        # the flat/shadowless prompt; ground tiles must be low-contrast and easy on the eyes.
+        im = ImageEnhance.Contrast(im).enhance(0.82)
         im.save(os.path.join(A, f"{name}.png"))
         os.remove(raw)
-        print(f"  {name}: {im.size}")
+        print(f"  {name}: {im.size} (calmed)")
 
 
 if __name__ == "__main__":
