@@ -77,6 +77,9 @@ const PEER_HISTORY_CAP = 60;
 const USER_INTERACTION_RANGE = WORLD.INTERACTION_RADIUS + 2;
 /** No turns for this long → auto-close so neither player stays locked "busy". */
 const USER_INTERACTION_IDLE_MS = 120_000;
+/** Min gap between two travel-stand hops from the same player — a hop is heavyweight and emits a
+ *  measured cue, so bound floods from a modified client (mirrors MIN_PEER_TURN_INTERVAL_MS). */
+const MIN_TRAVEL_INTERVAL_MS = 2_000;
 
 export class WorldRoom extends Room<WorldState> {
   maxClients = WORLD.ROOM_CAPACITY;
@@ -261,12 +264,30 @@ export class WorldRoom extends Room<WorldState> {
   private handleTravel(client: Client, msg: TravelMsg) {
     const e = this.state.entities.get(client.sessionId);
     const dest = Math.trunc(Number(msg?.destinationSlot));
-    if (!e || !Number.isFinite(dest) || dest < 0) return;
+    // Validate a sane slot: a safe non-negative integer within a generous cap. (An astronomic but
+    // finite index would overflow theta=dest·GOLDEN_ANGLE in islandSlot → cos(∞)=NaN → a NaN avatar
+    // position written to synced state. The cap dwarfs the 100 slots + any lazy expansion.)
+    if (!e || !Number.isSafeInteger(dest) || dest < 0 || dest > OCEAN.SIZE * 1000) return;
+
+    // Rate-limit: a hop emits a measured cue; never trust the client's own pacing.
+    const now = Date.now();
+    if (now - e.lastTravelAt < MIN_TRAVEL_INTERVAL_MS) return;
+    e.lastTravelAt = now;
+
+    // Teleporting away must tear down any open conversation (an NPC chat is not distance-gated and
+    // would otherwise strand a live interaction with a now-far NPC). Mirrors the onLeave teardown.
+    for (const [iid, it] of this.interactions) {
+      if (it.initiatorEntityId === e.id || it.partnerEntityId === e.id) this.closeInteraction(iid, "left");
+    }
 
     const sessionId = this.clientSessions.get(e.id) ?? e.id;
-    // far-vs-near from slot geometry: a long ocean hop from home reads as novelty/risk.
-    const hop = e.homeSlot >= 0 ? slotDistance(e.homeSlot, dest) : Infinity;
-    const far = hop > OCEAN.SPACING * 4; // ≈ 4+ slot-spacings out = a distant, non-adjacent shore
+    // far-vs-near from slot geometry: a long ocean hop from home reads as novelty/risk. With NO known
+    // home (offline assign-fetch failed → homeSlot=-1, the zero-key fallback) we cannot measure the
+    // hop, so we must NOT fabricate a novelty-seeking read: default to the conventional `travel_near`
+    // (hop 0) rather than Infinity, which would mislabel even the player's "near shore" pick as far.
+    const knownHome = e.homeSlot >= 0;
+    const hop = knownHome ? slotDistance(e.homeSlot, dest) : 0;
+    const far = knownHome && hop > OCEAN.SPACING * 4; // ≈ 4+ slot-spacings out = a distant, non-adjacent shore
     const audience = [...this.state.entities.values()].filter((o) => o.kind === "user" && o.id !== e.id).length;
 
     const emit = (action: string, raw: Record<string, number> = {}) =>

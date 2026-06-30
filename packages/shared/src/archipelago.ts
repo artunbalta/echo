@@ -126,6 +126,26 @@ export function nearestEmptySlot(
   return fromIndex + 1;
 }
 
+/**
+ * The slot SPATIALLY nearest `fromIndex` (excluding it). Index proximity ≠ spatial proximity under
+ * the phyllotaxis layout (index+1 is a golden-angle turn away, index+2 two turns out), so the travel
+ * stand's "near shore" must be chosen by Euclidean distance — not index arithmetic — to match the
+ * server's authoritative far-vs-near classification (which uses {@link slotDistance}).
+ */
+export function nearestSlot(fromIndex: number): number {
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < ARCHIPELAGO_SIZE; i++) {
+    if (i === fromIndex) continue;
+    const d = slotDistance(fromIndex, i);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best >= 0 ? best : (fromIndex + 1) % ARCHIPELAGO_SIZE;
+}
+
 // ── placement (pure) ──────────────────────────────────────────────────────────────
 
 /** One user→island assignment. `joinedAt` is the epoch-ms timestamp of first claim. */

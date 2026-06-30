@@ -88,8 +88,8 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   // ── STAND cues — the travel stand (the co-presence amplifier; F2+ and F6). A single-actor
   //    choice (counterpart "none"); far/near is the openness/risk read. ⚑ openness routes off-axis
   //    under the committed W (the cross-flow gap) — flagged in known-gaps, not silently re-routed. ──
-  travel_near: { channel: "A", cue: "A9", stage: 2, polarity: "take", axisPrior: "conventional / low novelty (the known shore)" },
-  travel_far: { channel: "A", cue: "A12", stage: 2, polarity: "take", axisPrior: "openness/novelty-seeking + risk — leave the familiar ⚑" },
+  travel_near: { channel: "A", cue: "K4", stage: 2, polarity: "take", axisPrior: "conventional / low novelty (the known shore) — cue-catalog K4, never-sets-sail twin" },
+  travel_far: { channel: "A", cue: "A11", stage: 2, polarity: "take", axisPrior: "openness/novelty-seeking + risk — leave the familiar (cue-catalog A11 sail-out) ⚑" },
   prepare_before_travel: { channel: "C", cue: "C7", stage: 2, polarity: "take", axisPrior: "planning/conscientiousness" },
   bargain_hard: { channel: "F", cue: "F9", stage: 3, polarity: "take", axisPrior: "dominance/economic-aggression" },
   fairness_split_fair: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "fairness/warmth" },
