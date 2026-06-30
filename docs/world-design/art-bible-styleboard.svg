@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="640" viewBox="0 0 960 640" font-family="ui-monospace, Menlo, monospace">
+  <!-- ECHO Art Bible — style board. HAND-AUTHORED direction reference (palette/light/accent), NOT
+       the Higgsfield-generated samples. The 4 AI sample tiles come from §6 prompts after re-auth. -->
+  <defs>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a2f50"/><stop offset="45%" stop-color="#5a4a72"/>
+      <stop offset="72%" stop-color="#8a6a9e"/><stop offset="88%" stop-color="#c98a8f"/>
+      <stop offset="100%" stop-color="#e8b894"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3aa0e6"/><stop offset="40%" stop-color="#2680c6"/>
+      <stop offset="72%" stop-color="#1f5a8f"/><stop offset="100%" stop-color="#1c3a5e"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9a7e54"/><stop offset="55%" stop-color="#c9ad79"/>
+      <stop offset="100%" stop-color="#e8d3a0"/>
+    </linearGradient>
+    <radialGradient id="lantern" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#fbf4e4"/><stop offset="45%" stop-color="#e8d3a0"/>
+      <stop offset="100%" stop-color="#1c1326" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="echoGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#c79bf0"/><stop offset="60%" stop-color="#a06cd5"/>
+      <stop offset="100%" stop-color="#a06cd5" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="960" height="640" fill="#1c1326"/>
+  <text x="32" y="40" fill="#f4e9d0" font-size="22" font-weight="bold">ECHO — art bible · style board</text>
+  <text x="32" y="62" fill="#a06cd5" font-size="12">a country that does not exist · 16-bit top-down · dusk · calm, literary, slightly uncanny</text>
+  <text x="32" y="80" fill="#8a6a9e" font-size="10">HAND-AUTHORED direction reference (palette / light / accent) — NOT the Higgsfield samples (those run from §6 after re-auth)</text>
+
+  <!-- ── palette ramps ── -->
+  <text x="32" y="116" fill="#f4e9d0" font-size="13" font-weight="bold">PALETTE — anchors + sanctioned extensions</text>
+  <g font-size="8" fill="#cdb88e">
+    <!-- ink --><text x="32" y="134">ink / shadow</text>
+    <rect x="120" y="126" width="34" height="20" fill="#120c1c"/><rect x="154" y="126" width="34" height="20" fill="#1c1326"/><rect x="188" y="126" width="34" height="20" fill="#2a2340"/>
+    <!-- water --><text x="250" y="134">water →deep</text>
+    <rect x="340" y="126" width="30" height="20" fill="#3aa0e6"/><rect x="370" y="126" width="30" height="20" fill="#2680c6"/><rect x="400" y="126" width="30" height="20" fill="#1f5a8f"/><rect x="430" y="126" width="30" height="20" fill="#1c3a5e"/>
+    <!-- sky --><text x="490" y="134">dusk sky</text>
+    <rect x="560" y="126" width="26" height="20" fill="#3a2f50"/><rect x="586" y="126" width="26" height="20" fill="#5a4a72"/><rect x="612" y="126" width="26" height="20" fill="#8a6a9e"/><rect x="638" y="126" width="26" height="20" fill="#c98a8f"/><rect x="664" y="126" width="26" height="20" fill="#e8b894"/>
+
+    <text x="32" y="166">sand wet→dry</text>
+    <rect x="120" y="158" width="34" height="20" fill="#9a7e54"/><rect x="154" y="158" width="34" height="20" fill="#c9ad79"/><rect x="188" y="158" width="34" height="20" fill="#e8d3a0"/>
+    <text x="250" y="166">grass / life</text>
+    <rect x="340" y="158" width="30" height="20" fill="#3f8a45"/><rect x="370" y="158" width="30" height="20" fill="#57b257"/><rect x="400" y="158" width="30" height="20" fill="#74c365"/><rect x="430" y="158" width="30" height="20" fill="#8fd97e"/>
+    <text x="490" y="166">parchment</text>
+    <rect x="560" y="158" width="32" height="20" fill="#cdb88e"/><rect x="592" y="158" width="32" height="20" fill="#e8d3a0"/><rect x="624" y="158" width="32" height="20" fill="#f4e9d0"/><rect x="656" y="158" width="32" height="20" fill="#fbf4e4"/>
+
+    <text x="32" y="198">bark / earth</text>
+    <rect x="120" y="190" width="34" height="20" fill="#5d3a22"/><rect x="154" y="190" width="34" height="20" fill="#7a4a2b"/><rect x="188" y="190" width="34" height="20" fill="#9a6238"/>
+    <text x="250" y="198" fill="#c79bf0">echo (uncanny only)</text>
+    <rect x="340" y="190" width="30" height="20" fill="#7a4aa8"/><rect x="370" y="190" width="30" height="20" fill="#a06cd5"/><rect x="400" y="190" width="30" height="20" fill="#c79bf0"/>
+    <text x="445" y="203" fill="#a06cd5" font-size="9">↞ sacred + rare · ≤5% of any frame · only where the mirror/echo touches</text>
+  </g>
+
+  <!-- ── light & shadow rule ── -->
+  <text x="32" y="248" fill="#f4e9d0" font-size="13" font-weight="bold">ONE LIGHT — dusk sun → long UL shadows</text>
+  <g>
+    <rect x="32" y="262" width="280" height="150" fill="url(#dusk)"/>
+    <!-- low sun glow lower-right -->
+    <circle cx="300" cy="408" r="70" fill="#e8b894" opacity="0.5"/>
+    <!-- ground -->
+    <rect x="32" y="372" width="280" height="40" fill="#3f8a45"/>
+    <!-- a tree + its long shadow to upper-left -->
+    <polygon points="150,372 95,360 150,318 205,360" fill="#1c1326" opacity="0.32"/> <!-- shadow UL -->
+    <rect x="176" y="352" width="8" height="22" fill="#7a4a2b"/>
+    <ellipse cx="180" cy="346" rx="26" ry="20" fill="#57b257"/><ellipse cx="172" cy="340" rx="16" ry="12" fill="#8fd97e"/>
+    <!-- horizon island silhouette w/ faint echo glow -->
+    <ellipse cx="250" cy="334" rx="34" ry="7" fill="#2a2340"/>
+    <ellipse cx="250" cy="333" rx="20" ry="4" fill="url(#echoGlow)" opacity="0.5"/>
+    <text x="40" y="282" fill="#f4e9d0" font-size="9" opacity="0.8">dusk sky band</text>
+    <text x="60" y="402" fill="#1c1326" font-size="8">↖ shadow</text>
+  </g>
+
+  <!-- ── 3 schematic mood tiles ── -->
+  <text x="350" y="248" fill="#f4e9d0" font-size="13" font-weight="bold">MOOD TILES (schematic — the feel, not the final pixels)</text>
+
+  <!-- shore -->
+  <g>
+    <rect x="350" y="262" width="180" height="150" fill="url(#sand)"/>
+    <rect x="350" y="262" width="180" height="34" fill="url(#water)"/>
+    <rect x="350" y="294" width="180" height="6" fill="#f4e9d0" opacity="0.8"/> <!-- tide line -->
+    <circle cx="430" cy="350" r="3" fill="#5d3a22"/><circle cx="470" cy="380" r="2.5" fill="#9a6238"/>
+    <text x="358" y="406" fill="#1c1326" font-size="9">F0 shore — wet→dry sand, foam tide-line</text>
+  </g>
+  <!-- dusk water + uncanny glint -->
+  <g>
+    <rect x="546" y="262" width="180" height="150" fill="url(#water)"/>
+    <rect x="560" y="290" width="40" height="2" fill="#cfeafb" opacity="0.7"/><rect x="640" y="330" width="34" height="2" fill="#cfeafb" opacity="0.6"/>
+    <circle cx="660" cy="300" r="5" fill="url(#echoGlow)"/> <!-- the one violet shimmer -->
+    <text x="554" y="406" fill="#cfeafb" font-size="9">dusk sea — turquoise→ink · one echo glint</text>
+  </g>
+  <!-- travel stand exterior -->
+  <g>
+    <rect x="742" y="262" width="186" height="150" fill="#2a2340"/>
+    <ellipse cx="835" cy="372" rx="92" ry="44" fill="url(#lantern)" opacity="0.85"/> <!-- warm interior glow -->
+    <!-- frame: bark posts + parchment awning -->
+    <rect x="772" y="320" width="8" height="70" fill="#5d3a22"/><rect x="888" y="320" width="8" height="70" fill="#5d3a22"/>
+    <polygon points="762,322 906,322 894,300 774,300" fill="#e8d3a0"/> <!-- canvas awning -->
+    <polygon points="762,322 906,322 900,330 768,330" fill="#cdb88e"/>
+    <rect x="800" y="350" width="56" height="40" fill="#7a4a2b"/> <!-- counter -->
+    <circle cx="884" cy="338" r="6" fill="#fbf4e4"/><circle cx="884" cy="338" r="10" fill="#e8d3a0" opacity="0.4"/> <!-- lantern -->
+    <rect x="812" y="332" width="14" height="9" fill="#7a4aa8"/> <!-- the echo-glint sign object -->
+    <text x="752" y="406" fill="#e8d3a0" font-size="9">travel stand — built warmth in wild dusk</text>
+  </g>
+
+  <!-- ── outline + grain rule ── -->
+  <text x="32" y="452" fill="#f4e9d0" font-size="13" font-weight="bold">OUTLINE + DITHER (objects only)</text>
+  <g>
+    <!-- object WITH selective outline (lit edge only) -->
+    <rect x="40" y="470" width="60" height="60" fill="#74c365"/>
+    <path d="M40,470 H100 V530" fill="none" stroke="#1c1326" stroke-width="2"/> <!-- lit edges outlined -->
+    <rect x="70" y="500" width="30" height="30" fill="#1c1326" opacity="0.2"/> <!-- self-shadow, no outline -->
+    <text x="40" y="548" fill="#cdb88e" font-size="8">object: 1px ink outline on lit edges</text>
+    <!-- ground tile, NO outline -->
+    <rect x="220" y="470" width="60" height="60" fill="#57b257"/>
+    <rect x="220" y="470" width="60" height="30" fill="#3f8a45"/> <!-- dither band at transition -->
+    <g fill="#74c365"><rect x="222" y="498" width="4" height="4"/><rect x="230" y="498" width="4" height="4"/><rect x="238" y="498" width="4" height="4"/><rect x="246" y="498" width="4" height="4"/></g>
+    <text x="220" y="548" fill="#cdb88e" font-size="8">ground: no outline · dither at value edge</text>
+  </g>
+
+  <!-- ── the echo accent rule ── -->
+  <text x="350" y="452" fill="#f4e9d0" font-size="13" font-weight="bold">THE UNCANNY ACCENT — echo-violet #a06cd5</text>
+  <g font-size="10" fill="#cdb88e">
+    <circle cx="372" cy="486" r="10" fill="url(#echoGlow)"/>
+    <text x="392" y="490">the mirror that holds the wrong posture · the doppelgänger · the horizon island ·</text>
+    <text x="392" y="506">bioluminescent dusk water · the echo "forming" in UI.</text>
+    <text x="392" y="528" fill="#a06cd5">RULE: appears ONLY where the echo theme touches. Never decorative. Usually 0% of a frame.</text>
+    <text x="392" y="544" fill="#8a6a9e">When violet appears, something is watching / forming. Its rarity is what makes it land.</text>
+  </g>
+
+  <text x="32" y="600" fill="#8a6a9e" font-size="10">STYLE TOKEN BLOCK (every hf gen prompt inherits §4): dusk light → UL shadows · value-muted saturation · selective 1px ink outline on objects · dither at transitions · faint grain · NO text/logos/UI.</text>
+  <text x="32" y="622" fill="#5a4a72" font-size="9">Built warmth (stands, fire, lanterns: parchment glow + bark geometry) vs wild dusk (organic grass/water/bark, no straight lines). The contrast is the feeling.</text>
+</svg>
