@@ -23,7 +23,7 @@ import { strict as assert } from "node:assert";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { Client } from "colyseus.js";
-import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, type EventContext } from "@echo/shared";
+import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, presenceTier, type EventContext } from "@echo/shared";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function waitFor(pred: () => boolean, timeoutMs = 8000, label = "condition"): Promise<void> {
@@ -135,7 +135,14 @@ async function main() {
   assert.equal(A().lastSeq, 2, "server acked A's last input seq");
   log(`      A moved → B mirrors A.x=${ent(roomB, roomA.sessionId).x.toFixed(2)} (|Δ|<0.05); lastSeq=${A().lastSeq}`);
 
-  // ── (3) first contact: per-actor first_contact + proxemics ───────────────────────────────────
+  // ── world-unify §3: while only DISTANT, the Flow-0 baseline cannot leak — ZERO social emission ──
+  // Adjacent-slot neighbours spawn ~6 tiles apart = the DISTANT silhouette tier (seen from their own
+  // islands, anonymous). No proximity → no interaction → the server emits NO BehavioralEvent at all.
+  assert.equal(presenceTier(gap0), "distant", "adjacent-slot neighbours spawn at the DISTANT silhouette tier");
+  assert.equal(captured.length, 0, "ZERO social events while only distant (no leak below Tier 1 / CLOSE)");
+  log(`      presenceTier(gap ${gap0.toFixed(1)}) = "distant" (anonymous silhouette); social events so far = ${captured.length}`);
+
+  // ── (3) first contact at Tier 1: per-actor first_contact + proxemics (social begins ONLY here) ──
   await steerA(() => B().x, () => B().y, 1.3, "interaction range of B");
   roomA.send("interact_start", { targetId: roomB.sessionId });
   await waitFor(() => evsBy("first_contact").length >= 2 && evsBy("proxemics_close").length + evsBy("proxemics_far").length >= 2, 5000, "first-contact pair + proxemics pair");

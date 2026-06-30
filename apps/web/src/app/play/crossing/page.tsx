@@ -1,12 +1,8 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import dynamic from "next/dynamic";
-
-// The shared realtime zone of the canonical 7-flow experience: the ocean + clearing the player
-// crosses into from Flow 0/1 (Flow 2 "the crossing" onward). Other live players are visible here.
-// PixiJS touches the DOM/WebGL — load only in the browser. Reuses the proven Colyseus WorldClient.
-const WorldClient = dynamic(() => import("@/components/WorldClient"), { ssr: false });
-
-export default function CrossingPage() {
-  return <WorldClient />;
+// The crossing is no longer a separate destination — it's the physical act of sailing off your
+// island in the ONE shared ocean at /play (silhouette → person, by distance). Retired; folded in.
+// (Code recoverable in git, like the Step-5 route retirements.)
+export default function PlayCrossingPage() {
+  redirect("/play");
 }
