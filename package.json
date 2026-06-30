@@ -17,7 +17,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "seed": "node db/seed/seed.mjs",
     "gen:assets": "node pipeline/generate-venue-assets.mjs",
-    "gen:island-assets": "node pipeline/generate-island-assets.mjs"
+    "gen:island-assets": "node pipeline/generate-island-assets.mjs",
+    "gen:flow-assets": "node pipeline/generate-flow-assets.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
