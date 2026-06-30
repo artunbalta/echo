@@ -3,7 +3,7 @@
  * renderer only needs the {ground, decorations, collision} shape this produces.
  * Deterministic from a seed so client and (future) server agree on collision.
  */
-import { WORLD } from "@echo/shared";
+import { WORLD, archipelagoSlots } from "@echo/shared";
 
 export type DecoKind = "tree" | "bush" | "flower";
 
@@ -224,6 +224,48 @@ export function generateArchipelago(seed = 7): TileMap {
   }
 
   return { width: W, height: H, collision, water, decorations, portal: null, homeCenter: { x: cx, y: cy }, islands };
+}
+
+/**
+ * THE ONE SHARED OCEAN (world-unify §1). A single 128×128 sea holding all 100 archipelago islands
+ * as real, positioned landmasses at their Vogel-phyllotaxis slot coordinates (archipelago.ts) — not
+ * 100 separate maps. Every player lives on one of these islands and shares this coordinate space.
+ *
+ * Fully sailable: collision is left clear everywhere (you sail the sea and walk the islands freely;
+ * the "crossing" is just distance closing, not a wall). The water mask drives the ocean/beach
+ * rendering; `islands` carries every slot's centre+radius for the client's distance-LOD + the local
+ * player's own-island feature placement. Deterministic — the layout is a pure function of the slots.
+ */
+export function generateOcean(): TileMap {
+  const W = WORLD.MAP_WIDTH;
+  const H = WORLD.MAP_HEIGHT;
+  const collision = new Uint8Array(W * H); // 0 everywhere — the whole ocean is sailable
+  const water = new Uint8Array(W * H).fill(1); // 1 = sea; islands punch land (0) into it
+  const decorations: Decoration[] = [];
+  const islands: IslandInfo[] = [];
+  const ISLAND_R = 3.4; // land radius per slot (small, distinct islands packed in one sea)
+
+  for (const slot of archipelagoSlots()) {
+    const cx = slot.x;
+    const cy = slot.y;
+    islands.push({ x: cx, y: cy, r: ISLAND_R });
+    const ri = Math.ceil(ISLAND_R) + 1;
+    for (let dy = -ri; dy <= ri; dy++) {
+      for (let dx = -ri; dx <= ri; dx++) {
+        // wobble the coastline a touch per slot so islands read organic, not as perfect discs
+        const wob = 0.5 * Math.sin((dx + dy + slot.index) * 1.3);
+        if (Math.hypot(dx, dy) > ISLAND_R + wob) continue;
+        const x = Math.round(cx) + dx;
+        const y = Math.round(cy) + dy;
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        water[y * W + x] = 0; // land
+      }
+    }
+    // one tree as a non-blocking island landmark (collision stays clear — sail/walk freely)
+    decorations.push({ kind: "tree", x: Math.round(cx), y: Math.round(cy) });
+  }
+
+  return { width: W, height: H, collision, water, decorations, portal: null, islands };
 }
 
 export function isBlocked(map: TileMap, tileX: number, tileY: number): boolean {
