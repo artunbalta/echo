@@ -117,8 +117,8 @@ export default function Account() {
           </div>
         )}
 
-        <button onClick={() => router.push("/world")} className="mt-4 text-xs text-parchment/50 hover:text-parchment">
-          ← back to the world
+        <button onClick={() => router.push("/play")} className="mt-4 text-xs text-parchment/50 hover:text-parchment">
+          ← back to your island
         </button>
       </div>
     </main>
