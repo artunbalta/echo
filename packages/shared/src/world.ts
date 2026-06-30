@@ -62,9 +62,8 @@ export const PRESENCE = {
   CLOSE: WORLD.INTERACTION_RADIUS + 0.5, // = 2.0
   /** Tier 2 — sprite + name resolve in (alpha lerp CLOSE..APPROACH); NO social. */
   APPROACH: 5.0,
-  /** Tier 3 — faint anonymous silhouette (no name, no interaction); the "someone is out there" band. */
-  DISTANT: 40.0,
-  /** Beyond this, cull entirely — over the horizon. */
+  /** Tier 3 — faint anonymous silhouette (no name, no interaction); the "someone is out there"
+   *  band runs APPROACH..HORIZON. Beyond HORIZON, cull entirely (over the horizon). */
   HORIZON: 40.0,
   /** Silhouette opacity at Tier 3 (lerps up to 1.0 across Tier 2). */
   SILHOUETTE_ALPHA: 0.22,

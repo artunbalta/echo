@@ -702,9 +702,11 @@ export class PixiWorld {
     // ── distance-based presence LOD (world-unify §2): far = faint anonymous silhouette, near =
     //    full sharp named avatar. Self is at distance 0 → always sharp. The name appears only as a
     //    remote resolves (Tier 2/1); at Tier 3 it is an anonymous ink-tinted silhouette; beyond the
-    //    horizon it is culled. (Social interaction is gated separately, in detectNearby below, at
-    //    exactly Tier 1 — so seeing a silhouette can never start measurement.) ──
-    const dist = Math.hypot(this.localX - tileX, this.localY - tileY);
+    //    horizon it is culled. (Social interaction is gated separately, in detectProximity below, at
+    //    exactly Tier 1 — so seeing a silhouette can never start measurement.)
+    //    YOUR OWN island's Flow-0 affordances ("f0_*", client-local) are NOT distant strangers —
+    //    they sit ~6 tiles away but belong to you, so they always render sharp + named (distance 0). ──
+    const dist = re.id.startsWith("f0_") ? 0 : Math.hypot(this.localX - tileX, this.localY - tileY);
     const tier = presenceTier(dist);
     const a = presenceAlpha(dist);
     re.sprite.visible = a > 0.001;
@@ -821,6 +823,7 @@ export class PixiWorld {
     const out: { id: string; refId: string; name: string; x: number; y: number }[] = [];
     for (const [id, re] of this.entities) {
       if (re.kind !== "npc") continue;
+      if (id.startsWith("f0_")) continue; // client-local own-island affordances aren't room NPCs the echo can approach
       const x = (re as { _tx?: number })._tx ?? re.targetX;
       const y = (re as { _ty?: number })._ty ?? re.targetY;
       out.push({ id, refId: re.refId, name: re.name, x, y });

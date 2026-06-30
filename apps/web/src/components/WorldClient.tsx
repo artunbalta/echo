@@ -15,7 +15,7 @@ import { useEcho } from "@/lib/useEcho";
 import { markFunnel } from "@/lib/funnel";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent } from "@echo/shared";
 import {
-  nearestSlot, islandSlot,
+  nearestSlot, islandSlot, clampToMap,
   FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event,
   type Flow0Affordance,
 } from "@echo/shared";
@@ -538,9 +538,10 @@ export default function WorldClient() {
       const home = islandSlot(slotIndex ?? 0); // offline (no slot) → centre island, matching pickSpawn
       f0EntsRef.current = FLOW0_AFFORDANCES.map((a) => {
         f0ByIdRef.current.set(`f0_${a.id}`, a);
+        const p = clampToMap(home.x + a.dx, home.y + a.dy); // keep outer-ring island offsets on-map
         return {
           id: `f0_${a.id}`, kind: "npc", refId: `f0_${a.id}`, name: a.label, spriteUrl: a.sprite,
-          x: home.x + a.dx, y: home.y + a.dy, facing: "down", moving: false, role: "flow0", status: "none",
+          x: p.x, y: p.y, facing: "down", moving: false, role: "flow0", status: "none",
         } as EntitySnapshot;
       });
       f0SpawnAtRef.current = Date.now();
@@ -868,8 +869,9 @@ export default function WorldClient() {
     const npc = world.listNpcs().find((n) => n.id === target.id);
     if (npc) world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
     const nearbyId = world.getNearbyId();
-    // Only auto-open with an NPC — the wandering echo never barges into a real player.
-    if (nearbyId && world.getNearbyKind() === "npc") {
+    // Only auto-open with a real room NPC — never a real player, and never a client-local Flow-0
+    // affordance (f0_*; not room state → the server would reject interactStart and stall the loop).
+    if (nearbyId && world.getNearbyKind() === "npc" && !nearbyId.startsWith("f0_")) {
       world.setAutoWalk(null);
       setAutoConvoActive(true);
       autoTurnsRef.current = 0;
