@@ -31,6 +31,12 @@ export const PROP_KINDS = [
   "driftwood",     // the one odd far thing on the west shore
   "shell",         // the 5 scattered beach objects (collect / stack / ignore)
   "path_marker",   // the obvious worn path east (a weak, low-weight openness cue)
+  // ── the stand archetypes (Step 6). These are STRUCTURES (bark frame + parchment awning), so the
+  //    assets-absent fallback must be a stall silhouette, NOT a humanoid character sheet. ──
+  "travel_stand",
+  "workplace_stand",
+  "food_stand",
+  "market_stand",
 ] as const;
 export type PropKind = (typeof PROP_KINDS)[number];
 
@@ -271,6 +277,22 @@ function drawPathMarker(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
   p(6, 13, 4, 1, "#a9a59c");
 }
 
+/** A built stall — bark posts + a parchment-canvas awning + a warm lantern. The procedural fallback
+ *  for the stand archetypes when their bible PNG is absent, so a stall reads as a STRUCTURE (not a
+ *  humanoid). `accent` tints the awning so the four stands read as distinct at a glance. */
+function drawStand(ctx: CanvasRenderingContext2D, ox: number, oy: number, accent: string) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 13);
+  p(2, 10, 12, 1, "#5d3a22");        // awning ridge (bark)
+  p(1, 11, 14, 3, accent);           // parchment-canvas awning (tinted)
+  p(1, 13, 14, 1, "#cdb88e");        // awning underside shade
+  p(2, 14, 2, 7, "#7a4a2b");         // left bark post
+  p(12, 14, 2, 7, "#7a4a2b");        // right bark post
+  p(3, 17, 10, 4, "#9a6238");        // counter
+  p(3, 17, 10, 1, "#b88a5a");        // counter highlight
+  p(11, 12, 1, 2, "#fbf4e4");        // a small hanging lantern glow
+}
+
 const DRAW: Record<PropKind, Draw> = {
   dog: drawDog,
   grain_sprout: (c, x, y) => drawGrainSprout(c, x, y),
@@ -286,4 +308,8 @@ const DRAW: Record<PropKind, Draw> = {
   driftwood: (c, x, y) => drawDriftwood(c, x, y),
   shell: (c, x, y) => drawShell(c, x, y),
   path_marker: (c, x, y) => drawPathMarker(c, x, y),
+  travel_stand: (c, x, y) => drawStand(c, x, y, "#8a6a9e"),      // dusk-mauve (the ferry/horizon)
+  workplace_stand: (c, x, y) => drawStand(c, x, y, "#b88a5a"),   // bark-warm (labour)
+  food_stand: (c, x, y) => drawStand(c, x, y, "#e8b894"),        // warm cookfire glow
+  market_stand: (c, x, y) => drawStand(c, x, y, "#e8d3a0"),      // parchment (trade)
 };

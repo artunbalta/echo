@@ -75,10 +75,12 @@ def walk():
         (host, "treat_other"), (host, "host_table"), (host, "eat_meal"),
         (worker, "work_shift"), (worker, "take_vocation"), (worker, "shirk_work"),
     ]
+    tel_by_action = {}
     for actor, action in seq:
         r = post(ev(actor, action))
         assert r.status_code == 200, (actor, action, r.status_code, r.text)
         d = r.json()
+        tel_by_action[action] = d.get("telemetry_used", {})
         report["steps"].append({"actor": "host" if actor == host else "worker", "action": action,
                                  "prior": CUES[action][5], "delta_mu": round(d["delta_mu"], 4),
                                  "cond": d["cond_key"]})
@@ -87,11 +89,16 @@ def walk():
     report["distance"] = round(float(np.linalg.norm(mu_h - mu_w)), 4)
     report["mu_host"] = mu_h.tolist()
     report["mu_worker"] = mu_w.tolist()
+    report["shirk_tel"] = tel_by_action.get("shirk_work", {})
     report["missing_context_status"] = post(ev(host, "treat_other", bad=True)).status_code
 
     c = report["checks"]
     c["stand_cues_move_posterior"] = all(s["delta_mu"] > 1e-4 for s in report["steps"])
     c["host_diverges_from_worker"] = report["distance"] > 0.05
+    # shirk_work must read on its OWN axis (ts_leisure), NOT cross-load onto warmth/dominance via
+    # the K-twin's approach injection (the Step-4 bug class — fixed by the emptiness-gated catch-all).
+    c["shirk_work_no_approach_cross_load"] = ("approach" not in report["shirk_tel"]
+                                              and "ts_leisure" in report["shirk_tel"])
     c["mandatory_context_rejected_422"] = report["missing_context_status"] == 422
     report["passed"] = all(c.values())
     return report
