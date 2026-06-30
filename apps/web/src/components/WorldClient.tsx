@@ -14,6 +14,7 @@ import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel"
 import { useEcho } from "@/lib/useEcho";
 import { markFunnel } from "@/lib/funnel";
 import type { InteractTurnPayload } from "@echo/shared";
+import { nearestSlot } from "@echo/shared";
 
 const prettyBucket = (b: string) => b.replace(/_/g, " ");
 
@@ -182,8 +183,11 @@ export default function WorldClient() {
   const FAR_GATHERING = 60;
   const travelDestinations = () => {
     const home = slotIndexRef.current ?? 0;
+    // "a near shore" must be SPATIALLY nearest (index ≠ space under phyllotaxis), so its label
+    // matches the server's authoritative travel_near verdict. The far gathering is a fixed shared
+    // landmark (so two players who pick it rendezvous); for central/clustered homes it is genuinely far.
     return [
-      { slot: (home + 2) % 100, label: "a near shore" },
+      { slot: nearestSlot(home), label: "a near shore" },
       { slot: FAR_GATHERING, label: "the far gathering ⟡" },
       { slot: (FAR_GATHERING + 25) % 100, label: "a distant stranger's island" },
     ];

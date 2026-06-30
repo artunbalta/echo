@@ -15,6 +15,8 @@ telemetry→openness path** (it was anchored on the island day-loop economy only
   `egg_hollow` → dominance/warmth (gap #1).
 - **F2 social openness:** `asks_question`, `self_disclosure` → affect/pace; `deviate_custom` →
   dominance (gap #3).
+- **Stand / travel (F2+/F6):** `travel_far` (sail to a far island — openness/novelty-seeking) routes
+  via `risk_index` → dominance/intellect under the committed W; openness stays flat (gap #3).
 
 warmth, dominance, pace, formality, affect all measure cleanly and are validated end-to-end
 (Steps 2–4 walkthroughs + the live courtesy gradient). **openness is the one axis with no working
@@ -76,15 +78,18 @@ Gaps #1 and #3 below are the per-flow detail of this single milestone.
   with no measurable ML load regression in local two-tab runs.
 - **Status:** OPEN — co-deferred to the **W re-anchor milestone**.
 
-## 3. F2/F3 openness-intended social cues route to other axes (same W gap as #1)
+## 3. F2/F3/travel openness-intended cues route to other axes (same W gap as #1)
 
-- **Opened:** 2026-06-29 (Step 4, F2 dialogue + F3 clearing).
-- **What:** Several Flow-2/Flow-3 cues whose design-doc prior is **openness** load elsewhere under
-  the committed W: `asks_question` and `self_disclosure` (F2) → affect/pace (carried by reply
-  latency + a mild `ts_social`, not openness); `deviate_custom` (F3) → dominance (via `risk_index`).
-  They move the posterior and are bucketed on the right `counterpart_status`, but the openness
-  direction the doc intends is not yet expressed. Flagged ⚑ in `scripts/flow2_dialogue_walkthrough.py`
-  / `flow3_clearing_walkthrough.py` and in `social.ts`.
+- **Opened:** 2026-06-29 (Step 4, F2 dialogue + F3 clearing; extended Step 6 for the travel stand).
+- **What:** Several cues whose design-doc prior is **openness** load elsewhere under the committed W:
+  `asks_question` and `self_disclosure` (F2) → affect/pace (carried by reply latency + a mild
+  `ts_social`, not openness); `deviate_custom` (F3) → dominance (via `risk_index`); and the travel
+  stand's `travel_far` (Step 6 — sailing to a far island, openness/novelty-seeking) → dominance/
+  intellect (via `risk_index`), openness flat (confirmed in `scripts/stand_travel_walkthrough.py`:
+  μ_wanderer openness ≈ −0.19 while dominance/intellect move). `travel_near` → `consistency`,
+  `prepare_before_travel` → `persistence` route fine. All move the posterior and bucket correctly,
+  but the openness direction is not yet expressed. Flagged ⚑ in `scripts/flow2_dialogue_walkthrough.py`
+  / `flow3_clearing_walkthrough.py` / `stand_travel_walkthrough.py` and in `social.ts`.
 - **Root cause:** identical to #1 — W has **no telemetry→openness path** (anchored on the day-loop
   economy). Openness is carried mostly by the semantic embedding channel, which is a hash offline.
 - **Why we are NOT fixing it now:** same as #1 — re-anchor W **once** on the full multi-flow cue set

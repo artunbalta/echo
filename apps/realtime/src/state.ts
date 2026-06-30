@@ -30,6 +30,9 @@ export class Entity extends Schema {
   /** The archipelago slot this user owns (their home island), carried at join. −1 = unknown.
    *  Used by the travel stand to read far-vs-near (the novelty/risk cue) from slot geometry. */
   homeSlot = -1;
+  /** Server-side rate-limit clock for the travel stand (a heavyweight hop emits a measured cue;
+   *  bound floods from a modified client, mirroring the peer-chat MIN_PEER_TURN_INTERVAL_MS). */
+  lastTravelAt = 0;
   // NPC movement scratch
   wanderTargetX = 0;
   wanderTargetY = 0;
