@@ -25,7 +25,7 @@ import type {
   Stakes,
 } from "./telemetry.js";
 
-export type SocialStage = 2 | 3;
+export type SocialStage = 1 | 2 | 3; // F1 (workplace/economy), F2 (dialogue), F3 (clearing)
 
 export interface SocialCueDef {
   channel: CueChannel;
@@ -91,6 +91,16 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   travel_near: { channel: "A", cue: "K4", stage: 2, polarity: "take", axisPrior: "conventional / low novelty (the known shore) — cue-catalog K4, never-sets-sail twin" },
   travel_far: { channel: "A", cue: "A11", stage: 2, polarity: "take", axisPrior: "openness/novelty-seeking + risk — leave the familiar (cue-catalog A11 sail-out) ⚑" },
   prepare_before_travel: { channel: "C", cue: "C7", stage: 2, polarity: "take", axisPrior: "planning/conscientiousness" },
+
+  // ── STAND cues — the food/dining stand (F3 clearing, reused F4/F6 community: eat / treat / host) ──
+  eat_meal: { channel: "G", cue: "G13", stage: 3, polarity: "take", axisPrior: "self-feeding (low social)" },
+  treat_other: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "generosity (treat vs self) → warmth" },
+  host_table: { channel: "G", cue: "G14", stage: 3, polarity: "take", axisPrior: "hosting → warmth/dominance/energy" },
+
+  // ── STAND cues — the workplace/business stand (F1/F5: labour / vocation / time-allocation) ──
+  work_shift: { channel: "C", cue: "C8", stage: 1, polarity: "take", axisPrior: "industriousness → energy/formality" },
+  take_vocation: { channel: "C", cue: "C9", stage: 1, polarity: "take", axisPrior: "commit to a craft → persistence/formality/intellect" },
+  shirk_work: { channel: "C", cue: "C8", stage: 1, polarity: "refuse", axisPrior: "avoidance / low-industriousness" },
   bargain_hard: { channel: "F", cue: "F9", stage: 3, polarity: "take", axisPrior: "dominance/economic-aggression" },
   fairness_split_fair: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "fairness/warmth" },
   // grabbing the larger share is an AFFIRMATIVE self-interested act — "take", not a refusal twin.
