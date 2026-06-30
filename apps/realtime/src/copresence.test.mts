@@ -23,7 +23,7 @@ import { strict as assert } from "node:assert";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { Client } from "colyseus.js";
-import { WORLD, tileDistance, type EventContext } from "@echo/shared";
+import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, type EventContext } from "@echo/shared";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function waitFor(pred: () => boolean, timeoutMs = 8000, label = "condition"): Promise<void> {
@@ -169,6 +169,34 @@ async function main() {
   assertFullContext(cs, 3, "courtesy_warm_server");
   log(`[5] F3 station courtesy_warm_server → actor=${cs.actor_id} counterpart=${cs.target.id}(${cs.context.counterpart_status}) stage=${cs.context.stage}`);
 
+  // ── (6) TRAVEL STAND — the co-presence amplifier: reach a FAR, non-adjacent island ───────────
+  const FAR = 60; // a fixed distant landmark (A is on slot 0, B on slot 1 — both near the centre)
+  const sx = WORLD.MAP_WIDTH / OCEAN.EXTENT, sy = WORLD.MAP_HEIGHT / OCEAN.EXTENT;
+  const farTile = clampToMap(islandSlot(FAR).x * sx, islandSlot(FAR).y * sy);
+  const aBefore = { x: A().x, y: A().y };
+  roomA.send("travel", { destinationSlot: FAR, prepared: true });
+  await waitFor(() => tileDistance(A().x, A().y, farTile.x, farTile.y) < 0.6, 5000, "A arrives at the far island");
+  await waitFor(() => evsBy("travel_far").length >= 1, 4000, "travel_far cue emitted");
+  const tv = evsBy("travel_far").find((e) => e.actor_id === "userA")!;
+  assert.ok(tv, "travel_far emitted for the traveller");
+  assert.equal(tv.target.id, `island_${FAR}`);
+  assertFullContext(tv, 2, "travel_far");
+  assert.ok(evsBy("prepare_before_travel").length >= 1, "prepare_before_travel emitted (kit readied)");
+  const hopHome = tileDistance(aBefore.x, aBefore.y, A().x, A().y);
+  assert.ok(hopHome > 8, `A travelled a long way from its home region (${hopHome.toFixed(1)} tiles)`);
+  log(`\n[6] travel stand → A sailed to a non-adjacent island (slot ${FAR}): (${aBefore.x.toFixed(1)},${aBefore.y.toFixed(1)}) → (${A().x.toFixed(1)},${A().y.toFixed(1)}), hop ${hopHome.toFixed(1)} tiles; cue travel_far stage ${tv.context.stage}`);
+
+  // B follows to the SAME far island → the two reach the same distant shore and see each other.
+  roomB.send("travel", { destinationSlot: FAR });
+  await waitFor(() => tileDistance(B().x, B().y, farTile.x, farTile.y) < 0.6, 5000, "B arrives at the same far island");
+  await waitFor(() => {
+    const aSeenByB = ent(roomB, roomA.sessionId), bSeenByA = ent(roomA, roomB.sessionId);
+    return aSeenByB && bSeenByA && tileDistance(aSeenByB.x, aSeenByB.y, B().x, B().y) < 2;
+  }, 5000, "A and B co-located at the far island");
+  const reunion = tileDistance(A().x, A().y, B().x, B().y);
+  assert.ok(reunion < 2, `two players rendezvous at the far island (gap ${reunion.toFixed(2)})`);
+  log(`    two players both travelled to slot ${FAR} → co-located at the far shore (gap ${reunion.toFixed(2)} tiles) — co-presence amplified beyond the home cluster`);
+
   // ── teardown ─────────────────────────────────────────────────────────────────────────────────
   await roomA.leave(true);
   await roomB.leave(true);
@@ -178,7 +206,8 @@ async function main() {
 
   log("\n" + "-".repeat(96));
   log("RESULT: PASS ✅  — co-presence + per-actor first contact/proxemics + F2 social cues + F3");
-  log("        clearing stations all emit server-authoritative per-actor events with mandatory context.");
+  log("        clearing stations + the travel stand (far-island co-presence amplifier) all emit");
+  log("        server-authoritative per-actor events with mandatory context.");
   log("=".repeat(96));
   console.log(out.join("\n"));
   process.exit(0);

@@ -133,6 +133,11 @@ export class NetClient {
   sendSocialCue(targetId: string, action: string, latencyMs?: number, editsCount?: number) {
     this.room?.send(C2S.SOCIAL_CUE, { targetId, action, latencyMs, editsCount });
   }
+  /** Use the travel stand: go to a destination archipelago slot (the server moves you there in the
+   *  shared room and emits the travel cue). `prepared` = you planned/gathered before leaving. */
+  sendTravel(destinationSlot: number, prepared?: boolean) {
+    this.room?.send(C2S.TRAVEL, { destinationSlot, prepared });
+  }
 
   leave() {
     this.left = true;

@@ -186,6 +186,18 @@ def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
         tel["consistency"] = 0.85
         return True
 
+    # — travel stand (the co-presence amplifier): far = novelty/risk, near = the known. openness is
+    #   the doc-intended axis (⚑ routes via risk→dominance under the committed W — known-gaps). —
+    if a == "travel_far":
+        tel["risk_index"] = 0.75            # leaving the familiar for a distant unknown shore
+        return True
+    if a == "travel_near":
+        tel["consistency"] = 0.7            # sticking to the known / nearby
+        return True
+    if a == "prepare_before_travel":
+        tel["persistence"] = 0.6            # planning before the crossing
+        return True
+
     # — openness-intended dialogue (⚑ no telemetry→openness path in W; carried by embedding +
     #   a mild engaged-disclosure signal). Flagged in docs/known-gaps.md. —
     if a in ("asks_question", "self_disclosure"):
