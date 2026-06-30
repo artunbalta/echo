@@ -123,4 +123,7 @@ export interface EntitySnapshot {
    *  entities. */
   role?: string;
   status?: string;
+  /** Whether this entity is sailing (the open sea is traversable for them) — drives the client's
+   *  movement prediction + a boat render. Authoritative: the server only lets you anchor on land. */
+  sailing?: boolean;
 }

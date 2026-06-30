@@ -412,6 +412,10 @@ export default function WorldClient() {
         for (const e of f0EntsRef.current) snaps.set(e.id, e);
         world.applySnapshot(snaps, net.lastAckSeq());
         snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
+        // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
+        // anchor on land, so this corrects an optimistic toggle that tried to anchor mid-sea).
+        const selfSnap = snaps.get(net.selfId);
+        if (selfSnap) { world.setSailing(!!selfSnap.sailing); setSailing(!!selfSnap.sailing); }
         // Derive the "who's live now" roster straight from the synced state, and announce
         // a genuinely new arrival so two players notice each other.
         const live: { id: string; name: string; refId: string }[] = [];

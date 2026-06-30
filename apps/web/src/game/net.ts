@@ -75,6 +75,7 @@ export class NetClient {
           moving: e.moving,
           role: e.role ?? "",
           status: e.status ?? "none",
+          sailing: e.sailing ?? false,
         });
       });
       this.cbs.onSnapshot?.(map, state.tick);
