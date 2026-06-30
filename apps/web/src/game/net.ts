@@ -138,6 +138,10 @@ export class NetClient {
   sendTravel(destinationSlot: number, prepared?: boolean) {
     this.room?.send(C2S.TRAVEL, { destinationSlot, prepared });
   }
+  /** Board a raft / drop anchor — toggle whether the open sea is traversable for this player. */
+  sendSetSail(on: boolean) {
+    this.room?.send(C2S.SET_SAIL, { on });
+  }
 
   leave() {
     this.left = true;
