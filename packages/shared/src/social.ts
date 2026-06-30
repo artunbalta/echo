@@ -79,13 +79,16 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   group_observe: { channel: "A", cue: "A4", stage: 3, polarity: "take", axisPrior: "observer / low energy" },
   group_avoid: { channel: "G", cue: "G1", stage: 3, polarity: "refuse", axisPrior: "avoidance / introversion" },
   conform_custom: { channel: "H", cue: "H3", stage: 3, polarity: "take", axisPrior: "conformity/consistency" },
-  deviate_custom: { channel: "H", cue: "H3", stage: 3, polarity: "refuse", axisPrior: "openness/dominance ⚑" },
+  // deviating is an AFFIRMATIVE assertive act (not a Channel-K non-action) — polarity "take" so the
+  // refusal twin doesn't inject a spurious approach/warmth-negative load over its dominance signal.
+  deviate_custom: { channel: "H", cue: "H3", stage: 3, polarity: "take", axisPrior: "openness/dominance ⚑" },
   include_marginal: { channel: "G", cue: "G1", stage: 3, polarity: "take", axisPrior: "warmth(HIGH) — moral-social" },
   ignore_marginal: { channel: "G", cue: "G1", stage: 3, polarity: "refuse", axisPrior: "low warmth" },
   join_exclusion: { channel: "D", cue: "D9", stage: 3, polarity: "take", axisPrior: "dominance/low-warmth" },
   bargain_hard: { channel: "F", cue: "F9", stage: 3, polarity: "take", axisPrior: "dominance/economic-aggression" },
   fairness_split_fair: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "fairness/warmth" },
-  fairness_split_greedy: { channel: "F", cue: "F9", stage: 3, polarity: "refuse", axisPrior: "self-interest/dominance" },
+  // grabbing the larger share is an AFFIRMATIVE self-interested act — "take", not a refusal twin.
+  fairness_split_greedy: { channel: "F", cue: "F9", stage: 3, polarity: "take", axisPrior: "self-interest/dominance" },
 };
 
 /** Every social action the server/client may reference (for validation + ingest gating). */
