@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AvatarPreview from "@/components/AvatarPreview";
+import { resolveUserId } from "@/lib/identity";
 import { styleFromAttributes, styleFromId, type CharStyle } from "@/game/art";
 import {
   createFromSelfie,
@@ -42,13 +43,10 @@ export default function Onboard() {
     setName(localStorage.getItem("echo.name") ?? "");
   }, []);
 
+  // The ONE canonical id (bare form, no "u_" prefix) — same resolver the world uses, so the
+  // character created here is written under exactly the id the world reads/writes later.
   function userId(): string {
-    let id = localStorage.getItem("echo.userId");
-    if (!id) {
-      id = "u_" + Math.random().toString(36).slice(2, 10);
-      localStorage.setItem("echo.userId", id);
-    }
-    return id;
+    return resolveUserId();
   }
 
   // ── camera ──────────────────────────────────────────────────────────────────

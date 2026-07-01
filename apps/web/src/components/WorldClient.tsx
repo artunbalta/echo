@@ -12,6 +12,7 @@ import OutcomesPanel, { type MetPerson } from "@/components/OutcomesPanel";
 import RecognitionMeter from "@/components/RecognitionMeter";
 import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
 import { useEcho } from "@/lib/useEcho";
+import { resolveUserId } from "@/lib/identity";
 import { markFunnel } from "@/lib/funnel";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent } from "@echo/shared";
 import {
@@ -335,16 +336,14 @@ export default function WorldClient() {
   );
 
   useEffect(() => {
-    // `?u=<name>` overrides identity from the URL — so two tabs in ONE browser (which share
-    // localStorage) can join as two DIFFERENT users on adjacent islands for the co-presence test.
-    // Normalize "" → null so an empty `?u=` falls through consistently for BOTH userId and name.
+    // The ONE canonical user id — resolveUserId() returns the bare form (auth id | ?u= override
+    // verbatim | a fresh persisted UUID), NO "u_" prefix. The SAME string drives every WRITE
+    // (emitFlow0 actorId + net.connect below) AND every READ (setUid → useEcho → /persona), so the
+    // "your echo" panel reflects the real posterior the events wrote to. `name` still honours ?u=.
     const override = (new URLSearchParams(window.location.search).get("u") || "").trim() || null;
-    const userId = override
-      ? "u_" + override
-      : localStorage.getItem("echo.userId") ?? "u_" + Math.random().toString(36).slice(2, 10);
+    const userId = resolveUserId();
     const name = override ?? localStorage.getItem("echo.name") ?? "Newcomer";
     const sessionId = "s_" + Math.random().toString(36).slice(2, 10);
-    if (!override) localStorage.setItem("echo.userId", userId);
     setUid(userId);
     uidRef.current = userId;
     sessionIdRef.current = sessionId;
