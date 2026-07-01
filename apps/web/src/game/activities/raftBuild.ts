@@ -33,6 +33,10 @@ export interface RaftBuildConfig {
   sessionId: () => string;
   /** POST events to /observe/behavioral (the scene owns the fetch + evidence log). */
   send: (events: BehavioralEvent[]) => void;
+  /** Remove/add a client-local entity THROUGH the scene, so its live merge-set stays in sync (in /play
+   *  the scene's set is re-merged into every server snapshot; a raw world.removeEntity would be undone). */
+  removeEntity: (id: string) => void;
+  addEntity: (snap: EntitySnapshot, heightPx?: number) => void;
   onWhisper?: (text: string | null) => void;
   onPhase?: (p: RaftPhase) => void;
   /** A driftwood piece is in pick range (show a "pick" prompt) — null when none is. */
@@ -133,7 +137,7 @@ export class RaftBuild {
     const idx = this.remaining.findIndex((w) => w.id === id);
     if (idx < 0) return;
     const w = this.remaining.splice(idx, 1)[0];
-    this.cfg.world.removeEntity(w.id);
+    this.cfg.removeEntity(w.id);
     this.gathered++;
     if (!this.gatherStartAt) this.gatherStartAt = performance.now();
     this.nearWoodId = null;
@@ -231,10 +235,9 @@ export class RaftBuild {
     const snap: EntitySnapshot = {
       id: this.cfg.raftId, kind: "npc", refId: this.cfg.raftId, name: "",
       spriteUrl: RAFT_BUILD.sprites.raft, x: this.cfg.assembly.x, y: this.cfg.assembly.y,
-      facing: "down", moving: false,
+      facing: "down", moving: false, role: "flow1", status: "none",
     };
-    this.cfg.world.addEntity(snap);
-    this.cfg.world.setEntityDisplayHeight(this.cfg.raftId, RAFT_BUILD.displayH.raft);
+    this.cfg.addEntity(snap, RAFT_BUILD.displayH.raft);
   }
 
   private launch() {

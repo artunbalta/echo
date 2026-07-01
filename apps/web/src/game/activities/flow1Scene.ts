@@ -55,8 +55,23 @@ export class Flow1Scene {
   private pickPrompt: string | null = null;
   private beatPrompt: string | null = null;
   private seedUsed = false;
+  /** The LIVE set of client-local F1 entities. In /play this is re-merged into every server snapshot,
+   *  so the controllers MUST mutate it (not raw world.add/remove) or a pick would be undone next tick. */
+  private liveMap = new Map<string, EntitySnapshot>();
 
   constructor(private o: Flow1SceneOpts) {}
+
+  private removeEntityImpl = (id: string) => {
+    this.o.world.removeEntity(id);
+    this.liveMap.delete(id);
+  };
+  private addEntityImpl = (snap: EntitySnapshot, px?: number) => {
+    this.liveMap.set(snap.id, snap);
+    this.o.world.addEntity(snap);
+    if (px) this.o.world.setEntityDisplayHeight(snap.id, px);
+  };
+  /** Current client-local F1 entities. /play merges this into every snapshot so add/remove persist. */
+  liveEntities(): EntitySnapshot[] { return [...this.liveMap.values()]; }
 
   private p = (dx: number, dy: number) => nearestWalkable(this.o.map, this.o.home.x + dx, this.o.home.y + dy);
   private pre = (s: string) => `${this.o.idPrefix ?? "f1_"}${s}`;
@@ -105,6 +120,7 @@ export class Flow1Scene {
     add(this.pre("buried_cache"), "proc:buried_cache", bp.buried_cache.x, bp.buried_cache.y, 16);
 
     this.entityHeights = heights;
+    for (const s of snaps) this.liveMap.set(s.id, s); // seed the live set with the initial props
     return { snaps, heights };
   }
 
@@ -128,6 +144,7 @@ export class Flow1Scene {
       world: this.o.world, wood: this.woodPos, assembly: this.assembly,
       launch: this.launch, raftId: this.pre("raft"), needed: RAFT_BUILD.needed,
       actorId: this.o.actorId, sessionId: this.o.sessionId, send: this.o.send,
+      removeEntity: this.removeEntityImpl, addEntity: this.addEntityImpl,
       onWhisper: (t) => this.o.hooks?.onWhisper?.(t),
       onPhase: (p) => this.o.hooks?.onPhase?.(p),
       onNearWood: (id) => { this.pickPrompt = id ? "pick up the driftwood — press [space]" : null; this.refreshPrompt(); },
@@ -158,7 +175,7 @@ export class Flow1Scene {
         reveal: "the spade strikes something hollow. you uncover it — not treasure, but a quiet, good view." },
     ];
     this.beats = new Flow1Beats({
-      world: this.o.world, beats,
+      world: this.o.world, beats, addEntity: this.addEntityImpl,
       actorId: this.o.actorId, sessionId: this.o.sessionId, send: this.o.send,
       onWhisper: (t) => this.o.hooks?.onWhisper?.(t),
       onPrompt: (t) => { this.beatPrompt = t; this.refreshPrompt(); },
