@@ -5,17 +5,51 @@
  */
 import "server-only";
 
-const ML_URL = process.env.ML_SERVICE_URL ?? "";
-const ML_TOKEN = process.env.ML_SERVICE_TOKEN ?? "";
+/**
+ * Read the ML service config at REQUEST time (not module scope). Two reasons:
+ *   1. A Vercel env var added/changed in the dashboard takes effect on the next invocation,
+ *      without depending on when this module was first evaluated.
+ *   2. In Next.js only NEXT_PUBLIC_* vars are inlined; ML_SERVICE_URL / ML_SERVICE_TOKEN are
+ *      SERVER-ONLY and must be present in the runtime environment (Vercel Production, not just
+ *      Preview or a local .env). If they aren't, we degrade to a mock — see `call`.
+ * Trailing slashes are trimmed so `${url}${path}` never becomes `…//observe/behavioral` (a 404).
+ */
+function mlConfig(): { url: string; token: string } {
+  return {
+    url: (process.env.ML_SERVICE_URL ?? "").trim().replace(/\/+$/, ""),
+    token: (process.env.ML_SERVICE_TOKEN ?? "").trim(),
+  };
+}
+
+/** Attach a machine-readable `reason` to an object fallback so the caller / Network tab can see
+ *  WHY a response was mocked ("ml_service_url_unset" vs "ml_forward_failed"), instead of a silent
+ *  fake success. No-op for non-object fallbacks. */
+function withReason<T>(fallback: T, reason: string): T {
+  return fallback && typeof fallback === "object"
+    ? ({ ...(fallback as object), reason } as T)
+    : fallback;
+}
 
 async function call<T>(path: string, init: RequestInit, fallback: T): Promise<T> {
-  if (!ML_URL) return fallback;
+  const { url, token } = mlConfig();
+  if (!url) {
+    // NOT configured for this runtime. This is a MISCONFIGURATION in production (the world can't
+    // measure), not a feature — make it loud in the server logs and label the response, rather than
+    // silently pretending success. Local/dev without an ML service still degrades gracefully.
+    const msg = `[ml] ML_SERVICE_URL is unset in this runtime — cannot forward ${path}; returning mock.`;
+    if (process.env.NODE_ENV === "production") {
+      console.error(`${msg} Set ML_SERVICE_URL (and ML_SERVICE_TOKEN) for the Vercel PRODUCTION environment and redeploy.`);
+    } else {
+      console.warn(msg);
+    }
+    return withReason(fallback, "ml_service_url_unset");
+  }
   try {
-    const res = await fetch(`${ML_URL}${path}`, {
+    const res = await fetch(`${url}${path}`, {
       ...init,
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${ML_TOKEN}`,
+        authorization: `Bearer ${token}`,
         ...(init.headers ?? {}),
       },
       signal: AbortSignal.timeout(20000),
@@ -23,8 +57,12 @@ async function call<T>(path: string, init: RequestInit, fallback: T): Promise<T>
     if (!res.ok) throw new Error(`ml ${path} ${res.status}`);
     return (await res.json()) as T;
   } catch (err) {
-    console.warn(`[ml] ${path} failed, using fallback:`, (err as Error).message);
-    return fallback;
+    // A real forward was attempted and failed (network / non-200 / 401). Loud in prod so a broken
+    // token or unreachable service surfaces, and labeled so it's distinguishable from "unset".
+    const msg = `[ml] ${path} forward FAILED (${url}${path}): ${(err as Error).message} — returning mock.`;
+    if (process.env.NODE_ENV === "production") console.error(msg);
+    else console.warn(msg);
+    return withReason(fallback, "ml_forward_failed");
   }
 }
 
@@ -104,6 +142,9 @@ export function meetingOutcome(body: Record<string, unknown>): Promise<unknown> 
 export interface BehavioralObserveResult {
   ok?: boolean;
   mocked?: boolean;
+  /** When mocked, WHY: "ml_service_url_unset" (env missing in this runtime) | "ml_forward_failed"
+   *  (a real forward to echo-ml threw / returned non-200). Absent on a real forwarded result. */
+  reason?: string;
   userId?: string;
   polarity?: "take" | "refuse";
   cond_key?: string;
