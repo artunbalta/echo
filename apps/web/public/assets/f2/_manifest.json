@@ -1,0 +1,22 @@
+[
+  {
+    "name": "raft_causeway",
+    "key": true,
+    "size": 56
+  },
+  {
+    "name": "ocean",
+    "key": false,
+    "size": 64
+  },
+  {
+    "name": "solo_figure",
+    "key": true,
+    "size": 30
+  },
+  {
+    "name": "gift_props",
+    "key": true,
+    "size": 20
+  }
+]
