@@ -27,10 +27,14 @@ export async function POST(req: Request) {
   for (const event of events) {
     results.push(await observeBehavioralEvent({ event }));
   }
+  const mocked = results.some((r) => r.mocked);
   return NextResponse.json({
     ok: true,
     forwarded: results.length,
-    mocked: results.some((r) => r.mocked),
+    mocked,
+    // Surface WHY it mocked (if it did) so the failure is diagnosable from the Network tab, rather
+    // than a silent fake success: "ml_service_url_unset" ⇒ set ML_SERVICE_URL in Vercel Production.
+    ...(mocked ? { reason: results.find((r) => r.reason)?.reason ?? "unknown" } : {}),
     results,
   });
 }
