@@ -1,0 +1,14 @@
+# Keep the Docker build context (repo root) lean for the Render builds (realtime + ML).
+# Only files actually COPYed in each Dockerfile end up in the image; this just trims the upload.
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/dist
+.git
+.next
+**/.next
+*.log
+.env
+.env.*
+!.env.example

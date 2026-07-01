@@ -1,0 +1,9 @@
+{
+  "//": "Production build config (used by `npm run build` → the Docker image). Same as tsconfig.json",
+  "//2": "but EXCLUDES test files so tsc compiles only runtime source — the headless integration",
+  "//3": "test (*.test.mts) imports `colyseus.js` (a client-only dep not installed in the realtime",
+  "//4": "image), so compiling it broke the Render Docker build. The test still runs via its own tsx",
+  "//5": "path (npm run test:copresence), and `npm run typecheck` (tsconfig.json) still covers it locally.",
+  "extends": "./tsconfig.json",
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.mts"]
+}
