@@ -1,0 +1,22 @@
+[
+  {
+    "name": "travel_stand",
+    "key": true,
+    "size": 52
+  },
+  {
+    "name": "workplace_stand",
+    "key": true,
+    "size": 52
+  },
+  {
+    "name": "food_stand",
+    "key": true,
+    "size": 52
+  },
+  {
+    "name": "market_stand",
+    "key": true,
+    "size": 52
+  }
+]

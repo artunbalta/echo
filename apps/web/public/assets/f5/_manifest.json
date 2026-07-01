@@ -1,0 +1,17 @@
+[
+  {
+    "name": "scarcity_overlay",
+    "key": false,
+    "size": 64
+  },
+  {
+    "name": "found_property",
+    "key": true,
+    "size": 18
+  },
+  {
+    "name": "unwatched_hush",
+    "key": true,
+    "size": 64
+  }
+]

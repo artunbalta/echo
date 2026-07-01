@@ -1,0 +1,52 @@
+[
+  {
+    "name": "grass",
+    "key": false,
+    "size": 64
+  },
+  {
+    "name": "water",
+    "key": false,
+    "size": 64
+  },
+  {
+    "name": "sand",
+    "key": false,
+    "size": 64
+  },
+  {
+    "name": "hill",
+    "key": true,
+    "size": 44
+  },
+  {
+    "name": "thicket",
+    "key": true,
+    "size": 40
+  },
+  {
+    "name": "driftwood",
+    "key": true,
+    "size": 36
+  },
+  {
+    "name": "shell",
+    "key": true,
+    "size": 14
+  },
+  {
+    "name": "path_marker",
+    "key": true,
+    "size": 30
+  },
+  {
+    "name": "tidepool",
+    "key": true,
+    "size": 40
+  },
+  {
+    "name": "horizon_island",
+    "key": true,
+    "size": 80
+  }
+]

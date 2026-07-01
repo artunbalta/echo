@@ -1,0 +1,32 @@
+[
+  {
+    "name": "settlement",
+    "key": false,
+    "size": 64
+  },
+  {
+    "name": "home_orderly",
+    "key": true,
+    "size": 48
+  },
+  {
+    "name": "home_ornate",
+    "key": true,
+    "size": 48
+  },
+  {
+    "name": "home_sparse",
+    "key": true,
+    "size": 48
+  },
+  {
+    "name": "gathering",
+    "key": true,
+    "size": 56
+  },
+  {
+    "name": "doppelganger_cameo",
+    "key": true,
+    "size": 30
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "partner_neutral",
+    "key": true,
+    "size": 30
+  },
+  {
+    "name": "partner_ally",
+    "key": true,
+    "size": 30
+  },
+  {
+    "name": "partner_wronged",
+    "key": true,
+    "size": 30
+  },
+  {
+    "name": "promise_token",
+    "key": true,
+    "size": 18
+  },
+  {
+    "name": "memory_wall",
+    "key": true,
+    "size": 56
+  },
+  {
+    "name": "bench",
+    "key": true,
+    "size": 36
+  },
+  {
+    "name": "shared_fire",
+    "key": true,
+    "size": 36
+  }
+]

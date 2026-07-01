@@ -1,0 +1,32 @@
+[
+  {
+    "name": "fertile_patch",
+    "key": true,
+    "size": 40
+  },
+  {
+    "name": "berry_bush",
+    "key": true,
+    "size": 32
+  },
+  {
+    "name": "gamble_cave",
+    "key": true,
+    "size": 52
+  },
+  {
+    "name": "marker_stone",
+    "key": true,
+    "size": 36
+  },
+  {
+    "name": "buried_cache",
+    "key": true,
+    "size": 32
+  },
+  {
+    "name": "shy_creature",
+    "key": true,
+    "size": 22
+  }
+]
