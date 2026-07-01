@@ -1,52 +1,45 @@
 "use client";
 
 /**
- * Flow 1 — "Scarcity, Learning, Solving", the EMBODIED raft build (ECHO_level_design_7flows.md §FLOW 1).
- * The flagship of the embodied-interaction rebuild: an interaction is a *performed* activity, not a
- * button menu. You walk the shore and gather driftwood (how much = thoroughness), stand at the water's
- * edge and HOLD to work it into a raft (deliberation → pace, redo → self-monitoring, persistence → grit,
- * flourish → openness), then push it into the water (the F1→F2 seam). The measurement is the MANNER,
- * sampled continuously and emitted as continuous raw_signals through the proven /observe/behavioral
- * ingress (buildFlow1Event, solo context) — the backend math is untouched.
- *
- * A dedicated slice scene (isolated from the shared-ocean WorldClient) so the primitive can be verified
- * end-to-end before it is seeped into the canonical own-island path. Runs zero-key: island terrain is
- * local; ML moves the posterior when services/ml is up, and the scene never blocks on telemetry.
+ * Flow 1 — "Scarcity, Learning, Solving", the EMBODIED activities (ECHO_level_design_7flows.md §FLOW 1).
+ * An isolated, real, playable slice of the whole flow: the flagship raft build PLUS the rest of F1
+ * (plant-vs-eat, gamble cave, marker study, buried-cache dig, the shy creature). Every interaction is a
+ * *performed* activity whose MANNER is the measurement (continuous raw_signals through the proven
+ * /observe/behavioral ingress), never a button-menu. The shared Flow1Scene orchestrator does the work,
+ * so this scene and the canonical /play own-island seep behave identically. Zero-key; procedural
+ * animation; the measurement backend is untouched.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { PixiWorld } from "@/game/PixiWorld";
-import { generateArchipelago, type TileMap } from "@/game/tilemap";
-import { RaftBuild, type RaftPhase } from "@/game/activities/raftBuild";
-import { LocomotionSampler } from "@/game/activities/sampler";
+import { generateArchipelago } from "@/game/tilemap";
+import { Flow1Scene } from "@/game/activities/flow1Scene";
+import { type RaftPhase } from "@/game/activities/raftBuild";
 import { resolveUserId } from "@/lib/identity";
-import { RAFT_BUILD, type EntitySnapshot, type BehavioralEvent } from "@echo/shared";
+import { type EntitySnapshot, type BehavioralEvent } from "@echo/shared";
 
 interface LiveResult { delta_mu?: number; mocked?: boolean; cond_key?: string }
 
 export default function Flow1Client() {
   const mountRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<PixiWorld | null>(null);
-  const raftRef = useRef<RaftBuild | null>(null);
-  const samplerRef = useRef<LocomotionSampler | null>(null);
+  const sceneRef = useRef<Flow1Scene | null>(null);
   const uidRef = useRef("");
   const sessionRef = useRef("");
 
   const [whisper, setWhisper] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState<string | null>(null);
   const [phase, setPhase] = useState<RaftPhase>("gather");
-  const [stirred, setStirred] = useState(0);
-  const [pickPrompt, setPickPrompt] = useState(false);
   const [counter, setCounter] = useState<{ gathered: number; needed: number } | null>(null);
+  const [stirred, setStirred] = useState(0);
 
-  // POST a batch of BehavioralEvents to the proven ingress; log reproducible client-side evidence
-  // (the cue + how far the posterior moved) and give a diegetic "the mirror stirs" pulse — no score UI.
+  // POST a batch of BehavioralEvents to the proven ingress; log reproducible evidence + a diegetic
+  // "the mirror stirs" pulse when the posterior actually moves — no score UI.
   const postEvents = useCallback((events: BehavioralEvent[]) => {
     if (!events.length) return;
     void (async () => {
       try {
         const res = await fetch("/api/observe/behavioral", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ events }),
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
         });
         const data = (await res.json()) as { results?: LiveResult[]; mocked?: boolean };
         const log = (window as unknown as { __echoFlow1?: unknown[] }).__echoFlow1 ?? [];
@@ -55,9 +48,7 @@ export default function Flow1Client() {
           if ((r.delta_mu ?? 0) > 0.002) setStirred((n) => n + 1);
         });
         (window as unknown as { __echoFlow1?: unknown[] }).__echoFlow1 = log;
-      } catch {
-        /* best-effort — never block the player on telemetry */
-      }
+      } catch { /* best-effort — never block the player on telemetry */ }
     })();
   }, []);
 
@@ -82,28 +73,27 @@ export default function Flow1Client() {
 
       const map = generateArchipelago(seed);
       const home = map.homeCenter ?? { x: Math.round(map.width / 2), y: Math.round(map.height / 2) };
-      const spawn = nearestWalkable(map, home.x, home.y + 5);
-      // Snap every wood piece + the assembly/launch spots to the nearest WALKABLE LAND tile, so none land
-      // in water or on an obstacle (the earlier "unreachable / overlapping" pieces). Dedupe onto distinct
-      // tiles so two pieces never stack.
-      const used = new Set<string>([`${spawn.x},${spawn.y}`]);
-      const snapUnique = (x: number, y: number) => {
-        let p = nearestWalkable(map, x, y);
-        let guard = 0;
-        while (used.has(`${p.x},${p.y}`) && guard++ < 12) p = nearestWalkable(map, p.x + (guard % 2 ? 1 : -1), p.y + (guard % 3 ? 1 : 0));
-        used.add(`${p.x},${p.y}`);
-        return p;
-      };
-      const woodPos = RAFT_BUILD.driftwoodOffsets.map((o, i) => {
-        const p = snapUnique(home.x + o.dx, home.y + o.dy);
-        return { id: `f1_wood_${i}`, x: p.x, y: p.y };
-      });
-      const assembly = nearestWalkable(map, home.x + RAFT_BUILD.assemblySpot.dx, home.y + RAFT_BUILD.assemblySpot.dy);
-      const launch = nearestWalkable(map, home.x + RAFT_BUILD.launchSpot.dx, home.y + RAFT_BUILD.launchSpot.dy);
+      const spawn = { x: home.x, y: home.y + 5 };
 
-      // Clear terrain + collision around the spawn, every wood piece, and the assembly/launch spots so
-      // the player can always walk to them (mirrors Flow0Client's clearing).
-      for (const p of [spawn, assembly, launch, ...woodPos]) {
+      world = new PixiWorld({}, { map, artDir: "/assets/island" });
+      worldRef.current = world;
+
+      // The shared orchestrator computes positions (snapped to walkable land) + the entity snapshots.
+      const scene = new Flow1Scene({
+        world, map, home,
+        actorId: () => uidRef.current, sessionId: () => sessionRef.current, send: postEvents,
+        hooks: {
+          onWhisper: (t) => setWhisper(t),
+          onPrompt: (t) => setPrompt(t),
+          onPhase: (p) => setPhase(p),
+          onCounter: (g) => setCounter(g),
+        },
+      });
+      sceneRef.current = scene;
+      const { snaps } = scene.entities();
+
+      // Clear terrain + collision around the spawn and every placed object so all are reachable.
+      for (const p of [spawn, ...snaps.map((s) => ({ x: s.x, y: s.y }))]) {
         map.decorations = map.decorations.filter((d) => Math.hypot(d.x - p.x, d.y - p.y) > 1.5);
         for (let dy = -1; dy <= 1; dy++)
           for (let dx = -1; dx <= 1; dx++) {
@@ -113,52 +103,25 @@ export default function Flow1Client() {
           }
       }
 
-      world = new PixiWorld({}, { map, artDir: "/assets/island" });
-      worldRef.current = world;
-
       const self: EntitySnapshot = { id: "player1", kind: "user", refId: userId, name: "you",
         spriteUrl: "", x: spawn.x, y: spawn.y, facing: "up", moving: false };
-      const snaps = new Map<string, EntitySnapshot>([["player1", self]]);
-      for (const w of woodPos) {
-        snaps.set(w.id, { id: w.id, kind: "npc", refId: w.id, name: "", spriteUrl: RAFT_BUILD.sprites.driftwood,
-          x: w.x, y: w.y, facing: "down", moving: false });
-      }
+      const snapMap = new Map<string, EntitySnapshot>([["player1", self]]);
+      for (const s of snaps) snapMap.set(s.id, s);
 
       await world.init(mountRef.current!);
       if (disposed) return;
       world.setSelf("player1", spawn.x, spawn.y);
-      world.applySnapshot(snaps, 0);
-      // Shrink the driftwood to gatherable (avatar-ish) scale — its committed PNG is 36×75, ~3× the avatar.
-      for (const w of woodPos) world.setEntityDisplayHeight(w.id, RAFT_BUILD.displayH.driftwood);
-
-      const raft = new RaftBuild({
-        world, selfId: "player1", wood: woodPos, assembly, launch, raftId: "f1_raft", needed: RAFT_BUILD.needed,
-        actorId: () => uidRef.current, sessionId: () => sessionRef.current,
-        send: postEvents,
-        onWhisper: (t) => setWhisper(t),
-        onPhase: (p) => setPhase(p),
-        onNearWood: (id) => setPickPrompt(!!id),
-        onProgress: (g) => setCounter({ gathered: g.gathered, needed: g.needed }),
-      });
-      raftRef.current = raft;
-      raft.start();
-
-      const sampler = new LocomotionSampler({
-        world, actorId: () => uidRef.current, sessionId: () => sessionRef.current, send: postEvents, stage: 1,
-      });
-      samplerRef.current = sampler;
-      sampler.start();
+      world.applySnapshot(snapMap, 0);
+      scene.begin(); // applies display heights + starts the controllers
     })();
 
     return () => {
       disposed = true;
-      raftRef.current?.abandonIfUnfinished();
-      raftRef.current?.dispose();
-      samplerRef.current?.stop();
+      sceneRef.current?.dispose();
       world?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [postEvents]);
 
   return (
     <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-[#f4e9d0]">
@@ -184,22 +147,15 @@ export default function Flow1Client() {
         </div>
       )}
 
-      {/* the embodied "pick" prompt — walk up to a plank, press to pick it up (no passive walk-over) */}
-      {pickPrompt && (phase === "gather" || phase === "ready") && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-[#a06cd5]/30 bg-black/50 px-4 py-1.5 text-xs text-[#f4e9d0]/80 backdrop-blur">
-          pick up the driftwood — press <span className="rounded border border-[#a06cd5]/50 px-1.5">space</span>
+      {/* the single contextual prompt (raft "pick", or a beat: plant/eat/enter/study/dig) */}
+      {prompt && (
+        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-[#a06cd5]/30 bg-black/50 px-4 py-1.5 text-xs text-[#f4e9d0]/85 backdrop-blur">
+          {prompt}
         </div>
       )}
-
-      {/* the "hold to work" hint appears only while building (diegetic, not a control panel) */}
-      {phase === "building" && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full bg-black/35 px-4 py-1.5 text-xs text-[#f4e9d0]/60 backdrop-blur">
-          hold [space] to work the wood — as long, or as briefly, as you like
-        </div>
-      )}
-      {(phase === "gather" || phase === "ready") && !pickPrompt && (
+      {!prompt && (phase === "gather" || phase === "ready") && (
         <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-[#f4e9d0]/55 backdrop-blur">
-          walk with WASD / arrows — find the driftwood along the shore
+          walk with WASD / arrows — the island is yours to work
         </div>
       )}
 
@@ -209,26 +165,4 @@ export default function Flow1Client() {
       )}
     </div>
   );
-}
-
-/** Nearest WALKABLE LAND tile to (x,y): land (not open water) and not blocked. Spiral-searches outward so
- *  a driftwood/assembly/launch position that fell in water or on an obstacle snaps to reachable ground. */
-function nearestWalkable(map: TileMap, x: number, y: number, maxR = 8): { x: number; y: number } {
-  const w = map.width, h = map.height;
-  const walk = (tx: number, ty: number) => {
-    if (tx < 0 || ty < 0 || tx >= w || ty >= h) return false;
-    const idx = ty * w + tx;
-    const land = !map.water || map.water[idx] === 0;
-    const clear = !map.collision || map.collision[idx] === 0;
-    return land && clear;
-  };
-  const rx = Math.round(x), ry = Math.round(y);
-  if (walk(rx, ry)) return { x: rx, y: ry };
-  for (let r = 1; r <= maxR; r++)
-    for (let dy = -r; dy <= r; dy++)
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // walk the ring at radius r
-        if (walk(rx + dx, ry + dy)) return { x: rx + dx, y: ry + dy };
-      }
-  return { x: rx, y: ry };
 }
