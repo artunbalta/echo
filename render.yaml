@@ -1,14 +1,59 @@
-# Render Blueprint — deploys the ECHO realtime (Colyseus) websocket world server.
+# Render Blueprint — the two backend services for the ECHO live world.
 #
-# Deploy:
-#   1. Push this repo to GitHub.
-#   2. Render dashboard → New → Blueprint → select this repo (it reads render.yaml).
-#   3. After it goes live, copy the service URL (https://echo-realtime-xxxx.onrender.com).
-#   4. In Vercel (the web app) set:  NEXT_PUBLIC_REALTIME_URL = wss://echo-realtime-xxxx.onrender.com
-#      then redeploy the web app. (Note the wss:// — secure WebSocket.)
+#   echo-realtime  Colyseus websocket world server (Node)        ← the browser connects here (wss://)
+#   echo-ml        FastAPI learning engine (Python)              ← measures behaviour (the posterior)
 #
-# The server reads $PORT (injected by Render) automatically; /health is the health check.
+# Full production topology:
+#   Vercel  → the Next.js web app (echovirtualworld.com)
+#   Render  → echo-realtime (the shared world) + echo-ml (the measurement engine)
+#
+#   browser ──wss──▶ echo-realtime ──https──▶ echo-ml        (live multiplayer flows: F2/F3 cues)
+#   browser ──https─▶ Vercel /api/* ──https──▶ echo-ml        (solitary flows F0/F1 + echo proposals)
+#   echo-realtime / echo-ml ──▶ Supabase (optional persistence) ──▶ Anthropic / Voyage (optional)
+#
+# Deploy (first time):
+#   1. Render dashboard → New → Blueprint → pick this repo (it reads render.yaml) → Apply.
+#      It creates BOTH services. Set the `sync:false` secrets when prompted (see each below).
+#   2. After echo-ml is live, copy its URL (https://echo-ml-xxxx.onrender.com) and set it as
+#      ML_SERVICE_URL on echo-realtime (+ in Vercel). After echo-realtime is live, set
+#      NEXT_PUBLIC_REALTIME_URL = wss://echo-realtime-xxxx.onrender.com in Vercel, then redeploy web.
+#   3. ML_SERVICE_TOKEN must be the SAME secret in all three places (echo-ml, echo-realtime, Vercel).
+#
+# Both servers read $PORT (injected by Render). Health checks: /health on each (no auth).
+
 services:
+  # ── the measurement engine (Python / FastAPI) ───────────────────────────────────────────────
+  - type: web
+    name: echo-ml
+    runtime: docker
+    dockerfilePath: services/ml/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    plan: starter # 512MB; "free" works but cold-starts (~30-60s first hit) and loses in-memory state
+    autoDeploy: true
+    envVars:
+      # REQUIRED — the bearer token every caller (realtime + web) must present. Set the SAME value
+      # here, on echo-realtime, and in Vercel. NOT the dev default; enter a real secret in the dashboard.
+      - key: ML_SERVICE_TOKEN
+        sync: false
+      # Real NPC/agent dialogue for /npc/turn + /agent/turn. Absent → deterministic mock replies.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Embeddings provider. "voyage" + VOYAGE_API_KEY = real multilingual embeddings (fixes the
+      # Turkish collapse). With NO key, voyage degrades gracefully to the deterministic hash mock,
+      # so leaving the key unset is safe — measurement still runs, just without cross-lingual semantics.
+      - key: EMBEDDINGS_PROVIDER
+        value: voyage
+      - key: VOYAGE_API_KEY
+        sync: false
+      # Persistence: with both set, learning state hydrates/persists to Supabase; absent → in-memory
+      # (per-process, lost on restart — fine for a demo, but the posterior resets on every redeploy).
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://ibinblpqcbrgbndeqtsc.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+  # ── the shared world (Node / Colyseus) ──────────────────────────────────────────────────────
   - type: web
     name: echo-realtime
     runtime: docker
@@ -20,6 +65,14 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Where the realtime server forwards measured cues. Set to the LIVE echo-ml URL after it
+      # deploys, e.g. https://echo-ml-xxxx.onrender.com (full URL incl. https://). Absent → the
+      # world runs but emits NOTHING to the posterior (no measurement).
+      - key: ML_SERVICE_URL
+        sync: false
+      # Same bearer token as echo-ml's ML_SERVICE_TOKEN.
+      - key: ML_SERVICE_TOKEN
+        sync: false
       # Real NPC dialogue (without it, NPCs reply with deterministic mocks). Enter in dashboard.
       - key: ANTHROPIC_API_KEY
         sync: false
