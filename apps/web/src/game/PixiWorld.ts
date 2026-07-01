@@ -85,6 +85,9 @@ interface RenderEntity {
   activity?: EntityActivity | null;
   /** A small carried-item overlay (a plank/tool above the hands) while carrying. Lazily created. */
   carry?: Graphics;
+  /** Target rendered HEIGHT in source px (before world scale). When set, the sprite is scaled so a big
+   *  committed PNG (e.g. a 36×75 driftwood) reads at avatar-scale instead of its native size. */
+  targetH?: number;
 }
 
 /**
@@ -905,6 +908,13 @@ export class PixiWorld {
       re.animTime = 0;
       re.sprite.texture = frameArr[0];
     }
+
+    // Normalize display size to a target height (source px), so a large committed PNG reads at
+    // avatar-scale. Recomputed from the live texture, so it survives the async PNG swap (maybeLoadSheet).
+    if (re.targetH) {
+      const th = re.sprite.texture.height || SPRITE.FRAME_H;
+      re.sprite.scale.set(re.targetH / th);
+    }
   }
 
   private updateCamera() {
@@ -1050,6 +1060,14 @@ export class PixiWorld {
   addEntity(snap: EntitySnapshot) {
     if (this.entities.has(snap.id)) return;
     this.ensureEntity(snap);
+  }
+
+  /** Scale a prop entity so it renders ≈ `px` source-pixels tall (before world scale), regardless of
+   *  whether it's the procedural 16×24 sheet or a large committed PNG — so activity props read at
+   *  avatar-scale. Persists across the async PNG swap (applied every frame in drawEntity). */
+  setEntityDisplayHeight(id: string, px: number) {
+    const re = this.entities.get(id);
+    if (re) re.targetH = px;
   }
 
   /** Remove a client-local entity mid-scene (e.g. a piece of driftwood the moment it is gathered). */

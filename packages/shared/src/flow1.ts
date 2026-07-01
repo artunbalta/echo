@@ -114,18 +114,23 @@ export type Flow1CueKey = keyof typeof FLOW1_CUES;
  * `assemblySpot`, then pushes off from `launchSpot` (which unlocks sailing — the F1→F2 seam).
  */
 export const RAFT_BUILD = {
-  /** How many driftwood pieces lie on the shore. `needed` are required to build; extra = thoroughness. */
-  driftwoodCount: 6,
-  needed: 4,
-  /** Egocentric offsets for the driftwood scatter (down the west/south shore). */
+  /** How many driftwood pieces lie on the shore. `needed` are required to build; every piece gathered
+   *  BEYOND `needed` is the thoroughness/openness cue (a thorough player over-gathers; a hasty one grabs
+   *  the minimum) — carried as thoroughness01 = gathered/driftwoodCount through the ingress. */
+  driftwoodCount: 8,
+  needed: 5,
+  /** Egocentric offsets for the driftwood scatter (down the west/south shore). Each is snapped to the
+   *  nearest walkable land tile at placement time so none land in water / unreachable (Flow1Client). */
   driftwoodOffsets: [
-    { dx: -4, dy: 4 }, { dx: -6, dy: 5 }, { dx: -8, dy: 4 },
-    { dx: -3, dy: 6 }, { dx: -7, dy: 6 }, { dx: -10, dy: 5 },
+    { dx: -3, dy: 3 }, { dx: -5, dy: 4 }, { dx: -7, dy: 3 }, { dx: -9, dy: 4 },
+    { dx: -4, dy: 5 }, { dx: -6, dy: 6 }, { dx: -8, dy: 5 }, { dx: -2, dy: 6 },
   ],
   /** Where the raft is assembled (near the shore). */
-  assemblySpot: { dx: -5, dy: 7 },
-  /** Where the finished raft is pushed into the water (the crossing point). */
-  launchSpot: { dx: -5, dy: 9 },
+  assemblySpot: { dx: -4, dy: 6 },
+  /** Where the finished raft is pushed into the water (the crossing point, at the shore's edge). */
+  launchSpot: { dx: -4, dy: 8 },
+  /** Rendered heights (source px, avatar ≈ 24) so props read at gatherable scale, not their native PNG size. */
+  displayH: { driftwood: 17, raft: 26 },
   /** The prop kind for each state (rendered via proc:<kind> → PROP_ASSETS PNG, procedural fallback). */
   sprites: { driftwood: "proc:driftwood", raft: "proc:raft" },
 } as const;
