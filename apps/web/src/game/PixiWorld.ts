@@ -126,6 +126,9 @@ export class PixiWorld {
   private fxLayer = new Container();
   private fx = new Graphics();
   private particles: { x: number; y: number; vx: number; vy: number; life: number; max: number; color: number }[] = [];
+  /** Display heights requested before their entity existed (applied on ensureEntity) — lets a scene set
+   *  a prop's scale up-front even though the client-local entity only renders on the next snapshot merge. */
+  private pendingH = new Map<string, number>();
   private map: TileMap;
   private proceduralArt: boolean;
   private artDir: string | null;
@@ -440,6 +443,8 @@ export class PixiWorld {
       buf: [],
     };
     this.entities.set(snap.id, re);
+    const ph = this.pendingH.get(snap.id);
+    if (ph !== undefined) { re.targetH = ph; this.pendingH.delete(snap.id); }
     // Live players get a soft glow ring beneath them so a real human reads differently
     // from the 100 wandering NPCs. It draws under the sprite via its zIndex (py - 0.1,
     // set in drawEntity) — entityLayer.sortableChildren sorts by zIndex, not insert order.
@@ -1068,6 +1073,7 @@ export class PixiWorld {
   setEntityDisplayHeight(id: string, px: number) {
     const re = this.entities.get(id);
     if (re) re.targetH = px;
+    else this.pendingH.set(id, px); // entity not placed yet → apply when it appears (ensureEntity)
   }
 
   /** Remove a client-local entity mid-scene (e.g. a piece of driftwood the moment it is gathered). */
@@ -1103,6 +1109,12 @@ export class PixiWorld {
    *  the SAME kind keeps the rhythmic phase running (only carrying/intensity update); a new kind restarts
    *  it. `carrying` overlays a carried item above the hands. The animation itself is procedural — see
    *  drawEntity — so no sprite sheets are needed and it always runs zero-key. */
+  /** Set the LOCAL player's activity animation (the controllers don't need to know the self entity id,
+   *  which is server-assigned in /play). */
+  setSelfActivityState(kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number }) {
+    if (this.selfId) this.setActivityState(this.selfId, kind, opts);
+  }
+
   setActivityState(id: string, kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number }) {
     const re = this.entities.get(id);
     if (!re) return;

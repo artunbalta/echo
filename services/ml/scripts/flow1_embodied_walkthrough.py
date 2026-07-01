@@ -101,6 +101,17 @@ def tessa_build(actor):
             "persistence(grit)+edits(formality)+deliberation(pace)+decoration ⚑openness"),
         ("launch_raft (considered)", ev(actor, "C", "launch_raft", cue="C7",
             raw={"decision_latency_ms": 3000}), "commitment latency→pace"),
+        # the rest of F1, done the patient/curious way:
+        ("plant_seed (invest)", ev(actor, "F", "plant_seed", cue="F1",
+            raw={"delayed": True}), "patience/time-discounting→save_rate→pace(−)"),
+        ("study_marker (long dwell)", ev(actor, "A", "study_marker", cue="A4",
+            raw={"dwell_ms": 8000}), "non-instrumental knowledge→ts_learn→intellect/openness"),
+        ("dig_cache (persist after fail)", ev(actor, "C", "dig_cache", cue="C7",
+            raw={"persist_after_fail": 0.9, "dwell_ms": 6000}), "grit→persistence→affect/energy"),
+        ("sit_still (calm, 9s)", ev(actor, "A", "sit_still", cue="A4",
+            raw={"still_ms": 9000}), "stillness→solitude_tol (calm/low-energy)"),
+        ("stay_safe (cautious)", ev(actor, "F", "stay_safe", cue="F3",
+            raw={"risk01": 0.1, "decision_latency_ms": 3000}), "risk-averse"),
     ]
 
 
@@ -118,6 +129,13 @@ def hank_build(actor):
             "persistence(grit)+edits(formality)+deliberation(pace)"),
         ("launch_raft (snap)", ev(actor, "C", "launch_raft", cue="C7",
             raw={"decision_latency_ms": 150}), "commitment latency→pace"),
+        # the rest of F1, done the impatient/incurious/risk-seeking way:
+        ("eat_now (instant)", ev(actor, "F", "eat_now", cue="F1",
+            raw={"delayed": False}), "high time-discounting→save_rate low"),
+        ("study_marker (glance)", ev(actor, "A", "study_marker", cue="A4",
+            raw={"dwell_ms": 800}), "brief glance→low ts_learn"),
+        ("enter_cave (risk)", ev(actor, "F", "enter_cave", cue="F3",
+            raw={"risk01": 0.8, "decision_latency_ms": 200}), "risk-seeking→risk_index→dominance"),
     ]
 
 

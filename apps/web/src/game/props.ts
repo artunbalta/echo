@@ -31,6 +31,13 @@ export const PROP_KINDS = [
   "driftwood",     // the one odd far thing on the west shore
   "shell",         // the 5 scattered beach objects (collect / stack / ignore)
   "path_marker",   // the obvious worn path east (a weak, low-weight openness cue)
+  // ── Flow 1 ("Scarcity, Learning, Solving") objects. Procedural stand-ins; Higgsfield PNGs override
+  //    via PROP_ASSETS (propAssets.ts). Each is a performed-activity target (plant/eat/gamble/study/dig). ──
+  "fertile_patch", // tilled soil — plant the seed here (delayed payoff)
+  "gamble_cave",   // a dark cave mouth — uncertain yield (risk)
+  "marker_stone",  // a weathered standing stone with a faint glyph — study it (non-instrumental knowledge)
+  "buried_cache",  // a marked digging spot — dig it out (persistence after failure)
+  "shy_creature",  // a small creature that appears only when the player is still & quiet
   // ── the stand archetypes (Step 6). These are STRUCTURES (bark frame + parchment awning), so the
   //    assets-absent fallback must be a stall silhouette, NOT a humanoid character sheet. ──
   "travel_stand",
@@ -277,6 +284,58 @@ function drawPathMarker(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
   p(6, 13, 4, 1, "#a9a59c");
 }
 
+// ── Flow 1 objects (procedural fallbacks; PNGs override via PROP_ASSETS) ─────────────────────────────
+function drawFertilePatch(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 12);
+  p(2, 16, 12, 5, "#6b4a2b"); // tilled soil bed
+  p(2, 16, 12, 1, "#836039");
+  for (const rx of [3, 6, 9, 12]) p(rx, 17, 1, 4, "#5a3d23"); // furrows
+  p(7, 14, 1, 3, "#5b8f3a"); // a lone hopeful sprout
+  p(6, 13, 3, 1, "#7cb84f");
+}
+function drawGambleCave(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 13);
+  p(1, 8, 14, 13, "#5a5560"); // rock face
+  p(1, 8, 14, 2, "#726c78");
+  p(4, 12, 8, 9, "#161018"); // dark mouth
+  p(5, 11, 6, 2, "#241a2b");
+  // a faint glitter deep inside (the uncertain lure), flickering with the frame
+  if (frame === 1 || frame === 3) p(7, 15, 2, 2, "#a06cd5");
+}
+function drawMarkerStone(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 10);
+  p(4, 6, 8, 15, "#8a8780"); // standing stone
+  p(4, 6, 8, 1, "#a9a59c");
+  p(4, 6, 1, 15, "#9a968d");
+  // a faint carved glyph
+  p(6, 10, 4, 1, "#5d5a54");
+  p(7, 11, 1, 3, "#5d5a54");
+  p(6, 14, 3, 1, "#5d5a54");
+}
+function drawBuriedCache(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 11);
+  p(3, 17, 10, 4, "#6b4a2b"); // a low mound of disturbed earth
+  p(3, 17, 10, 1, "#836039");
+  // a scratched X marking the spot
+  p(6, 18, 1, 1, "#3a2817"); p(9, 18, 1, 1, "#3a2817");
+  p(7, 19, 2, 1, "#3a2817"); p(6, 20, 1, 1, "#3a2817"); p(9, 20, 1, 1, "#3a2817");
+}
+function drawShyCreature(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 7);
+  const ear = frame === 1 ? -1 : 0; // ears twitch
+  p(6, 15, 5, 5, "#9a8f7e"); // small round body
+  p(6, 15, 5, 1, "#b3a892");
+  p(6, 13 + ear, 1, 3, "#8a7f6e"); // ears
+  p(9, 13 + ear, 1, 3, "#8a7f6e");
+  rect(ctx, ox + 7, oy + 16, 1, 1, "#241a14"); // eyes
+  rect(ctx, ox + 9, oy + 16, 1, 1, "#241a14");
+}
+
 /** A built stall — bark posts + a parchment-canvas awning + a warm lantern. The procedural fallback
  *  for the stand archetypes when their bible PNG is absent, so a stall reads as a STRUCTURE (not a
  *  humanoid). `accent` tints the awning so the four stands read as distinct at a glance. */
@@ -308,6 +367,11 @@ const DRAW: Record<PropKind, Draw> = {
   driftwood: (c, x, y) => drawDriftwood(c, x, y),
   shell: (c, x, y) => drawShell(c, x, y),
   path_marker: (c, x, y) => drawPathMarker(c, x, y),
+  fertile_patch: (c, x, y) => drawFertilePatch(c, x, y),
+  gamble_cave: drawGambleCave,
+  marker_stone: (c, x, y) => drawMarkerStone(c, x, y),
+  buried_cache: (c, x, y) => drawBuriedCache(c, x, y),
+  shy_creature: drawShyCreature,
   travel_stand: (c, x, y) => drawStand(c, x, y, "#8a6a9e"),      // dusk-mauve (the ferry/horizon)
   workplace_stand: (c, x, y) => drawStand(c, x, y, "#b88a5a"),   // bark-warm (labour)
   food_stand: (c, x, y) => drawStand(c, x, y, "#e8b894"),        // warm cookfire glow

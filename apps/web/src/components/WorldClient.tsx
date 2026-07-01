@@ -21,6 +21,7 @@ import {
   type Flow0Affordance,
 } from "@echo/shared";
 import { generateOcean } from "@/game/tilemap";
+import { Flow1Scene } from "@/game/activities/flow1Scene";
 
 const prettyBucket = (b: string) => b.replace(/_/g, " ");
 
@@ -53,6 +54,14 @@ export default function WorldClient() {
   const f0ByIdRef = useRef<Map<string, Flow0Affordance>>(new Map());
   const f0DoneRef = useRef<Set<string>>(new Set());
   const f0SpawnAtRef = useRef(0);
+  // ── Flow 1 own-island layer: the embodied raft build + the rest of F1 (plant/eat, cave, marker,
+  //    cache, shy creature) seep onto YOUR island as client-local entities (role "flow1"), same solo
+  //    /observe/behavioral ingress as F0. Driven by the Flow1Scene controllers' own input. ──
+  const f1EntsRef = useRef<EntitySnapshot[]>([]);
+  const f1SceneRef = useRef<Flow1Scene | null>(null);
+  const [f1Prompt, setF1Prompt] = useState<string | null>(null);
+  const [f1Whisper, setF1Whisper] = useState<string | null>(null);
+  const [f1Counter, setF1Counter] = useState<{ gathered: number; needed: number } | null>(null);
   const firstMoveDoneRef = useRef(false);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
@@ -368,8 +377,12 @@ export default function WorldClient() {
     }
 
     let disposed = false;
+    const oceanMap = generateOcean(); // ONE shared ocean, reused by PixiWorld + the F1 placement/reachability
     const world = new PixiWorld({
       onNearbyChange: (t) => {
+        // F1 embodied-activity props (role "flow1") are driven by the Flow1Scene controllers' own input,
+        // not the WorldClient menu/chat — never treat them as "nearby" (no menu, no chat conflict).
+        if (t && snapsRef.current?.get(t.id)?.role === "flow1") { setNearby(null); return; }
         setNearby(t);
         if (t) markFunnel(uidRef.current, "first_nearby");
       },
@@ -391,7 +404,7 @@ export default function WorldClient() {
         else if (type === "dwell") d.dwell++;
         else if (type === "revisit") d.revisits++;
       },
-    }, { map: generateOcean(), artDir: "/assets/island" }); // ONE shared ocean: 100 islands in one sea
+    }, { map: oceanMap, artDir: "/assets/island" }); // ONE shared ocean: 100 islands in one sea
     worldRef.current = world;
 
     const net = new NetClient(config.realtimeUrl);
@@ -404,11 +417,13 @@ export default function WorldClient() {
         world.setSelf(w.entityId, w.spawn.x, w.spawn.y);
         setStatus("");
         markFunnel(uidRef.current, "world_enter");
+        f1SceneRef.current?.begin(); // start the F1 controllers now the self entity exists
       },
       onSnapshot: (snaps, _tick) => {
-        // Merge in this player's own-island Flow-0 affordances (client-local; not room state) so
-        // they render + become "nearby" alongside the live room entities.
+        // Merge in this player's own-island Flow-0 affordances + Flow-1 activity props (client-local;
+        // not room state) so they render alongside the live room entities.
         for (const e of f0EntsRef.current) snaps.set(e.id, e);
+        for (const e of f1EntsRef.current) snaps.set(e.id, e);
         world.applySnapshot(snaps, net.lastAckSeq());
         snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
         // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
@@ -565,6 +580,30 @@ export default function WorldClient() {
         } as EntitySnapshot;
       });
       f0SpawnAtRef.current = Date.now();
+
+      // Seep Flow 1 onto the same own island (client-local, role "flow1"): the embodied raft build + the
+      // rest of F1 (plant/eat, cave, marker, cache, shy creature). Same SOLO /observe/behavioral ingress
+      // as F0; the raft launch tells the SERVER to unlock sailing (net.sendSetSail). begin() runs on
+      // welcome, once the self entity exists.
+      const f1Scene = new Flow1Scene({
+        world, map: oceanMap, home,
+        actorId: () => uidRef.current, sessionId: () => sessionIdRef.current,
+        send: (events) => {
+          void fetch("/api/observe/behavioral", {
+            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+          }).catch(() => { /* best-effort; never block the player */ });
+        },
+        hooks: {
+          onWhisper: (t) => setF1Whisper(t),
+          onPrompt: (t) => setF1Prompt(t),
+          onCounter: (g) => setF1Counter(g),
+          onPhase: (p) => { if (p !== "gather" && p !== "ready") setF1Counter(null); },
+          onLaunched: () => netRef.current?.sendSetSail(true),
+        },
+      });
+      f1EntsRef.current = f1Scene.entities().snaps;
+      f1SceneRef.current = f1Scene;
+
       if (disposed) return;
       try {
         await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
@@ -578,6 +617,7 @@ export default function WorldClient() {
 
     return () => {
       disposed = true;
+      f1SceneRef.current?.dispose();
       tele.stop();
       net.leave();
       world.destroy();
@@ -1050,6 +1090,29 @@ export default function WorldClient() {
       <div ref={mountRef} className="absolute inset-0" />
       {/* Atmospheric vignette over the world (below the UI panels in DOM order). */}
       <div className="world-vignette absolute inset-0" />
+
+      {/* ── Flow 1 own-island embodied activities (raft build + beats) — diegetic overlays only ── */}
+      {f1Whisper && (
+        <div className="pointer-events-none absolute left-1/2 top-14 z-20 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-[#f4e9d0]/85">
+          {f1Whisper}
+        </div>
+      )}
+      {f1Counter && (
+        <div className="pointer-events-none absolute left-8 top-1/2 z-20 -translate-y-1/2 rounded-xl border border-white/10 bg-black/45 px-4 py-3 text-center backdrop-blur">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-[#f4e9d0]/50">driftwood</div>
+          <div className="mt-1 text-lg tabular-nums text-[#f4e9d0]/90">
+            {f1Counter.gathered} <span className="text-[#f4e9d0]/40">/ {f1Counter.needed}</span>
+          </div>
+          {f1Counter.gathered >= f1Counter.needed && (
+            <div className="mt-1 text-[10px] italic text-[#a06cd5]/80">enough — or more</div>
+          )}
+        </div>
+      )}
+      {f1Prompt && !nearby && (
+        <div className="pointer-events-none absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full border border-[#a06cd5]/30 bg-black/50 px-4 py-1.5 text-xs text-[#f4e9d0]/85 backdrop-blur">
+          {f1Prompt}
+        </div>
+      )}
 
       {/* The crossing affordance: board a raft to set sail (the open sea is a wall on foot). */}
       {!offline && (

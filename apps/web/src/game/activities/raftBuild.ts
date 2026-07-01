@@ -23,7 +23,6 @@ export type RaftPhase = "gather" | "ready" | "building" | "built" | "launched";
 
 export interface RaftBuildConfig {
   world: PixiWorld;
-  selfId: string;
   /** The driftwood entities placed on the shore (client-local). */
   wood: { id: string; x: number; y: number }[];
   assembly: { x: number; y: number };
@@ -40,6 +39,10 @@ export interface RaftBuildConfig {
   onNearWood?: (id: string | null) => void;
   /** Gather counter changed (for the side "driftwood N / needed" readout). */
   onProgress?: (g: { gathered: number; needed: number; total: number }) => void;
+  /** The raft was pushed off (the F1→F2 seam). The caller unlocks sailing — client-side in the solo
+   *  slice (world.setSailing), or authoritatively in /play (net.sendSetSail). Falls back to
+   *  world.setSailing(true) if omitted. */
+  onLaunched?: () => void;
 }
 
 const BUILD_FULL_MS = 4200; // total held time to complete the raft (0..1 progress)
@@ -137,7 +140,7 @@ export class RaftBuild {
     this.cfg.onNearWood?.(null);
     this.cfg.onProgress?.({ gathered: this.gathered, needed: this.cfg.needed, total: this.total });
     // a brief embodied stoop, then keep the carried-wood overlay
-    this.cfg.world.setActivityState(this.cfg.selfId, "gather", { carrying: true });
+    this.cfg.world.setSelfActivityState("gather", { carrying: true });
     this.cfg.onWhisper?.(
       this.gathered < this.cfg.needed
         ? `you pick up a length of driftwood.`
@@ -168,7 +171,7 @@ export class RaftBuild {
         this.cfg.onNearWood?.(near);
       }
       // Keep the carried-wood overlay while you have wood (cleared just after a fresh stoop).
-      this.cfg.world.setActivityState(this.cfg.selfId, this.gathered > 0 ? "carry" : null, {
+      this.cfg.world.setSelfActivityState(this.gathered > 0 ? "carry" : null, {
         carrying: this.gathered > 0,
       });
 
@@ -198,12 +201,12 @@ export class RaftBuild {
         this.buildMs += dtMs;
         const prev = this.progress;
         this.progress = Math.min(1 + DECOR_SPAN_MS / BUILD_FULL_MS, this.progress + dtMs / BUILD_FULL_MS);
-        this.cfg.world.setActivityState(this.cfg.selfId, "build", { intensity: 1 });
+        this.cfg.world.setSelfActivityState("build", { intensity: 1 });
         if (prev < 1 && this.progress >= 1) this.cfg.onWhisper?.("the raft holds together. it would float. carry it to the water when you're ready.");
       } else {
         // released mid-build (before completion) → a redo when re-engaged
         if (this.wasHolding && this.progress > 0.05 && this.progress < 1) this.redo++;
-        this.cfg.world.setActivityState(this.cfg.selfId, "carry", { carrying: true });
+        this.cfg.world.setSelfActivityState("carry", { carrying: true });
       }
       // deliberation = time stood at the wood before the first strike (not counted as build time)
       if (this.firstPressAt === 0 && near) this.buildMs = 0;
@@ -214,7 +217,7 @@ export class RaftBuild {
         this.emitAssemble(now);
         this.completeAt = now;
         this.setPhase("built");
-        this.cfg.world.setActivityState(this.cfg.selfId, "carry", { carrying: true });
+        this.cfg.world.setSelfActivityState("carry", { carrying: true });
         this.cfg.onWhisper?.("you heft the raft toward the water's edge. press [space] to push it in.");
       }
       return;
@@ -236,8 +239,9 @@ export class RaftBuild {
 
   private launch() {
     this.emitLaunch(performance.now());
-    this.cfg.world.setActivityState(this.cfg.selfId, null);
-    this.cfg.world.setSailing(true);
+    this.cfg.world.setSelfActivityState(null);
+    if (this.cfg.onLaunched) this.cfg.onLaunched();
+    else this.cfg.world.setSailing(true); // solo slice: unlock sailing client-side
     this.setPhase("launched");
     this.cfg.onWhisper?.("you push the raft into the shallows. the water takes it. the far shore waits.");
   }
