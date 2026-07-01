@@ -76,7 +76,40 @@ Gaps #1 and #3 below are the per-flow detail of this single milestone.
 - **Resolution criterion:** a debounced sampler emits ≤1 aggregated movement cue per ~1.5s (capped
   per flow), and after the re-anchor heading-variance loads onto openness/pace as the doc intends,
   with no measurable ML load regression in local two-tab runs.
-- **Status:** OPEN — co-deferred to the **W re-anchor milestone**.
+- **UPDATE (2026-06-30, embodied rebuild):** the debounced sampler IS now built as the
+  `movement_sample` cue (≤1 aggregate/~1.5s, change-thresholded, per-flow cap) — see
+  `apps/web/src/game/activities/`. Its ONLY mapped signal is `still_ms → solitude_tol` (a real W
+  path — calm/stillness, the low end of energy). `heading_var`, `speed_var`, `explore_ratio` are
+  carried in `raw_signals` (captured for the re-anchor) but are deliberately **NOT** mapped to any
+  feature in `ingest.py` (`_embodied_features`, the `movement_sample` branch), precisely so a
+  high-frequency sampler cannot contaminate dominance/warmth before the re-anchor learns their true
+  (openness/pace) direction. So the sampler infrastructure is done; the openness *routing* remains
+  deferred to the re-anchor.
+- **Status:** OPEN (routing only) — sampler built; heading/explore captured-but-unrouted, co-deferred
+  to the **W re-anchor milestone**.
+
+## 6. Embodied-activity openness cues route off-axis / are captured-unrouted (same W gap as #1)
+
+- **Opened:** 2026-06-30 (the F1/F4/F5/F6 embodied rebuild).
+- **What:** the embodied activities emit *manner* scalars that the design doc intends for **openness**
+  but the committed W cannot route: `decoration` (a decorative/non-functional flourish on a build —
+  doc: openness) is carried honestly as extra build-time (`ts_build`) in `ingest._embodied_features`,
+  NOT as openness; `explore_ratio` / `heading_var` (explore-vs-exploit while gathering/roaming — doc:
+  openness) are captured in `raw_signals` but unrouted (see gap #2). The manner cues that DO have a W
+  path load exactly as the doc's priors intend and individuate cleanly: `thoroughness01` /
+  `persist_after_fail` → `persistence` (grit/conscientiousness→affect/formality), `decision_latency_ms`
+  → `decision_latency` (deliberation→pace), `edits` → `editsCount` (self-monitoring→formality),
+  `dwell_ms` → `ts_build`/`ts_earn`/`ts_learn` (industriousness/curiosity time-share), `risk01` →
+  `risk_index` (dominance), `delayed` → `save_rate` (time-discounting→pace), `still_ms` →
+  `solitude_tol` (calm).
+- **Root cause:** identical to #1/#3 — W has no telemetry→openness path (anchored on the day-loop
+  economy). Not re-routed; carried on the nearest honest own-axis feature or captured-unrouted.
+- **Why we are NOT fixing it now:** same as #1 — re-anchor W **once** on the full multi-flow cue set
+  (now including the embodied F1 manner cues), not piecemeal.
+- **Resolution criterion:** after the multi-flow re-anchor, `decoration`/`explore_ratio`/`heading_var`
+  load predominantly onto openness in the embodied walkthroughs; numerics gate + the embodied
+  individuation walkthrough stay green.
+- **Status:** OPEN — folded into the **W re-anchor milestone** (same one as #1, #2, #3).
 
 ## 3. F2/F3/travel openness-intended cues route to other axes (same W gap as #1)
 

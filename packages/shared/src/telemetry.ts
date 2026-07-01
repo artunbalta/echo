@@ -118,6 +118,21 @@ export interface RawSignals {
   valence?: number; // D11/I — derived sentiment scalar (never the text)
   variance?: number; // F3 — chosen risk
   amount?: number; // F — resource quantity
+  decision_latency_ms?: number; // B2 — deliberation before/within a commitment → decision_latency
+  // ── embodied-activity MANNER scalars (the F1/F4/F5/F6 embodied rebuild). Derived client-side from
+  //    the actual performance and mapped onto the existing telemetry features (continuous, not
+  //    constants) in ingest._embodied_features. Extra keys are already ignored by the featurizer. ──
+  thoroughness01?: number; // gather/build thoroughness (just-enough ↔ obsessive) → persistence
+  persist_after_fail?: number; // retried after a slip/failure → persistence (grit, HIGH validity)
+  still_ms?: number; // held still & quiet → solitude_tol (calm; the shy-creature beat)
+  risk01?: number; // off-trail / dark-cave / threshold cost → risk_index
+  delayed?: boolean; // invest/plant (delayed payoff) vs consume now → save_rate (time-discounting)
+  decoration?: number; // ⚑ decorative flourish (doc: openness; carried as ts_build until the W re-anchor)
+  // ── continuous passive sampler (movement_sample). still_ms above rides here too. The rest are
+  //    captured for the one-time W re-anchor but intentionally unrouted today (docs/known-gaps.md #2). ──
+  heading_var?: number; // ⚑ heading-change rate (wander vs beeline) — doc: openness
+  speed_var?: number; // ⚑ movement-speed variance — doc: pace/energy
+  explore_ratio?: number; // ⚑ explore-new vs revisit-known (BALD signal) — doc: openness
   [k: string]: unknown; // forward-compatible; unknown keys ignored by featurizer
 }
 
