@@ -81,6 +81,26 @@ interface RenderEntity {
   loadedSpriteUrl?: string;
   /** Timestamped snapshot buffer for remote entity interpolation (render in the past). */
   buf: { t: number; x: number; y: number; facing: Facing; moving: boolean }[];
+  /** Embodied-activity animation state (the F1/F4/F5/F6 rebuild). null → normal walk/idle. */
+  activity?: EntityActivity | null;
+  /** A small carried-item overlay (a plank/tool above the hands) while carrying. Lazily created. */
+  carry?: Graphics;
+}
+
+/**
+ * An embodied-activity animation state layered on top of walk/idle (the F1/F4/F5/F6 rebuild). The
+ * animation is PROCEDURAL (a rhythmic bob/lunge on the existing sprite + a carried-item overlay +
+ * dust/spark particles) — no new sprite sheets, so it always runs zero-key. `intensity` scales the
+ * motion (e.g. a vigorous vs languid build). See setActivityState.
+ */
+export type ActivityKind = "gather" | "carry" | "build" | "dig" | "plant" | "study" | "still";
+export interface EntityActivity {
+  kind: ActivityKind;
+  /** performance.now() when the activity started (drives the rhythmic phase). */
+  t0: number;
+  /** true → also render the carried-item overlay above the hands. */
+  carrying?: boolean;
+  intensity?: number;
 }
 
 /** Render remotes this many ms in the past so interpolation always has two snapshots. */
@@ -99,6 +119,10 @@ export class PixiWorld {
   app = new Application();
   private world = new Container();
   private entityLayer = new Container();
+  /** Above-entities layer for embodied-activity particles (dig dust, build sparks). */
+  private fxLayer = new Container();
+  private fx = new Graphics();
+  private particles: { x: number; y: number; vx: number; vy: number; life: number; max: number; color: number }[] = [];
   private map: TileMap;
   private proceduralArt: boolean;
   private artDir: string | null;
@@ -123,6 +147,18 @@ export class PixiWorld {
   private nearbyId: string | null = null;
   private nearbyKind: "user" | "npc" | null = null;
   private dwellTimer = 0;
+  // ── locomotion sampler accumulators (the continuous passive sampler, known-gaps #2). Reset each
+  //    time sampleLocomotion() is drained. Movement-speed variance → pace/energy, heading-change rate
+  //    → openness ⚑, still time → solitude_tol, explore ratio (new vs revisited tiles) → openness ⚑. ──
+  private sampMs = 0;
+  private sampStillMs = 0;
+  private sampDist = 0;
+  private sampHeadingChanges = 0;
+  private sampLastHeading = "";
+  private sampSpeeds: number[] = [];
+  private sampNewTiles = 0;
+  private sampStepTiles = 0;
+  private sampVisited = new Set<string>();
   // "Locate" a live player from the roster: pan the camera toward them and pulse their
   // ring for a moment, then ease back to the player. Separate from drag-pan so the two
   // don't fight (drag-pan resets on walk; this eases on its own timer).
@@ -196,6 +232,9 @@ export class PixiWorld {
     this.buildGround();
     this.buildDecorations();
     this.world.addChild(this.entityLayer);
+    // Activity particles draw above entities (dig dust, build sparks).
+    this.fxLayer.addChild(this.fx);
+    this.world.addChild(this.fxLayer);
     this.buildPortal();
 
     this.bindInput();
@@ -479,6 +518,7 @@ export class PixiWorld {
         re.sprite.destroy();
         re.label.destroy();
         re.ring?.destroy();
+        re.carry?.destroy();
         this.entities.delete(id);
       }
     }
@@ -576,6 +616,45 @@ export class PixiWorld {
     this.updateCamera();
     this.detectProximity(dt);
     this.detectPortal();
+    this.stepParticles(dt);
+  }
+
+  /** Integrate + draw embodied-activity particles (dig dust / build sparks). Cheap: a capped pool
+   *  redrawn each frame into one Graphics; gravity + fade. */
+  private stepParticles(dt: number) {
+    if (this.particles.length === 0) {
+      if ((this.fx as any)._dirty !== false) { this.fx.clear(); (this.fx as any)._dirty = false; }
+      return;
+    }
+    (this.fx as any)._dirty = true;
+    this.fx.clear();
+    const next: typeof this.particles = [];
+    for (const p of this.particles) {
+      p.life -= dt;
+      if (p.life <= 0) continue;
+      p.vy += 40 * dt; // gravity
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      const a = Math.max(0, p.life / p.max);
+      this.fx.rect(p.x, p.y, 1.4, 1.4).fill({ color: p.color, alpha: a });
+      next.push(p);
+    }
+    this.particles = next;
+  }
+
+  /** Spawn a few activity particles at a tile position (world px). Capped so a long build can't leak. */
+  private spawnParticles(tileX: number, tileY: number, color: number, n: number, spread: number) {
+    if (this.particles.length > 80) return;
+    const px = tileX * TILE + TILE / 2;
+    const py = tileY * TILE + TILE * 0.6;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 + this.particles.length;
+      this.particles.push({
+        x: px + Math.cos(ang) * 2, y: py,
+        vx: Math.cos(ang) * spread, vy: -spread * 0.6 - (i % 3) * 4,
+        life: 0.5 + (i % 3) * 0.15, max: 0.8, color,
+      });
+    }
   }
 
   /** Ease the camera toward a located player while a ping is active, then back to self. */
@@ -620,6 +699,8 @@ export class PixiWorld {
   }
 
   private stepLocal(dt: number) {
+    const preX = this.localX;
+    const preY = this.localY;
     const kb = this.readInputDir();
     // Continuous movement direction: keyboard if pressed, else steer toward the click target.
     let dx: number = kb.x;
@@ -658,6 +739,23 @@ export class PixiWorld {
         if (Math.abs(this.panY) < 0.5) this.panY = 0;
       }
     }
+    // ── accumulate locomotion for the passive sampler (drained by sampleLocomotion) ──
+    this.sampMs += dt * 1000;
+    const stepDist = Math.hypot(this.localX - preX, this.localY - preY);
+    this.sampDist += stepDist;
+    if (moving) {
+      this.sampSpeeds.push(stepDist / Math.max(dt, 1e-3));
+      const h = this.localFacing;
+      if (this.sampLastHeading && h !== this.sampLastHeading) this.sampHeadingChanges++;
+      this.sampLastHeading = h;
+      // explore ratio: has the player been on this tile before this sample window? (new vs revisited)
+      const key = `${Math.round(this.localX)},${Math.round(this.localY)}`;
+      this.sampStepTiles++;
+      if (!this.sampVisited.has(key)) { this.sampVisited.add(key); this.sampNewTiles++; }
+    } else {
+      this.sampStillMs += dt * 1000;
+    }
+
     // Send intent on change (and stop edge). Quantize to an 8-way dir so the server and
     // remote players track our heading even when we steer continuously toward a click.
     const q = moving ? quantizeDir(dx, dy) : { x: 0 as -1 | 0 | 1, y: 0 as -1 | 0 | 1 };
@@ -751,6 +849,51 @@ export class PixiWorld {
       const amp = pulsing ? 0.3 : 0.12;
       re.ring.alpha = base + Math.sin(t * (pulsing ? 6 : 2)) * amp;
       re.ring.scale.set(pulsing ? 1.25 + Math.sin(t * 6) * 0.15 : 1);
+    }
+
+    // ── embodied-activity procedural animation (the F1/F4/F5/F6 rebuild): a rhythmic bob/lunge on the
+    //    existing sprite + optional carried-item overlay + dust/spark particles. No new sprite sheets,
+    //    so it always runs zero-key. Layered ON TOP of the walk/idle frame animation below. ──
+    let bob = 0;
+    let lean = 0;
+    if (re.activity) {
+      const el = (performance.now() - re.activity.t0) / 1000;
+      const inten = re.activity.intensity ?? 1;
+      const kind = re.activity.kind;
+      if (kind === "build" || kind === "dig") {
+        const hz = kind === "dig" ? 1.8 : 2.2;
+        const phase = Math.sin(el * Math.PI * 2 * hz);
+        lean = phase * (kind === "dig" ? 0.14 : 0.16) * inten;
+        bob = Math.max(0, phase) * (kind === "dig" ? 2.4 : 2.0) * inten;
+        if (phase > 0.85 && re.id === this.selfId && this.particles.length < 60)
+          this.spawnParticles(tileX, tileY, kind === "dig" ? 0x7a4a2b : 0xf0cf5e, 2, kind === "dig" ? 15 : 22);
+      } else if (kind === "gather" || kind === "plant") {
+        bob = Math.abs(Math.sin(el * Math.PI * 2 * (kind === "plant" ? 1.2 : 1.4))) * 2.0 * inten;
+      } else if (kind === "study") {
+        lean = Math.sin(el * 1.5) * 0.06;
+      } else if (kind === "still") {
+        bob = Math.sin(el * 1.2) * 0.5;
+      }
+    }
+    re.sprite.y = py - bob;
+    re.sprite.rotation = lean;
+
+    // carried-item overlay (a small bark plank/tool bobbing above the hands) while carrying
+    if (re.activity?.carrying) {
+      if (!re.carry) {
+        re.carry = new Graphics();
+        this.entityLayer.addChild(re.carry);
+      }
+      re.carry.visible = true;
+      re.carry.clear();
+      re.carry.rect(-3, -1.6, 6, 3).fill({ color: 0x8a5733 });
+      re.carry.rect(-3, -1.6, 6, 1).fill({ color: 0xb88a5a });
+      re.carry.x = px;
+      re.carry.y = py - SPRITE.FRAME_H * 0.62 - bob;
+      re.carry.rotation = lean;
+      (re.carry as any).zIndex = py + 0.2;
+    } else if (re.carry) {
+      re.carry.visible = false;
     }
 
     const frameArr = re.frames[facing];
@@ -901,6 +1044,26 @@ export class PixiWorld {
     if (re.buf.length > 20) re.buf.shift();
   }
 
+  /** Add a client-local entity mid-scene (e.g. the raft that appears when the player starts building).
+   *  Unlike applySnapshot this touches only the one entity, so the local player is never reconciled/
+   *  snapped. Idempotent — a second call with the same id is a no-op. */
+  addEntity(snap: EntitySnapshot) {
+    if (this.entities.has(snap.id)) return;
+    this.ensureEntity(snap);
+  }
+
+  /** Remove a client-local entity mid-scene (e.g. a piece of driftwood the moment it is gathered). */
+  removeEntity(id: string) {
+    const re = this.entities.get(id);
+    if (!re) return;
+    re.sprite.destroy();
+    re.label.destroy();
+    re.ring?.destroy();
+    re.carry?.destroy();
+    this.entities.delete(id);
+    if (this.nearbyId === id) { this.nearbyId = null; this.hooks.onNearbyChange?.(null); }
+  }
+
   /** Re-skin a live entity to a new procedural prop (e.g. grain sprout → ripe as it grows). */
   setEntitySprite(id: string, spriteUrl: string) {
     const re = this.entities.get(id);
@@ -916,6 +1079,49 @@ export class PixiWorld {
     if (!re) return;
     re.name = name;
     re.label.text = name;
+  }
+
+  /** Set (or clear, kind=null) an entity's embodied-activity animation (bob/lunge + particles). Passing
+   *  the SAME kind keeps the rhythmic phase running (only carrying/intensity update); a new kind restarts
+   *  it. `carrying` overlays a carried item above the hands. The animation itself is procedural — see
+   *  drawEntity — so no sprite sheets are needed and it always runs zero-key. */
+  setActivityState(id: string, kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number }) {
+    const re = this.entities.get(id);
+    if (!re) return;
+    if (!kind) {
+      re.activity = null;
+      re.sprite.rotation = 0;
+      if (re.carry) re.carry.visible = false;
+      return;
+    }
+    if (re.activity && re.activity.kind === kind) {
+      if (opts?.carrying !== undefined) re.activity.carrying = opts.carrying;
+      if (opts?.intensity !== undefined) re.activity.intensity = opts.intensity;
+      return;
+    }
+    re.activity = { kind, t0: performance.now(), carrying: opts?.carrying, intensity: opts?.intensity };
+  }
+
+  /** Drain the accumulated locomotion stats for the continuous passive sampler (known-gaps #2),
+   *  resetting the per-window counters. `stillMs` has a real W path (→ solitude_tol); `headingVar`,
+   *  `speedVar`, `exploreRatio` are the doc's openness/pace signals, captured here for the one-time W
+   *  re-anchor but intentionally unrouted in ingest today (so a high-frequency sampler can't bias
+   *  dominance/warmth before the re-anchor). The visited-tile set persists across windows so explore-vs-
+   *  exploit is meaningful over the whole flow. */
+  sampleLocomotion(): { activeMs: number; stillMs: number; distance: number; headingVar: number; speedVar: number; exploreRatio: number } {
+    const speeds = this.sampSpeeds;
+    let speedVar = 0;
+    if (speeds.length > 1) {
+      const mean = speeds.reduce((a, b) => a + b, 0) / speeds.length;
+      const v = speeds.reduce((a, b) => a + (b - mean) ** 2, 0) / speeds.length;
+      speedVar = Math.min(1, Math.sqrt(v) / WORLD.MOVE_SPEED);
+    }
+    const headingVar = Math.min(1, this.sampHeadingChanges / Math.max(1, this.sampDist));
+    const exploreRatio = this.sampStepTiles > 0 ? this.sampNewTiles / this.sampStepTiles : 0;
+    const out = { activeMs: this.sampMs, stillMs: this.sampStillMs, distance: this.sampDist, headingVar, speedVar, exploreRatio };
+    this.sampMs = 0; this.sampStillMs = 0; this.sampDist = 0; this.sampHeadingChanges = 0;
+    this.sampSpeeds = []; this.sampNewTiles = 0; this.sampStepTiles = 0;
+    return out;
   }
 
   destroy() {

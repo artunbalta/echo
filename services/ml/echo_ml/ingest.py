@@ -118,6 +118,102 @@ def _flow0_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     return False
 
 
+# ── embodied-activity cues (the F1/F4/F5/F6 embodied rebuild, ECHO_level_design_7flows.md) ──────────
+# Unlike the discrete menu cues above, these carry the *manner* of a performed activity as CONTINUOUS
+# raw_signals; this block maps those manner scalars onto the EXISTING telemetry features as continuous
+# values (never constants). Which activity's dwell counts as which time-share:
+_EMBODIED_TS = {
+    "gather_driftwood": "ts_earn",
+    "assemble_raft": "ts_build",
+    "launch_raft": "ts_build",
+    "study_marker": "ts_learn",
+    "dig_cache": "ts_build",
+}
+
+# The embodied-activity actions this block owns. Additive: only NEW action names appear here, so every
+# prior Flow-0 / social / per-channel cue keeps its exact behaviour.
+_EMBODIED_CUES = frozenset({
+    "gather_driftwood", "assemble_raft", "launch_raft", "abandon_gather", "abandon_build",
+    "plant_seed", "eat_now", "enter_cave", "stay_safe", "study_marker", "dig_cache", "sit_still",
+    "movement_sample",
+})
+
+
+def _embodied_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
+    """Embodied performed-activity cues → the EXISTING telemetry features, set to CONTINUOUS values
+    derived from the *manner* of the performance (thoroughness, persistence-after-fail, stillness,
+    off-trail risk, delayed-vs-instant) carried in raw_signals — never constants. This is the
+    individuation the button-menu threw away: two players performing the same activity in different
+    styles emit different scalars → different φ → measurably different posteriors. Which axis each
+    feature loads on stays LEARNED in W (cross-cutting rule #1); the doc's cue→axis lines are priors.
+
+    latency_ms / decision_latency_ms / edits ride the generic top-block of event_to_observation, so this
+    block only sets the manner features that block does not (persistence, ts_*, solitude_tol, risk_index,
+    save_rate). Returns True iff `action` is an embodied cue, so the caller skips the generic per-channel
+    blocks and prior behaviour is byte-identical.
+
+    Openness-intended manner (exploration ratio, decorative flourish) has NO telemetry→openness path in
+    the committed W (docs/known-gaps.md, the cross-flow gap): it is carried HONESTLY on the nearest
+    own-axis feature (decoration = extra build effort → ts_build) and never silently re-routed to
+    dominance/warmth; the one-time W re-anchor will learn the openness direction from these clean cues."""
+    if action not in _EMBODIED_CUES:
+        return False
+
+    # The debounced continuous passive sampler (~1 aggregate / ~1.5s, capped per flow). Its only cue with
+    # a real telemetry→axis path under the committed W is stillness/dwell → solitude_tol (calm, the low
+    # end of energy). heading-variance / speed-variance / exploration ratio are the doc's OPENNESS/pace
+    # signals (⚑ known-gaps #2) with NO W path yet — they ride in raw_signals (captured for the one-time
+    # W re-anchor) but are deliberately NOT mapped to a feature here, so a high-frequency sampler cannot
+    # contaminate dominance/warmth before the re-anchor learns their true direction.
+    if action == "movement_sample":
+        still = rs.get("still_ms")
+        if still is not None:
+            tel["solitude_tol"] = _clip01(float(still) / 8000.0)
+        return True
+
+    # Abandoning a performed activity is data (Rule 1/K): time NOT spent on the craft reads as leisure/
+    # avoidance — an own-axis read (like shirk_work), so the K-twin never cross-loads it onto warmth.
+    if not take or action.startswith("abandon"):
+        tel["ts_leisure"] = 0.5
+        return True
+
+    # thoroughness of a gather/build (just-enough ↔ obsessive) → conscientiousness/grit
+    if rs.get("thoroughness01") is not None:
+        tel["persistence"] = _clip01(float(rs["thoroughness01"]))
+    # grinding a puzzle/build out after each failure → strong grit (high validity)
+    if rs.get("persist_after_fail") is not None:
+        tel["persistence"] = max(tel.get("persistence", 0.0), _clip01(float(rs["persist_after_fail"])))
+    # holding still and quiet (the shy-creature beat) → calm / solitude-tolerance (the low end of energy)
+    if rs.get("still_ms") is not None:
+        tel["solitude_tol"] = _clip01(float(rs["still_ms"]) / 8000.0)
+    # a costly/uncertain embodied choice (enter the dark cave, push off-trail) → risk
+    if rs.get("risk01") is not None:
+        tel["risk_index"] = _clip01(float(rs["risk01"]))
+    elif action == "enter_cave":
+        tel["risk_index"] = 0.75
+    elif action == "stay_safe":
+        tel["risk_index"] = 0.1
+    # plant-vs-eat: investing the seed (delayed, larger payoff) vs eating now (instant) → time-discounting
+    if action == "plant_seed" or rs.get("delayed") is True:
+        tel["save_rate"] = 0.85
+    elif action == "eat_now" or rs.get("delayed") is False:
+        tel["save_rate"] = 0.15
+
+    # time-share of the activity on its axis (build / earn / learn), from the dwell it took
+    ts_key = _EMBODIED_TS.get(action)
+    if ts_key:
+        dwell = rs.get("dwell_ms")
+        share = _clip01(float(dwell) / 12000.0) if dwell is not None else 0.4
+        tel[ts_key] = max(tel.get(ts_key, 0.0), share)
+
+    # ⚑ decorative flourish / non-functional extra effort: doc-intended OPENNESS, but W has no openness
+    # path — carried honestly as extra build-time (ts_build), flagged in known-gaps, NOT re-routed.
+    if rs.get("decoration") is not None:
+        tel["ts_build"] = max(tel.get("ts_build", 0.0), _clip01(0.4 + 0.5 * _clip01(float(rs["decoration"]))))
+
+    return True
+
+
 def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     """Flow 2 dialogue + Flow 3 clearing cues (packages/shared/src/social.ts) → the EXISTING
     telemetry feature that matches each cue's signal type. Which axis each loads on stays LEARNED
@@ -266,11 +362,13 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
     if rs.get("decision_latency_ms") is not None:
         tel["decision_latency"] = float(rs["decision_latency_ms"])
 
-    # — Flow 0 (solitary shore) + Flow 2/3 (social) cues — purely additive; when a cue is handled
-    #   here we skip the generic per-channel blocks below so existing behaviour stays byte-identical.
+    # — Flow 0 (solitary shore) + embodied activities (F1/F4/F5/F6) + Flow 2/3 (social) cues — purely
+    #   additive; when a cue is handled here we skip the generic per-channel blocks below so existing
+    #   behaviour stays byte-identical. Dispatch is exclusive (first handler wins).
     flow0 = _flow0_features(action, take, rs, tel)
-    social = (not flow0) and _social_features(action, take, rs, tel)
-    handled = flow0 or social
+    embodied = (not flow0) and _embodied_features(action, take, rs, tel)
+    social = (not flow0 and not embodied) and _social_features(action, take, rs, tel)
+    handled = flow0 or embodied or social
 
     # — locomotion / approach (Channel A, G1) —
     if not handled and channel in ("A", "G"):
