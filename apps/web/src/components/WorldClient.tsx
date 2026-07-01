@@ -57,7 +57,6 @@ export default function WorldClient() {
   // ── Flow 1 own-island layer: the embodied raft build + the rest of F1 (plant/eat, cave, marker,
   //    cache, shy creature) seep onto YOUR island as client-local entities (role "flow1"), same solo
   //    /observe/behavioral ingress as F0. Driven by the Flow1Scene controllers' own input. ──
-  const f1EntsRef = useRef<EntitySnapshot[]>([]);
   const f1SceneRef = useRef<Flow1Scene | null>(null);
   const [f1Prompt, setF1Prompt] = useState<string | null>(null);
   const [f1Whisper, setF1Whisper] = useState<string | null>(null);
@@ -423,7 +422,10 @@ export default function WorldClient() {
         // Merge in this player's own-island Flow-0 affordances + Flow-1 activity props (client-local;
         // not room state) so they render alongside the live room entities.
         for (const e of f0EntsRef.current) snaps.set(e.id, e);
-        for (const e of f1EntsRef.current) snaps.set(e.id, e);
+        // The F1 LIVE set (not a static list): picks remove + the raft adds are reflected here, so a
+        // gather isn't undone by the next server snapshot re-adding a stale plank.
+        const f1live = f1SceneRef.current?.liveEntities();
+        if (f1live) for (const e of f1live) snaps.set(e.id, e);
         world.applySnapshot(snaps, net.lastAckSeq());
         snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
         // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
@@ -580,6 +582,13 @@ export default function WorldClient() {
         } as EntitySnapshot;
       });
       f0SpawnAtRef.current = Date.now();
+      // Normalize F0 prop scale: their committed PNGs are large (the driftwood is 36×75, ~3× the avatar),
+      // so give each a sane display height — consistent with the avatar-scale F1 props on the same island.
+      const F0_PROP_H: Record<string, number> = { driftwood: 18, shell: 12, path_marker: 20, hill: 36, thicket: 32, tidepool: 26 };
+      for (const e of f0EntsRef.current) {
+        const kind = e.spriteUrl.startsWith("proc:") ? e.spriteUrl.slice(5) : "";
+        if (F0_PROP_H[kind]) world.setEntityDisplayHeight(e.id, F0_PROP_H[kind]);
+      }
 
       // Seep Flow 1 onto the same own island (client-local, role "flow1"): the embodied raft build + the
       // rest of F1 (plant/eat, cave, marker, cache, shy creature). Same SOLO /observe/behavioral ingress
@@ -601,7 +610,7 @@ export default function WorldClient() {
           onLaunched: () => netRef.current?.sendSetSail(true),
         },
       });
-      f1EntsRef.current = f1Scene.entities().snaps;
+      f1Scene.entities(); // seed the scene's live entity set (merged into every snapshot below)
       f1SceneRef.current = f1Scene;
 
       if (disposed) return;

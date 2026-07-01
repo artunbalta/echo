@@ -43,6 +43,8 @@ export interface Flow1BeatsConfig {
   actorId: () => string;
   sessionId: () => string;
   send: (events: BehavioralEvent[]) => void;
+  /** Add a client-local entity THROUGH the scene so its live merge-set stays in sync (see raftBuild). */
+  addEntity: (snap: EntitySnapshot, heightPx?: number) => void;
   onWhisper?: (t: string | null) => void;
   onPrompt?: (t: string | null) => void;
   /** Shy-creature stillness beat: fires sit_still after ~stillMs of no movement, spawns the creature. */
@@ -228,9 +230,9 @@ export class Flow1Beats {
     const snap: EntitySnapshot = {
       id: st.creatureId, kind: "npc", refId: st.creatureId, name: "",
       spriteUrl: "proc:shy_creature", x: st.near.x, y: st.near.y, facing: "down", moving: false,
+      role: "flow1", status: "none",
     };
-    this.cfg.world.addEntity(snap);
-    this.cfg.world.setEntityDisplayHeight(st.creatureId, 14);
+    this.cfg.addEntity(snap, 14);
   }
 
   private emit(action: string, raw: Record<string, unknown>, polarity?: "take" | "refuse") {
