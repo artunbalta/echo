@@ -605,6 +605,45 @@ export class WorldRoom extends Room<WorldState> {
       latencyMs: msg.latencyMs,
       editsCount: msg.editsCount,
     }).catch(() => {});
+    // P3 (event-schema Rule 3): every dyadic turn produces a PER-ACTOR row from BOTH vantages —
+    // the sender's dialogue_turn carries the implicit micro-timing (C1 latency, B3 edits); the
+    // recipient's receives_turn records being addressed, the substrate for the K1 refusal twin
+    // at close. Human-typed turns only: an echo-drafted turn is the AGENT's act, never written
+    // into a human's posterior. Same self-contact guard as emitFirstContact (two tabs, one user).
+    if (sender.refId !== partner.refId && !msg.viaEcho) {
+      const audience = this.audienceAround(sender.id, partner.id);
+      void observeBehavioral(
+        buildSocialEvent({
+          actorId: sender.refId,
+          sessionId: this.clientSessions.get(sender.id) ?? sender.id,
+          action: "dialogue_turn",
+          counterpartId: partner.refId,
+          counterpartStatus: "peer",
+          targetKind: "player",
+          audienceSize: audience,
+          raw: { latency_ms: msg.latencyMs, edits: msg.editsCount, amount: msg.text.length },
+        }),
+      );
+      void observeBehavioral(
+        buildSocialEvent({
+          actorId: partner.refId,
+          sessionId: this.clientSessions.get(partner.id) ?? partner.id,
+          action: "receives_turn",
+          counterpartId: sender.refId,
+          counterpartStatus: "peer",
+          targetKind: "player",
+          audienceSize: audience,
+          raw: { amount: msg.text.length },
+        }),
+      );
+    }
+  }
+
+  /** Other live players who could observe this dyad (excludes the two participants). */
+  private audienceAround(aId: string, bId: string): number {
+    return [...this.state.entities.values()].filter(
+      (e) => e.kind === "user" && e.id !== aId && e.id !== bId,
+    ).length;
   }
 
   private closeInteraction(id: string, reason: string) {
@@ -616,6 +655,31 @@ export class WorldRoom extends Room<WorldState> {
     this.clientFor(it.initiatorEntityId)?.send(S2C.INTERACT_CLOSED, { interactionId: id, reason });
     if (it.kind === "user") {
       this.clientFor(it.partnerEntityId)?.send(S2C.INTERACT_CLOSED, { interactionId: id, reason });
+      // P3: the K1 refusal twin (cue-catalog K1 — "declines social bid"). If one side spoke and
+      // the other never answered across the whole interaction, the silent side's non-action is
+      // first-class data from THEIR vantage (Law 2: read, never penalized).
+      const a = this.state.entities.get(it.initiatorEntityId);
+      const b = this.state.entities.get(it.partnerEntityId);
+      if (a && b && a.refId !== b.refId && it.history.length > 0) {
+        for (const [silent, speaker] of [[a, b], [b, a]] as const) {
+          const spoke = (it.lastTurnAt[silent.id] ?? 0) > 0;
+          const otherSpoke = (it.lastTurnAt[speaker.id] ?? 0) > 0;
+          if (!spoke && otherSpoke) {
+            void observeBehavioral(
+              buildSocialEvent({
+                actorId: silent.refId,
+                sessionId: this.clientSessions.get(silent.id) ?? silent.id,
+                action: "declines_to_engage",
+                counterpartId: speaker.refId,
+                counterpartStatus: "peer",
+                targetKind: "player",
+                audienceSize: this.audienceAround(silent.id, speaker.id),
+                raw: { dwell_ms: Date.now() - it.startedAt },
+              }),
+            );
+          }
+        }
+      }
     }
   }
 

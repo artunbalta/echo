@@ -58,6 +58,13 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   close_graceful: { channel: "E", cue: "E4", stage: 2, polarity: "take", axisPrior: "warmth/conscientiousness" },
   close_abrupt: { channel: "E", cue: "E5", stage: 2, polarity: "refuse", axisPrior: "dominance/low-warmth" },
   close_ghost: { channel: "E", cue: "E6", stage: 2, polarity: "refuse", axisPrior: "withdrawal/low-conscientiousness" },
+  // ── P3 per-actor dialogue-turn rows (event-schema Rule 3): every dyadic act produces a row
+  //    from EACH vantage. The sender's turn carries the implicit micro-timing (C1 latency, B3
+  //    edits in raw_signals); the recipient's row records being addressed — the substrate the
+  //    K1 refusal twin (declines_to_engage) and E2 thinking-per-word derivations need. ──
+  dialogue_turn: { channel: "C", cue: "C1", stage: 2, polarity: "take", axisPrior: "reply tempo — pace(−slow)/intellect(+deliberate), HIGH (implicit timing)" },
+  receives_turn: { channel: "E", cue: "E1", stage: 2, polarity: "take", axisPrior: "was addressed (recipient vantage; context carrier for K1/E2 derivations)" },
+  declines_to_engage: { channel: "K", cue: "K1", stage: 2, polarity: "refuse", axisPrior: "declined social bid — warmth(−), solitude_tol(+); twin of G1/A1, HIGH" },
   // the disambiguating dilemma (core of F2) — separates warmth / dominance / affect-volatility, HIGH
   cold_response_deescalate: { channel: "G", cue: "G8", stage: 2, polarity: "take", axisPrior: "warmth (stay warm), HIGH" },
   cold_response_persist: { channel: "D", cue: "D8", stage: 2, polarity: "take", axisPrior: "dominance (push), HIGH" },

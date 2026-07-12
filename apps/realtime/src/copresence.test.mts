@@ -95,8 +95,14 @@ async function main() {
   const roomB = await clientB.joinOrCreate("world", { userId: "userB", name: "Bob", slotIndex: 1 });
   roomA.onMessage("welcome", () => {});
   roomB.onMessage("welcome", () => {});
-  roomA.onMessage("interact_opened", () => {});
+  // P3: capture the interaction id so a real chat turn can be sent through the live pipe.
+  let iidA = "";
+  roomA.onMessage("interact_opened", (p: { interactionId: string }) => { iidA = p.interactionId; });
   roomB.onMessage("interact_opened", () => {});
+  roomA.onMessage("interact_turn", () => {});
+  roomB.onMessage("interact_turn", () => {});
+  roomA.onMessage("interact_closed", () => {});
+  roomB.onMessage("interact_closed", () => {});
   roomA.onMessage("error", () => {});
 
   const ent = (room: any, id: string) => room.state?.entities?.get?.(id);
@@ -217,6 +223,28 @@ async function main() {
   assert.equal(ow.target.id, "userB"); assert.equal(ow.target.status, "peer");
   assertFullContext(ow, 2, "opener_warm");
   log(`[4] F2 SOCIAL_CUE opener_warm → actor=${ow.actor_id} counterpart=${ow.target.id}(${ow.target.status}) stage=${ow.context.stage}`);
+
+  // ── (4b) P3 PER-ACTOR CHAT ROWS (event-schema Rule 3): one live chat turn from A produces TWO
+  //    rows — A's dialogue_turn (with the implicit C1 latency / B3 edits riding raw_signals) AND
+  //    B's receives_turn from B's OWN vantage. Then closing with B never having spoken emits B's
+  //    K1 refusal twin (declines_to_engage) — non-action is first-class data (Law 2). ──
+  await waitFor(() => !!iidA, 3000, "interaction id captured");
+  roomA.send("chat", { interactionId: iidA, text: "hello across the water", latencyMs: 1500, editsCount: 2 });
+  await waitFor(() => evsBy("dialogue_turn").length >= 1 && evsBy("receives_turn").length >= 1, 4000, "per-actor chat rows (both vantages)");
+  const dturn = evsBy("dialogue_turn").find((e) => e.actor_id === "userA")!;
+  const rturn = evsBy("receives_turn").find((e) => e.actor_id === "userB")!;
+  assert.ok(dturn, "sender's dialogue_turn row (their vantage)");
+  assert.ok(rturn, "recipient's receives_turn row (their vantage)");
+  assert.equal(dturn.target.id, "userB"); assert.equal(rturn.target.id, "userA");
+  assertFullContext(dturn, 2, "dialogue_turn"); assertFullContext(rturn, 2, "receives_turn");
+  assert.equal(dturn.context.counterpart_status, "peer"); assert.equal(rturn.context.counterpart_status, "peer");
+  roomA.send("interact_end", { interactionId: iidA });
+  await waitFor(() => evsBy("declines_to_engage").length >= 1, 4000, "K1 refusal twin for the silent side");
+  const k1 = evsBy("declines_to_engage").find((e) => e.actor_id === "userB")!;
+  assert.ok(k1, "declines_to_engage emitted for the participant who never answered");
+  assert.equal(k1.target.id, "userA");
+  assertFullContext(k1, 2, "declines_to_engage");
+  log(`[4b] P3 chat turn → dialogue_turn(userA→userB) + receives_turn(userB←userA), both full-context; close with B silent → K1 declines_to_engage(userB) — Rule 3 holds`);
 
   // ── (5) TRAVEL STAND — the co-presence amplifier: reach a FAR, non-adjacent island ───────────
   const FAR = 60; // a fixed distant landmark (A is on slot 0, B on slot 1 — both near the centre)

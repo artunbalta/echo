@@ -249,6 +249,30 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
             tele["save_rate"] = 1.0 if opt == "save" else 0.0
         if payload.get("latencyMs") is not None:
             tele["decision_latency"] = payload.get("latencyMs")
+    elif t == "fork_decision":
+        # P1's richer island fork (supersedes choice_made there): same behavioural reads;
+        # the survival context (scarcityLevel, ...) rides along in the payload for P5.
+        opt = payload.get("option")
+        if payload.get("forkKey") == "plant_or_spend" and opt in ("save", "spend"):
+            tele["save_rate"] = 1.0 if opt == "save" else 0.0
+        if payload.get("forkKey") == "tide_wager" and opt != "refused" and payload.get("variance") is not None:
+            tele["risk_index"] = payload.get("variance")
+        if payload.get("latencyMs") is not None and opt != "refused":
+            tele["decision_latency"] = payload.get("latencyMs")
+    elif t == "passive_locomotion":
+        # P3 (known-gaps #2): the continuous passive channel is RECORDED, not yet featurized —
+        # the committed W has no telemetry→openness path, so featurizing now would misroute the
+        # most individuating signal (openness) onto dominance/warmth. The ★ one-time re-anchor
+        # (P5) trains on this buffer; only after it do these scalars move the posterior.
+        scalars = {
+            k: float(payload[k])
+            for k in ("heading_change_rate", "path_tortuosity", "novel_tile_ratio", "backtrack_rate", "dwell_ms", "tiles")
+            if isinstance(payload.get(k), (int, float))
+        }
+        if scalars:
+            st.locomotion.append(scalars)
+            if len(st.locomotion) > 2000:  # bounded ring
+                del st.locomotion[: len(st.locomotion) - 2000]
     if tele:
         st.posterior = P.observe(st.posterior, "", tele)
     return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}
@@ -375,6 +399,8 @@ def get_persona(uid: str, authorization: str = Header(None)):
         "correlation": _top_correlation(st.posterior),
         "uncertainty": float(np.mean(st.posterior.var)),
         "behaviors": len(st.behaviors),
+        # P3: recorded passive-locomotion windows — the ★ re-anchor's corpus volume (gap #2).
+        "locomotion": len(st.locomotion),
         "temperature": round(st.temperature, 3),
         "ece": round(G.expected_calibration_error(confs, corr), 3) if confs else None,
         "buckets": {k: v.to_dict() for k, v in st.buckets.items()},
