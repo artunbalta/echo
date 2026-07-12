@@ -67,6 +67,11 @@ export interface UseDayOptions {
 export interface UseDayApi extends DayClockState {
   /** Feed/spend vitality from a discrete act (eat grain +0.3, harvest +0.35, …). */
   addVitality: (delta01: number) => void;
+  /**
+   * The BALD director stages a leaner (or easier) day — TODAY ONLY, clock-side, never
+   * persisted: personalized information-seeking (blueprint VIII.6), not a lasting debuff.
+   */
+  nudgeScarcity: (delta01: number) => void;
   /** The category currently being lingered at (from onNearbyChange) — drives dwell effects. */
   setDwellCategory: (cat: string | null) => void;
   /** Mark today's crop consumed/harvested (the plot empties; closeDay records it). */
@@ -200,6 +205,15 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     setClock((c) => ({ ...c, vitality01: vitalityRef.current }));
   }, []);
 
+  const nudgeScarcity = useCallback((delta01: number) => {
+    const s = stateRef.current;
+    if (!s) return;
+    // Clock-side only: today's drain + fork stakes bite harder, but closeDay folds from
+    // this nudged level exactly like any lean day — the person's RESPONSE is the signal.
+    stateRef.current = { ...s, scarcityLevel: Math.max(0, Math.min(1, s.scarcityLevel + delta01)) };
+    setClock((c) => ({ ...c, scarcityLevel: stateRef.current!.scarcityLevel }));
+  }, []);
+
   const setDwellCategory = useCallback((cat: string | null) => {
     dwellCatRef.current = cat;
   }, []);
@@ -292,6 +306,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
   return {
     ...clock,
     addVitality,
+    nudgeScarcity,
     setDwellCategory,
     noteCropHarvested,
     noteCropCleared,

@@ -418,6 +418,17 @@ def get_persona(uid: str, authorization: str = Header(None)):
         # with context flow through /observe/behavioral.
         "conditional_keys": sorted(st.cond.keys()),
         "conditional": {k: v.mu.tolist() for k, v in st.cond.items()},
+        # P7 (blueprint VIII.9 / III.3): the PUBLIC-MINUS-PRIVATE delta — self-monitoring as a
+        # stored, first-class read (the operational Ring of Gyges). Built from the Channel-H
+        # privacy-conditioned posteriors; null until both vantages have real evidence.
+        "self_monitoring": (
+            lambda pub, priv: {
+                "delta": [round(float(a - b), 4) for a, b in zip(pub.mu, priv.mu)],
+                "warmth_delta": round(float(pub.mu[0] - priv.mu[0]), 4),
+            }
+            if pub is not None and priv is not None
+            else None
+        )(st.cond.get("privacy:public"), st.cond.get("privacy:private")),
         "reward_version": st.reward.version,
         # "which raw features load on each axis" — replaces the hard-coded explanation when a
         # learned measurement matrix is active; null on a clean checkout (heuristic fallback).
@@ -437,6 +448,35 @@ def select_npc(req: SelectNpcReq, authorization: str = Header(None)):
         "selected": scores[0].npc_id if scores else None,
         "ranking": [
             {"npc": s.npc_id, "info_gain": round(s.score, 4), "p": round(s.predictive_p, 3)}
+            for s in scores[:10]
+        ],
+    }
+
+
+@app.post("/select-situation")
+def select_situation(req: SelectNpcReq, authorization: str = Header(None)):
+    """P7 — the BALD SITUATION-DIRECTOR (blueprint II.5 / IV.5 / stage-map §11): the same
+    expected-information-gain acquisition, generalized from NPCs to (affordance, context)
+    candidates — a lean day, a moral probe, a wager framing. The math is unchanged; only the
+    candidate space grew. The director RAISES SALIENCE of the max-MI candidate, never coerces
+    (Law 2): the caller surfaces the pick; refusing it is a K-cue, not a penalty.
+
+    The per-session intervention CAP decays as the posterior tightens (BALD's diminishing
+    returns made explicit): probing days early, calm mastery later — the felt curve falls out
+    of the math (IV.5). cap = ceil(3 · mean(Σ)/prior_var), floored at 0.
+    """
+    _auth(authorization)
+    st = STORE.get(req.userId)
+    cands = [(n["id"], np.array(n["axes_vec"], dtype=float)) for n in req.npcs]
+    scores = bald_scores(st.posterior, cands, samples=req.samples)
+    unc01 = float(np.clip(np.mean(st.posterior.var) / P.HYPER.prior_var, 0.0, 1.0))
+    cap = int(np.ceil(3.0 * unc01))
+    return {
+        "selected": scores[0].npc_id if scores else None,
+        "cap": cap,
+        "uncertainty01": round(unc01, 3),
+        "ranking": [
+            {"candidate": s.npc_id, "info_gain": round(s.score, 4), "p": round(s.predictive_p, 3)}
             for s in scores[:10]
         ],
     }

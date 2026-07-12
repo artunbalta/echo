@@ -246,6 +246,21 @@ def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
         tel["solitude_tol"] = 0.5           # watching rather than joining
         return True
 
+    # — P7 Stage-7 private moral probes (Channel H, privacy-conditioned cond_key) —
+    if a == "help_at_cost":
+        tel["ts_social"] = 0.85             # costly help with no witness → warmth/character
+        tel["approach"] = True
+        return True
+    if a == "pass_by":
+        tel["approach"] = False             # walked past the costly good (read, never penalized)
+        return True
+    if a == "return_cache":
+        tel["consistency"] = 0.9            # integrity unobserved → norm-internalization
+        return True
+    if a == "keep_cache":
+        tel["consistency"] = 0.1            # kept what wasn't theirs (nobody would know)
+        return True
+
     return False
 
 
@@ -339,8 +354,14 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
         if not tel:
             tel["approach"] = False
 
-    # conditional-bucket key: social events condition on counterpart status; otherwise on stakes.
-    if channel in _SOCIAL_CHANNELS and ctx.get("counterpart_status") not in (None, "none"):
+    # conditional-bucket key: MORAL (Channel H) events condition on PRIVACY — the Ring-of-Gyges
+    # axis (P7 / blueprint III.2, VIII.9): the same moral act watched vs unwatched builds two
+    # separate conditional posteriors, so the public-minus-private delta (self-monitoring,
+    # III.3) becomes a stored, first-class read. Social events condition on counterpart status;
+    # everything else on stakes.
+    if channel == "H":
+        cond_key = f"privacy:{ctx['public_or_private']}"
+    elif channel in _SOCIAL_CHANNELS and ctx.get("counterpart_status") not in (None, "none"):
         cond_key = f"counterpart:{ctx['counterpart_status']}"
     else:
         cond_key = f"stakes:{ctx['stakes']}"
