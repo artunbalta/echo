@@ -825,7 +825,7 @@ export class PixiWorld {
     //    YOUR OWN island's Flow-0 affordances ("f0_*", client-local) belong to you, so they always
     //    render sharp + named (distance 0 → Tier 1). ──
     // Your OWN island's affordances (f0_*) and day stations (day_*) belong to you — always named.
-    const dist = re.id.startsWith("f0_") || re.id.startsWith("day_") ? 0 : Math.hypot(this.localX - tileX, this.localY - tileY);
+    const dist = re.id.startsWith("f0_") || re.id.startsWith("day_") || re.id.startsWith("probe_") ? 0 : Math.hypot(this.localX - tileX, this.localY - tileY);
     const named = presenceTier(dist) === "close"; // identity only at near/interaction range
     re.sprite.visible = true;
     re.sprite.alpha = 1; // sharp at every distance — no silhouette, no alpha-dim
@@ -956,7 +956,7 @@ export class PixiWorld {
     const out: { id: string; refId: string; name: string; x: number; y: number }[] = [];
     for (const [id, re] of this.entities) {
       if (re.kind !== "npc") continue;
-      if (id.startsWith("f0_") || id.startsWith("day_")) continue; // client-local own-island affordances/stations aren't room NPCs the echo can approach
+      if (id.startsWith("f0_") || id.startsWith("day_") || id.startsWith("probe_")) continue; // client-local own-island affordances/stations/probes aren't room NPCs the echo can approach
       const x = (re as { _tx?: number })._tx ?? re.targetX;
       const y = (re as { _ty?: number })._ty ?? re.targetY;
       out.push({ id, refId: re.refId, name: re.name, x, y });

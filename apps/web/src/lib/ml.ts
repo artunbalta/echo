@@ -142,6 +142,27 @@ export function meetingOutcome(body: Record<string, unknown>): Promise<unknown> 
   return call("/meeting-outcome", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
 }
 
+export interface SituationPick {
+  selected: string | null;
+  cap: number;
+  uncertainty01?: number;
+  mocked?: boolean;
+}
+
+/** P7 — the BALD situation-director: expected-information-gain over (affordance, context)
+ *  candidates. Raises salience of the pick, never coerces (Law 2). Mock → no intervention. */
+export function selectSituation(body: {
+  userId: string;
+  npcs: { id: string; axes_vec: number[] }[];
+  samples?: number;
+}): Promise<SituationPick> {
+  return call<SituationPick>(
+    "/select-situation",
+    { method: "POST", body: JSON.stringify({ samples: 128, ...body }) },
+    { selected: null, cap: 0, mocked: true },
+  );
+}
+
 export interface BehavioralObserveResult {
   ok?: boolean;
   mocked?: boolean;

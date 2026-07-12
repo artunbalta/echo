@@ -19,7 +19,7 @@ import { useDay, type DuskReason } from "@/lib/useDay";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEvent, IslandDayState } from "@echo/shared";
 import {
   nearestSlot, slotDistance, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, SURVIVAL,
-  FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event,
+  FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event, buildSocialEvent,
   type Flow0Affordance,
 } from "@echo/shared";
 import { generateOcean } from "@/game/tilemap";
@@ -53,6 +53,53 @@ const DAY_STATIONS: DayStation[] = [
   { refId: "day_campfire", sprite: "proc:campfire", dx: -2, dy: 2, name: "a campfire", kind: "end" },
 ];
 const DAY_BY_ID = new Map(DAY_STATIONS.map((s) => [s.refId, s]));
+
+// ── P7 Stage-7 — the private moral probes (the Ring of Gyges, blueprint III.2). One appears
+//    on YOUR island from day 2 on (never the first morning — character reads need a settled
+//    baseline), alternating. PRIVATE, audience 0, no witness, no reward marker; the temptation
+//    is REAL (the cache feeds you; the gull costs you). Each is the private twin of a public
+//    clearing norm, so the engine's privacy-conditioned posteriors yield the public-minus-
+//    private delta (VIII.9). Skippable outright — walking past is simply not measured as a
+//    choice unless declined explicitly (Law 2). ──
+interface MoralProbe {
+  refId: string;
+  sprite: string;
+  dx: number;
+  dy: number;
+  name: string;
+  prompt: string;
+  takeAction: string; // SOCIAL_CUES key (polarity take)
+  takeLabel: string;
+  refuseAction: string; // the explicit decline twin
+  refuseLabel: string;
+  vitalityOnTake: number;
+  vitalityOnRefuse: number;
+  doneLineTake: string;
+  doneLineRefuse: string;
+}
+const MORAL_PROBES: MoralProbe[] = [
+  {
+    refId: "probe_gull", sprite: "proc:driftwood", dx: 6, dy: 5,
+    name: "a gull tangled in the trap line",
+    prompt: "a gull, tangled in your trap line. freeing it will cost you time and strength. no one would ever know either way.",
+    takeAction: "help_at_cost", takeLabel: "free it (it takes a while)",
+    refuseAction: "pass_by", refuseLabel: "leave it",
+    vitalityOnTake: -0.08, vitalityOnRefuse: 0,
+    doneLineTake: "it startles off across the water. nothing marks that this happened.",
+    doneLineRefuse: "you walk on. the line creaks behind you.",
+  },
+  {
+    refId: "probe_cache", sprite: "proc:shell", dx: -3, dy: -7,
+    name: "a half-buried cache, another's mark on it",
+    prompt: "a buried cache with someone else's mark carved into it. food inside, by the weight. nobody would know.",
+    takeAction: "return_cache", takeLabel: "leave it be",
+    refuseAction: "keep_cache", refuseLabel: "take it",
+    vitalityOnTake: 0, vitalityOnRefuse: 0.15,
+    doneLineTake: "you cover it back over, mark up.",
+    doneLineRefuse: "it feeds you. the mark stays under the sand.",
+  },
+];
+const PROBE_BY_ID = new Map(MORAL_PROBES.map((p) => [p.refId, p]));
 /** The tide wager's two sides (mirrors lib/island-day DAY_BET; local so the world stays lean). */
 const DAY_WAGER = {
   safe: { expectedValue: 1, variance: 0.1 },
@@ -99,6 +146,7 @@ export default function WorldClient() {
   const betWonRef = useRef<boolean | null>(null);
   const dayStartAtRef = useRef(0);
   const locoRef = useRef<LocomotionSampler | null>(null);
+  const probeEntsRef = useRef<EntitySnapshot[]>([]);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
   const interactionRef = useRef<string | null>(null);
@@ -505,6 +553,82 @@ export default function WorldClient() {
     return () => clearTimeout(t);
   }, [day.ready, day.crop, day.dayCount]);
 
+  // The BALD situation-director (P7 / II.5): once per day, ask which situation would teach
+  // the echo the most about THIS person. Salience only — the pick appears in the world; the
+  // cap decays as the posterior converges; ML absent → null → the deterministic rhythm.
+  const [directorPick, setDirectorPick] = useState<string | null>(null);
+  useEffect(() => {
+    if (!day.ready || day.dayCount < 1 || !uidRef.current) return;
+    let gone = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/island/director", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userId: uidRef.current }),
+        });
+        const pick = (await r.json()) as { surface: string | null };
+        if (gone) return;
+        setDirectorPick(pick.surface);
+        if (pick.surface === "lean_day") dayApiRef.current.nudgeScarcity(0.15);
+      } catch {
+        if (!gone) setDirectorPick(null);
+      }
+    })();
+    return () => {
+      gone = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day.ready, day.dayCount]);
+
+  // Today's private moral probe (Stage 7): appears from day 2 on, alternating (or the
+  // director's pick when it named one), on your own island — visible to no one else.
+  useEffect(() => {
+    if (!day.ready || day.dayCount < 1) {
+      probeEntsRef.current = [];
+      return;
+    }
+    const probe =
+      MORAL_PROBES.find((p) => p.refId === directorPick) ??
+      MORAL_PROBES[(day.dayCount - 1) % MORAL_PROBES.length];
+    const home = oceanIslandCenter(slotIndexRef.current ?? 0);
+    const lim = OCEAN_ISLAND_R - 2;
+    const m = Math.hypot(probe.dx, probe.dy) || 1;
+    const k = Math.min(1, lim / m);
+    const p = clampToMap(home.x + probe.dx * k, home.y + probe.dy * k);
+    probeEntsRef.current = [{
+      id: probe.refId, kind: "npc", refId: probe.refId, name: probe.name, spriteUrl: probe.sprite,
+      x: p.x, y: p.y, facing: "down", moving: false, role: "probe", status: "none",
+    } as EntitySnapshot];
+  }, [day.ready, day.dayCount, directorPick]);
+
+  /** Commit a Stage-7 moral probe — private, audience 0, commit-once; the act (or its explicit
+   *  decline twin) goes straight through the behavioral ingress with a PRIVATE envelope. */
+  const commitProbe = useCallback(
+    (probe: MoralProbe, take: boolean) => {
+      if (dayCommitted[probe.refId]) return;
+      setDayCommitted((c) => ({ ...c, [probe.refId]: take ? "take" : "refuse" }));
+      dayApiRef.current.addVitality(take ? probe.vitalityOnTake : probe.vitalityOnRefuse);
+      if (!telemetryConsented()) return; // fully playable, emits nothing (event-schema §5)
+      const event = buildSocialEvent({
+        actorId: uidRef.current,
+        sessionId: sessionIdRef.current,
+        action: take ? probe.takeAction : probe.refuseAction,
+        counterpartId: probe.refId,
+        counterpartStatus: "none",
+        targetKind: "place",
+        audienceSize: 0,
+        contextOverride: {
+          public_or_private: "private",
+          scarcity_level: Number(dayApiRef.current.scarcityLevel.toFixed(3)),
+        },
+      });
+      void fetch("/api/observe/behavioral", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event }),
+      }).catch(() => {});
+    },
+    [dayCommitted],
+  );
+
   /** Commit an irreversible day fork (grain / trap-line / the raft). No take-backs within the day. */
   const commitDayFork = useCallback(
     (st: DayStation, optId: string) => {
@@ -840,8 +964,10 @@ export default function WorldClient() {
         // Merge in this player's own-island Flow-0 affordances (client-local; not room state) so
         // they render + become "nearby" alongside the live room entities.
         for (const e of f0EntsRef.current) snaps.set(e.id, e);
-        // …and the survival day's stations (role "day"), likewise client-local.
+        // …and the survival day's stations (role "day") + today's private moral probe (role
+        // "probe"), likewise client-local — no other player ever sees your Stage-7 moment.
         for (const e of dayEntsRef.current) snaps.set(e.id, e);
+        for (const e of probeEntsRef.current) snaps.set(e.id, e);
         world.applySnapshot(snaps, net.lastAckSeq());
         snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
         // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
@@ -1381,7 +1507,7 @@ export default function WorldClient() {
     const nearbyId = world.getNearbyId();
     // Only auto-open with a real room NPC — never a real player, and never a client-local Flow-0
     // affordance (f0_*; not room state → the server would reject interactStart and stall the loop).
-    if (nearbyId && world.getNearbyKind() === "npc" && !nearbyId.startsWith("f0_") && !nearbyId.startsWith("day_")) {
+    if (nearbyId && world.getNearbyKind() === "npc" && !nearbyId.startsWith("f0_") && !nearbyId.startsWith("day_") && !nearbyId.startsWith("probe_")) {
       world.setAutoWalk(null);
       setAutoConvoActive(true);
       autoTurnsRef.current = 0;
@@ -1765,6 +1891,30 @@ export default function WorldClient() {
               </button>
             </div>
           );
+        }
+        // P7 Stage-7 — the private moral probe: no witness, no reward marker, no score. The
+        // prompt names the cost honestly; both arms are one click; done-state is a quiet line.
+        if (role === "probe") {
+          const probe = PROBE_BY_ID.get(nearby.refId);
+          if (probe) {
+            const verdict = dayCommitted[probe.refId];
+            return (
+              <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 text-center font-mono">
+                <div className="mb-1 text-sm italic text-parchment/80">{nearby.name}</div>
+                {verdict ? (
+                  <p className="text-sm italic text-parchment/60">{verdict === "take" ? probe.doneLineTake : probe.doneLineRefuse}</p>
+                ) : (
+                  <div>
+                    <p className="mb-2 text-sm leading-relaxed text-parchment/85">{probe.prompt}</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button onClick={() => commitProbe(probe, true)} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">{probe.takeLabel}</button>
+                      <button onClick={() => commitProbe(probe, false)} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">{probe.refuseLabel}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          }
         }
         // The survival day — a station on YOUR OWN homestead (P1). Forks are commit-once and
         // diegetic; the campfire is ALWAYS willing (an undecided fork is data, not a gate — Law 2).

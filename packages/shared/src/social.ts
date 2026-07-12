@@ -25,7 +25,7 @@ import type {
   Stakes,
 } from "./telemetry.js";
 
-export type SocialStage = 1 | 2 | 3; // F1 (workplace/economy), F2 (dialogue), F3 (clearing)
+export type SocialStage = 1 | 2 | 3 | 7; // F1 economy, F2 dialogue, F3 clearing, Stage-7 private moral probes
 
 export interface SocialCueDef {
   channel: CueChannel;
@@ -92,6 +92,15 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   include_marginal: { channel: "G", cue: "G1", stage: 3, polarity: "take", axisPrior: "warmth(HIGH) — moral-social" },
   ignore_marginal: { channel: "G", cue: "G1", stage: 3, polarity: "refuse", axisPrior: "low warmth" },
   join_exclusion: { channel: "D", cue: "D9", stage: 3, polarity: "take", axisPrior: "dominance/low-warmth" },
+  // ── P7 Stage-7 — private moral probes (the Ring of Gyges, blueprint III.2): the costly good
+  //    no one will ever know about. Emitted PRIVATE with audience 0; each is the private TWIN
+  //    of a public Stage-3 norm act, so the engine's privacy-conditioned Channel-H posteriors
+  //    yield the public-minus-private delta (self-monitoring, VIII.9). Refusing is read,
+  //    never penalized (Law 2). ──
+  help_at_cost: { channel: "H", cue: "H9", stage: 7, polarity: "take", axisPrior: "costly help, unobserved — warmth/character (HIGH; zero strategic value)" },
+  pass_by: { channel: "H", cue: "H9", stage: 7, polarity: "refuse", axisPrior: "walks past the costly good (K-twin; read, never penalized)" },
+  return_cache: { channel: "H", cue: "H2", stage: 7, polarity: "take", axisPrior: "honesty unobserved — leaves what isn't theirs" },
+  keep_cache: { channel: "H", cue: "H2", stage: 7, polarity: "refuse", axisPrior: "keeps it (nobody would know; the temptation is real — it feeds you)" },
   // ── STAND cues — the travel stand (the co-presence amplifier; F2+ and F6). A single-actor
   //    choice (counterpart "none"); far/near is the openness/risk read. ⚑ openness routes off-axis
   //    under the committed W (the cross-flow gap) — flagged in known-gaps, not silently re-routed. ──
