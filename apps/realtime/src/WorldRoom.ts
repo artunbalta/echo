@@ -25,6 +25,10 @@ import {
   FLOW2_FIRST_CONTACT,
   buildSocialEvent,
   SOCIAL_CUES,
+  buildFlow0Event,
+  FLOW0_EGGS,
+  PRESENCE,
+  OCEAN_ISLAND_R,
   type MoveIntent,
   type ChatMessage,
   type SocialCueMsg,
@@ -88,6 +92,17 @@ export class WorldRoom extends Room<WorldState> {
   maxClients = WORLD.ROOM_CAPACITY;
   private interactions = new Map<string, ActiveInteraction>();
   private clientSessions = new Map<string, string>(); // entityId -> sessionId
+  // ── P4 Stage-2/3 life-scale reads ──
+  // The sighting (egg_horizon_seen): once per (viewer, seen) pair, when a far-but-visible
+  // ANONYMOUS figure first appears across the water. Throttled scan; capped per viewer.
+  private sightingsSeen = new Set<string>(); // "viewerId|seenId"
+  private sightingsByViewer = new Map<string, number>();
+  private lastSightingScanAt = 0;
+  // crossing_latency (blueprint VIII.11): ms from first being seen by this room to the FIRST
+  // ever sail-out — novelty-approach-vs-avoidance at the scale of a life. Keyed by refId so it
+  // survives reconnects (process-lifetime; the zero-key bound).
+  private firstSeenAt = new Map<string, number>();
+  private hasCrossed = new Set<string>();
 
   async onCreate(options: { worldId?: string }) {
     this.setState(new WorldState());
@@ -123,6 +138,7 @@ export class WorldRoom extends Room<WorldState> {
     e.homeSlot = typeof options.slotIndex === "number" ? options.slotIndex : -1;
     this.state.entities.set(e.id, e);
     if (options.sessionId) this.clientSessions.set(e.id, options.sessionId);
+    if (!this.firstSeenAt.has(e.refId)) this.firstSeenAt.set(e.refId, Date.now());
 
     const welcome: WelcomePayload = {
       entityId: e.id,
@@ -318,11 +334,32 @@ export class WorldRoom extends Room<WorldState> {
         }),
       );
 
-    if (msg.prepared) emit("prepare_before_travel");
-    emit(far ? "travel_far" : "travel_near", { distance: Number.isFinite(hop) ? Number(hop.toFixed(2)) : 0, amount: dest });
-
     // Arrive at the destination island's ocean coordinate in the shared room.
     const arrive = this.spawnForSlot(dest);
+
+    // P4: the empty-vs-peopled contrast (blueprint VIII.2 — the cleanest openness-vs-warmth
+    // disambiguator). The server counts, authoritatively, who is already at the destination:
+    // sailing to a BARE island reads novelty; sailing to a peopled one reads sociality. The
+    // count rides raw_signals; the P5 re-anchor separates the two loadings.
+    const destOccupants = [...this.state.entities.values()].filter(
+      (o) => o.id !== e.id && tileDistance(o.x, o.y, arrive.x, arrive.y) <= OCEAN_ISLAND_R + 2,
+    ).length;
+
+    const travelRaw: Record<string, number> = {
+      distance: Number.isFinite(hop) ? Number(hop.toFixed(2)) : 0,
+      amount: dest,
+      dest_occupants: destOccupants,
+    };
+    // crossing_latency (VIII.11): the FIRST ever sail-out, measured from first being seen —
+    // one scalar capturing novelty-approach-vs-avoidance at the scale of a life.
+    if (!this.hasCrossed.has(e.refId)) {
+      this.hasCrossed.add(e.refId);
+      const t0 = this.firstSeenAt.get(e.refId);
+      if (t0) travelRaw.crossing_latency_ms = now - t0;
+    }
+
+    if (msg.prepared) emit("prepare_before_travel");
+    emit(far ? "travel_far" : "travel_near", travelRaw);
     e.x = arrive.x;
     e.y = arrive.y;
     e.dir = { x: 0, y: 0 };
@@ -697,6 +734,46 @@ export class WorldRoom extends Room<WorldState> {
       }
     }
     this.enforceUserInteractions(now);
+    this.scanSightings(now);
+  }
+
+  /**
+   * The Stage-2 SIGHTING (P4 / storyboard VI.A 6:00): a far, sharp, ANONYMOUS figure first
+   * becomes visible across the water. Fires ONCE per (viewer, seen) pair, for BOTH viewers,
+   * as a SOLITARY cue (audience 0, no counterpart — the figure is anonymous at that tier, so
+   * there is nothing social about it yet; naming/social begin only at CLOSE). Throttled scan,
+   * capped per viewer so a crowded ocean can't flood the channel.
+   */
+  private scanSightings(now: number) {
+    if (now - this.lastSightingScanAt < 2000) return;
+    this.lastSightingScanAt = now;
+    const egg = FLOW0_EGGS.find((g) => g.id === "egg_horizon")!;
+    const users = [...this.state.entities.values()].filter((e) => e.kind === "user");
+    for (const viewer of users) {
+      if ((this.sightingsByViewer.get(viewer.id) ?? 0) >= 6) continue;
+      for (const seen of users) {
+        if (seen.id === viewer.id || seen.refId === viewer.refId) continue;
+        const key = `${viewer.id}|${seen.id}`;
+        if (this.sightingsSeen.has(key)) continue;
+        const d = tileDistance(viewer.x, viewer.y, seen.x, seen.y);
+        if (d > PRESENCE.APPROACH && d <= PRESENCE.HORIZON) {
+          this.sightingsSeen.add(key);
+          this.sightingsByViewer.set(viewer.id, (this.sightingsByViewer.get(viewer.id) ?? 0) + 1);
+          void observeBehavioral(
+            buildFlow0Event({
+              actorId: viewer.refId,
+              sessionId: this.clientSessions.get(viewer.id) ?? viewer.id,
+              channel: egg.channel,
+              cue: egg.cue,
+              action: egg.action, // egg_horizon_seen — I3 novelty / openness (⚑ until P5)
+              targetId: "horizon_figure",
+              targetKind: "place",
+              raw: { distance: Number(d.toFixed(1)) },
+            }),
+          );
+        }
+      }
+    }
   }
 
   /** Keep live-player conversations honest: end them when the two walk apart (so neither is

@@ -18,7 +18,7 @@ import { markFunnel, telemetryConsented } from "@/lib/funnel";
 import { useDay, type DuskReason } from "@/lib/useDay";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEvent, IslandDayState } from "@echo/shared";
 import {
-  nearestSlot, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, SURVIVAL,
+  nearestSlot, slotDistance, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, SURVIVAL,
   FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event,
   type Flow0Affordance,
 } from "@echo/shared";
@@ -37,12 +37,15 @@ interface DayStation {
   dx: number;
   dy: number;
   name: string;
-  kind: "grain" | "wager" | "dwell" | "end";
+  kind: "grain" | "wager" | "dwell" | "end" | "raft";
   cat?: DayCat;
   hint?: string;
 }
 const DAY_STATIONS: DayStation[] = [
   { refId: "day_grain", sprite: "proc:grain_sprout", dx: -4, dy: -4, name: "a sprout", kind: "grain" },
+  // The raft is the ONE gate in the whole game, and it is self-imposed (blueprint I.3): the sea
+  // opens only after you choose to begin it. Never building it (K4) is first-class data (Law 2).
+  { refId: "day_raft", sprite: "proc:raft", dx: -7, dy: -3, name: "an unfinished raft", kind: "raft", cat: "build" },
   { refId: "day_bush", sprite: "proc:berry_bush", dx: 5, dy: -3, name: "a berry bush", kind: "dwell", cat: "earn", hint: "you forage — it feeds you while the light lasts" },
   { refId: "day_cairn", sprite: "proc:book_cairn", dx: -4, dy: 5, name: "a cairn of books", kind: "dwell", cat: "learn", hint: "you read the island, the tides, yourself" },
   { refId: "day_bedroll", sprite: "proc:bedroll", dx: 5, dy: 4, name: "a bedroll", kind: "dwell", cat: "leisure", hint: "you rest; strength returns as the day passes" },
@@ -322,11 +325,30 @@ export default function WorldClient() {
     // "a near shore" must be SPATIALLY nearest (index ≠ space under phyllotaxis), so its label
     // matches the server's authoritative travel_near verdict. The far gathering is a fixed shared
     // landmark (so two players who pick it rendezvous); for central/clustered homes it is genuinely far.
-    return [
+    const dests = [
       { slot: nearestSlot(home), label: "a near shore" },
       { slot: FAR_GATHERING, label: "the far gathering ⟡" },
       { slot: (FAR_GATHERING + 25) % 100, label: "a distant stranger's island" },
     ];
+    // P4 (blueprint VIII.2): the NOVEL-EMPTY island — the cleanest openness-vs-warmth
+    // disambiguator. The nearest slot with NO ONE on it (no NPCs in render state); the server
+    // stamps dest_occupants authoritatively on arrival either way.
+    const npcs = worldRef.current?.listNpcs() ?? [];
+    const taken = new Set(dests.map((d) => d.slot));
+    let bare: number | null = null;
+    let bareD = Infinity;
+    for (let i = 0; i < 100; i++) {
+      if (i === home || taken.has(i)) continue;
+      const c = oceanIslandCenter(i);
+      if (npcs.some((n) => Math.hypot(n.x - c.x, n.y - c.y) <= OCEAN_ISLAND_R + 2)) continue;
+      const d = slotDistance(home, i);
+      if (d < bareD) {
+        bareD = d;
+        bare = i;
+      }
+    }
+    if (bare !== null) dests.push({ slot: bare, label: "a bare shore — no one there" });
+    return dests;
   };
   const travel = useCallback((slot: number, label: string) => {
     netRef.current?.sendTravel(slot, preparedRef.current);
@@ -483,10 +505,10 @@ export default function WorldClient() {
     return () => clearTimeout(t);
   }, [day.ready, day.crop, day.dayCount]);
 
-  /** Commit an irreversible day fork (grain / trap-line). No take-backs within the day. */
+  /** Commit an irreversible day fork (grain / trap-line / the raft). No take-backs within the day. */
   const commitDayFork = useCallback(
     (st: DayStation, optId: string) => {
-      const key = st.kind === "grain" ? "plant_or_spend" : "tide_wager";
+      const key = st.kind === "grain" ? "plant_or_spend" : st.kind === "raft" ? "start_ship" : "tide_wager";
       if (dayCommitted[key]) return;
       markFunnel(uidRef.current, "first_fork");
       const shownAt = daySeenAtRef.current[st.refId] ?? dayStartAtRef.current;
@@ -509,6 +531,26 @@ export default function WorldClient() {
           type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(),
           payload: { ...base, stake: DAY_WAGER.stake, expectedValue: side.expectedValue, variance: side.variance, chosenRisk: optId },
         });
+      } else if (st.kind === "raft") {
+        // The Stage-2 gate, self-imposed: beginning the raft opens the long work of leaving.
+        const leaving = optId === "start";
+        dayChoicesRef.current.push({
+          forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
+          detail: leaving ? "began the long work of leaving" : "let the raft lie",
+        });
+        events.push({ type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(), payload: base });
+        if (leaving) {
+          dayApiRef.current.noteBuildDelta(0.1);
+          const secs = Math.round((Date.now() - dayStartAtRef.current) / 1000);
+          events.push({
+            type: "structure_progress", sessionId: sessionIdRef.current, ts: Date.now(),
+            payload: { structure: "ship", started: true, finished: false, delta01: 0.1, sessionSeconds: secs },
+          });
+          events.push({
+            type: "leave_intent", sessionId: sessionIdRef.current, ts: Date.now(),
+            payload: { stage: "started", dayIndex: dayApiRef.current.dayCount, shipProgress01: 0.1, secondsAlone: secs },
+          });
+        }
       } else {
         dayChoicesRef.current.push({
           forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
@@ -578,6 +620,8 @@ export default function WorldClient() {
       const refusals: string[] = [];
       if (grainForkReady && day.crop === "none" && !dayCommitted.plant_or_spend) refusals.push("plant_or_spend");
       if (!dayCommitted.tide_wager) refusals.push("tide_wager");
+      // Never beginning the raft is K4 — one of the strongest cues in the system (I.3).
+      if (!dayCommitted.start_ship && day.structureProgress === 0) refusals.push("start_ship");
       for (const forkKey of refusals) {
         events.push({
           type: "fork_decision", sessionId: sessionIdRef.current, ts: now,
@@ -1453,16 +1497,22 @@ export default function WorldClient() {
       {/* Atmospheric vignette over the world (below the UI panels in DOM order). */}
       <div className="world-vignette absolute inset-0" />
 
-      {/* The crossing affordance: board a raft to set sail (the open sea is a wall on foot). */}
-      {!offline && (
+      {/* The crossing affordance: board a raft to set sail (the open sea is a wall on foot).
+          P4: the raft must be BEGUN first — the one self-imposed gate in the game (blueprint
+          I.3). Until then the button honestly points at the unfinished raft on your shore. */}
+      {!offline && (day.structureProgress > 0 || sailing ? (
         <button
           onClick={toggleSail}
           className="panel absolute bottom-4 left-4 z-30 rounded-lg px-3 py-2 font-mono text-[11px] text-parchment hover:text-echo"
-          title="The open sea is a wall on foot — board a raft to cross to another island."
+          title="The open sea is a wall on foot — board your raft to cross to another island."
         >
-          {sailing ? "⚓ drop anchor" : "⛵ board a raft — set sail"}
+          {sailing ? "⚓ drop anchor" : "⛵ board your raft — set sail"}
         </button>
-      )}
+      ) : (
+        <div className="panel absolute bottom-4 left-4 z-30 rounded-lg px-3 py-2 font-mono text-[11px] text-parchment/45" title="Begin the raft on your shore and the sea opens.">
+          ⛵ an unfinished raft waits on your shore
+        </div>
+      ))}
 
       {offline ? (
         <div className="panel absolute left-1/2 top-1/2 w-[min(420px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-lg px-6 py-5 text-center font-mono text-sm text-parchment">
@@ -1728,6 +1778,27 @@ export default function WorldClient() {
                     <div className="flex flex-wrap gap-2">
                       <button onClick={() => commitDayFork(st, "spend")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">eat it now</button>
                       <button onClick={() => commitDayFork(st, "save")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">save the seed</button>
+                    </div>
+                  </div>
+                );
+              }
+              // ── the raft: the one self-imposed gate (Stage 2) ──
+              if (st.kind === "raft") {
+                if (day.structureProgress >= 1) {
+                  return <p className="text-sm italic text-parchment/80">the raft is ready. the sea is yours.</p>;
+                }
+                if (day.structureProgress > 0 || dayCommitted.start_ship === "start") {
+                  return <p className="text-sm italic text-parchment/80">the raft takes shape, plank by plank — time here builds it.</p>;
+                }
+                if (dayCommitted.start_ship === "stay") {
+                  return <p className="text-sm italic text-parchment/60">you let it lie, for now. the horizon keeps.</p>;
+                }
+                return (
+                  <div>
+                    <p className="mb-2 text-sm text-parchment/85">an unfinished raft. begin the long work of leaving — or let it lie.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => commitDayFork(st, "start")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">begin the raft</button>
+                      <button onClick={() => commitDayFork(st, "stay")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">leave it be</button>
                     </div>
                   </div>
                 );
