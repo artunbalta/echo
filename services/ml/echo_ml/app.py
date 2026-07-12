@@ -339,6 +339,12 @@ def feedback(req: FeedbackReq, authorization: str = Header(None)):
         xp = embed(f"{req.context} || {req.chosen}")
         xn = embed(f"{req.context} || {req.rejected}")
         st.reward.step_pair(xp, xn)
+    # 1b) the VETO (P6 / blueprint II.6): agreed=false on a rejected utterance with no
+    # correction — "that wasn't me" on a REAL autonomous act, the highest-value signal the
+    # system receives. No winner exists to pair, so it anchors the reward head as a negative
+    # OUTCOME on that action (BCE y=0); the bucket demotion below happens regardless.
+    elif req.rejected and not req.agreed:
+        st.reward.step_outcome(embed(f"{req.context} || {req.rejected}"), 0.0)
 
     # 2) autonomy bucket + calibration data
     bucket = st.bucket(req.bucket)

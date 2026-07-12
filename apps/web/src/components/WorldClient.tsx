@@ -541,6 +541,11 @@ export default function WorldClient() {
         events.push({ type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(), payload: base });
         if (leaving) {
           dayApiRef.current.noteBuildDelta(0.1);
+          // Beginning the raft is the gate itself: once begun, the sea is yours to cross
+          // (the choice is the commitment — P1's rule, kept identical here).
+          worldRef.current?.setSailing(true);
+          netRef.current?.sendSetSail(true);
+          setSailing(true);
           const secs = Math.round((Date.now() - dayStartAtRef.current) / 1000);
           events.push({
             type: "structure_progress", sessionId: sessionIdRef.current, ts: Date.now(),
@@ -1272,12 +1277,17 @@ export default function WorldClient() {
     setAutoConvo(v);
   }
 
-  /** Nearest NPC we didn't just leave — who the echo approaches next. */
+  /** Nearest NPC we didn't just leave — who the echo approaches next. The echo obeys the
+   *  same world rules as the person (P4): without a begun raft it cannot cross water, so it
+   *  only considers NPCs on the current island; with the raft it sails like anyone else. */
   function pickNextNpc(): { id: string; name: string } | null {
     const world = worldRef.current;
     if (!world) return null;
     const me = world.getSelfTile();
-    const npcs = world.listNpcs();
+    const canCross = day.structureProgress > 0 || sailing;
+    const npcs = world
+      .listNpcs()
+      .filter((n) => canCross || Math.hypot(n.x - me.x, n.y - me.y) <= OCEAN_ISLAND_R + 2);
     if (!npcs.length) return null;
     const recent = autoTargetRef.current?.id;
     const sorted = npcs
@@ -1296,7 +1306,18 @@ export default function WorldClient() {
     handoverOnRef.current = true;
     autoMetRef.current = 0;
     markFunnel(uidRef.current, "handover_start");
-    setEchoStatus(`your echo is carrying ${prettyBucket(bucket)} on its own — wandering and meeting people for you.`);
+    // The echo lives by the same rules you do (P4): with a begun raft it boards and can
+    // cross the water to reach people; without one it can only wander your own shore.
+    if ((day.structureProgress > 0 || sailing) && !sailing) {
+      worldRef.current?.setSailing(true);
+      netRef.current?.sendSetSail(true);
+      setSailing(true);
+    }
+    setEchoStatus(
+      day.structureProgress > 0 || sailing
+        ? `your echo is carrying ${prettyBucket(bucket)} on its own — wandering and meeting people for you.`
+        : `your echo is carrying ${prettyBucket(bucket)} on its own — but without a raft it can only wander your shore.`,
+    );
     approachNext();
   }
 
@@ -1333,7 +1354,30 @@ export default function WorldClient() {
     const target = autoTargetRef.current;
     if (!world || !target) return;
     const npc = world.listNpcs().find((n) => n.id === target.id);
-    if (npc) world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
+    // Straight-line auto-walk has no pathfinding: a tree between the echo and its target
+    // cancels the walk and the loop would re-aim into the same tree forever. Detect the
+    // stall (position frozen across polls), first sidestep with a jittered aim, then give
+    // up on this target and approach someone else (P6: the echo must never freeze).
+    const me = world.getSelfTile();
+    const stuck =
+      steerLastPosRef.current &&
+      Math.hypot(me.x - steerLastPosRef.current.x, me.y - steerLastPosRef.current.y) < 0.1;
+    steerStuckRef.current = stuck ? steerStuckRef.current + 1 : 0;
+    steerLastPosRef.current = me;
+    if (npc) {
+      if (steerStuckRef.current >= 18) {
+        steerStuckRef.current = 0;
+        autoTargetRef.current = null;
+        autoLoopTimer.current = setTimeout(() => approachNextRef.current(), 400);
+        return;
+      }
+      if (steerStuckRef.current >= 5) {
+        const a = Math.random() * Math.PI * 2; // sidestep around the obstacle
+        world.setAutoWalk({ x: npc.x + Math.cos(a) * 2.5, y: npc.y + Math.sin(a) * 2.5 });
+      } else {
+        world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
+      }
+    }
     const nearbyId = world.getNearbyId();
     // Only auto-open with a real room NPC — never a real player, and never a client-local Flow-0
     // affordance (f0_*; not room state → the server would reject interactStart and stall the loop).
@@ -1346,6 +1390,8 @@ export default function WorldClient() {
     }
     autoLoopTimer.current = setTimeout(steerToTarget, 350);
   }
+  const steerLastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const steerStuckRef = useRef(0);
 
   /** One autonomous turn: the echo proposes and — only where it's truly earned (decision
    *  `auto`) — speaks. It never self-confirms agreement; silence is not consent. The sole

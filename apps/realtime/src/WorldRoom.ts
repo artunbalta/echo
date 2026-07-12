@@ -586,8 +586,10 @@ export class WorldRoom extends Room<WorldState> {
       text: reply.text,
     });
 
-    // Persist the exchange (fire-and-forget; never blocks the turn).
-    if (userId) {
+    // Persist the exchange (fire-and-forget; never blocks the turn). Echo-drafted turns
+    // (viaEcho) are the AGENT's acts, not the person's — never written into the human's
+    // posterior via the /observe path (P6 measurement hygiene; the veto is their signal).
+    if (userId && !msg.viaEcho) {
       logInteraction({
         worldId: this.state.worldId,
         actorId: userId,

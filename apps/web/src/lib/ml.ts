@@ -91,13 +91,16 @@ export function agentTurn(body: {
     { method: "POST", body: JSON.stringify(body) },
     {
       action: mockProposal(body.userMessage),
-      decision: "copilot",
+      // Zero-key path (P6 acceptance): the mock policy still drives a VISIBLE handover —
+      // `auto` in the demo smalltalk bucket so the echo walks and talks; honestly labeled
+      // (mocked + the rationale) and vetoable exactly like the real thing.
+      decision: body.bucket === "smalltalk" ? "auto" : "copilot",
       confidence: 0.5,
       p_hat: 0.5,
       tau: 0.58,
       explored: false,
-      level: "copilot",
-      rationale: "ML service offline — showing a neutral draft. Start services/ml to enable real proposals.",
+      level: body.bucket === "smalltalk" ? "auto" : "copilot",
+      rationale: "ML service offline — a demo turn so the handover is visible. Start services/ml for real proposals.",
       candidates: [mockProposal(body.userMessage)],
       mocked: true,
     },
@@ -189,7 +192,14 @@ export function getPersona(uid: string): Promise<PersonaSnapshot> {
   return call<PersonaSnapshot>(
     `/persona/${uid}`,
     { method: "GET" },
-    { userId: uid, traits: [], uncertainty: 1, behaviors: 0, ece: null, buckets: {}, reward_version: 0, mocked: true },
+    {
+      userId: uid, traits: [], uncertainty: 1, behaviors: 0, ece: null,
+      // Zero-key path (P6): one demo `auto` bucket so the handover on-ramp is reachable and
+      // visibly demonstrable with no services. Honest: the whole snapshot is mocked:true and
+      // every consumer labels it (the meter's DEMO badge, the panel's offline line).
+      buckets: { smalltalk: { level: "auto", agreement_ewma: 0.85, volume: 12, ece: 0.05 } },
+      reward_version: 0, mocked: true,
+    },
   );
 }
 
