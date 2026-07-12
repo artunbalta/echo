@@ -635,15 +635,19 @@ export class WorldRoom extends Room<WorldState> {
       text: msg.text,
     });
     // Persist the exchange for the end-of-day connection read (fire-and-forget).
-    logInteraction({
-      worldId: this.state.worldId,
-      actorId: sender.refId,
-      targetId: partner.refId,
-      userText: msg.text,
-      npcText: "",
-      latencyMs: msg.latencyMs,
-      editsCount: msg.editsCount,
-    }).catch(() => {});
+    // Echo-drafted turns are the AGENT's acts — skip logInteraction so the echo's words
+    // are never attributed to the human sender (matches the NPC path at :592).
+    if (!msg.viaEcho) {
+      logInteraction({
+        worldId: this.state.worldId,
+        actorId: sender.refId,
+        targetId: partner.refId,
+        userText: msg.text,
+        npcText: "",
+        latencyMs: msg.latencyMs,
+        editsCount: msg.editsCount,
+      }).catch(() => {});
+    }
     // P3 (event-schema Rule 3): every dyadic turn produces a PER-ACTOR row from BOTH vantages —
     // the sender's dialogue_turn carries the implicit micro-timing (C1 latency, B3 edits); the
     // recipient's receives_turn records being addressed, the substrate for the K1 refusal twin

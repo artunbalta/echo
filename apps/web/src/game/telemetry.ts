@@ -113,6 +113,7 @@ export class LocomotionSampler {
 
   /** New day → novelty resets with the world (yesterday's ground can be novel again). */
   resetDay() {
+    this.samples = [];
     this.visited.clear();
     this.emitsToday = 0;
     this.lastEmitted = null;

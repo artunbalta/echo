@@ -745,17 +745,20 @@ export default function WorldClient() {
         },
       }];
       // Undecided forks close as REFUSALS — first-class data, never a blocker (Law 2). Only a
-      // fork that actually OPENED today can be refused.
-      const refusals: string[] = [];
-      if (grainForkReady && day.crop === "none" && !dayCommitted.plant_or_spend) refusals.push("plant_or_spend");
-      if (!dayCommitted.tide_wager) refusals.push("tide_wager");
-      // Never beginning the raft is K4 — one of the strongest cues in the system (I.3).
-      if (!dayCommitted.start_ship && day.structureProgress === 0) refusals.push("start_ship");
-      for (const forkKey of refusals) {
-        events.push({
-          type: "fork_decision", sessionId: sessionIdRef.current, ts: now,
-          payload: { forkKey, option: "refused", latencyMs: now - dayStartAtRef.current, irreversible: false, ...dayForkContext() },
-        });
+      // fork that actually OPENED today can be refused. Skip on collapse: the player was knocked
+      // out, not choosing non-engagement — conflating the two writes a false Channel-K signal.
+      if (reason !== "collapse") {
+        const refusals: string[] = [];
+        if (grainForkReady && day.crop === "none" && !dayCommitted.plant_or_spend) refusals.push("plant_or_spend");
+        if (!dayCommitted.tide_wager) refusals.push("tide_wager");
+        // Never beginning the raft is K4 — one of the strongest cues in the system (I.3).
+        if (!dayCommitted.start_ship && day.structureProgress === 0) refusals.push("start_ship");
+        for (const forkKey of refusals) {
+          events.push({
+            type: "fork_decision", sessionId: sessionIdRef.current, ts: now,
+            payload: { forkKey, option: "refused", latencyMs: now - dayStartAtRef.current, irreversible: false, ...dayForkContext() },
+          });
+        }
       }
       void forwardDayEvents(events);
 
@@ -792,7 +795,7 @@ export default function WorldClient() {
         setDuskBusy(false);
       }
     },
-    [duskBusy, duskReading, collapsedCard, pendingNext, dayCommitted, grainForkReady, day.crop, flushDayDwell, dayForkContext, forwardDayEvents],
+    [duskBusy, duskReading, collapsedCard, pendingNext, dayCommitted, grainForkReady, day.crop, day.structureProgress, flushDayDwell, dayForkContext, forwardDayEvents],
   );
   endDayFnRef.current = endWorldDay;
 
