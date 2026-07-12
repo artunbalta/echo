@@ -95,6 +95,9 @@ export interface WorldHooks {
   emitTelemetry?: (type: string, payload: Record<string, unknown>) => void;
   /** Fires when the local player steps in/out of the portal doorway's interaction radius. */
   onPortalChange?: (near: boolean) => void;
+  /** The local player's predicted tile position, every frame — feeds the passive
+   *  locomotion sampler (P3). The consumer throttles; positions never leave the client. */
+  onSelfSample?: (x: number, y: number) => void;
 }
 
 export class PixiWorld {
@@ -762,6 +765,7 @@ export class PixiWorld {
     if (self) {
       this.drawEntity(self, this.localX, this.localY, this.localFacing, moving, dt);
     }
+    this.hooks.onSelfSample?.(this.localX, this.localY);
   }
 
   private stepRemotes(dt: number) {

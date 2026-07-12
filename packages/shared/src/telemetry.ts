@@ -35,7 +35,11 @@ export type TelemetryType =
   // conditional signature). A refused fork emits fork_decision with option:"refused"
   // (the Channel-K twin — Law 2: non-choice is data, never a penalty).
   | "survival_tick" // payload: { vitality01, daylight01, scarcityLevel, dayCount }
-  | "fork_decision"; // payload: { forkKey, option|"refused", latencyMs, scarcityLevel, vitality01, daylight01, dayCount, irreversible }
+  | "fork_decision" // payload: { forkKey, option|"refused", latencyMs, scarcityLevel, vitality01, daylight01, dayCount, irreversible }
+  // ── P3 continuous passive locomotion (known-gaps #2; the openness apparatus, II.4). ──
+  // The least-fakeable channel, aggregated client-side: debounced (idle windows emit
+  // nothing), change-thresholded, per-day-capped, ≤1 event / ~1.5 s. Scalars only.
+  | "passive_locomotion"; // payload: { heading_change_rate, path_tortuosity, novel_tile_ratio, backtrack_rate, dwell_ms, tiles }
 
 export interface TelemetryEvent {
   type: TelemetryType;
@@ -182,6 +186,7 @@ export const CUE_FOR_TYPE: Record<TelemetryType, { channel: CueChannel; cue: Cue
   fork_deliberation: { channel: "B", cue: "B2" },
   survival_tick: { channel: "I", cue: "I1" }, // ambient affect/body-state sample (context carrier)
   fork_decision: { channel: "F", cue: "F1" }, // save_or_spend under scarcity (richer choice_made)
+  passive_locomotion: { channel: "A", cue: "A9" }, // territory range / exploration breadth → openness
 };
 
 /** A neutral context for legacy backfill — flagged via provenance:"legacy" so the engine down-weights it. */

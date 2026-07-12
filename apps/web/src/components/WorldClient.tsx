@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { config } from "@/lib/config";
 import { PixiWorld } from "@/game/PixiWorld";
 import { NetClient } from "@/game/net";
-import { TelemetryCollector } from "@/game/telemetry";
+import { TelemetryCollector, LocomotionSampler } from "@/game/telemetry";
 import { proposeReply, sendFeedback, requestConnectionAnalysis, type AgentTurn, type ConnectionAnalysis } from "@/lib/agent";
 import EchoPanel from "@/components/EchoPanel";
 import LiveRoster from "@/components/LiveRoster";
@@ -95,6 +95,7 @@ export default function WorldClient() {
   const dayNearSinceRef = useRef<{ cat: DayCat | null; t: number }>({ cat: null, t: 0 });
   const betWonRef = useRef<boolean | null>(null);
   const dayStartAtRef = useRef(0);
+  const locoRef = useRef<LocomotionSampler | null>(null);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
   const interactionRef = useRef<string | null>(null);
@@ -640,6 +641,7 @@ export default function WorldClient() {
     setGrainForkReady(false);
     setMirrorLine(null);
     captureDayBaseline(); // tomorrow's beat diffs against tomorrow's start
+    locoRef.current?.resetDay(); // novelty + the per-day emit cap reset with the morning
   }, [pendingNext, captureDayBaseline]);
 
   const submitDuskVerdict = useCallback(
@@ -734,7 +736,13 @@ export default function WorldClient() {
     }
 
     let disposed = false;
+    // The continuous passive locomotion channel (P3, gap #2): least-fakeable, consent-gated
+    // with the same switch as everything else. It emits into the ordinary collector, so the
+    // batch pipe (→ realtime → ML /telemetry) and its caps apply unchanged.
+    const loco = new LocomotionSampler((scalars) => teleRef.current?.emit("passive_locomotion", { ...scalars }));
+    locoRef.current = loco;
     const world = new PixiWorld({
+      onSelfSample: telemetryConsent ? (x, y) => loco.feed(x, y) : undefined,
       onNearbyChange: (t) => {
         setNearby(t);
         // The day's time-share: lingering near a day-station accrues its verb (and feeds or
@@ -768,7 +776,9 @@ export default function WorldClient() {
 
     const net = new NetClient(config.realtimeUrl);
     netRef.current = net;
-    const tele = new TelemetryCollector(sessionId, (events) => net.sendTelemetry(events));
+    // Consent gates the collector at the SOURCE (event-schema §5): declined → the collector
+    // records nothing at all (previously the interval was gated but a full buffer still flushed).
+    const tele = new TelemetryCollector(sessionId, (events) => net.sendTelemetry(events), 2000, telemetryConsent);
     teleRef.current = tele;
 
     net.on({
