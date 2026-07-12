@@ -142,6 +142,50 @@ def behavioral_corpus(n: int, seed: int):
     return [""] * n, teles, np.array(targets, dtype=float)
 
 
+def openness_corpus(n: int, seed: int):
+    """★ P5 (known-gaps #1/#3): anchor the NEW openness feature block so exploration finally has
+    its own identified direction — the eigenvalue the information matrix was missing (IV.4).
+    Each row draws the four novelty features INDEPENDENTLY of the social/economic draws, so
+    openness decorrelates from warmth/dominance in the anchor corpus (that independence is what
+    breaks the factor degeneracy). Doc priors: novelty breadth → openness(+, strong) with a mild
+    energy(+); wander → openness(+) with a mild pace(−); far/bare travel → openness(+, strong);
+    curiosity acts (unmarked paths, eggs, questions, deviation) → openness(+, strong) with a
+    mild intellect(+)."""
+    rng = np.random.default_rng(seed + 202)
+    iz = AXIS_INDEX
+    teles, targets = [], []
+    for _ in range(n):
+        z = np.zeros(len(AXIS_KEYS))
+        tele: dict = {}
+
+        # Axis-NEUTRAL latency on half the rows: keeps has_latency/latency_norm decorrelated
+        # from "is a text row" so the reply-tempo features stay pinned to pace, not to the
+        # text rows' style labels (a corpus-composition artifact, not a real relationship).
+        if rng.random() < 0.5:
+            tele["latencyMs"] = int(rng.choice([150, 300, 600, 1200, 2500, 4000, 6000]))
+            z[iz["pace"]] += float(np.tanh((1500.0 - tele["latencyMs"]) / 1500.0)) * 0.5
+
+        nv = float(rng.random()); tele["novel_tile_ratio"] = nv
+        z[iz["openness"]] += (nv - 0.4) * 1.5                 # new ground per minute ⇒ explorer
+        z[iz["energy"]] += (nv - 0.5) * 0.3
+
+        pt_raw = float(1.0 + rng.random() * 6.0); tele["path_tortuosity"] = pt_raw
+        wander = float(np.tanh((pt_raw - 1.0) / 2.5))
+        z[iz["openness"]] += (wander - 0.4) * 0.7             # meandering ⇒ curiosity-led
+        z[iz["pace"]] += -(wander - 0.5) * 0.3                # and unhurried
+
+        tn = float(rng.random()); tele["travel_novelty"] = tn
+        z[iz["openness"]] += (tn - 0.4) * 1.3                 # sails to far/bare shores ⇒ novelty
+
+        cu = float(rng.random()); tele["curiosity"] = cu
+        z[iz["openness"]] += (cu - 0.4) * 1.4                 # unmarked paths / eggs / questions
+        z[iz["intellect"]] += (cu - 0.5) * 0.3
+
+        teles.append(tele)
+        targets.append(np.clip(z, -1, 1))
+    return [""] * n, teles, np.array(targets, dtype=float)
+
+
 def load_anchor_corpus(path: Path):
     texts, teles, targets = [], [], []
     for line in path.read_text().splitlines():
@@ -173,11 +217,14 @@ def main():
         texts, teles, Z = load_anchor_corpus(Path(args.anchors))
     else:
         # Default keyless bootstrap: synthetic TEXT rows anchor the style/embedding features
-        # (legacy behaviour, preserved) AND behavioral rows anchor the §3.2 choice features
-        # (the Phase 0 spine). Together they pin both halves of the grown W in one fit.
+        # (legacy behaviour, preserved), behavioral rows anchor the §3.2 choice features
+        # (the Phase 0 spine), and — since the ★ P5 re-anchor — openness rows anchor the
+        # exploration block (the full multi-flow cue set: F0 exploration + F2/F3 dialogue +
+        # travel). One fit pins all three halves of the grown W.
         t_s, tl_s, Z_s = synthetic_corpus(args.n, args.seed)
         t_b, tl_b, Z_b = behavioral_corpus(max(1, args.n // 2), args.seed)
-        texts, teles, Z = t_s + t_b, tl_s + tl_b, np.vstack([Z_s, Z_b])
+        t_o, tl_o, Z_o = openness_corpus(max(1, args.n // 2), args.seed)
+        texts, teles, Z = t_s + t_b + t_o, tl_s + tl_b + tl_o, np.vstack([Z_s, Z_b, Z_o])
 
     Phi = np.array([P.featurize_raw(t, tl) for t, tl in zip(texts, teles)], dtype=float)
     print(f"[train] corpus: N={Phi.shape[0]}  F={Phi.shape[1]}  D={len(AXIS_KEYS)}")
@@ -208,9 +255,19 @@ def main():
 
     # Quick self-check: top features per axis (the interpretability trace).
     interp = model.interpretability(top=3)
-    for axis in ("warmth", "pace", "formality"):
+    for axis in ("warmth", "pace", "formality", "openness"):
         tops = ", ".join(f"{f['feature']}{f['loading']:+.2f}" for f in interp[axis])
         print(f"[train]   {axis:10s} ← {tops}")
+
+    # ★ Identifiability diagnostic (blueprint IV.4 / IX.3): the Fisher information the feature
+    # space carries about each axis, I = W Ψ⁻¹ Wᵀ. An axis with near-zero information is
+    # UNIDENTIFIED (its variance leaks into the others) — exactly what openness was before the
+    # re-anchor. Report per-axis information + the matrix condition number.
+    info = W @ np.diag(1.0 / np.maximum(Psi, 1e-6)) @ W.T
+    eigs = np.linalg.eigvalsh(info)
+    print(f"[train] information I=WΨ⁻¹Wᵀ: cond={eigs[-1] / max(eigs[0], 1e-12):.1f}  min-eig={eigs[0]:.3f}")
+    for i, k in enumerate(AXIS_KEYS):
+        print(f"[train]   I[{k:10s}] = {info[i, i]:8.3f}")
 
 
 if __name__ == "__main__":

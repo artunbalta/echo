@@ -161,11 +161,16 @@ _FIDELITY = {
     "gaze_reflection": {"affect"},
     "stack_tidy": {"formality"},
     "egg_reflection": {"affect"},
+    # ★ P5 re-anchor (known-gaps #1 closed): the exploration cues now have a REAL
+    # telemetry→openness path (the curiosity/novelty feature block) and are ASSERTED
+    # to load on openness — no longer a documented divergence.
+    "enter_unmarked": {"openness"},
+    "approach_distant_lone": {"openness"},
+    "egg_horizon_seen": {"openness"},
+    "egg_hollow": {"openness"},
 }
-# Cues where the committed W (trained on the island day-loop, not F0 locomotion) has NO strong
-# telemetry path to the doc's intended *openness* — they still move the posterior, but route via
-# the closest signal-type feature (risk/approach). Reported as a known, documented divergence.
-_OPENNESS_DIVERGENCE = {"enter_unmarked", "approach_distant_lone", "egg_horizon_seen", "egg_hollow"}
+# (Resolved by the ★ P5 re-anchor — kept for the report annotation only.)
+_OPENNESS_DIVERGENCE: set[str] = set()
 
 
 def _record(report, label, e, r, prior):

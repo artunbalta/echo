@@ -260,10 +260,9 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
         if payload.get("latencyMs") is not None and opt != "refused":
             tele["decision_latency"] = payload.get("latencyMs")
     elif t == "passive_locomotion":
-        # P3 (known-gaps #2): the continuous passive channel is RECORDED, not yet featurized —
-        # the committed W has no telemetry→openness path, so featurizing now would misroute the
-        # most individuating signal (openness) onto dominance/warmth. The ★ one-time re-anchor
-        # (P5) trains on this buffer; only after it do these scalars move the posterior.
+        # P3 recorded this channel; the ★ P5 re-anchor gave W a real telemetry→openness path
+        # (novel_tile_ratio / path_tortuosity are identified directions now), so the least-
+        # fakeable channel finally moves the posterior — AND stays recorded for drift/retrain.
         scalars = {
             k: float(payload[k])
             for k in ("heading_change_rate", "path_tortuosity", "novel_tile_ratio", "backtrack_rate", "dwell_ms", "tiles")
@@ -273,6 +272,10 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
             st.locomotion.append(scalars)
             if len(st.locomotion) > 2000:  # bounded ring
                 del st.locomotion[: len(st.locomotion) - 2000]
+            if "novel_tile_ratio" in scalars:
+                tele["novel_tile_ratio"] = scalars["novel_tile_ratio"]
+            if "path_tortuosity" in scalars:
+                tele["path_tortuosity"] = scalars["path_tortuosity"]
     if tele:
         st.posterior = P.observe(st.posterior, "", tele)
     return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}

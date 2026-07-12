@@ -416,6 +416,15 @@ TELEMETRY_FEATURE_NAMES = [
     "decision_latency",   # choice deliberation (distinct from reply latency)
     "persistence",        # finished / started structures — conscientiousness / grit
     "consistency",        # stability of choices across days (0 within a single session)
+    # ── ★ P5 openness block (closes known-gaps #1/#3): the telemetry→openness path the original
+    # W lacked. Grows F 62 → 66; each is an IDENTIFIED direction for novelty-seeking so
+    # exploration stops leaking onto dominance/warmth (the factor-degeneracy fix, blueprint IV.4).
+    # Populated by the P3 passive locomotion sampler, the travel stand (dest_occupants-modulated),
+    # and the ⚑ exploration/dialogue cues re-routed in ingest.py. All bounded; absent ⇒ 0.
+    "novel_tile_ratio",   # fraction of newly-visited ground per window — exploration breadth (A9)
+    "path_tortuosity",    # wander vs beeline (A6), normalized from the raw ≥1 ratio
+    "travel_novelty",     # sails far / to bare shores (A11 / travel_far)
+    "curiosity",          # enter_unmarked / eggs / asks_question / self_disclosure / deviate_custom
 ]
 
 
@@ -440,11 +449,17 @@ def _telemetry_features(telemetry: Optional[dict]) -> np.ndarray:
     dl = t.get("decision_latency")
     decision_latency = float(np.tanh((dl or 0.0) / 3000.0)) if dl is not None else 0.0
 
+    # path_tortuosity arrives as the raw path/net ratio (≥1; ~1 beeline, ~10 meander);
+    # normalize into [0,1) so W sees a bounded wander read. Absent → 0 (neutral).
+    pt_raw = t.get("path_tortuosity")
+    path_tortuosity = float(np.tanh(max(0.0, float(pt_raw) - 1.0) / 2.5)) if pt_raw is not None else 0.0
+
     return np.array([
         latency_norm, has_latency, edits_norm, approach_f,
         b("ts_earn"), b("ts_learn"), b("ts_social"), b("ts_leisure"), b("ts_build"),
         b("save_rate"), b("risk_index"), b("solitude_tol"), b("pet_attach"),
         decision_latency, b("persistence"), b("consistency"),
+        b("novel_tile_ratio"), path_tortuosity, b("travel_novelty"), b("curiosity"),
     ], dtype=float)
 
 
