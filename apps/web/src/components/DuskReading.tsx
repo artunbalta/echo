@@ -27,9 +27,12 @@ export interface DuskReadingData {
 export default function DuskReading({
   reading,
   onSubmit,
+  onNextDay,
 }: {
   reading: DuskReadingData;
   onSubmit: (verdict: { ratings: Record<number, boolean>; overall: number }) => void;
+  /** P1 day loop: offered after the verdict — sleep, and wake into the next morning. */
+  onNextDay?: () => void;
 }) {
   const [ratings, setRatings] = useState<Record<number, boolean>>({});
   const [overall, setOverall] = useState<number | null>(null);
@@ -119,7 +122,17 @@ export default function DuskReading({
             </button>
           </div>
         ) : (
-          <p className="mt-6 text-center text-sm text-parchment/55">the echo remains. thank you.</p>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-parchment/55">the echo remains. thank you.</p>
+            {onNextDay && (
+              <button
+                onClick={onNextDay}
+                className="mt-4 w-full rounded-xl border border-echo/40 py-2.5 text-sm text-echo transition hover:bg-echo/10"
+              >
+                sleep — meet the morning
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -26,7 +26,16 @@ export type TelemetryType =
   | "pet_talk" // a turn to the pet     payload: { chars, valence, turnIndex, underStress } (NO raw text)
   | "leave_intent" // progress to leave payload: { stage, dayIndex, shipProgress01, secondsAlone }
   | "structure_progress" // building     payload: { structure, delta01, sessionSeconds, started, finished }
-  | "fork_deliberation"; // hover/undo before commit  payload: { forkKey, hovers, msDeliberated }
+  | "fork_deliberation" // hover/undo before commit  payload: { forkKey, hovers, msDeliberated }
+  // ── P1 survival spine (ECHO_PLAYABLE_BLUEPRINT.md VII.1): the three clocks emit. ──
+  // survival_tick is an ambient body/world-state sample (a CONTEXT carrier — vitality,
+  // daylight, scarcity — not itself a dispositional cue); fork_decision supersedes
+  // choice_made on the island forks, carrying the survival context envelope so the same
+  // choice under different scarcity is distinguishable (Law 3: identity lives in the
+  // conditional signature). A refused fork emits fork_decision with option:"refused"
+  // (the Channel-K twin — Law 2: non-choice is data, never a penalty).
+  | "survival_tick" // payload: { vitality01, daylight01, scarcityLevel, dayCount }
+  | "fork_decision"; // payload: { forkKey, option|"refused", latencyMs, scarcityLevel, vitality01, daylight01, dayCount, irreversible }
 
 export interface TelemetryEvent {
   type: TelemetryType;
@@ -171,6 +180,8 @@ export const CUE_FOR_TYPE: Record<TelemetryType, { channel: CueChannel; cue: Cue
   leave_intent: { channel: "G", cue: "G5" },
   structure_progress: { channel: "C", cue: "C7" },
   fork_deliberation: { channel: "B", cue: "B2" },
+  survival_tick: { channel: "I", cue: "I1" }, // ambient affect/body-state sample (context carrier)
+  fork_decision: { channel: "F", cue: "F1" }, // save_or_spend under scarcity (richer choice_made)
 };
 
 /** A neutral context for legacy backfill — flagged via provenance:"legacy" so the engine down-weights it. */
