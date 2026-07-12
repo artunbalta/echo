@@ -845,7 +845,9 @@ export default function WorldClient() {
   // baseline; it never touches the social path and can only fire from your own-island affordances.
   const emitFlow0 = useCallback(
     async (channel: any, cue: any, action: string, targetId: string, targetKind: any, raw?: any) => {
-      if (!uidRef.current) return;
+      // Consent gate at the source (event-schema §5): telemetry off → the solitary shore is
+      // fully explorable and emits NOTHING. (Was ungated — a real leak the consent audit caught.)
+      if (!uidRef.current || !telemetryConsented()) return;
       const event: BehavioralEvent = buildFlow0Event({
         actorId: uidRef.current, sessionId: sessionIdRef.current, channel, cue, action, targetId, targetKind, raw,
       });
