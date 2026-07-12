@@ -30,6 +30,42 @@ export const WORLD = {
 
 export const TICK_MS = 1000 / WORLD.TICK_HZ;
 
+/**
+ * Survival-clock constants (ECHO_PLAYABLE_BLUEPRINT.md Part I / VII.1) — the island day's
+ * three clocks share one source of truth, mirroring the WORLD pattern: client (useDay),
+ * server persistence (wall-clock decay on load), and tests all read these.
+ *
+ * The three clocks: VITALITY (you decay unless you sustain yourself), DAYLIGHT (the day is
+ * a finite budget, closed at the campfire), SEASON/DECAY (world state ages between sessions).
+ * Difficulty comes ONLY from scarcity + irreversibility — never a score (Law 1).
+ */
+export const SURVIVAL = {
+  /** One island day of real time (~8 min of daylight). The campfire `end` may close it sooner. */
+  DAY_MS: 8 * 60 * 1000,
+  VITALITY_MAX: 100,
+  /** Baseline decay in vitality points per real minute; scaled by scarcityMultiplier(). */
+  VITALITY_DRAIN_PER_MIN: 6,
+  /** The grain ripens partway through the day (was a local const in IslandClient). */
+  GROW_MS: 14_000,
+  /** Wall-clock decay applied when a session resumes — the teeth of irreversibility. */
+  DECAY: {
+    /** A planted/ripe crop left untended this long has wilted by your return. */
+    CROP_WILT_MS: 36 * 3600 * 1000,
+    /** Fraction of structure progress a half-built structure loses per elapsed day. */
+    STRUCT_WEATHER_PER_DAY: 0.05,
+    /** How much a tended tie's warmth cools toward baseline per elapsed day. */
+    TIE_COOL_PER_DAY: 0.08,
+  },
+  /** Multiplier on vitality drain + fork stakes: NORMAL at scarcity 0 → LEAN at scarcity 1. */
+  SCARCITY: { LEAN: 1.6, NORMAL: 1.0 },
+} as const;
+
+/** Drain/stakes multiplier for a continuous scarcity_level in [0,1] (EventContext scale). */
+export function scarcityMultiplier(level01: number): number {
+  const t = Math.max(0, Math.min(1, level01));
+  return SURVIVAL.SCARCITY.NORMAL + (SURVIVAL.SCARCITY.LEAN - SURVIVAL.SCARCITY.NORMAL) * t;
+}
+
 /** Pixel width/height of the full map (source pixels). */
 export const MAP_PX = {
   width: WORLD.MAP_WIDTH * WORLD.TILE_SIZE,
