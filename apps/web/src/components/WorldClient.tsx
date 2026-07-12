@@ -191,6 +191,33 @@ export default function WorldClient() {
   const [pendingNext, setPendingNext] = useState<IslandDayState | null>(null);
   const [awayChanges, setAwayChanges] = useState<string[]>([]);
   const endDayFnRef = useRef<(reason: DuskReason) => void>(() => {});
+  // The dusk MIRROR BEAT baseline (P2/M1): the echo's read of you at the day's start. At the
+  // campfire we diff against it — a line appears ONLY when a real axis resolved or a bucket's
+  // agreement genuinely rose today. Nothing moved → nothing said (silence is content, §VIII.10).
+  const dayBaselineRef = useRef<{ traits: Set<string>; agreements: Record<string, number> } | null>(null);
+  const [mirrorLine, setMirrorLine] = useState<string | null>(null);
+  const captureDayBaseline = useCallback(() => {
+    const s = echoRef.current.snap;
+    dayBaselineRef.current = {
+      traits: new Set(s?.traits ?? []),
+      agreements: Object.fromEntries(Object.entries(s?.buckets ?? {}).map(([k, b]) => [k, b.agreement_ewma ?? 0.5])),
+    };
+  }, []);
+  /** One honest sentence about today's real movement, or null (most days are null — that's the design). */
+  const duskMirrorLine = useCallback((): string | null => {
+    const base = dayBaselineRef.current;
+    const s = echoRef.current.snap;
+    if (!base || !s || s.mocked) return null; // never fake a beat on demo values
+    const newTrait = s.traits.find((t) => !base.traits.has(t));
+    if (newTrait) return `by the fire, it sees a little more: someone ${newTrait}.`;
+    for (const [name, b] of Object.entries(s.buckets ?? {})) {
+      const before = base.agreements[name];
+      if (before !== undefined && (b.agreement_ewma ?? 0.5) > before + 0.04) {
+        return `its calls in ${prettyBucket(name)} landed closer to yours today.`;
+      }
+    }
+    return null;
+  }, []);
 
   /** Day events ride the proven island pipe: choices → ML /observe (posterior), ambient →
    *  /telemetry. Consent-gated at the source (event-schema §5). */
@@ -404,11 +431,12 @@ export default function WorldClient() {
     w.setScarcity(day.scarcityLevel);
   }, [day.ready, day.dayPhase01, day.vitality01, day.scarcityLevel]);
 
-  // On day load: the honest return hook + the day-2 marker.
+  // On day load: the honest return hook + the day-2 marker + the mirror-beat baseline.
   useEffect(() => {
     if (!day.ready) return;
     if (day.changes.length) setAwayChanges(day.changes);
     if (day.dayCount >= 1) markFunnel(uidRef.current, "day_2_return");
+    captureDayBaseline();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day.ready]);
 
@@ -574,6 +602,9 @@ export default function WorldClient() {
         setDuskBusy(false);
         return;
       }
+      // The mirror beat: diff the echo's read of you against the day's start — only a REAL
+      // movement earns a sentence (M1); most days stay silent by design.
+      setMirrorLine(duskMirrorLine());
       try {
         const res = await fetch("/api/island/reading", {
           method: "POST",
@@ -607,7 +638,9 @@ export default function WorldClient() {
     setCollapsedCard(false);
     setPendingNext(null);
     setGrainForkReady(false);
-  }, [pendingNext]);
+    setMirrorLine(null);
+    captureDayBaseline(); // tomorrow's beat diffs against tomorrow's start
+  }, [pendingNext, captureDayBaseline]);
 
   const submitDuskVerdict = useCallback(
     ({ ratings, overall }: { ratings: Record<number, boolean>; overall: number }) => {
@@ -1968,7 +2001,7 @@ export default function WorldClient() {
 
       {/* Dusk — the day's echo, then sleep into the next morning (P1 day loop). */}
       {duskReading && (
-        <DuskReading reading={duskReading} onSubmit={submitDuskVerdict} onNextDay={pendingNext ? startNextWorldDay : undefined} />
+        <DuskReading reading={duskReading} onSubmit={submitDuskVerdict} onNextDay={pendingNext ? startNextWorldDay : undefined} mirrorLine={mirrorLine} />
       )}
     </div>
   );

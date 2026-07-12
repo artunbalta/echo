@@ -119,6 +119,7 @@ img.pixel {
   .recognition-rise,
   .graduation-rise,
   .echo-pulse,
+  .echo-rise,
   .scroll-cue {
     animation: none !important;
   }
