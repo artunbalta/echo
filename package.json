@@ -21,7 +21,8 @@
     "gen:flow-assets": "node pipeline/generate-flow-assets.mjs",
     "gen:roster": "node pipeline/generate-roster-portraits.mjs",
     "verify:roster": "node pipeline/verify-roster.mjs",
-    "gen:plates": "node pipeline/generate-legend-plates.mjs"
+    "gen:plates": "node pipeline/generate-legend-plates.mjs",
+    "gen:vacancy": "node pipeline/derive-vacancy.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

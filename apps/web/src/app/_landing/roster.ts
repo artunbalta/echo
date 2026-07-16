@@ -27,11 +27,14 @@ import { styleFromId, type CharStyle } from "@/game/art";
  * portrait a haircut does not read as a person.
  */
 export const CAST: { id: string; name: string }[] = [
-  { id: "premade_1480", name: "Pell" },
+  // premade_0 carries the one hand-picked portrait (see pipeline/roster-cast.mjs). Its palette is
+  // styleFromId("premade_0") exactly, which is why the art lives on THIS id and not on the id the
+  // name Lark used to sit on — a tile must never lie about the sprite a player receives.
+  { id: "premade_0", name: "Lark" },
   { id: "premade_11888", name: "Rook" },
   { id: "premade_8535", name: "Maren" },
   { id: "premade_4940", name: "Sorrel" },
-  { id: "premade_4483", name: "Lark" },
+  { id: "premade_4483", name: "Pell" },
   { id: "premade_5893", name: "Bryn" },
   { id: "premade_11861", name: "Cass" },
   { id: "premade_12508", name: "Wren" },
