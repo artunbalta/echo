@@ -245,7 +245,7 @@ function Hero({ selected, entry }: { selected: Selection; entry: RosterEntry | n
         )}
       </div>
       <p className="mt-3 text-center font-pixel text-xs uppercase tracking-[0.2em] text-parchment/50">
-        {entry ? entry.label : selected === EMPTY_SLOT ? "You" : "Choose"}
+        {entry ? entry.name : selected === EMPTY_SLOT ? "You" : "Choose"}
       </p>
     </div>
   );
@@ -301,7 +301,7 @@ const Tile = forwardRef<
       type="button"
       role="radio"
       aria-checked={selected}
-      aria-label={entry.label}
+      aria-label={entry.name}
       tabIndex={tabIndex}
       onClick={onSelect}
       onFocus={onSelect}
