@@ -29,7 +29,7 @@ import { styleFromId, type CharStyle } from "@/game/art";
 export const CAST: { id: string; name: string }[] = [
   { id: "premade_1480", name: "Pell" },
   { id: "premade_11888", name: "Rook" },
-  { id: "premade_8535", name: "Maren" },
+  { id: "premade_8535", name: "Yase" },
   { id: "premade_4940", name: "Sorrel" },
   // The middle-right slot: the hand-picked portrait (see pipeline/roster-cast.mjs). Its palette is
   // styleFromId("premade_0") exactly, which is why the art lives on THIS id — a tile must never lie

@@ -52,8 +52,14 @@ export default function CharacterSelect() {
   const [website, setWebsite] = useState(""); // honeypot; a human never sees or fills this
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ already: boolean; seat: number | null } | null>(null);
+  const [done, setDone] = useState<{
+    already: boolean;
+    seat: number | null;
+    portraitPending: boolean;
+  } | null>(null);
   const [seats, setSeats] = useState<Seats | null>(null);
+  const [selfie, setSelfie] = useState<string | null>(null);
+  const [consent, setConsent] = useState(false);
 
   // The result of createFromPremade — held so a failed submit never loses the chosen character (§1b).
   const characterRef = useRef<CharacterResult | null>(null);
@@ -136,9 +142,19 @@ export default function CharacterSelect() {
       setError("Choose a character first, or take the empty slot.");
       return;
     }
-    if (isEmpty && fill !== "premade") {
+    if (isEmpty && fill === null) {
       setError("Choose how to fill your slot.");
       return;
+    }
+    if (isEmpty && fill === "photo") {
+      if (!selfie) {
+        setError("Choose a photo first.");
+        return;
+      }
+      if (!consent) {
+        setError("We need your say-so before sending your photo.");
+        return;
+      }
     }
 
     setBusy(true);
@@ -151,7 +167,9 @@ export default function CharacterSelect() {
           name,
           email,
           website, // honeypot — server answers 200 and discards if this is non-empty
-          characterSource: character?.source ?? "premade",
+          characterSource: isEmpty && fill === "photo" ? "selfie" : "premade",
+          selfie: isEmpty && fill === "photo" ? selfie : undefined,
+          selfieConsent: isEmpty && fill === "photo" ? consent : undefined,
           characterRef: entry?.id ?? null,
           characterSpriteUrl: character?.spriteUrl ?? "",
           characterAttributes: character?.attributes ?? null,
@@ -161,6 +179,7 @@ export default function CharacterSelect() {
         error?: string;
         already?: boolean;
         full?: boolean;
+        portraitPending?: boolean;
         seat?: number | null;
         taken?: number;
         cap?: number;
@@ -177,7 +196,11 @@ export default function CharacterSelect() {
       if (typeof data.taken === "number" && typeof data.cap === "number") {
         setSeats({ cap: data.cap, taken: data.taken, remaining: data.remaining ?? 0, available: true });
       }
-      setDone({ already: Boolean(data.already), seat: data.seat ?? null });
+      setDone({
+        already: Boolean(data.already),
+        seat: data.seat ?? null,
+        portraitPending: Boolean(data.portraitPending),
+      });
     } catch {
       setError("Could not reach the waitlist. Check your connection and try again.");
     } finally {
@@ -185,7 +208,15 @@ export default function CharacterSelect() {
     }
   }
 
-  if (done) return <Joined already={done.already} seat={done.seat} entry={entry} />;
+  if (done)
+    return (
+      <Joined
+        already={done.already}
+        seat={done.seat}
+        entry={entry}
+        portraitPending={done.portraitPending}
+      />
+    );
 
   const full = seats?.available === true && seats.remaining === 0;
 
@@ -245,7 +276,20 @@ export default function CharacterSelect() {
               )}
             </div>
 
-            {isEmpty && <FillChoice fill={fill} onPick={setFill} formRef={formRef} />}
+            {isEmpty && (
+              <FillChoice
+                fill={fill}
+                onPick={setFill}
+                formRef={formRef}
+                selfie={selfie}
+                onSelfie={(uri, e) => {
+                  setSelfie(uri);
+                  if (e) setError(null);
+                }}
+                consent={consent}
+                onConsent={setConsent}
+              />
+            )}
           </div>
         </div>
 
@@ -257,7 +301,11 @@ export default function CharacterSelect() {
             busy={busy}
             error={error}
             full={full}
-            disabled={!selected || (isEmpty && fill !== "premade")}
+            disabled={
+              !selected ||
+              (isEmpty && fill === null) ||
+              (isEmpty && fill === "photo" && (!selfie || !consent))
+            }
             onName={setName}
             onEmail={setEmail}
             onWebsite={setWebsite}
@@ -484,15 +532,84 @@ function Silhouette({ breathing = true }: { breathing?: boolean }) {
 
 /* ── the two ways to fill the empty slot ─────────────────────────────────────────────────────── */
 
+/**
+ * The two ways to fill the empty slot. The photo path is the hero path.
+ *
+ * VALIDATION HERE IS A COURTESY, NOT A CONTROL. Everything checked in the browser is checked again
+ * on the server (api/waitlist readSelfie), because anyone can POST that endpoint directly and it
+ * spends money. What this buys is a person finding out their photo is too small before they wait,
+ * rather than after.
+ */
 function FillChoice({
   fill,
   onPick,
   formRef,
+  selfie,
+  onSelfie,
+  consent,
+  onConsent,
 }: {
   fill: Fill;
   onPick: (f: Fill) => void;
   formRef: React.RefObject<HTMLDivElement | null>;
+  selfie: string | null;
+  onSelfie: (dataUri: string | null, err?: string) => void;
+  consent: boolean;
+  onConsent: (v: boolean) => void;
 }) {
+  const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function pick(file: File) {
+    setErr(null);
+    onSelfie(null);
+    if (!/^image\/(jpeg|jpg|png)$/.test(file.type)) {
+      const m = "That photo must be a JPEG or PNG.";
+      setErr(m);
+      onSelfie(null, m);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      const m = "That photo is over 10MB.";
+      setErr(m);
+      onSelfie(null, m);
+      return;
+    }
+    const dataUri = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.onerror = () => rej(new Error("read failed"));
+      r.readAsDataURL(file);
+    }).catch(() => null);
+    if (!dataUri) {
+      setErr("Could not read that file.");
+      return;
+    }
+    // Dimensions and alpha are checked from the decoded image, not from the file name.
+    const img = new Image();
+    img.onload = () => {
+      if (Math.min(img.width, img.height) < 384) {
+        const m = "That photo is too small. It needs to be at least 384px on each side.";
+        setErr(m);
+        onSelfie(null, m);
+        return;
+      }
+      if (Math.max(img.width, img.height) > 5000) {
+        const m = "That photo is too large. Keep it under 5000px on a side.";
+        setErr(m);
+        onSelfie(null, m);
+        return;
+      }
+      onSelfie(dataUri);
+    };
+    img.onerror = () => {
+      const m = "That file is not an image we can read.";
+      setErr(m);
+      onSelfie(null, m);
+    };
+    img.src = dataUri;
+  }
+
   return (
     <div className="mt-6 rounded-lg border-2 border-echo/25 bg-[#120c19] p-4">
       <p className="mb-3 text-center font-pixel text-xs uppercase tracking-[0.2em] text-echo">
@@ -501,12 +618,16 @@ function FillChoice({
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          disabled
-          className="flex-1 rounded border-2 border-echo/15 px-4 py-3 text-left font-pixel text-sm text-parchment/35"
+          onClick={() => onPick("photo")}
+          className={`flex-1 rounded border-2 px-4 py-3 text-left font-pixel text-sm transition-colors ${
+            fill === "photo"
+              ? "border-parchment/60 text-parchment"
+              : "border-echo/25 text-parchment/80 hover:border-parchment/40"
+          }`}
         >
           Use a photo
-          <span className="mt-1 block text-[11px] leading-snug text-parchment/30">
-            Not wired up yet. Coming in the next step.
+          <span className="mt-1 block text-[11px] leading-snug text-parchment/40">
+            Your face, drawn in the world&apos;s hand.
           </span>
         </button>
         <button
@@ -527,6 +648,64 @@ function FillChoice({
           </span>
         </button>
       </div>
+
+      {fill === "photo" && (
+        <div className="mt-4 border-t border-echo/15 pt-4">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void pick(f);
+            }}
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="rounded border-2 border-parchment/25 px-3 py-2 font-pixel text-xs text-parchment/80 transition-colors hover:border-parchment/60"
+            >
+              {selfie ? "Choose a different photo" : "Choose a photo"}
+            </button>
+            {selfie && (
+              // eslint-disable-next-line @next/next/no-img-element -- a local data URI preview
+              <img
+                src={selfie}
+                alt="The photo you chose"
+                className="h-12 w-12 rounded object-cover"
+              />
+            )}
+          </div>
+
+          {/* CONSENT AT THE POINT OF UPLOAD, not buried in a footer link. It says where the photo
+              goes, what is kept, and for how long, in the same breath as the button that sends it. */}
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(e) => onConsent(e.target.checked)}
+              className="mt-0.5 accent-echo"
+            />
+            <span className="font-pixel text-[11px] leading-relaxed text-parchment/50">
+              Send my photo to an image service outside the EU and UK to draw my character. It is
+              deleted once the character is drawn. The character is kept, the photo is not. My own
+              photo only.
+            </span>
+          </label>
+
+          {err && (
+            <p role="alert" className="mt-3 font-pixel text-[11px] text-red-300">
+              {err}
+            </p>
+          )}
+          <p className="mt-3 font-pixel text-[11px] leading-relaxed text-parchment/30">
+            JPEG or PNG, at least 384px, under 10MB. Your place is kept the moment you join. The
+            character is drawn afterwards and arrives by email.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -636,16 +815,18 @@ function Joined({
   already,
   seat,
   entry,
+  portraitPending,
 }: {
   already: boolean;
   seat: number | null;
   entry: RosterEntry | null;
+  portraitPending: boolean;
 }) {
   return (
     <section id="waitlist" className="bg-ink px-5 py-24 sm:px-8 sm:py-32">
       <div className="mx-auto flex max-w-md flex-col items-center text-center">
         <div className="box-content w-[144px] overflow-hidden rounded-lg border-2 border-echo/20 bg-[#120c19]">
-          {entry ? <Portrait entry={entry} fallbackScale={4} /> : <Silhouette />}
+          {entry ? <Portrait entry={entry} fallbackScale={4} /> : <Silhouette breathing={false} />}
         </div>
         <h2 className="mt-8 font-pixel text-2xl font-bold uppercase tracking-[0.25em] text-parchment">
           {already ? "Kept your place" : "The slot is yours"}
@@ -658,9 +839,14 @@ function Joined({
           </p>
         )}
         <p className="mt-4 font-pixel text-sm leading-relaxed text-parchment/60">
-          {already
-            ? "We already had you. Your character is updated, and your place is unchanged."
-            : "No one knows you here yet. That is the point. We will write when the island is ready."}
+          {portraitPending
+            ? // Honest about the wait AND about the seat: the place is already theirs, the drawing
+              // is the only thing outstanding. No progress bar, because we cannot honestly promise
+              // a time — generation is someone else's queue.
+              "Your character is being drawn from your photo. It will reach you by email shortly. Your place is already kept, whatever the drawing does."
+            : already
+              ? "We already had you. Your character is updated, and your place is unchanged."
+              : "No one knows you here yet. That is the point. We will write when the island is ready."}
         </p>
       </div>
     </section>

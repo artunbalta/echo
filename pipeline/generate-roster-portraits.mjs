@@ -21,7 +21,7 @@
  * procedural AvatarPreview fallback in place. Results are COMMITTED so the landing runs key-free.
  *
  * Run:  npm run gen:roster                    # the whole sheet
- *       npm run gen:roster -- --test Maren Sorrel
+ *       npm run gen:roster -- --test Yase Sorrel
  */
 import { execFileSync, execSync } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";

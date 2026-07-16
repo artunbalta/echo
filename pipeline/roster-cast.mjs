@@ -117,7 +117,7 @@ export const CAST = [
     // strongest silhouette tool there is. Her turn is mirrored away from Sorrel's, the other
     // slight/long build (as a same-facing pair they measured IoU 0.707; mirrored, 0.429).
     id: "premade_8535", // light tan / black / brick-red / long
-    name: "Maren",
+    name: "Yase",
     build: "slight and narrow-shouldered, long neck",
     posture: "turned three-quarters to her LEFT, looking back over the far shoulder",
     hairShape: "long and loose, falling well past the shoulders, one side tucked behind the ear",
