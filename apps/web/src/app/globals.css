@@ -113,12 +113,21 @@ img.pixel {
   to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
+/* A gentle idle bob for character-select portraits — staggered per card via inline
+   animation-delay so the row doesn't move in lockstep, reads as alive rather than static. */
+@keyframes char-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.char-bob { animation: char-bob 2.4s ease-in-out infinite; }
+
 /* Respect reduced-motion everywhere these live. */
 @media (prefers-reduced-motion: reduce) {
   .star-lit,
   .recognition-rise,
   .graduation-rise,
   .echo-pulse,
+  .char-bob,
   .scroll-cue {
     animation: none !important;
   }

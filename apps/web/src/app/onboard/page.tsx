@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AvatarPreview from "@/components/AvatarPreview";
 import { resolveUserId } from "@/lib/identity";
@@ -8,17 +8,27 @@ import { styleFromAttributes, styleFromId, type CharStyle } from "@/game/art";
 import {
   createFromSelfie,
   createFromPremade,
-  premadeStyles,
   type CharacterResult,
 } from "@/lib/character";
 
-type Step = "consent" | "choose" | "selfie" | "premade" | "reveal";
+type Step = "consent" | "select" | "selfie" | "reveal";
 
 interface Consent {
   world: boolean;
   telemetry: boolean;
   voice: boolean;
   biometric: boolean;
+}
+
+// Hand-picked (not the first N ids) so the row shows all four hair-style "types" once each
+// instead of risking a hash collision that repeats a label across two cards.
+const PREMADE_IDS = ["premade_5", "premade_2", "premade_0", "premade_1"];
+const CUSTOM_ID = "custom";
+
+/** The only per-premade differentiator we have (hair silhouette) doubles as a lightweight
+ *  "type" tag — deliberately not a personal name, since these are anonymous stand-ins. */
+function typeLabel(style: CharStyle): string {
+  return style.hairStyle.charAt(0).toUpperCase() + style.hairStyle.slice(1);
 }
 
 export default function Onboard() {
@@ -35,9 +45,17 @@ export default function Onboard() {
   const [error, setError] = useState<string | null>(null);
   const [style, setStyle] = useState<CharStyle | null>(null);
   const [result, setResult] = useState<CharacterResult | null>(null);
+  const [selectedId, setSelectedId] = useState<string>(PREMADE_IDS[0]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Computed once — feeds stable CharStyle objects to AvatarPreview so its animation
+  // loop doesn't tear down and restart on every keystroke in the name field.
+  const premades = useMemo(
+    () => PREMADE_IDS.map((id) => ({ id, style: styleFromId(id) })),
+    [],
+  );
 
   useEffect(() => {
     setName(localStorage.getItem("echo.name") ?? "");
@@ -109,6 +127,15 @@ export default function Onboard() {
     }
   }
 
+  function confirmSelection() {
+    if (selectedId === CUSTOM_ID) {
+      setStep("selfie");
+      startCamera();
+      return;
+    }
+    pickPremade(selectedId);
+  }
+
   function enterWorld() {
     if (!result) return;
     localStorage.setItem("echo.name", name.trim() || "Newcomer");
@@ -123,7 +150,7 @@ export default function Onboard() {
   // ── render ──────────────────────────────────────────────────────────────────
   return (
     <main className="flex min-h-screen w-screen items-center justify-center bg-ink p-4">
-      <div className="panel w-full max-w-xl rounded-lg p-6 font-mono text-parchment">
+      <div className={`panel w-full rounded-lg p-6 font-mono text-parchment ${step === "select" ? "max-w-2xl" : "max-w-xl"}`}>
         <div className="mb-1 flex items-center gap-2.5">
           <img
             src="/logo.png"
@@ -166,37 +193,63 @@ export default function Onboard() {
                 </span>
               </label>
             ))}
-            <button onClick={() => setStep("choose")} className="mt-4 w-full rounded bg-echo px-4 py-2 font-bold text-ink">
+            <button onClick={() => setStep("select")} className="mt-4 w-full rounded bg-echo px-4 py-2 font-bold text-ink">
               Continue →
             </button>
           </div>
         )}
 
-        {/* CHOOSE PATH */}
-        {step === "choose" && (
+        {/* SELECT CHARACTER — premade cast + "create your own", one unified screen */}
+        {step === "select" && (
           <div>
+            <h2 className="mb-4 text-center font-pixel text-base font-bold uppercase tracking-[0.2em] text-echo glow-echo">
+              Select Character
+            </h2>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="What should people call you?"
-              className="mb-4 w-full rounded border-2 border-echo/30 bg-ink px-3 py-2 text-center outline-none focus:border-echo"
+              className="mb-5 w-full rounded border-2 border-echo/30 bg-ink px-3 py-2 text-center outline-none focus:border-echo"
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="mb-5 grid grid-cols-5 gap-2">
+              {premades.map(({ id, style: s }, i) => {
+                const selected = selectedId === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setSelectedId(id)}
+                    disabled={!!busy}
+                    className={`flex flex-col items-center gap-2 rounded-lg border-2 p-2 transition-colors disabled:opacity-50 ${
+                      selected ? "border-echo bg-echo/10" : "border-echo/20 bg-grass/10 hover:border-echo/50"
+                    }`}
+                  >
+                    <div className="char-bob flex h-24 w-16 items-end justify-center" style={{ animationDelay: `${i * 0.3}s` }}>
+                      <AvatarPreview style={s} scale={4} />
+                    </div>
+                    <span className="text-[10px] uppercase tracking-wide text-parchment/70">{typeLabel(s)}</span>
+                  </button>
+                );
+              })}
               <button
-                disabled={!consent.biometric}
-                onClick={() => { setStep("selfie"); startCamera(); }}
-                className="rounded border-2 border-echo/40 p-4 text-left text-sm enabled:hover:border-echo disabled:opacity-40"
+                onClick={() => consent.biometric && setSelectedId(CUSTOM_ID)}
+                disabled={!consent.biometric || !!busy}
+                className={`flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  selectedId === CUSTOM_ID ? "border-echo bg-echo/10" : "border-echo/25 hover:border-echo/50"
+                }`}
               >
-                <span className="block font-bold text-echo">Selfie →</span>
-                <span className="text-xs text-parchment/60">
-                  {consent.biometric ? "A character that looks like you." : "Enable selfie consent first."}
+                <div className="flex h-24 w-16 items-center justify-center text-3xl leading-none text-echo/70">+</div>
+                <span className="text-center text-[10px] uppercase tracking-wide text-parchment/70">
+                  {consent.biometric ? "Create Your Own" : "Enable selfie consent"}
                 </span>
               </button>
-              <button onClick={() => setStep("premade")} className="rounded border-2 border-echo/40 p-4 text-left text-sm hover:border-echo">
-                <span className="block font-bold text-echo">Premade →</span>
-                <span className="text-xs text-parchment/60">Pick from a curated set.</span>
-              </button>
             </div>
+            <button
+              onClick={confirmSelection}
+              disabled={!!busy}
+              className="w-full rounded bg-echo px-4 py-3 font-pixel font-bold uppercase tracking-widest text-ink disabled:opacity-50"
+            >
+              Play »»»
+            </button>
             <button onClick={() => setStep("consent")} className="mt-4 text-xs text-parchment/50 hover:text-parchment">← back</button>
           </div>
         )}
@@ -208,22 +261,8 @@ export default function Onboard() {
             <p className="mb-3 text-xs text-parchment/60">Your photo is sent once for style analysis and then discarded — never stored.</p>
             <div className="flex justify-center gap-2">
               <button onClick={captureSelfie} disabled={!!busy} className="rounded bg-echo px-4 py-2 font-bold text-ink disabled:opacity-50">Capture</button>
-              <button onClick={() => { stopCamera(); setStep("choose"); }} className="rounded border border-echo/40 px-4 py-2 text-sm">Cancel</button>
+              <button onClick={() => { stopCamera(); setStep("select"); }} className="rounded border border-echo/40 px-4 py-2 text-sm">Cancel</button>
             </div>
-          </div>
-        )}
-
-        {/* PREMADE */}
-        {step === "premade" && (
-          <div>
-            <div className="grid grid-cols-4 gap-2">
-              {premadeStyles(8).map((p) => (
-                <button key={p.id} onClick={() => pickPremade(p.id)} disabled={!!busy} className="rounded border-2 border-echo/20 bg-grass/20 p-1 hover:border-echo">
-                  <img src={p.dataUrl} alt={p.id} className="pixel mx-auto" style={{ imageRendering: "pixelated", width: 48 }} />
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setStep("choose")} className="mt-4 text-xs text-parchment/50 hover:text-parchment">← back</button>
           </div>
         )}
 
