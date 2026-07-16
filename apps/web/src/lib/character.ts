@@ -77,16 +77,6 @@ export async function createFromSelfie(
   return { attributes, spriteUrl, portraitUrl, source: "selfie" };
 }
 
-/** Premade gallery: deterministic styles from the same generator (consistent art). */
-export function premadeStyles(count = 8): { id: string; dataUrl: string }[] {
-  const out: { id: string; dataUrl: string }[] = [];
-  for (let i = 0; i < count; i++) {
-    const id = `premade_${i}`;
-    out.push({ id, dataUrl: buildCharacterSheet(styleFromId(id)).toDataURL("image/png") });
-  }
-  return out;
-}
-
 export async function createFromPremade(premadeId: string, userId: string): Promise<CharacterResult> {
   const style = styleFromId(premadeId);
   const sheet = buildCharacterSheet(style);
