@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Lenis from "lenis";
 import AuthModal from "@/components/AuthModal";
 import Splash from "@/components/Splash";
+import CharacterSelect from "./_landing/CharacterSelect";
 import { getSupabase } from "@/lib/supabase";
 
 type Mode = "signin" | "signup";
@@ -223,6 +224,11 @@ export default function Landing() {
           ▾ scroll
         </a>
       </section>
+
+      {/* ─────────────────────── JOIN WAITLIST (§1b) ─────────────────────── */}
+      {/* Step (a). Mounted directly under the hero so it is reviewable now; the book (§1a) lands
+          above it in step (c), and the old marketing sections below are removed in step (d). */}
+      <CharacterSelect />
 
       {/* ─────────────────────── FEATURES ─────────────────────── */}
       <section id="features" className="bg-[#f3ecd9] px-6 py-20 sm:px-10 sm:py-24">
