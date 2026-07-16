@@ -171,6 +171,7 @@ export default function LegendBook() {
 /* ── the book itself ─────────────────────────────────────────────────────────────────────────── */
 
 function Book({ scale, beat, page }: { scale: number; beat: (typeof BEATS)[number] | null; page: number }) {
+  const cover = page < 0;
   return (
     <div
       className="relative mx-auto flex w-full max-w-[560px] items-stretch justify-center rounded-sm border-2 border-[#2a2340] bg-[#120c19] p-2 shadow-[0_10px_0_#0d0812] sm:max-w-[720px] sm:p-3"
@@ -180,30 +181,50 @@ function Book({ scale, beat, page }: { scale: number; beat: (typeof BEATS)[numbe
         transition: "none",
       }}
     >
-      {/* binding: bark, down the middle */}
-      <div
-        aria-hidden
-        className="absolute inset-y-2 left-1/2 z-20 hidden w-[10px] -translate-x-1/2 bg-bark shadow-[inset_2px_0_0_#5d3a22,inset_-2px_0_0_#5d3a22] sm:block sm:w-3"
-      />
+      {/* The binding, and it is HIDDEN ON THE COVER. A closed book shows no spine from the front,
+          and more to the point: the cover's type is centred, so a spine down the middle would run
+          straight through the wordmark. Text must never cross the spine. Revealing the binding on
+          the first turn is also just what opening a book does. */}
+      {!cover && (
+        <div
+          aria-hidden
+          className="absolute inset-y-2 left-1/2 z-20 hidden w-[10px] -translate-x-1/2 bg-bark shadow-[inset_2px_0_0_#5d3a22,inset_-2px_0_0_#5d3a22] sm:block sm:w-3"
+        />
+      )}
       <div
         className="flex w-full origin-center"
         style={{ transform: `scaleX(${scale})`, transition: "none" }}
       >
-        {page < 0 ? <Cover /> : <Spread beat={beat!} />}
+        {cover ? <Cover /> : <Spread beat={beat!} />}
       </div>
     </div>
   );
 }
 
+/**
+ * ONE height for the cover and every spread. They used to differ — the cover was min-h-[300px]
+ * sm:min-h-[420px] while a spread was sized by its own content — so the whole book visibly changed
+ * size on the very first turn. The cover's proportions are the reference; everything matches it.
+ */
+const LEAF_H = "h-[300px] sm:h-[420px]";
+
 function Cover() {
   return (
-    <div className="flex min-h-[300px] w-full flex-col items-center justify-center gap-4 bg-parchment px-6 py-16 sm:min-h-[420px]">
-      {/* The one echo-violet on this page, and it is small. The cover and the empty roster slot are
-          the only two places it is allowed on the whole landing. */}
-      <p className="font-pixel text-5xl font-bold lowercase tracking-tight text-echo sm:text-6xl">
+    <div
+      className={`${LEAF_H} relative flex w-full flex-col items-center justify-center gap-5 bg-[#5d3a22] px-6`}
+    >
+      {/* A debossed rule, the way a bound board is tooled. Pixel-art: a hard 2px line, no bevel. */}
+      <div className="pointer-events-none absolute inset-4 border-2 border-[#7a4a2b] sm:inset-6" />
+
+      {/* CREAM TYPE, VIOLET GLOW — not violet fill. Echo-violet is the rarest thing on this page and
+          it belongs on an EDGE: here it is light coming off the letters, not the letters themselves.
+          `glow-echo` is the app's existing violet text-shadow (globals.css, already used by
+          /onboard), so this reuses the house glow rather than inventing a second one.
+          Centred on a single board with no spine behind it, so nothing crosses the binding. */}
+      <p className="glow-echo font-pixel text-5xl font-bold lowercase leading-none tracking-tight text-parchment sm:text-6xl">
         {COVER.mark}
       </p>
-      <p className="font-pixel text-xs uppercase tracking-[0.3em] text-ink/50 sm:text-sm">
+      <p className="font-pixel text-[10px] uppercase tracking-[0.3em] text-parchment/45 sm:text-xs">
         {COVER.line}
       </p>
     </div>
@@ -212,15 +233,15 @@ function Cover() {
 
 function Spread({ beat }: { beat: (typeof BEATS)[number] }) {
   return (
-    <div className="grid w-full grid-cols-1 bg-parchment sm:grid-cols-2">
-      {/* Left leaf: the plate. Degrades to nothing if the art is missing — the line still carries
-          the beat, which is why the text is never baked into the image. */}
-      <div className="flex items-center justify-center border-b-2 border-[#cdb88e] bg-[#e8d3a0] p-5 sm:border-b-0 sm:border-r-2 sm:p-6">
+    <div className={`${LEAF_H} grid w-full grid-cols-1 bg-parchment sm:grid-cols-2`}>
+      {/* Left leaf: the plate. Degrades to a quiet panel if the art is missing — the line still
+          carries the beat, which is exactly why the text is never baked into the image. */}
+      <div className="flex items-center justify-center overflow-hidden border-b-2 border-[#cdb88e] bg-[#e8d3a0] p-4 sm:border-b-0 sm:border-r-2 sm:p-6">
         <Plate beat={beat} />
       </div>
       {/* Right leaf: the line. Real DOM text. */}
-      <div className="flex items-center justify-center p-6 sm:p-10">
-        <p className="max-w-[26ch] text-balance font-pixel text-base leading-relaxed text-ink/85 sm:text-lg">
+      <div className="flex items-center justify-center overflow-hidden p-5 sm:p-10">
+        <p className="max-w-[26ch] text-balance font-pixel text-sm leading-relaxed text-ink/85 sm:text-lg">
           {beat.line}
         </p>
       </div>
@@ -234,17 +255,18 @@ function Plate({ beat }: { beat: (typeof BEATS)[number] }) {
   if (failed) {
     // Never a broken slot: an absent plate leaves a quiet parchment panel, and the legend line
     // beside it still carries the whole beat.
-    return <div aria-hidden className="h-[172px] w-[256px] rounded-sm bg-[#cdb88e]/40" />;
+    return <div aria-hidden className="h-[86px] w-[128px] rounded-sm bg-[#cdb88e]/40 sm:h-[172px] sm:w-[256px]" />;
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element -- pixel art must not be resampled by
     // next/image. `pixel` + an integer scale is the whole point.
     //
-    // Fixed at exactly 2x (128x86 -> 256x172), and `max-w-none` is LOAD-BEARING. An earlier version
-    // stepped 1x/2x/3x at breakpoints, but the 3x width did not fit inside the book's leaf, so the
-    // stylesheet's `img { max-width: 100% }` quietly clamped it and the plate rendered at 2.31x —
-    // a fractional scale, which smears the pixel grid. Any size here must actually FIT the leaf, or
-    // the clamp silently undoes the integer rule. 2x fits every breakpoint down to a 390px phone.
+    // Integer scale only: 1x on phones, 2x from sm. `max-w-none` is LOAD-BEARING, and so is the
+    // rule that each size must actually FIT its leaf. An earlier version stepped up to 3x, which did
+    // not fit, so the stylesheet's `img { max-width: 100% }` quietly clamped it and the plate
+    // rendered at 2.31x — a fractional scale that smears the pixel grid. 1x on phones is not
+    // timidity either: the leaf is now a FIXED height shared with the cover, and a 2x plate plus its
+    // line does not fit inside it on a stacked mobile layout.
     <img
       src={beat.plate}
       alt={beat.alt}
@@ -252,7 +274,7 @@ function Plate({ beat }: { beat: (typeof BEATS)[number] }) {
       height={86}
       draggable={false}
       onError={() => setFailed(true)}
-      className="pixel box-content block w-[256px] max-w-none select-none"
+      className="pixel box-content block w-[128px] max-w-none select-none sm:w-[256px]"
       style={{ imageRendering: "pixelated" }}
     />
   );

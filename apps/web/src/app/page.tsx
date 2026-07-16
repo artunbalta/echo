@@ -1,48 +1,34 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Lenis from "lenis";
-import AuthModal from "@/components/AuthModal";
 import Splash from "@/components/Splash";
 import LegendBook from "./_landing/LegendBook";
 import CharacterSelect from "./_landing/CharacterSelect";
 import DemoEntry from "./_landing/DemoEntry";
-import { getSupabase } from "@/lib/supabase";
 
 /**
- * The landing. Exactly three stacked sections, in this order (§1):
+ * The landing. Top to bottom:
  *
- *   1a  LegendBook      the myth, told as a book. The hero.
- *   1b  CharacterSelect JOIN WAITLIST. The roster with a hole in it. The conversion surface.
- *   1c  DemoEntry       a quiet, honestly-labelled door to the live build.
+ *   hero            the pixel landscape and the first-day line. Restored from the original.
+ *   1a LegendBook   the myth, told as a book.
+ *   1b CharacterSelect  JOIN WAITLIST. The roster with a hole in it, form at the bottom.
+ *   1c DemoEntry    the trailer and a door to the live build. Stays last.
  *
- * REMOVED from the old landing (all of it marketing, none of it serving those three):
- *   - the photo hero (title.png over landing-back.png) and its two CTAs
- *   - the FEATURES grid ("An agent that learns you, then moves things forward") + 3 SVG icons
- *   - the HOW IT WORKS three-step section
- *   - the WORLD showcase (browser-chrome mock around demo.png)
- *   - the FINAL CTA section ("Today is your first day.")
- *   - the nav links Product / How it works / World, and the footer's copies of them
- *   - the "▾ scroll" cue
- * Orphaned by that: public/title.png and public/demo.png. They are LEFT ON DISK, not deleted —
- * removing a page is reversible, deleting committed art is a decision for you, and they cost
- * nothing while untracked-in-use. public/logo.png stays: /onboard uses it too.
+ * REMOVED from the original landing: the FEATURES grid and its 3 SVG icons, HOW IT WORKS, the WORLD
+ * showcase (browser chrome around demo.png), the FINAL CTA, the Product / How it works / World nav
+ * and its footer copies, and the "▾ scroll" target that pointed at them. public/demo.png is orphaned
+ * by that and is LEFT ON DISK rather than deleted; public/title.png and public/landing-back.png are
+ * back in use by the hero.
  *
- * KEPT deliberately, as a judgement call worth flagging: the top bar's Log in / Enter, and
- * AuthModal. The brief says exactly three sections, and this is a fourth thing. But AuthModal owns
- * the ONLY writes to the echo.userId / echo.email localStorage keys the rest of the app reads, and
- * deleting the only way an existing player signs in would be a bigger break than a small header.
- * It is reduced to the wordmark plus one text link, with no marketing nav.
+ * NO AUTH. The header's Log in, the hero's two auth buttons and AuthModal are all gone (§6). What
+ * that actually costs is documented in _landing/README-auth-removal.md — short version: nothing
+ * crashes, because every reader of `echo.userId` already falls back to a generated anonymous id.
+ * What is lost is account CONTINUITY: there is no longer any way to sign in, so a returning player
+ * on a new browser gets a new anonymous echo instead of their old one.
  */
-
-type Mode = "signin" | "signup";
-
 export default function Landing() {
   const lenisRef = useRef<Lenis | null>(null);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<Mode>("signin");
-  const [email, setEmail] = useState<string | null>(null);
 
   // This route scrolls; the global stylesheet locks body overflow for the full-screen world/venue
   // routes, so opt back in here and restore on leave.
@@ -77,65 +63,74 @@ export default function Landing() {
     };
   }, []);
 
-  // Freeze the spring while the auth modal is open.
-  useEffect(() => {
-    const lenis = lenisRef.current;
-    if (!lenis) return;
-    if (authOpen) lenis.stop();
-    else lenis.start();
-  }, [authOpen]);
-
-  // Reflect an existing Supabase session in the header.
-  useEffect(() => {
-    const supa = getSupabase();
-    if (!supa) return;
-    supa.auth.getSession().then(({ data }) => setEmail(data.session?.user?.email ?? null));
-    const { data: sub } = supa.auth.onAuthStateChange((_e, session) =>
-      setEmail(session?.user?.email ?? null),
-    );
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
   return (
     <div className="relative bg-ink text-parchment">
       <Splash />
 
-      {/* Wordmark and a way back in. No marketing nav: there is nothing to navigate to. */}
+      {/* Wordmark only. There is nothing to navigate to, and nothing to log in to. */}
       <header className="absolute inset-x-0 top-0 z-40">
-        <nav className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4 sm:px-8">
-          <a href="#legend" className="flex items-center gap-2.5">
+        <nav className="mx-auto flex max-w-6xl items-center px-5 py-4 sm:px-8">
+          <a href="#top" className="flex items-center gap-2.5">
             <img
               src="/logo.png"
               alt=""
-              width={28}
-              height={28}
+              width={32}
+              height={32}
               draggable={false}
-              className="h-7 w-7 select-none rounded"
+              className="h-8 w-8 select-none rounded"
             />
-            <span className="font-pixel text-xl font-bold lowercase tracking-wide text-parchment">
+            <span className="font-pixel text-xl font-bold lowercase tracking-wide text-[#1f2740]">
               echo
             </span>
           </a>
-          {email ? (
-            <Link
-              href="/play"
-              className="font-pixel text-xs text-parchment/60 underline-offset-4 transition-colors hover:text-parchment hover:underline"
-            >
-              Enter <span aria-hidden>›</span>
-            </Link>
-          ) : (
-            <button
-              onClick={() => {
-                setAuthMode("signin");
-                setAuthOpen(true);
-              }}
-              className="font-pixel text-xs text-parchment/60 underline-offset-4 transition-colors hover:text-parchment hover:underline"
-            >
-              Log in
-            </button>
-          )}
         </nav>
       </header>
+
+      {/* ───────────────────────── HERO ───────────────────────── */}
+      <section id="top" className="relative h-[100dvh] min-h-[560px] w-full overflow-hidden bg-ink">
+        <img
+          src="/landing-back.png"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+
+        <div className="hero-scrim absolute inset-0" />
+        <div className="world-vignette absolute inset-0" />
+
+        <div className="echo-rise absolute inset-0 z-10 flex flex-col justify-center px-6 sm:px-12 lg:px-24">
+          <div className="max-w-xl">
+            <img
+              src="/title.png"
+              alt="AI AGENTS THAT LEARN YOU."
+              draggable={false}
+              className="title-img w-[min(84vw,560px)] select-none"
+            />
+            <p className="mt-6 max-w-md font-pixel text-base leading-relaxed text-[#241d33] [text-shadow:0_1px_0_rgba(255,248,230,0.55)] sm:mt-7 sm:text-xl">
+              You&apos;ve arrived in a country that does not exist. It is your first day. No one knows
+              you here, not even you.
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-4">
+              {/* Was "Get Started" into the auth modal. With auth gone the only thing to start is
+                  the waitlist, so it goes there rather than nowhere. */}
+              <a href="#waitlist" className="btn-pixel" aria-label="Join the waitlist">
+                Join the waitlist{" "}
+                <span className="chev" aria-hidden>
+                  ›
+                </span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <a
+          href="#legend"
+          className="scroll-cue absolute bottom-5 left-1/2 z-10 -translate-x-1/2 font-pixel text-xs text-[#241d33]"
+          aria-label="Scroll for more"
+        >
+          ▾ scroll
+        </a>
+      </section>
 
       <LegendBook />
       <CharacterSelect />
@@ -147,16 +142,6 @@ export default function Landing() {
           <p className="font-pixel text-xs text-parchment/30">A country that does not exist.</p>
         </div>
       </footer>
-
-      <AuthModal
-        open={authOpen}
-        mode={authMode}
-        onClose={() => setAuthOpen(false)}
-        onAuthed={(e) => {
-          setEmail(e);
-          setAuthOpen(false);
-        }}
-      />
     </div>
   );
 }

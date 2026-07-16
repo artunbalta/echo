@@ -5,6 +5,7 @@ import AvatarPreview from "@/components/AvatarPreview";
 import { createFromPremade, type CharacterResult } from "@/lib/character";
 import { resolveUserId } from "@/lib/identity";
 import { EMPTY_INDEX, EMPTY_SLOT, GRID, GRID_COLS, type RosterEntry } from "./roster";
+import { VACANCY } from "./vacancy";
 
 /**
  * JOIN WAITLIST — the character select (§1b). A fighting-game roster with a hole in the middle:
@@ -425,11 +426,12 @@ const EmptyTile = forwardRef<
       }`}
     >
       <Silhouette />
-      {/* Named, not decorated. The tile has to say what it is — a place kept for you — or it reads
-          as a missing image. A dashed border marks it out as a vacancy rather than a lit frame; it
-          goes solid only once claimed. */}
+      {/* Named, not decorated: the tile has to say what it is or it reads as a missing image. Sits
+          ABOVE the head, in the tile's own empty air — the derived body covers half the tile, so a
+          label any lower would be buried inside the shape. A dashed border marks the slot out as a
+          vacancy rather than a lit frame; it goes solid only once claimed. */}
       <span
-        className={`pointer-events-none absolute inset-x-0 bottom-1.5 text-center font-pixel text-[8px] uppercase tracking-[0.18em] transition-colors sm:bottom-2.5 sm:text-[10px] ${
+        className={`pointer-events-none absolute inset-x-0 top-1 text-center font-pixel text-[8px] uppercase tracking-[0.18em] transition-colors sm:top-2 sm:text-[10px] ${
           selected ? "text-echo" : "text-echo/60 group-hover:text-echo/90"
         }`}
       >
@@ -440,72 +442,42 @@ const EmptyTile = forwardRef<
 });
 
 /**
- * A person-shaped absence, framed exactly like a real portrait so the hole reads as a hole rather
- * than as a missing image. Drawn, never generated: this one must not be able to 404.
+ * The empty centre slot's shape. DERIVED FROM THE EIGHT PORTRAITS, never hand-drawn — the geometry
+ * comes from _landing/vacancy.ts, which pipeline/derive-vacancy.mjs computes by overlaying the eight
+ * committed masks and keeping the pixels a majority agree on.
  *
- * DRAWN AS AN OUTLINE, not a filled shape, and that is the whole design. Two earlier versions filled
- * the bust with violet and both read as an object rather than a person — first a tombstone, then a
- * chess pawn. The lesson is that a featureless FILLED bust always reads as a mannequin: with no
- * face, no hair and no props, the only thing left is a symmetric blob. The brief already had the
- * answer in its own words — "an outline, a silhouette-shaped absence". An outline is the shape of a
- * person who is not there, which is exactly the thing the centre slot is supposed to mean, and it
- * stops competing with the eight real portraits around it.
+ * WHY DERIVED. Three hand-authored versions failed identically: built from abstract tapering blocks,
+ * they read as an object rather than a person — a tombstone, then a chess pawn, then a pawn with an
+ * outline. The fault was the source, not the rendering. A shape invented in the abstract matches
+ * nothing in the grid, so it reads as nothing. The eight portraits are all normalised to the same
+ * canvas, baseline and scale, so the shape they SHARE is by construction the shape of a person in
+ * this lineup — head, neck and shoulders, at exactly their crop. Match their outline and the hole
+ * reads instantly as "someone is missing here, and it's you".
  *
- * Grid-aligned and stepped, never curved: an SVG curve scales as a smooth vector and would sit
- * visibly off the pixel grid beside the 72px portraits. The staircase IS the pixel-art idiom for a
- * curve, so the absence is drawn in the same language as the people around it.
+ * FLAT FILLS ONLY. No gradient anywhere: a soft vertical gradient would break the same hard-palette
+ * pixel rule the portraits are held to, and it is what made the earlier version read as a purple
+ * mass. The violet is spent on the RIM — a 1px edge that breathes — with the interior barely there.
+ * An inviting absence, not a blob.
  */
-function Silhouette() {
-  // Half-width of the bust at each y, on the portraits' own 72x108 grid. The shoulders FLARE fast
-  // and then drop straight to the floor — a bust reads as a bust because the shoulders arrive
-  // suddenly. An even taper from neck to base is what produced the pawn.
-  const PROFILE: [number, number][] = [
-    [16, 5], [18, 7], [20, 8], [22, 9], [26, 10],   // rounded crown
-    [38, 10], [42, 8], [45, 7],                      // jaw
-    [47, 4], [53, 4],                                // neck
-    [53, 12], [56, 17], [59, 21], [62, 24], [65, 26], // shoulders
-    [69, 27], [108, 27],                             // torso to the floor
-  ];
-
-  // Trace the staircase down the right side, then back up the left, as one closed polygon.
-  const CX = 36;
-  const pts: string[] = [];
-  for (let i = 0; i < PROFILE.length; i++) {
-    const [y, h] = PROFILE[i];
-    if (i > 0) pts.push(`${CX + PROFILE[i - 1][1]},${y}`);
-    pts.push(`${CX + h},${y}`);
-  }
-  for (let i = PROFILE.length - 1; i >= 0; i--) {
-    const [y, h] = PROFILE[i];
-    pts.push(`${CX - h},${y}`);
-    if (i > 0) pts.push(`${CX - PROFILE[i - 1][1]},${y}`);
-  }
-
+function Silhouette({ breathing = true }: { breathing?: boolean }) {
   return (
     <svg
-      viewBox="0 0 72 108"
+      viewBox={`0 0 ${VACANCY.w} ${VACANCY.h}`}
       aria-hidden
       shapeRendering="crispEdges"
       preserveAspectRatio="xMidYMax meet"
       className="block h-auto w-full"
     >
-      <defs>
-        {/* Barely there. The interior is a hint of something forming, not a fill — the outline is
-            what carries the shape. This is the one echo-violet on the page and it has to earn it. */}
-        <linearGradient id="echo-void" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="#a06cd5" stopOpacity="0.20" />
-          <stop offset="60%" stopColor="#a06cd5" stopOpacity="0.09" />
-          <stop offset="100%" stopColor="#a06cd5" stopOpacity="0.03" />
-        </linearGradient>
-      </defs>
-      <polygon
-        points={pts.join(" ")}
-        fill="url(#echo-void)"
-        stroke="#a06cd5"
-        strokeWidth="1"
-        strokeOpacity="0.75"
-        strokeLinejoin="miter"
-      />
+      {/* the absence: flat, barely there, so the eye reads the edge */}
+      {VACANCY.interior.map(([y, x, w]) => (
+        <rect key={`i${y}-${x}`} x={x} y={y} width={w} height={1} fill="#a06cd5" fillOpacity={0.09} />
+      ))}
+      {/* the rim: the only echo-violet on the page, and the only thing that moves */}
+      <g className={breathing ? "animate-breathe motion-reduce:animate-none" : undefined}>
+        {VACANCY.edge.map(([y, x, w]) => (
+          <rect key={`e${y}-${x}`} x={x} y={y} width={w} height={1} fill="#a06cd5" fillOpacity={0.85} />
+        ))}
+      </g>
     </svg>
   );
 }

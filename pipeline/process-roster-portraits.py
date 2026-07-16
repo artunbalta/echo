@@ -230,8 +230,49 @@ def process_singles(d):
     return 0
 
 
+def adopt(name, raw_path, fill, d=None):
+    """Fold ONE externally-supplied portrait into the existing set, without touching the others.
+
+    For a hand-picked image (e.g. one chosen out of an earlier run's gallery) rather than a fresh
+    generation. It gets the same treatment every other portrait got — flatten the tile to ink,
+    measure the body, seat it on the floor, scale to its `fill` — and is then mapped onto the palette
+    the EXISTING finals already share, rather than re-deriving a palette across the whole set.
+
+    That direction matters. Re-deriving would perturb seven already-approved portraits to accommodate
+    one newcomer; mapping the newcomer onto their palette leaves those seven byte-identical and still
+    lands the new one in one shared palette. The roster stays coherent and the diff stays honest.
+    """
+    d = os.path.abspath(d or DEFAULT_DIR)
+    jobs = json.load(open(os.path.join(d, "_manifest.json")))
+    cap = int(jobs[0].get("cap", 24))
+    w = int(jobs[0].get("size", 72))
+    h = int(round(w * 3 / 2))
+
+    existing = [
+        Image.open(os.path.join(d, f"{j['name']}.png")).convert("RGB")
+        for j in jobs
+        if j["name"] != name and os.path.exists(os.path.join(d, f"{j['name']}.png"))
+    ]
+    if not existing:
+        print("[roster] no existing portraits to borrow a palette from")
+        return 1
+
+    pal = shared_palette(existing, cap)
+    im = normalize(Image.open(raw_path).convert("RGB"), w, h, fill=fill)
+    im = im.quantize(palette=pal, dither=Image.NONE).convert("RGB")
+    out = os.path.join(d, f"{name}.png")
+    im.save(out)
+    print(f"  [roster] adopted {name}: {im.size} fill={fill}, mapped onto the palette of "
+          f"{len(existing)} existing portraits ({cap} colours)")
+    return 0
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if "--adopt" in sys.argv:
+        i = sys.argv.index("--adopt")
+        name, raw_path, fill = sys.argv[i + 1], sys.argv[i + 2], float(sys.argv[i + 3])
+        return adopt(name, raw_path, fill)
     d = os.path.abspath(args[0]) if args else os.path.abspath(DEFAULT_DIR)
     if "--sheet" in sys.argv:
         i = sys.argv.index("--sheet")

@@ -92,15 +92,35 @@ export const CAST = [
   // -- the two BUZZ heads. Same head outline by hash, so they are pushed apart on every other axis:
   //    heavy/straight-on/collar/rope  vs  tall/turned/hood/strap.
   {
-    id: "premade_1480", // rich dark brown / bark-brown / forest-green / buzz
-    name: "Pell",
+    // THE ONE HAND-PICKED PORTRAIT. Art supplied by Artun from an earlier run's gallery
+    // (Higgsfield asset 98d4713f-70be-4da1-a40d-fb77077604d0) and adopted, not regenerated:
+    //   python3 pipeline/process-roster-portraits.py --adopt premade_0 <file> 0.88
+    //
+    // WHY premade_0 AND NOT premade_4483. The instruction was "use this as Lark". A portrait's
+    // palette is not free — it must equal styleFromId(id) or the tile lies about the sprite the
+    // player actually receives. This art is fair skin #f1c79b / silver-grey #cfcfcf / forest-green
+    // #3f8a64 / buzz, which IS styleFromId("premade_0") exactly, and is nothing like
+    // styleFromId("premade_4483") (deep amber / sea-blue / rose / short). So the NAME Lark moved to
+    // premade_0 and the art kept its palette. The label is free; the palette is not.
+    //
+    // It also DISPLACED premade_1480 rather than adding to the roster. premade_1480 carried this
+    // exact design — heavy, buzz, straight-on, rope over the shoulder, forest-green tunic — so
+    // keeping both would have put two of the same character in an eight-person lineup, which is the
+    // failure this whole cast was rebuilt to fix. The name Pell moved to premade_4483.
+    id: "premade_0", // fair warm / silver-grey / forest-green / buzz
+    name: "Lark",
     build: "heavy and broad, thick neck, shoulders squared and filling the frame",
     posture: "straight-on, chin level, utterly still",
     hairShape: "close-shaved buzzcut, flat crown, a blunt square hairline",
     garment: "a high stiff standing collar, buttoned to the throat",
     prop: "a thick coil of rope slung over the right shoulder, its bulk breaking the shoulder line sideways",
     expression: "flat and tired, heavy brow, mouth a straight line",
-    fill: 0.88,
+    // 0.84, wider than anyone else, and chosen on evidence rather than taste. At the 0.88 this
+    // design originally carried, the adopted portrait scored head IoU 0.803 against Cass — over the
+    // 0.80 cap. The two share silver-grey hair, a broad build and a pale face, so they genuinely do
+    // read alike, and no prompt change can fix that without regenerating. Framing this one wider
+    // (its design note always said "a little more air above the head") separates them to 0.734.
+    fill: 0.84,
   },
   {
     id: "premade_11888", // medium bronze / black / slate-blue / buzz
@@ -144,7 +164,7 @@ export const CAST = [
   // -- the two SHORT heads: one tilted and loose with a bird, one square and level with a basket.
   {
     id: "premade_4483", // deep amber-brown / faded sea-blue / rose / short
-    name: "Lark",
+    name: "Pell",
     build: "rangy and thin, one shoulder dropped lower than the other",
     posture: "head tilted to the left, shoulders asymmetric and loose",
     hairShape: "short and windblown, sticking up in irregular tufts",
