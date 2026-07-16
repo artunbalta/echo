@@ -23,6 +23,10 @@ import { EMPTY_INDEX, EMPTY_SLOT, GRID, GRID_COLS, type RosterEntry } from "./ro
 type Selection = RosterEntry | typeof EMPTY_SLOT | null;
 type Fill = "photo" | "premade" | null;
 
+/** The real seat count from GET /api/waitlist. `available: false` means we could not read it, and
+ *  in that case the UI says nothing rather than inventing a number. */
+type Seats = { cap: number; taken: number | null; remaining: number | null; available: boolean };
+
 /**
  * Portraits are 72x107 (pipeline/process-roster-portraits.py). Scale is INTEGER ONLY, and sizing
  * steps between whole multiples at breakpoints rather than interpolating — a fractional scale would
@@ -47,7 +51,8 @@ export default function CharacterSelect() {
   const [website, setWebsite] = useState(""); // honeypot; a human never sees or fills this
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ already: boolean } | null>(null);
+  const [done, setDone] = useState<{ already: boolean; seat: number | null } | null>(null);
+  const [seats, setSeats] = useState<Seats | null>(null);
 
   // The result of createFromPremade — held so a failed submit never loses the chosen character (§1b).
   const characterRef = useRef<CharacterResult | null>(null);
@@ -78,6 +83,21 @@ export default function CharacterSelect() {
       cancelled = true;
     };
   }, [entry]);
+
+  // The real remaining count. Fetched, never assumed: if it cannot be read the line simply does not
+  // render (see Scarcity), because a made-up number is the exact growth-hack pattern we refuse.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/waitlist")
+      .then((r) => r.json())
+      .then((d: Seats) => {
+        if (!cancelled) setSeats(d);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const choose = useCallback((cell: RosterEntry | typeof EMPTY_SLOT, index: number) => {
     setError(null);
@@ -136,13 +156,27 @@ export default function CharacterSelect() {
           characterAttributes: character?.attributes ?? null,
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string; already?: boolean };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        already?: boolean;
+        full?: boolean;
+        seat?: number | null;
+        taken?: number;
+        cap?: number;
+        remaining?: number;
+      };
       if (!res.ok) {
         // Keep name, email AND the chosen character — never lose the selection on a failed submit.
         setError(data.error ?? "Could not save that. Please try again.");
+        // A 409 means the last seat went while this form was open. Reflect the truth immediately
+        // rather than leaving a stale "N left" on screen above a form that can no longer succeed.
+        if (data.full) setSeats({ cap: data.cap ?? 0, taken: data.taken ?? 0, remaining: 0, available: true });
         return;
       }
-      setDone({ already: Boolean(data.already) });
+      if (typeof data.taken === "number" && typeof data.cap === "number") {
+        setSeats({ cap: data.cap, taken: data.taken, remaining: data.remaining ?? 0, available: true });
+      }
+      setDone({ already: Boolean(data.already), seat: data.seat ?? null });
     } catch {
       setError("Could not reach the waitlist. Check your connection and try again.");
     } finally {
@@ -150,7 +184,9 @@ export default function CharacterSelect() {
     }
   }
 
-  if (done) return <Joined already={done.already} entry={entry} />;
+  if (done) return <Joined already={done.already} seat={done.seat} entry={entry} />;
+
+  const full = seats?.available === true && seats.remaining === 0;
 
   return (
     <section id="waitlist" className="relative bg-ink px-5 py-20 sm:px-8 sm:py-24">
@@ -159,15 +195,20 @@ export default function CharacterSelect() {
           <h2 className="font-pixel text-3xl font-bold uppercase tracking-[0.3em] text-parchment sm:text-4xl">
             Join Waitlist
           </h2>
+          <Scarcity seats={seats} />
           <p className="mx-auto mt-4 max-w-md font-pixel text-sm leading-relaxed text-parchment/60 sm:text-base">
             Every figure here is someone who already arrived. The space in the middle is yours.
           </p>
         </header>
 
-        {/* Hero and roster are centred as one unit, and the form sits under BOTH rather than under
-            the roster column — otherwise the hero column leaves a large dead space beside it. */}
-        <div className="mt-12 flex flex-col items-center gap-10 md:flex-row md:items-center md:justify-center md:gap-14">
-          <Hero selected={selected} entry={entry} />
+        {/* The roster is the hero of this section, so it sits dead-centre on the page and the large
+            portrait hangs beside it. Previously the two were centred as a PAIR, which pushed the
+            grid visibly right of centre; `md:absolute` takes the preview out of flow so the grid
+            centres on the section itself and the preview occupies the space that was dead anyway. */}
+        <div className="relative mt-12 flex flex-col items-center gap-10">
+          <div className="md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
+            <Hero selected={selected} entry={entry} />
+          </div>
 
           <div>
             <div
@@ -214,6 +255,7 @@ export default function CharacterSelect() {
             website={website}
             busy={busy}
             error={error}
+            full={full}
             disabled={!selected || (isEmpty && fill !== "premade")}
             onName={setName}
             onEmail={setEmail}
@@ -226,26 +268,57 @@ export default function CharacterSelect() {
   );
 }
 
+/* ── real scarcity ───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The true remaining count, straight from the row count (§8). Everything here is load-bearing:
+ *
+ *  - The number is REAL. It is `cap - count(confirmed rows)`, read from GET /api/waitlist, and the
+ *    server refuses signups past the cap with a 409 rather than quietly hiding the form. If it says
+ *    limited, it is limited.
+ *  - If the count cannot be read, this renders NOTHING. No placeholder, no cap-only teaser, no
+ *    "almost gone". An invented number is precisely the pattern the brief forbids, and a fake
+ *    scarcity line is worse than no scarcity line.
+ *  - No countdown, no decay, no "1,247 people joined", no urgency verbs. The line states a fact in
+ *    the world's register and stops. The pull is that the place is small, not that a clock is running.
+ */
+function Scarcity({ seats }: { seats: Seats | null }) {
+  if (!seats?.available || seats.remaining === null || seats.taken === null) return null;
+  const { remaining, cap } = seats;
+  return (
+    <p className="mt-5 font-pixel text-xs uppercase tracking-[0.25em] text-parchment/45 sm:text-sm">
+      {remaining === 0 ? (
+        <>All {cap} places taken</>
+      ) : (
+        <>
+          <span className="text-parchment/80">{remaining}</span> of {cap} places left
+        </>
+      )}
+    </p>
+  );
+}
+
 /* ── the large selected portrait ─────────────────────────────────────────────────────────────── */
 
+/**
+ * The large preview of whatever is currently selected.
+ *
+ * It renders NOTHING until something is selected. The previous version always drew the framed
+ * rectangle and filled it with "No one yet." / "CHOOSE" — a large empty box sitting next to the
+ * empty slot, which both wasted the space and competed with the one deliberate vacancy on the page.
+ * A preview of nothing is not a preview.
+ */
 function Hero({ selected, entry }: { selected: Selection; entry: RosterEntry | null }) {
+  if (!selected) return null;
   return (
     <div className="shrink-0">
       <div
-        className={`${HERO_SIZE} relative flex aspect-[72/107] items-end justify-center overflow-hidden rounded-lg border-2 border-echo/20 bg-[#120c19]`}
+        className={`${HERO_SIZE} relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded-lg border-2 border-echo/20 bg-[#120c19]`}
       >
-        {entry ? (
-          <Portrait entry={entry} />
-        ) : selected === EMPTY_SLOT ? (
-          <Silhouette />
-        ) : (
-          <p className="self-center px-4 text-center font-pixel text-xs leading-relaxed text-parchment/30">
-            No one yet.
-          </p>
-        )}
+        {entry ? <Portrait entry={entry} /> : <Silhouette />}
       </div>
       <p className="mt-3 text-center font-pixel text-xs uppercase tracking-[0.2em] text-parchment/50">
-        {entry ? entry.name : selected === EMPTY_SLOT ? "You" : "Choose"}
+        {entry ? entry.name : "You"}
       </p>
     </div>
   );
@@ -272,7 +345,7 @@ function Portrait({ entry, fallbackScale = 4 }: { entry: RosterEntry; fallbackSc
       src={entry.portrait}
       alt=""
       width={72}
-      height={107}
+      height={108}
       draggable={false}
       onError={() => setFailed(true)}
       className="pixel block h-auto w-full select-none"
@@ -345,13 +418,23 @@ const EmptyTile = forwardRef<
       onClick={onSelect}
       onFocus={onSelect}
       onKeyDown={onKeyDown}
-      className={`${TILE_SIZE} relative flex aspect-[72/107] items-end justify-center overflow-hidden rounded border-2 bg-[#120c19] outline-none transition-all ${
+      className={`${TILE_SIZE} group relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded border-2 border-dashed bg-[#0d0812] outline-none transition-all ${
         selected
-          ? "border-echo shadow-[0_0_28px_rgba(160,108,213,0.55),inset_0_0_18px_rgba(160,108,213,0.22)]"
-          : "border-echo/50 shadow-[0_0_14px_rgba(160,108,213,0.25)] hover:border-echo/80 hover:shadow-[0_0_22px_rgba(160,108,213,0.4)] focus-visible:border-echo"
+          ? "border-echo border-solid shadow-[0_0_30px_rgba(160,108,213,0.5),inset_0_0_22px_rgba(160,108,213,0.18)]"
+          : "border-echo/45 shadow-[0_0_16px_rgba(160,108,213,0.18)] hover:border-echo/75 hover:shadow-[0_0_26px_rgba(160,108,213,0.35)] focus-visible:border-echo"
       }`}
     >
       <Silhouette />
+      {/* Named, not decorated. The tile has to say what it is — a place kept for you — or it reads
+          as a missing image. A dashed border marks it out as a vacancy rather than a lit frame; it
+          goes solid only once claimed. */}
+      <span
+        className={`pointer-events-none absolute inset-x-0 bottom-1.5 text-center font-pixel text-[8px] uppercase tracking-[0.18em] transition-colors sm:bottom-2.5 sm:text-[10px] ${
+          selected ? "text-echo" : "text-echo/60 group-hover:text-echo/90"
+        }`}
+      >
+        You
+      </span>
     </button>
   );
 });
@@ -360,36 +443,69 @@ const EmptyTile = forwardRef<
  * A person-shaped absence, framed exactly like a real portrait so the hole reads as a hole rather
  * than as a missing image. Drawn, never generated: this one must not be able to 404.
  *
- * Built from grid-aligned rectangles only — no curves. An SVG curve scales as a smooth vector and
- * would sit visibly off the pixel grid next to the 72px portraits; axis-aligned rects on whole-pixel
- * coordinates stay sharp and grid-true at every integer scale, which is the same trick the existing
- * landing icons use (shapeRendering="crispEdges"). The stepped shoulders are the pixel-art idiom for
- * a curve, so the absence is drawn in the same language as the people around it.
+ * DRAWN AS AN OUTLINE, not a filled shape, and that is the whole design. Two earlier versions filled
+ * the bust with violet and both read as an object rather than a person — first a tombstone, then a
+ * chess pawn. The lesson is that a featureless FILLED bust always reads as a mannequin: with no
+ * face, no hair and no props, the only thing left is a symmetric blob. The brief already had the
+ * answer in its own words — "an outline, a silhouette-shaped absence". An outline is the shape of a
+ * person who is not there, which is exactly the thing the centre slot is supposed to mean, and it
+ * stops competing with the eight real portraits around it.
+ *
+ * Grid-aligned and stepped, never curved: an SVG curve scales as a smooth vector and would sit
+ * visibly off the pixel grid beside the 72px portraits. The staircase IS the pixel-art idiom for a
+ * curve, so the absence is drawn in the same language as the people around it.
  */
 function Silhouette() {
-  // x, y, w, h on the portraits' own 72x107 grid: a rounded head, a neck, stepped shoulders.
-  const BUST: [number, number, number, number][] = [
-    [30, 20, 12, 2],
-    [28, 22, 16, 4],
-    [27, 26, 18, 16],
-    [28, 42, 16, 3],
-    [31, 45, 10, 6],
-    [23, 51, 26, 5],
-    [18, 56, 36, 7],
-    [14, 63, 44, 9],
-    [11, 72, 50, 35],
+  // Half-width of the bust at each y, on the portraits' own 72x108 grid. The shoulders FLARE fast
+  // and then drop straight to the floor — a bust reads as a bust because the shoulders arrive
+  // suddenly. An even taper from neck to base is what produced the pawn.
+  const PROFILE: [number, number][] = [
+    [16, 5], [18, 7], [20, 8], [22, 9], [26, 10],   // rounded crown
+    [38, 10], [42, 8], [45, 7],                      // jaw
+    [47, 4], [53, 4],                                // neck
+    [53, 12], [56, 17], [59, 21], [62, 24], [65, 26], // shoulders
+    [69, 27], [108, 27],                             // torso to the floor
   ];
+
+  // Trace the staircase down the right side, then back up the left, as one closed polygon.
+  const CX = 36;
+  const pts: string[] = [];
+  for (let i = 0; i < PROFILE.length; i++) {
+    const [y, h] = PROFILE[i];
+    if (i > 0) pts.push(`${CX + PROFILE[i - 1][1]},${y}`);
+    pts.push(`${CX + h},${y}`);
+  }
+  for (let i = PROFILE.length - 1; i >= 0; i--) {
+    const [y, h] = PROFILE[i];
+    pts.push(`${CX - h},${y}`);
+    if (i > 0) pts.push(`${CX - PROFILE[i - 1][1]},${y}`);
+  }
+
   return (
     <svg
-      viewBox="0 0 72 107"
+      viewBox="0 0 72 108"
       aria-hidden
       shapeRendering="crispEdges"
       preserveAspectRatio="xMidYMax meet"
       className="block h-auto w-full"
     >
-      {BUST.map(([x, y, w, h]) => (
-        <rect key={`${x}-${y}`} x={x} y={y} width={w} height={h} className="fill-echo/25" />
-      ))}
+      <defs>
+        {/* Barely there. The interior is a hint of something forming, not a fill — the outline is
+            what carries the shape. This is the one echo-violet on the page and it has to earn it. */}
+        <linearGradient id="echo-void" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0%" stopColor="#a06cd5" stopOpacity="0.20" />
+          <stop offset="60%" stopColor="#a06cd5" stopOpacity="0.09" />
+          <stop offset="100%" stopColor="#a06cd5" stopOpacity="0.03" />
+        </linearGradient>
+      </defs>
+      <polygon
+        points={pts.join(" ")}
+        fill="url(#echo-void)"
+        stroke="#a06cd5"
+        strokeWidth="1"
+        strokeOpacity="0.75"
+        strokeLinejoin="miter"
+      />
     </svg>
   );
 }
@@ -451,6 +567,7 @@ function Form({
   website,
   busy,
   error,
+  full,
   disabled,
   onName,
   onEmail,
@@ -462,6 +579,7 @@ function Form({
   website: string;
   busy: boolean;
   error: string | null;
+  full: boolean;
   disabled: boolean;
   onName: (v: string) => void;
   onEmail: (v: string) => void;
@@ -522,12 +640,15 @@ function Form({
           </p>
         )}
 
+        {/* When the list is full the button says so and stops. The form is not hidden and the
+            endpoint still refuses with a 409 — hiding it would leave the cap unenforced and make
+            the scarcity a UI trick rather than a fact (§8). */}
         <button
           type="submit"
-          disabled={busy || disabled}
+          disabled={busy || disabled || full}
           className="mt-1 w-full rounded bg-parchment px-4 py-3 font-pixel font-bold uppercase tracking-[0.2em] text-ink transition-opacity hover:bg-parchment/90 disabled:cursor-not-allowed disabled:opacity-25"
         >
-          {busy ? "Joining…" : "Join"}
+          {full ? "Full" : busy ? "Joining…" : "Join"}
         </button>
         <p className="text-center font-pixel text-[11px] leading-relaxed text-parchment/35">
           Name and email only. We write to you when there is something to see.
@@ -539,7 +660,15 @@ function Form({
 
 /* ── confirmation ────────────────────────────────────────────────────────────────────────────── */
 
-function Joined({ already, entry }: { already: boolean; entry: RosterEntry | null }) {
+function Joined({
+  already,
+  seat,
+  entry,
+}: {
+  already: boolean;
+  seat: number | null;
+  entry: RosterEntry | null;
+}) {
   return (
     <section id="waitlist" className="bg-ink px-5 py-24 sm:px-8 sm:py-32">
       <div className="mx-auto flex max-w-md flex-col items-center text-center">
@@ -549,9 +678,16 @@ function Joined({ already, entry }: { already: boolean; entry: RosterEntry | nul
         <h2 className="mt-8 font-pixel text-2xl font-bold uppercase tracking-[0.25em] text-parchment">
           {already ? "Kept your place" : "The slot is yours"}
         </h2>
+        {/* A real seat number, assigned by the database, not a flourish. It is the one number here
+            that means something, so it is the one number shown. No confetti. */}
+        {seat !== null && (
+          <p className="mt-4 font-pixel text-xs uppercase tracking-[0.25em] text-parchment/45">
+            Arrival {seat}
+          </p>
+        )}
         <p className="mt-4 font-pixel text-sm leading-relaxed text-parchment/60">
           {already
-            ? "We already had you. Your character is updated."
+            ? "We already had you. Your character is updated, and your place is unchanged."
             : "No one knows you here yet. That is the point. We will write when the island is ready."}
         </p>
       </div>
