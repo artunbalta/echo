@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabaseAdmin";
 import { hasFal, submitPortrait } from "@/lib/fal-portrait";
+import { photoPathReady } from "@/lib/photo-path-ready";
 
 export const runtime = "nodejs";
 /** The selfie upload to fal.storage happens inside the request (see below), so this needs more than
@@ -183,6 +184,25 @@ export async function POST(req: Request) {
     );
   }
 
+  // 3a. Can the photo path actually deliver? Checked BEFORE the seat and BEFORE any spend.
+  //     If migration 0007 is missing, or FAL, or Resend, this flow cannot keep its promise: it would
+  //     take a seat, pay for an image, and then go silent because there is nowhere to record the job
+  //     or no way to hand it over. Refuse honestly instead. The premade path is untouched.
+  if (source === "selfie") {
+    const gate = await photoPathReady(admin);
+    if (!gate.ready) {
+      console.warn(`[waitlist] photo path unavailable: ${gate.reason}`);
+      return NextResponse.json(
+        {
+          error:
+            "Photo characters are not available right now. Your place is still yours: pick someone from the roster and join.",
+          photoPath: false,
+        },
+        { status: 503 },
+      );
+    }
+  }
+
   // 3. Rate limit. After validation so a malformed flood does not consume a window, before the
   //    write so a valid flood does not. Fail OPEN: if the counter is unavailable (e.g. migration
   //    0006 not yet applied) a real person must still be able to join.
@@ -321,13 +341,18 @@ export async function GET() {
   const { data, error } = await admin.rpc("waitlist_taken");
   if (error) {
     console.warn("[waitlist] count unavailable:", error.message);
-    return NextResponse.json({ cap: CAP, taken: null, remaining: null, available: false });
+    return NextResponse.json({ cap: CAP, taken: null, remaining: null, available: false, photoPath: false });
   }
   const taken = Number(data ?? 0);
+  // photoPath tells the UI whether to offer the photo option at all. The reason is deliberately NOT
+  // returned: it names our infrastructure, and a browser has no business knowing which migration is
+  // outstanding.
+  const gate = await photoPathReady(admin);
   return NextResponse.json({
     cap: CAP,
     taken,
     remaining: Math.max(0, CAP - taken),
     available: true,
+    photoPath: gate.ready,
   });
 }

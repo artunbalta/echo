@@ -26,7 +26,15 @@ type Fill = "photo" | "premade" | null;
 
 /** The real seat count from GET /api/waitlist. `available: false` means we could not read it, and
  *  in that case the UI says nothing rather than inventing a number. */
-type Seats = { cap: number; taken: number | null; remaining: number | null; available: boolean };
+type Seats = {
+  cap: number;
+  taken: number | null;
+  remaining: number | null;
+  available: boolean;
+  /** Whether the photo path can actually deliver end to end (migration 0007 + FAL + Resend). The
+   *  UI does not offer a door that will not open; it degrades to the roster and says so. */
+  photoPath?: boolean;
+};
 
 /**
  * Portraits are 72x107 (pipeline/process-roster-portraits.py). Scale is INTEGER ONLY, and sizing
@@ -281,6 +289,7 @@ export default function CharacterSelect() {
                 fill={fill}
                 onPick={setFill}
                 formRef={formRef}
+                photoEnabled={seats?.photoPath !== false}
                 selfie={selfie}
                 onSelfie={(uri, e) => {
                   setSelfie(uri);
@@ -544,6 +553,7 @@ function FillChoice({
   fill,
   onPick,
   formRef,
+  photoEnabled,
   selfie,
   onSelfie,
   consent,
@@ -552,6 +562,7 @@ function FillChoice({
   fill: Fill;
   onPick: (f: Fill) => void;
   formRef: React.RefObject<HTMLDivElement | null>;
+  photoEnabled: boolean;
   selfie: string | null;
   onSelfie: (dataUri: string | null, err?: string) => void;
   consent: boolean;
@@ -616,18 +627,25 @@ function FillChoice({
         Fill the empty slot
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
+        {/* Not offered when it cannot deliver. A disabled button that says why beats a live one that
+            takes a photo, takes a seat, and returns nothing. */}
         <button
           type="button"
+          disabled={!photoEnabled}
           onClick={() => onPick("photo")}
-          className={`flex-1 rounded border-2 px-4 py-3 text-left font-pixel text-sm transition-colors ${
-            fill === "photo"
-              ? "border-parchment/60 text-parchment"
-              : "border-echo/25 text-parchment/80 hover:border-parchment/40"
+          className={`flex-1 rounded border-2 px-4 py-3 text-left font-pixel text-sm transition-colors disabled:cursor-not-allowed ${
+            !photoEnabled
+              ? "border-echo/10 text-parchment/25"
+              : fill === "photo"
+                ? "border-parchment/60 text-parchment"
+                : "border-echo/25 text-parchment/80 hover:border-parchment/40"
           }`}
         >
           Use a photo
           <span className="mt-1 block text-[11px] leading-snug text-parchment/40">
-            Your face, drawn in the world&apos;s hand.
+            {photoEnabled
+              ? "Your face, drawn in the world's hand."
+              : "Not open yet. Pick someone from the roster for now."}
           </span>
         </button>
         <button
