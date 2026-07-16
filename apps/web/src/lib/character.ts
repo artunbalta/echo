@@ -4,6 +4,7 @@
  * upload. Keeps the raw selfie in memory only for the duration of the calls (§13).
  */
 import type { CharacterAttributes } from "@echo/shared";
+import { config } from "./config";
 import { getSupabase } from "./supabase";
 import { styleFromAttributes, styleFromId, buildCharacterSheet } from "@/game/art";
 
@@ -50,11 +51,15 @@ async function uploadSheet(canvas: HTMLCanvasElement, key: string): Promise<stri
   try {
     const blob = await (await fetch(dataUrl)).blob();
     const path = `sheets/${key}.png`;
+    // config.artStorageBucket defaults to "characters" — the name this used to hardcode in two
+    // places — so this is a no-op unless NEXT_PUBLIC_ART_STORAGE_BUCKET is set. See config.ts for
+    // why the documented `ART_STORAGE_BUCKET` could never have worked.
+    const bucket = config.artStorageBucket;
     const { error } = await supabase.storage
-      .from("characters")
+      .from(bucket)
       .upload(path, blob, { upsert: true, contentType: "image/png" });
     if (error) throw error;
-    const { data } = supabase.storage.from("characters").getPublicUrl(path);
+    const { data } = supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
   } catch (err) {
     console.warn("[character] storage upload failed, using data URL:", err);
