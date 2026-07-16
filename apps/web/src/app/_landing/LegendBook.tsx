@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BEATS, COVER } from "./legend";
+import { BEATS, COVER, LEGEND_INTRO } from "./legend";
 
 /**
  * The legend book (landing §1a). A bespoke pixel-art book: cover, then seven spreads, each one
@@ -121,6 +121,11 @@ export default function LegendBook() {
   return (
     <section id="legend" className="relative bg-ink px-4 pb-16 pt-24 sm:px-8 sm:pb-24 sm:pt-32">
       <div className="mx-auto max-w-4xl">
+        {/* Not a heading (no <h2>): it is a caption on the book, and an <h2> here would announce
+            itself as a section title competing with the hero. Quiet by construction. */}
+        <p className="mb-6 text-center font-pixel text-[10px] uppercase tracking-[0.35em] text-parchment/30 sm:mb-8 sm:text-xs">
+          {LEGEND_INTRO}
+        </p>
         <div
           role="group"
           aria-roledescription="book"
@@ -211,20 +216,31 @@ const LEAF_H = "h-[300px] sm:h-[420px]";
 function Cover() {
   return (
     <div
-      className={`${LEAF_H} relative flex w-full flex-col items-center justify-center gap-5 bg-[#5d3a22] px-6`}
+      className={`${LEAF_H} relative flex w-full flex-col items-center justify-center gap-5 bg-[#150e1f] px-6`}
     >
-      {/* A debossed rule, the way a bound board is tooled. Pixel-art: a hard 2px line, no bevel. */}
-      <div className="pointer-events-none absolute inset-4 border-2 border-[#7a4a2b] sm:inset-6" />
+      {/* A debossed rule, the way a bound board is tooled. Pixel-art: a hard 2px line, no bevel.
+          Bark, kept from the leather cover — one warm line, so the board is not a plain black box. */}
+      <div className="pointer-events-none absolute inset-4 border-2 border-[#3a2f50] sm:inset-6" />
 
       {/* CREAM TYPE, VIOLET GLOW — not violet fill. Echo-violet is the rarest thing on this page and
           it belongs on an EDGE: here it is light coming off the letters, not the letters themselves.
-          `glow-echo` is the app's existing violet text-shadow (globals.css, already used by
-          /onboard), so this reuses the house glow rather than inventing a second one.
-          Centred on a single board with no spine behind it, so nothing crosses the binding. */}
-      <p className="glow-echo font-pixel text-5xl font-bold lowercase leading-none tracking-tight text-parchment sm:text-6xl">
+          Centred on a single board with no spine behind it, so nothing crosses the binding.
+          The board is ink so the type is the only light in the frame: on the old bark board the glow
+          had nothing to glow against and the whole thing read muddy.
+
+          NOT `glow-echo`, and that is the fix for the violet dash through the middle of the "e".
+          The house glow is `0 0 12px` PLUS a tight `0 0 2px` (globals.css), and at this size the 2px
+          halo bleeds off the surrounding strokes straight into the "e"'s small counter and fills it
+          violet — an artifact, never a design choice; it broke the letterform. Dropping the tight
+          halo and keeping only wide, soft radii leaves the counter dark and the letters intact.
+          Written inline rather than by editing globals.css, which /onboard shares. */}
+      <p
+        className="font-pixel text-5xl font-bold lowercase leading-none tracking-tight text-parchment sm:text-6xl"
+        style={{ textShadow: "0 0 18px rgba(160,108,213,0.55), 0 0 40px rgba(160,108,213,0.28)" }}
+      >
         {COVER.mark}
       </p>
-      <p className="font-pixel text-[10px] uppercase tracking-[0.3em] text-parchment/45 sm:text-xs">
+      <p className="font-pixel text-[10px] uppercase tracking-[0.3em] text-parchment/40 sm:text-xs">
         {COVER.line}
       </p>
     </div>

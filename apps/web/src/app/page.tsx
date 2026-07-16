@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Lenis from "lenis";
 import Splash from "@/components/Splash";
 import LegendBook from "./_landing/LegendBook";
@@ -67,24 +67,7 @@ export default function Landing() {
     <div className="relative bg-ink text-parchment">
       <Splash />
 
-      {/* Wordmark only. There is nothing to navigate to, and nothing to log in to. */}
-      <header className="absolute inset-x-0 top-0 z-40">
-        <nav className="mx-auto flex max-w-6xl items-center px-5 py-4 sm:px-8">
-          <a href="#top" className="flex items-center gap-2.5">
-            <img
-              src="/logo.png"
-              alt=""
-              width={32}
-              height={32}
-              draggable={false}
-              className="h-8 w-8 select-none rounded"
-            />
-            <span className="font-pixel text-xl font-bold lowercase tracking-wide text-[#1f2740]">
-              echo
-            </span>
-          </a>
-        </nav>
-      </header>
+      <Nav />
 
       {/* ───────────────────────── HERO ───────────────────────── */}
       <section id="top" className="relative h-[100dvh] min-h-[560px] w-full overflow-hidden bg-ink">
@@ -143,5 +126,84 @@ export default function Landing() {
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ── nav ─────────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The navbar. Rebuilt for the page that actually exists now: three places to go, and nothing to log
+ * in to (auth is gone — see _landing/README-auth-removal.md).
+ *
+ * Two-state on purpose, because the page is two-toned. Over the hero it is transparent with dark
+ * type, since the hero art is bright pixel landscape. Past the hero every section is ink, so it
+ * takes an ink background and parchment type. The original nav only ever had the light state,
+ * because the old landing was light all the way down; keeping that here would have put navy text on
+ * a dark page.
+ *
+ * Mobile drops the anchors and keeps the wordmark and the one CTA. A hamburger for three in-page
+ * anchors is furniture, not navigation.
+ */
+function Nav() {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const link = scrolled
+    ? "text-parchment/60 hover:text-parchment"
+    : "text-[#1f2740]/70 hover:text-[#1f2740]";
+
+  return (
+    <header
+      className={`fixed inset-x-0 top-0 z-50 transition-colors duration-300 ${
+        scrolled ? "border-b border-parchment/10 bg-ink/90 backdrop-blur" : "border-b border-transparent"
+      }`}
+    >
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3 sm:px-8">
+        <a href="#top" className="flex items-center gap-2.5">
+          <img
+            src="/logo.png"
+            alt=""
+            width={32}
+            height={32}
+            draggable={false}
+            className="h-8 w-8 select-none rounded"
+          />
+          <span
+            className={`font-pixel text-xl font-bold lowercase tracking-wide transition-colors ${
+              scrolled ? "text-parchment" : "text-[#1f2740]"
+            }`}
+          >
+            echo
+          </span>
+        </a>
+
+        <div className="flex items-center gap-6">
+          <a href="#legend" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
+            Legend
+          </a>
+          <a href="#waitlist" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
+            Waitlist
+          </a>
+          <a href="#demo" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
+            Demo
+          </a>
+          <a
+            href="#waitlist"
+            className={`rounded border-2 px-3 py-1.5 font-pixel text-xs font-bold transition-colors ${
+              scrolled
+                ? "border-parchment/30 text-parchment hover:border-parchment/70"
+                : "border-[#1f2740]/40 text-[#1f2740] hover:border-[#1f2740]"
+            }`}
+          >
+            Join
+          </a>
+        </div>
+      </nav>
+    </header>
   );
 }
