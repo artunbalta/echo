@@ -2,7 +2,7 @@
   "name": "echo",
   "version": "0.1.0",
   "private": true,
-  "description": "ECHO — a persistent virtual world where your agent learns who you are.",
+  "description": "ECHO \u2014 a persistent virtual world where your agent learns who you are.",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -20,7 +20,8 @@
     "gen:island-assets": "node pipeline/generate-island-assets.mjs",
     "gen:flow-assets": "node pipeline/generate-flow-assets.mjs",
     "gen:roster": "node pipeline/generate-roster-portraits.mjs",
-    "verify:roster": "node pipeline/verify-roster.mjs"
+    "verify:roster": "node pipeline/verify-roster.mjs",
+    "gen:plates": "node pipeline/generate-legend-plates.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
