@@ -30,6 +30,19 @@ const MAX_NAME = 80;
 const MAX_EMAIL = 254; // RFC 5321 maximum length of a forward-path
 
 /**
+ * THE CAP. The landing says spots are limited and shows the real remaining count, so this number
+ * has to mean something: past it, the endpoint REFUSES rather than the form quietly disappearing.
+ * Enforced atomically in Postgres by waitlist_join() under an advisory lock, because a
+ * count-then-insert from here would let two simultaneous requests both take the last seat.
+ *
+ * 500 is a real first-cohort size for a world where every arrival is meant to be met, not a number
+ * chosen to look scarce. Raising it later is a one-line change and an honest one — the count on
+ * screen is always `taken` out of this, straight from the row count. Nothing here is theatre:
+ * no countdown, no invented signups, no decay.
+ */
+const CAP = Number(process.env.WAITLIST_CAP ?? 500);
+
+/**
  * Deliberately stricter than the RFC and deliberately not a clever regex. The full grammar allows
  * quoted local parts and bracketed IP literals that no real signup uses, and every "perfect" email
  * regex is a well-known catastrophic-backtracking hazard. This is a linear-time shape check; the
@@ -124,36 +137,76 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4. The write. Upsert on the unique lower(email) index so a repeat signup updates rather than
-  //    erroring out ugly (§3) — someone changing their mind about their character should just work.
-  const { data, error } = await admin
-    .from("waitlist")
-    .upsert(
-      {
-        email,
-        name,
-        character_source: source,
-        character_ref: characterRef,
-        character_sprite_url: spriteUrl,
-        character_attributes: attributes,
-        ip_hash: hashIp(clientIp(req)),
-        user_agent: (req.headers.get("user-agent") ?? "").slice(0, 512),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "email" },
-    )
-    .select("created_at, updated_at")
-    .single();
+  // 4. The write. One RPC, not an upsert: waitlist_join() takes the advisory lock, counts confirmed
+  //    seats, refuses past the cap and assigns the seat number in a single atomic transaction. A
+  //    repeat signup updates in place and keeps its original seat (§3), consuming no second seat.
+  const { data, error } = await admin.rpc("waitlist_join", {
+    p_email: email,
+    p_name: name,
+    p_cap: CAP,
+    p_source: source,
+    p_ref: characterRef,
+    p_sprite_url: spriteUrl,
+    p_attributes: attributes,
+    p_ip_hash: hashIp(clientIp(req)),
+    p_user_agent: (req.headers.get("user-agent") ?? "").slice(0, 512),
+  });
 
   if (error) {
-    console.error("[waitlist] insert failed:", error.message);
+    console.error("[waitlist] join failed:", error.message);
     return NextResponse.json({ error: "Could not save that. Please try again." }, { status: 500 });
   }
 
-  // `already` lets the UI say "we updated your place" rather than implying a fresh signup. A row
-  // whose timestamps differ was created by an earlier request.
-  const already = Boolean(
-    data && data.created_at && data.updated_at && data.created_at !== data.updated_at,
-  );
-  return NextResponse.json({ ok: true, already });
+  const r = (data ?? {}) as {
+    ok?: boolean;
+    already?: boolean;
+    full?: boolean;
+    seat?: number | null;
+    taken?: number;
+    remaining?: number;
+  };
+
+  // The list being full is a real answer, so it gets a real refusal — 409, not a hidden form. If we
+  // say spots are limited, the limit has to bite.
+  if (r.full) {
+    return NextResponse.json(
+      { error: "Every spot is taken.", full: true, taken: r.taken ?? CAP, cap: CAP, remaining: 0 },
+      { status: 409 },
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    already: Boolean(r.already),
+    seat: r.seat ?? null,
+    taken: r.taken ?? 0,
+    cap: CAP,
+    remaining: r.remaining ?? 0,
+  });
+}
+
+/**
+ * The true remaining count for the landing's scarcity line. Real row count, confirmed rows only,
+ * no PII — the one thing about this table the world may know. Never cached: a stale "3 left" is a
+ * lie with extra steps, and this is a single indexed count.
+ */
+export async function GET() {
+  const admin = adminClient();
+  if (!admin) {
+    // Honest null over a comforting number. The UI renders the cap without a count rather than
+    // inventing one; an invented count is exactly the growth-hack pattern the brief forbids.
+    return NextResponse.json({ cap: CAP, taken: null, remaining: null, available: false });
+  }
+  const { data, error } = await admin.rpc("waitlist_taken");
+  if (error) {
+    console.warn("[waitlist] count unavailable:", error.message);
+    return NextResponse.json({ cap: CAP, taken: null, remaining: null, available: false });
+  }
+  const taken = Number(data ?? 0);
+  return NextResponse.json({
+    cap: CAP,
+    taken,
+    remaining: Math.max(0, CAP - taken),
+    available: true,
+  });
 }
