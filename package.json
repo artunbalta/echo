@@ -2,7 +2,7 @@
   "name": "echo",
   "version": "0.1.0",
   "private": true,
-  "description": "ECHO \u2014 a persistent virtual world where your agent learns who you are.",
+  "description": "ECHO — a persistent virtual world where your agent learns who you are.",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -22,7 +22,9 @@
     "gen:roster": "node pipeline/generate-roster-portraits.mjs",
     "verify:roster": "node pipeline/verify-roster.mjs",
     "gen:plates": "node pipeline/generate-legend-plates.mjs",
-    "gen:vacancy": "node pipeline/derive-vacancy.mjs"
+    "gen:vacancy": "node pipeline/derive-vacancy.mjs",
+    "gen:palette": "node pipeline/derive-palette.mjs",
+    "verify:pipeline": "node pipeline/verify-pipeline-parity.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
