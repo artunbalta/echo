@@ -89,8 +89,54 @@ export const SHIRT_WORD = {
  * 13.6 RGB from the echo ramp's dark end.
  */
 export const CAST = [
-  // -- the two BUZZ heads. Same head outline by hash, so they are pushed apart on every other axis:
-  //    heavy/straight-on/collar/rope  vs  tall/turned/hood/strap.
+  {
+    id: "premade_1480", // rich dark brown / bark-brown / forest-green / buzz
+    name: "Pell",
+    build: "heavy and broad, thick neck, shoulders squared and filling the frame",
+    posture: "straight-on, chin level, utterly still",
+    hairShape: "close-shaved buzzcut, flat crown, a blunt square hairline",
+    garment: "a high stiff standing collar, buttoned to the throat",
+    prop: "a thick coil of rope slung over the right shoulder, its bulk breaking the shoulder line sideways",
+    expression: "flat and tired, heavy brow, mouth a straight line",
+    fill: 0.88,
+  },
+  {
+    id: "premade_11888", // medium bronze / black / slate-blue / buzz
+    name: "Rook",
+    build: "tall and rangy, narrow through the shoulders, long neck",
+    posture: "turned three-quarters to his left, head straight, watchful",
+    hairShape: "close-shaved, with a soft widow's peak",
+    garment: "a deep hood pushed down and bunched thickly around the back of the neck, a fat roll of cloth behind the head",
+    prop: "a wide strap crossing the chest diagonally from shoulder to hip",
+    expression: "watchful and appraising, eyes slightly narrowed",
+    fill: 0.90,
+  },
+  {
+    // TEST FINDING: her first pass had "prop: none" and blacked out as a featureless lozenge —
+    // hair and shawl merged into one rounded blob. Every character now carries a prop; it is the
+    // strongest silhouette tool there is. Her turn is mirrored away from Sorrel's, the other
+    // slight/long build (as a same-facing pair they measured IoU 0.707; mirrored, 0.429).
+    id: "premade_8535", // light tan / black / brick-red / long
+    name: "Maren",
+    build: "slight and narrow-shouldered, long neck",
+    posture: "turned three-quarters to her LEFT, looking back over the far shoulder",
+    hairShape: "long and loose, falling well past the shoulders, one side tucked behind the ear",
+    garment: "a heavy shawl gathered around both shoulders, its edge rising in a soft peak",
+    prop: "a long fishing gaff resting against the left shoulder, its hooked head jutting up well clear of the head outline",
+    expression: "guarded, chin slightly down, eyes level and unblinking",
+    fill: 0.92,
+  },
+  {
+    id: "premade_4940", // deep amber-brown / faded sea-blue / ochre-gold / long
+    name: "Sorrel",
+    build: "slight and upright, narrow shoulders sloping steeply",
+    posture: "turned three-quarters to her right, chin lifted, gaze off past the viewer",
+    hairShape: "long, gathered back under a tied headscarf whose knot juts out from the back of the head",
+    garment: "a simple wrapped bodice, shoulders bare and narrow",
+    prop: "a wide bundle of dried herbs tucked at the left shoulder, its stems breaking the outline low and sideways",
+    expression: "distant and unbothered, eyes elsewhere, lips relaxed",
+    fill: 0.94,
+  },
   {
     // THE ONE HAND-PICKED PORTRAIT. Art supplied by Artun from an earlier run's gallery
     // (Higgsfield asset 98d4713f-70be-4da1-a40d-fb77077604d0) and adopted, not regenerated:
@@ -123,57 +169,6 @@ export const CAST = [
     fill: 0.84,
   },
   {
-    id: "premade_11888", // medium bronze / black / slate-blue / buzz
-    name: "Rook",
-    build: "tall and rangy, narrow through the shoulders, long neck",
-    posture: "turned three-quarters to his left, head straight, watchful",
-    hairShape: "close-shaved, with a soft widow's peak",
-    garment: "a deep hood pushed down and bunched thickly around the back of the neck, a fat roll of cloth behind the head",
-    prop: "a wide strap crossing the chest diagonally from shoulder to hip",
-    expression: "watchful and appraising, eyes slightly narrowed",
-    fill: 0.90,
-  },
-  // -- the two LONG heads. Mirrored turns, and opposite silhouette breaks (a tall thin gaff vs a
-  //    wide low herb bundle). The first test pair; both designs are the validated ones.
-  {
-    // TEST FINDING: her first pass had "prop: none" and blacked out as a featureless lozenge —
-    // hair and shawl merged into one rounded blob. Every character now carries a prop; it is the
-    // strongest silhouette tool there is. Her turn is mirrored away from Sorrel's, the other
-    // slight/long build (as a same-facing pair they measured IoU 0.707; mirrored, 0.429).
-    id: "premade_8535", // light tan / black / brick-red / long
-    name: "Maren",
-    build: "slight and narrow-shouldered, long neck",
-    posture: "turned three-quarters to her LEFT, looking back over the far shoulder",
-    hairShape: "long and loose, falling well past the shoulders, one side tucked behind the ear",
-    garment: "a heavy shawl gathered around both shoulders, its edge rising in a soft peak",
-    prop: "a long fishing gaff resting against the left shoulder, its hooked head jutting up well clear of the head outline",
-    expression: "guarded, chin slightly down, eyes level and unblinking",
-    fill: 0.92,
-  },
-  {
-    id: "premade_4940", // deep amber-brown / faded sea-blue / ochre-gold / long
-    name: "Sorrel",
-    build: "slight and upright, narrow shoulders sloping steeply",
-    posture: "turned three-quarters to her right, chin lifted, gaze off past the viewer",
-    hairShape: "long, gathered back under a tied headscarf whose knot juts out from the back of the head",
-    garment: "a simple wrapped bodice, shoulders bare and narrow",
-    prop: "a wide bundle of dried herbs tucked at the left shoulder, its stems breaking the outline low and sideways",
-    expression: "distant and unbothered, eyes elsewhere, lips relaxed",
-    fill: 0.94,
-  },
-  // -- the two SHORT heads: one tilted and loose with a bird, one square and level with a basket.
-  {
-    id: "premade_4483", // deep amber-brown / faded sea-blue / rose / short
-    name: "Pell",
-    build: "rangy and thin, one shoulder dropped lower than the other",
-    posture: "head tilted to the left, shoulders asymmetric and loose",
-    hairShape: "short and windblown, sticking up in irregular tufts",
-    garment: "an open loose collar, laces undone, throat bare",
-    prop: "a small dark bird perched on the raised left shoulder, clearly breaking the outline",
-    expression: "amused, one eyebrow raised, the hint of a crooked half-smile",
-    fill: 0.95,
-  },
-  {
     id: "premade_5893", // rich dark brown / dark coffee-brown / brick-red / short
     name: "Bryn",
     build: "compact and sturdy, shoulders round and level",
@@ -184,7 +179,6 @@ export const CAST = [
     expression: "open and direct, eyebrows up, on the edge of speaking",
     fill: 0.92,
   },
-  // -- the two BUN heads: a low tight knot on a broad frame vs a tall topknot on a small one.
   {
     id: "premade_11861", // light tan / silver-grey / slate-blue / bun
     name: "Cass",

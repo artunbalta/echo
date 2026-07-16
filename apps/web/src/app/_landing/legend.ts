@@ -67,15 +67,30 @@ export const BEATS: Beat[] = [
   },
   {
     id: "7_networks",
-    line: "It learns you, then it networks for you. The shore is small, and it is open now.",
+    // "acts for you", not "networks for you". Networking is one thing an agent might do; acting is
+    // the actual claim, and it is the larger and more honest one. It also closes the loop the legend
+    // opened: beats 2-4 are the echo only ever WATCHING, so ending on it acting is the turn the
+    // whole story has been walking toward.
+    line: "It learns you, then it acts for you. The shore is small, and it is open now.",
     plate: "/assets/legend/7_networks.png",
     alt: "Two figures meeting on a lantern-lit pier at dusk, with a settlement behind them and open water beyond.",
   },
 ];
 
-/** The cover. The ECHO mark on parchment, quiet. This and the empty roster slot are the only two
- *  places echo-violet is allowed on the entire landing, so it appears here once and barely. */
+/** The cover. The ECHO mark, quiet, on a dark board. This and the empty roster slot are the only two
+ *  places echo-violet is allowed on the entire landing, and here it is a glow, never a fill. */
 export const COVER = {
   mark: "echo",
   line: "A country that does not exist",
 } as const;
+
+/**
+ * The line above the book. It has one job: tell you the thing below is a story and can be read,
+ * without ever saying "click" or "scroll" or "learn more".
+ *
+ * In the legend's own voice, so it belongs to the myth rather than to the page furniture: this is
+ * how the island's story is passed on, and you are being handed it. Deliberately not a heading and
+ * not a call to action, because the hero above it already made the only claim this page makes; this
+ * is quieter than both, and it competes with neither.
+ */
+export const LEGEND_INTRO = "They tell it like this";
