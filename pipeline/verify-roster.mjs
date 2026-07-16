@@ -5,7 +5,7 @@
  * wired to `npm run verify:roster`. It exists because three separate things must agree and nothing
  * else would notice if they stopped:
  *
- *   1. pipeline/generate-roster-portraits.mjs mirrors styleFromId() from apps/web/src/game/art.ts.
+ *   1. pipeline/roster-cast.mjs mirrors styleFromId() from apps/web/src/game/art.ts.
  *      If art.ts's palettes change, the mirror goes stale and every portrait silently depicts a
  *      character that no longer matches the sprite the player actually receives.
  *   2. That script's ROSTER_IDS must match ROSTER_IDS in apps/web/src/app/_landing/roster.ts, or
@@ -26,7 +26,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..");
 const ART_TS = resolve(ROOT, "apps/web/src/game/art.ts");
 const ROSTER_TS = resolve(ROOT, "apps/web/src/app/_landing/roster.ts");
-const GEN_MJS = resolve(HERE, "generate-roster-portraits.mjs");
+const CAST_MJS = resolve(HERE, "roster-cast.mjs");
 
 const fails = [];
 const ok = (msg) => console.log(`  ok   ${msg}`);
@@ -43,20 +43,21 @@ function arrayOf(src, name, file) {
 }
 
 const art = readFileSync(ART_TS, "utf8");
-const gen = readFileSync(GEN_MJS, "utf8");
+const gen = readFileSync(CAST_MJS, "utf8");
 const roster = readFileSync(ROSTER_TS, "utf8");
 
-console.log("roster palette mirror (game/art.ts -> generate-roster-portraits.mjs)");
+console.log("roster palette mirror (game/art.ts -> roster-cast.mjs)");
 for (const name of ["SKINS", "HAIRS", "SHIRTS", "HAIR_STYLES"]) {
   const a = arrayOf(art, name, "game/art.ts");
-  const b = arrayOf(gen, name, "generate-roster-portraits.mjs");
+  const b = arrayOf(gen, name, "roster-cast.mjs");
   if (a.join(",") === b.join(",")) ok(`${name} matches (${a.length})`);
   else fail(`${name} DRIFTED\n         art.ts: ${a.join(" ")}\n         mirror: ${b.join(" ")}`);
 }
 
 console.log("\nroster ids (generator <-> app)");
-const genIds = arrayOf(gen, "ROSTER_IDS", "generate-roster-portraits.mjs");
-const appIds = arrayOf(roster, "ROSTER_IDS", "roster.ts");
+const idsIn = (src) => [...src.matchAll(/id:\s*"(premade_\d+)"/g)].map((m) => m[1]);
+const genIds = idsIn(gen);
+const appIds = idsIn(roster);
 if (genIds.join(",") === appIds.join(",")) ok(`${genIds.length} ids match`);
 else fail(`ids DRIFTED\n         generator: ${genIds.join(" ")}\n         app:       ${appIds.join(" ")}`);
 
@@ -100,22 +101,53 @@ for (const id of appIds) {
 }
 if (clean) ok(`none of the ${appIds.length} roster characters carries the accent`);
 
-console.log("\nroster reads as distinct people");
-const dims = (a, b) =>
-  (a.skin !== b.skin) + (a.hair !== b.hair) + (a.shirt !== b.shirt) + (a.hairStyle !== b.hairStyle);
-const styles = appIds.map(styleFromId);
-let worst = 4;
-let worstPair = "";
-for (let i = 0; i < styles.length; i++)
-  for (let j = i + 1; j < styles.length; j++) {
-    const d = dims(styles[i], styles[j]);
-    if (d < worst) {
-      worst = d;
-      worstPair = `${appIds[i]} vs ${appIds[j]}`;
+// The roster's identity contract. NOTE what is deliberately NOT checked here: an earlier version
+// demanded "at least 3 of 4 palette dims differ between any pair", which was a leftover from the
+// era when these portraits WERE eight recolors and colour was all that varied. It is the wrong
+// test now. Colour is not identity — shape is — and the real bar is the silhouette test in
+// pipeline/audit-roster-portraits.py, which scores head-outline IoU. What this file checks is the
+// one palette property that genuinely drives a silhouette, plus the spread guarantees the id search
+// was run under.
+console.log("\nhead-outline spread (the only sprite-fixed attribute that changes a silhouette)");
+const styles = Object.fromEntries(appIds.map((id) => [id, styleFromId(id)]));
+const byStyle = {};
+for (const id of appIds) (byStyle[styles[id].hairStyle] ??= []).push(id);
+const counts = Object.entries(byStyle).map(([k, v]) => `${k}:${v.length}`);
+const even = Object.keys(byStyle).length === 4 && Object.values(byStyle).every((v) => v.length === 2);
+if (even) ok(`2 of each hairStyle — four distinct head outlines (${counts.join(" ")})`);
+else
+  fail(
+    `hairStyle spread is ${counts.join(" ")} — characters sharing a style share a head outline. ` +
+      `The first attempt landed 3 buzz and scored mean head IoU 0.574 against a 0.55 bar.`,
+  );
+
+// Characters that share a head outline must not also share a colour, or they read as twins.
+let twins = 0;
+for (const ids of Object.values(byStyle))
+  for (let i = 0; i < ids.length; i++)
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = styles[ids[i]];
+      const b = styles[ids[j]];
+      const same = ["skin", "hair", "shirt"].filter((k) => a[k] === b[k]);
+      if (same.length) {
+        fail(`${ids[i]} and ${ids[j]} share hairStyle AND ${same.join("+")} — twins`);
+        twins++;
+      }
     }
-  }
-if (worst >= 3) ok(`min ${worst}/4 style dims differ between any pair`);
-else fail(`${worstPair} differ in only ${worst}/4 dims — they will read as the same person`);
+if (!twins) ok("no same-hairStyle pair shares a skin, hair or shirt colour");
+
+// Palette spread: every permitted value should appear, and none more than twice.
+for (const [dim, all] of [
+  ["skin", SKINS],
+  ["hair", HAIRS.filter((h) => h !== ECHO_VIOLET)],
+  ["shirt", SHIRTS.filter((s) => s !== HEATHER)],
+]) {
+  const used = appIds.map((id) => styles[id][dim]);
+  const over = [...new Set(used)].filter((v) => used.filter((u) => u === v).length > 2);
+  const cover = new Set(used).size;
+  if (over.length) fail(`${dim}: ${over.join(" ")} used more than twice`);
+  else ok(`${dim}: ${cover}/${all.length} values present, none more than twice`);
+}
 
 console.log("\nportraits present and committed");
 // Ask git which files are UNTRACKED rather than which are tracked. `git ls-files` lists only

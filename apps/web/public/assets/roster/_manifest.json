@@ -1,42 +1,66 @@
 [
   {
-    "name": "premade_0",
+    "name": "premade_1480",
+    "cast": "Pell",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.88
   },
   {
-    "name": "premade_2",
+    "name": "premade_11888",
+    "cast": "Rook",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.9
   },
   {
-    "name": "premade_5",
+    "name": "premade_8535",
+    "cast": "Maren",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.92
   },
   {
-    "name": "premade_7",
+    "name": "premade_4940",
+    "cast": "Sorrel",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.94
   },
   {
-    "name": "premade_10",
+    "name": "premade_4483",
+    "cast": "Lark",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.95
   },
   {
-    "name": "premade_111",
+    "name": "premade_5893",
+    "cast": "Bryn",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.92
   },
   {
-    "name": "premade_121",
+    "name": "premade_11861",
+    "cast": "Cass",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.88
   },
   {
-    "name": "premade_135",
+    "name": "premade_12508",
+    "cast": "Wren",
     "key": false,
-    "size": 72
+    "size": 72,
+    "cap": 24,
+    "fill": 0.96
   }
 ]
