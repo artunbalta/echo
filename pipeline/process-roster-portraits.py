@@ -98,7 +98,7 @@ def _mask(im):
 def _body_bbox(im, erode=5):
     """Bounding box of the figure's BODY MASS, with thin protrusions eroded away.
 
-    This is the fix for a real defect the 2-portrait test surfaced: Maren carries a fishing gaff
+    This is the fix for a real defect the 2-portrait test surfaced: Yase carries a fishing gaff
     whose hook rises above her head, so her raw bounding box was taller than Sorrel's, and scaling
     on raw bbox height rendered her head visibly SMALLER. That is exactly the "same roster, two
     pixel sizes" failure the whole spec exists to prevent — introduced, ironically, by the props
