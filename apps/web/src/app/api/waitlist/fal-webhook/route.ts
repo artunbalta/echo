@@ -20,7 +20,8 @@ export const maxDuration = 60;
  *   message = sha256(request_id . user_id . timestamp . sha256_hex(body))  signed with ED25519
  */
 
-const JWKS_URL = "https://rest.alpha.fal.ai/.well-known/jwks.json";
+// The documented endpoint. rest.alpha.fal.ai also answers, but alpha is not the contract.
+const JWKS_URL = "https://rest.fal.ai/.well-known/jwks.json";
 /** Replay window. FAL's own guidance is to reject stale timestamps; 5 minutes is their example. */
 const MAX_SKEW_S = 300;
 
@@ -49,17 +50,26 @@ function verifySignature(h: Headers, body: Buffer, keys: string[]): boolean {
   const skew = Math.abs(Date.now() / 1000 - Number(ts));
   if (!Number.isFinite(skew) || skew > MAX_SKEW_S) return false;
 
+  // ED25519 signs the MESSAGE ITSELF, not a hash of it — the algorithm hashes internally. An
+  // earlier version of this verified over sha256(message) and therefore rejected every genuine
+  // webhook, which is exactly what happened in production: FAL completed the job, called back, got
+  // 401 on every retry, and the row sat in 'claimed' forever with no error to show for it. The spec
+  // is literal (docs.fal.ai/model-endpoints/webhooks):
+  //     "\n".join([request_id, user_id, timestamp, sha256(body).hexdigest()]).encode("utf-8")
   const bodyHash = createHash("sha256").update(body).digest("hex");
-  const message = createHash("sha256")
-    .update(`${id}\n${user}\n${ts}\n${bodyHash}`)
-    .digest();
+  const message = Buffer.from(`${id}\n${user}\n${ts}\n${bodyHash}`, "utf8");
   const signature = Buffer.from(sig, "hex");
 
   for (const x of keys) {
     try {
-      // JWKS gives the raw ED25519 public key base64url-encoded; wrap it as a JWK to import.
+      // JWKS gives the ED25519 public key base64url-encoded. Node's JWK import wants unpadded
+      // base64url, so strip any '=' padding rather than trusting the provider's formatting.
       const key = createPublicKey({
-        key: { kty: "OKP", crv: "Ed25519", x } as unknown as import("node:crypto").JsonWebKey,
+        key: {
+          kty: "OKP",
+          crv: "Ed25519",
+          x: x.replace(/=+$/, ""),
+        } as unknown as import("node:crypto").JsonWebKey,
         format: "jwk",
       });
       if (edVerify(null, message, key, signature)) return true;
