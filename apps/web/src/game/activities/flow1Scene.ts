@@ -12,7 +12,7 @@ import type { TileMap } from "../tilemap";
 import { RaftBuild, type RaftPhase } from "./raftBuild";
 import { Flow1Beats, type BeatSpec } from "./flow1Beats";
 import { LocomotionSampler } from "./sampler";
-import { RAFT_BUILD, type BehavioralEvent, type EntitySnapshot } from "@echo/shared";
+import { RAFT_BUILD, reachTiles, type BehavioralEvent, type EntitySnapshot } from "@echo/shared";
 
 export interface Flow1SceneHooks {
   onWhisper?: (t: string | null) => void;
@@ -21,8 +21,10 @@ export interface Flow1SceneHooks {
   /** The driftwood counter (null when not gathering). */
   onCounter?: (g: { gathered: number; needed: number } | null) => void;
   onPhase?: (p: RaftPhase) => void;
-  /** Raft launched (F1→F2 seam) — the caller unlocks sailing (client-side solo, or net.sendSetSail in /play). */
-  onLaunched?: () => void;
+  /** Raft launched (F1→F2 seam) — the caller unlocks sailing (client-side solo, or net.sendSetSail in
+   *  /play). `seaworthiness` (0..1) is what the build was WORTH: it sets how much open water the raft can
+   *  put behind it before the sea pushes back. The player is never shown this number. */
+  onLaunched?: (seaworthiness: number) => void;
 }
 
 export interface Flow1SceneOpts {
@@ -69,6 +71,15 @@ export class Flow1Scene {
     this.liveMap.set(snap.id, snap);
     this.o.world.addEntity(snap);
     if (px) this.o.world.setEntityDisplayHeight(snap.id, px);
+  };
+  /** Re-skin a live entity (the raft as it grows from a frame of crossed logs into a bound deck).
+   *  Mutates the liveMap snapshot AND the world together — updating only the world would be undone by
+   *  the next server-snapshot re-merge in /play, which is the same trap that ate the driftwood pick. */
+  private setEntitySpriteImpl = (id: string, spriteUrl: string, px?: number) => {
+    const snap = this.liveMap.get(id);
+    if (snap) this.liveMap.set(id, { ...snap, spriteUrl });
+    this.o.world.setEntitySprite(id, spriteUrl);
+    if (px) this.o.world.setEntityDisplayHeight(id, px);
   };
   /** Current client-local F1 entities. /play merges this into every snapshot so add/remove persist. */
   liveEntities(): EntitySnapshot[] { return [...this.liveMap.values()]; }
@@ -145,11 +156,22 @@ export class Flow1Scene {
       launch: this.launch, raftId: this.pre("raft"), needed: RAFT_BUILD.needed,
       actorId: this.o.actorId, sessionId: this.o.sessionId, send: this.o.send,
       removeEntity: this.removeEntityImpl, addEntity: this.addEntityImpl,
+      setEntitySprite: this.setEntitySpriteImpl,
       onWhisper: (t) => this.o.hooks?.onWhisper?.(t),
       onPhase: (p) => this.o.hooks?.onPhase?.(p),
       onNearWood: (id) => { this.pickPrompt = id ? "pick up the driftwood — press [space]" : null; this.refreshPrompt(); },
+      onPrompt: (t) => { this.pickPrompt = t; this.refreshPrompt(); },
       onProgress: (g) => this.o.hooks?.onCounter?.(g.gathered >= 0 ? { gathered: g.gathered, needed: g.needed } : null),
-      onLaunched: this.o.hooks?.onLaunched,
+      onLaunched: (sea) => {
+        if (this.o.hooks?.onLaunched) {
+          this.o.hooks.onLaunched(sea); // /play: the SERVER owns the raft (net.sendSetSail carries `sea`)
+          return;
+        }
+        // Solo slice (/flow1): there is no server, so run the same shared physics locally. The raft is
+        // worth what it is worth here too — this route is the tuning harness for reach and drift.
+        this.o.world.setSailing(true);
+        this.o.world.setRaft({ sea, reach: reachTiles(sea), departX: this.launch.x, departY: this.launch.y });
+      },
     });
     this.raft.start();
 

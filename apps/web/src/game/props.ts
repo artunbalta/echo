@@ -19,6 +19,14 @@ export const PROP_KINDS = [
   "grain_sprout",
   "grain_ripe",
   "raft",
+  // ── the raft as it grows under your hands. The silhouette IS the progress bar: holding [space] walks it
+  //    up these stages, so the work is legible without a number on screen. Purely procedural — there is no
+  //    PROP_ASSETS PNG for these and there never will be. ──
+  "raft_frame",    // two crossed logs — you have started
+  "raft_half",     // half a deck, planks loose
+  "raft_lashed",   // a bound deck — the first stage that will float (= MIN_BUILD_MS, the launch gate)
+  "raft_solid",    // double crossbeams, tight rope
+  "raft_true",     // a true raft: full deck, bound rails, a stub mast
   "tidepool",
   "berry_bush",
   "book_cairn",
@@ -173,6 +181,44 @@ function drawRaft(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
   p(4, 11, 1, 4, "#caa873"); // a half-raised mast
   p(4, 10, 4, 1, "#caa873");
 }
+/**
+ * The raft under construction. `stage` 0..4 walks it from two crossed logs to a bound deck with a stub
+ * mast; `lash` is how much rope has been worked across it. Held work advances both, so the player watches
+ * the thing they are making take shape instead of watching a bar fill.
+ */
+function drawRaftStage(ctx: CanvasRenderingContext2D, ox: number, oy: number, stage: number, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 6 + stage * 2);
+  const planks = [0, 2, 3, 4, 5][stage]; // how much of the deck exists
+  const top = 21 - stage; // it thickens as it is built up
+  // the deck: planks laid side by side
+  for (let i = 0; i < planks; i++) p(2 + i * 2.4, top - 6, 2, 6, i % 2 ? "#7a4a2b" : "#8a5733");
+  if (stage === 0) {
+    // two crossed logs — just begun
+    p(2, top - 4, 12, 2, "#8a5733");
+    p(7, top - 8, 2, 10, "#7a4a2b");
+    return;
+  }
+  // rails / lashings — they tighten as the work goes on
+  p(1, top - 7, planks * 2.4 + 1, 1, "#5d3a22");
+  p(1, top, planks * 2.4 + 1, 1, "#5d3a22");
+  if (stage >= 2) {
+    // rope bindings creep across the deck (the lashing)
+    const ropes = stage - 1;
+    for (let r = 0; r < ropes; r++) p(2 + r * 4, top - 7, 1, 8, "#caa873");
+  }
+  if (stage >= 3) {
+    // a second crossbeam — it stops being a mat and becomes a hull
+    p(1, top - 3, planks * 2.4 + 1, 1, "#4a2e1b");
+  }
+  if (stage >= 4) {
+    // a true raft: a stub mast, and the rope catches the light
+    p(6, top - 14, 1, 7, "#caa873");
+    p(6, top - 15, 4, 1, "#e0d5b8");
+    if (frame === 1 || frame === 3) p(3, top - 7, 1, 8, "#e0d5b8");
+  }
+}
+
 function drawTidepool(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
   const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
   shadow(ctx, ox, oy, 11);
@@ -357,6 +403,11 @@ const DRAW: Record<PropKind, Draw> = {
   grain_sprout: (c, x, y) => drawGrainSprout(c, x, y),
   grain_ripe: drawGrainRipe,
   raft: (c, x, y) => drawRaft(c, x, y),
+  raft_frame: (c, x, y, _f, fr) => drawRaftStage(c, x, y, 0, fr),
+  raft_half: (c, x, y, _f, fr) => drawRaftStage(c, x, y, 1, fr),
+  raft_lashed: (c, x, y, _f, fr) => drawRaftStage(c, x, y, 2, fr),
+  raft_solid: (c, x, y, _f, fr) => drawRaftStage(c, x, y, 3, fr),
+  raft_true: (c, x, y, _f, fr) => drawRaftStage(c, x, y, 4, fr),
   tidepool: drawTidepool,
   berry_bush: (c, x, y) => drawBerryBush(c, x, y),
   book_cairn: (c, x, y) => drawBookCairn(c, x, y),

@@ -3,21 +3,32 @@
  * headline "building a raft" example). A *performed* activity, not a button menu:
  *
  *   gather  — you walk up to a piece of driftwood and PRESS to pick it up (a deliberate, embodied pick,
- *             not a passive walk-over). How much you gather — just the minimum ↔ every last piece — is the
- *             thoroughness cue. A side counter shows how many a raft needs.
- *   assemble— you stand at the shore's edge and HOLD to work the wood: an animated, rhythmic build. How
- *             long you deliberate first (pace), whether you slip and re-engage (redo → self-monitoring),
- *             how long you persist, and whether you keep going past "done" to add a flourish (decoration →
- *             openness ⚑) are all cues.
- *   launch  — you push the finished raft into the water (the commitment moment → the F1→F2 seam).
+ *             not a passive walk-over). A raft needs five lengths; there are eight on the shore. Taking
+ *             only what you need ↔ taking every last piece is the thoroughness cue — and it is not free
+ *             advice: the wood you carry is the wood the raft is made of, so it BUYS REACH.
+ *   assemble— you stand at the shore's edge and HOLD to work the wood. The raft grows under your hands,
+ *             stage by stage, out of the planks you laid down. The lashing SLIPS twice; setting your feet
+ *             and working through it is the grit cue. How long you deliberate first (pace), how long you
+ *             persist, and whether you keep going past "it will float" (care → openness ⚑) are all cues.
+ *   launch  — you carry the raft to the water and push it in (the commitment moment → the F1→F2 seam).
  *
- * The measurement is the MANNER (continuous raw_signals), never a discrete choice — so two people building
- * the same raft in different styles move their posteriors measurably differently. Everything routes through
- * the proven /observe/behavioral ingress via buildFlow1Event (solo context). Animation is procedural
- * (PixiWorld.setActivityState), so it runs zero-key with no new sprite art.
+ * WHAT THE EFFORT BUYS. The manner is measured (continuous raw_signals → the persona posterior), but it is
+ * ALSO a fact about the world: wood carried + time held → `seaworthiness` → how much open water the raft
+ * puts behind it before the sea starts pushing back (packages/shared/src/raft.ts). A raft lashed from five
+ * planks in four seconds reaches the near shore and nothing else; one worked out of all eight planks for
+ * fifteen seconds crosses to islands you could only look at before. Haste is never punished — the reach
+ * floor clears the widest crossing in the archipelago, so any raft always gets you somewhere. Haste is a
+ * style we MEASURE, and the world is merely honest about what it physically buys.
+ *
+ * The player is never shown a number. There is no quality meter and no score: there is a pile of wood, an
+ * amount of time you chose to spend on the lashings, and an ocean.
  */
-import type { PixiWorld } from "../PixiWorld";
-import { buildFlow1Event, FLOW1_CUES, RAFT_BUILD, type BehavioralEvent, type EntitySnapshot } from "@echo/shared";
+import type { PixiWorld, ActivityKind } from "../PixiWorld";
+import {
+  buildFlow1Event, FLOW1_CUES, RAFT_BUILD, RAFT_STAGES, RAFT_SLIPS,
+  MIN_BUILD_MS, SOLID_MS, LAVISH_BUILD_MS, seaworthiness,
+  type BehavioralEvent, type EntitySnapshot,
+} from "@echo/shared";
 
 export type RaftPhase = "gather" | "ready" | "building" | "built" | "launched";
 
@@ -37,22 +48,34 @@ export interface RaftBuildConfig {
    *  the scene's set is re-merged into every server snapshot; a raw world.removeEntity would be undone). */
   removeEntity: (id: string) => void;
   addEntity: (snap: EntitySnapshot, heightPx?: number) => void;
+  /** Re-skin a live entity through the scene (same re-merge reason as above). */
+  setEntitySprite: (id: string, spriteUrl: string, heightPx?: number) => void;
   onWhisper?: (text: string | null) => void;
   onPhase?: (p: RaftPhase) => void;
   /** A driftwood piece is in pick range (show a "pick" prompt) — null when none is. */
   onNearWood?: (id: string | null) => void;
+  /** A free-text contextual prompt from the raft itself (e.g. the push-off, once you carry it to the
+   *  water). Distinct from onNearWood, which the scene renders as the fixed "pick up the driftwood" line. */
+  onPrompt?: (text: string | null) => void;
   /** Gather counter changed (for the side "driftwood N / needed" readout). */
   onProgress?: (g: { gathered: number; needed: number; total: number }) => void;
   /** The raft was pushed off (the F1→F2 seam). The caller unlocks sailing — client-side in the solo
-   *  slice (world.setSailing), or authoritatively in /play (net.sendSetSail). Falls back to
-   *  world.setSailing(true) if omitted. */
-  onLaunched?: () => void;
+   *  slice (world.setSailing), or authoritatively in /play (net.sendSetSail). `sea` (0..1) is what the
+   *  build was worth and sets the raft's reach; it is never displayed. */
+  onLaunched?: (sea: number) => void;
 }
 
-const BUILD_FULL_MS = 4200; // total held time to complete the raft (0..1 progress)
-const DECOR_SPAN_MS = 2600; // extra held time past "done" that reads as full decoration (0..1)
 const PICK = 0.85; // pick range (tiles) — walk up to a plank to pick it
-const AT_STATION = 1.1; // "at the assembly / launch spot" radius (tiles)
+const AT_STATION = 1.1; // "at the assembly" radius (tiles)
+/** The launch spot sits at the waterline, and on foot you cannot step past it — so a tight radius here
+ *  meant a player carrying a finished raft could stand at the very edge, press, and have NOTHING happen,
+ *  with no word as to why. Be generous, and say something when they are still short. */
+const AT_LAUNCH = 1.7;
+const SLIP_STALL_MS = 420; // how long a slipped lashing refuses to take, before you can bite again
+const CADENCE_WINDOW_MS = 1500; // window over which we read how vigorously you are working
+
+/** Our claim token on the world's single self-activity slot (Flow1Beats holds the other one). */
+const ACTIVITY_OWNER = "raftBuild";
 
 export class RaftBuild {
   private phase: RaftPhase = "gather";
@@ -62,18 +85,33 @@ export class RaftBuild {
   private gatherStartAt = 0;
   private gatherEmitted = false;
   private nearWoodId: string | null = null;
+  private notEnoughWarnedAt = 0;
 
   // build accounting
   private buildArrivedAt = 0;
   private firstPressAt = 0;
-  private buildMs = 0;
-  private progress = 0; // 0..1 = building, up to ~1.6 with decoration
+  private workMs = 0; // HELD time actually spent working the wood (the thing that buys reach)
   private redo = 0;
   private wasHolding = false;
   private completeAt = 0;
-  private raftPlaced = false;
+  private floated = false; // has workMs crossed MIN_BUILD_MS (it will float)?
 
+  // the laid-out pile of planks that becomes the deck
+  private planks: string[] = [];
+  private planksUsed = 0;
+  private raftPlaced = false;
+  private stageIdx = -1;
+
+  // the lashing slips — working through them is grit (persist_after_fail)
+  private slipsHit = 0;
+  private slipsRecovered = 0;
+  private slipStallUntil = 0;
+  private slipPending = false; // the rope has slipped and has not been taken up again yet
+  private launchPrompt: string | null = null;
+
+  private strokes: number[] = []; // keydown timestamps, for the work cadence → animation intensity
   private actionDown = false; // action key currently held (build hold + rising-edge picks/launch)
+  private ownsActivity = false; // we share ONE global activity slot with Flow1Beats — only clear our own
   private raf = 0;
   private lastTick = 0;
   private disposed = false;
@@ -86,8 +124,10 @@ export class RaftBuild {
   start() {
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("keyup", this.onKey);
+    window.addEventListener("blur", this.onBlur);
+    document.addEventListener("visibilitychange", this.onBlur);
     this.cfg.onProgress?.({ gathered: 0, needed: this.cfg.needed, total: this.total });
-    this.cfg.onWhisper?.("driftwood lies along the shore. walk up to a piece and pick it up — a raft could cross this.");
+    this.cfg.onWhisper?.("driftwood lies along the shore. walk up to a piece and pick it up — a raft needs five.");
     this.lastTick = performance.now();
     const loop = () => {
       if (this.disposed) return;
@@ -102,7 +142,16 @@ export class RaftBuild {
     cancelAnimationFrame(this.raf);
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);
+    window.removeEventListener("blur", this.onBlur);
+    document.removeEventListener("visibilitychange", this.onBlur);
   }
+
+  /** Losing the window (alt-tab, a click into a text field) never delivers the keyup, so without this the
+   *  key stays latched "down" and the raft goes on building itself while the player is not even here —
+   *  and then ships that phantom time to the ML as dwell_ms. */
+  private onBlur = () => {
+    this.actionDown = false;
+  };
 
   private isActionKey(e: KeyboardEvent) {
     return e.key === " " || e.key === "Enter" || e.key.toLowerCase() === "e";
@@ -116,6 +165,7 @@ export class RaftBuild {
       e.preventDefault();
       if (!this.actionDown) {
         this.actionDown = true;
+        this.strokes.push(performance.now());
         this.onPressEdge(); // rising edge: pick / launch (build uses the held level in tick)
       }
     } else {
@@ -129,7 +179,8 @@ export class RaftBuild {
       this.pick(this.nearWoodId);
     } else if (this.phase === "built") {
       const self = this.cfg.world.getSelfTile();
-      if (this.dist(self, this.cfg.launch) < AT_STATION) this.launch();
+      if (this.dist(self, this.cfg.launch) < AT_LAUNCH) this.launch();
+      else this.cfg.onWhisper?.("not here. carry it down to the water's edge.");
     }
   }
 
@@ -144,11 +195,13 @@ export class RaftBuild {
     this.cfg.onNearWood?.(null);
     this.cfg.onProgress?.({ gathered: this.gathered, needed: this.cfg.needed, total: this.total });
     // a brief embodied stoop, then keep the carried-wood overlay
-    this.cfg.world.setSelfActivityState("gather", { carrying: true });
+    this.claimActivity("gather", { carrying: true });
     this.cfg.onWhisper?.(
       this.gathered < this.cfg.needed
         ? `you pick up a length of driftwood.`
-        : `you have enough for a raft now — but there is more, if you want it.`,
+        : this.gathered === this.cfg.needed
+          ? `enough for a raft. there is more, if you want a better one.`
+          : `another length. the raft will be the wider for it.`,
     );
     if (this.gathered >= this.cfg.needed && this.phase === "gather") this.setPhase("ready");
   }
@@ -157,8 +210,29 @@ export class RaftBuild {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
+  /** The shared self-activity slot (Flow1Beats writes it too) — claim/release by OWNER, never blind-null.
+   *  The world refuses a clear from anyone but the current owner. */
+  private claimActivity(kind: ActivityKind, opts?: { carrying?: boolean; intensity?: number }) {
+    this.ownsActivity = true;
+    this.cfg.world.setSelfActivityState(kind, { ...opts, owner: ACTIVITY_OWNER });
+  }
+  private releaseActivity() {
+    if (!this.ownsActivity) return;
+    this.ownsActivity = false;
+    this.cfg.world.setSelfActivityState(null, { owner: ACTIVITY_OWNER });
+  }
+
+  /** How vigorously you are working, 0.55..1 — re-press density over the last 1.5s. A player who leans on
+   *  the key and one who hammers at it look different, which is what the animation has always promised. */
+  private cadence01(now: number): number {
+    this.strokes = this.strokes.filter((t) => now - t < CADENCE_WINDOW_MS);
+    return Math.min(1, this.strokes.length / 4);
+  }
+
   private tick(now: number) {
-    const dtMs = now - this.lastTick;
+    // Clamp dt: a backgrounded tab hands rAF a multi-second delta on return, which would otherwise credit
+    // the player with work they never did (and post it to the ML as dwell_ms).
+    const dtMs = Math.min(now - this.lastTick, 50);
     this.lastTick = now;
     const self = this.cfg.world.getSelfTile();
 
@@ -174,88 +248,212 @@ export class RaftBuild {
         this.nearWoodId = near;
         this.cfg.onNearWood?.(near);
       }
-      // Keep the carried-wood overlay while you have wood (cleared just after a fresh stoop).
-      this.cfg.world.setSelfActivityState(this.gathered > 0 ? "carry" : null, {
-        carrying: this.gathered > 0,
-      });
+      // Keep the carried-wood overlay while you have wood. Only touch the slot when WE have something to
+      // say — a blind null here would wipe Flow1Beats' animation every frame (the bug, in reverse).
+      if (this.gathered > 0) this.claimActivity("carry", { carrying: true });
+      else this.releaseActivity();
 
-      // Arriving at the shore's edge with wood begins the build.
-      if (this.gathered >= 1 && this.dist(self, this.cfg.assembly) < AT_STATION) {
-        if (!this.gatherEmitted) {
-          this.emitGather(now);
-          this.gatherEmitted = true;
+      // Arriving at the shore's edge with a raft's worth of wood begins the build.
+      if (this.dist(self, this.cfg.assembly) < AT_STATION) {
+        if (this.gathered >= this.cfg.needed) {
+          if (!this.gatherEmitted) {
+            this.emitGather(now);
+            this.gatherEmitted = true;
+          }
+          this.nearWoodId = null;
+          this.cfg.onNearWood?.(null);
+          this.buildArrivedAt = now;
+          this.firstPressAt = 0;
+          this.workMs = 0;
+          this.layPlanks();
+          this.setPhase("building");
+          this.cfg.onWhisper?.("lay the wood out. hold [space] to work it into a raft — the longer you work it, the further it will carry you.");
+        } else if (now - this.notEnoughWarnedAt > 4000) {
+          // Not enough wood is not a failure — it is information. Say it once, plainly, and let them go back.
+          this.notEnoughWarnedAt = now;
+          this.cfg.onWhisper?.(`five lengths make a raft. you have ${this.gathered}.`);
         }
-        this.nearWoodId = null;
-        this.cfg.onNearWood?.(null);
-        this.buildArrivedAt = now;
-        this.firstPressAt = 0;
-        this.buildMs = 0;
-        this.placeRaft();
-        this.setPhase("building");
-        this.cfg.onWhisper?.("hold [space] to work the wood into a raft. take your time, or don't.");
       }
       return;
     }
 
     if (this.phase === "building") {
       const near = this.dist(self, this.cfg.assembly) < AT_STATION + 0.4;
-      const holding = this.actionDown && near;
+      const stalled = now < this.slipStallUntil;
+      const holding = this.actionDown && near && !stalled;
+
+      // The rope has stopped slipping and you are still on it — you set your feet. That counts whether you
+      // gritted your teeth and never let go, or let go and took a fresh bite. (An earlier cut demanded the
+      // re-press specifically, which quietly soft-locked anyone who simply kept holding: the slip flag had
+      // no other way to clear and the raft would never finish.)
+      if (this.slipPending && !stalled && this.actionDown && near) {
+        this.slipPending = false;
+        this.slipsRecovered++;
+      }
+
       if (holding) {
         if (this.firstPressAt === 0) this.firstPressAt = now;
-        this.buildMs += dtMs;
-        const prev = this.progress;
-        this.progress = Math.min(1 + DECOR_SPAN_MS / BUILD_FULL_MS, this.progress + dtMs / BUILD_FULL_MS);
-        this.cfg.world.setSelfActivityState("build", { intensity: 1 });
-        if (prev < 1 && this.progress >= 1) this.cfg.onWhisper?.("the raft holds together. it would float. carry it to the water when you're ready.");
+        this.workMs += dtMs;
+        this.claimActivity("build", { intensity: 0.55 + 0.45 * this.cadence01(now) });
+        this.growRaft();
+        this.checkSlip(now);
+        if (!this.floated && this.workMs >= MIN_BUILD_MS) {
+          this.floated = true;
+          this.cfg.onWhisper?.("the lashings hold. it would float. work it longer and it will go further — or take it now.");
+        }
       } else {
-        // released mid-build (before completion) → a redo when re-engaged
-        if (this.wasHolding && this.progress > 0.05 && this.progress < 1) this.redo++;
-        this.cfg.world.setSelfActivityState("carry", { carrying: true });
+        // You LET GO mid-build → a redo when you re-engage. Do not count the scripted slips: those are the
+        // rope failing, not the player second-guessing themselves, and counting them would hand every
+        // player an identical +2 `edits` — turning the self-monitoring cue into a measure of the game's own
+        // resistance rather than of them. (The slips are already measured, as grit, in persist_after_fail.)
+        if (this.wasHolding && this.workMs > 200 && !this.floated && !stalled && !this.slipPending) this.redo++;
+        if (this.gathered > 0 || this.floated) this.claimActivity("carry", { carrying: true });
+        else this.releaseActivity();
       }
-      // deliberation = time stood at the wood before the first strike (not counted as build time)
-      if (this.firstPressAt === 0 && near) this.buildMs = 0;
+      // deliberation = time stood at the wood before the first strike (not counted as work)
+      if (this.firstPressAt === 0 && near) this.workMs = 0;
       this.wasHolding = holding;
 
-      // Finish: raft complete AND you carry it away toward the water (leaving the workspace = done).
-      if (this.progress >= 1 && this.dist(self, this.cfg.assembly) > AT_STATION + 0.6) {
+      // Finish: it floats AND you carry it away toward the water (leaving the workspace = done).
+      if (this.floated && this.dist(self, this.cfg.assembly) > AT_STATION + 0.6) {
         this.emitAssemble(now);
         this.completeAt = now;
+        this.cfg.removeEntity(this.cfg.raftId); // you pick it up — it comes with you
+        this.raftPlaced = false;
         this.setPhase("built");
-        this.cfg.world.setSelfActivityState("carry", { carrying: true });
+        this.claimActivity("carry", { carrying: true });
         this.cfg.onWhisper?.("you heft the raft toward the water's edge. press [space] to push it in.");
       }
       return;
     }
-    // "built" → launch is handled on the action-key rising edge (onPressEdge); "launched" is terminal.
+
+    if (this.phase === "built") {
+      // Carrying a finished raft: surface the push-off the moment the water is in reach, so nobody is left
+      // standing on the sand pressing a key that silently does nothing. (Launch itself fires on the rising
+      // edge in onPressEdge; "launched" is terminal.)
+      const atWater = this.dist(self, this.cfg.launch) < AT_LAUNCH;
+      const prompt = atWater ? "push the raft into the water — press [space]" : null;
+      if (prompt !== this.launchPrompt) {
+        this.launchPrompt = prompt;
+        this.cfg.onPrompt?.(prompt);
+      }
+    }
   }
 
-  private placeRaft() {
-    if (this.raftPlaced) return;
-    this.raftPlaced = true;
-    const snap: EntitySnapshot = {
-      id: this.cfg.raftId, kind: "npc", refId: this.cfg.raftId, name: "",
-      spriteUrl: RAFT_BUILD.sprites.raft, x: this.cfg.assembly.x, y: this.cfg.assembly.y,
-      facing: "down", moving: false, role: "flow1", status: "none",
-    };
-    this.cfg.addEntity(snap, RAFT_BUILD.displayH.raft);
+  /** Lay the carried wood out at the shore's edge — one plank per length you brought. Eight planks is a
+   *  visibly bigger pile than five, and that pile is the counter: the raft is made of what you carried. */
+  private layPlanks() {
+    if (this.planks.length) return;
+    for (let i = 0; i < this.gathered; i++) {
+      const id = `${this.cfg.raftId}_plank_${i}`;
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      // Laid out BESIDE you, not under you — and spread far enough that eight lengths read as visibly more
+      // wood than five. The pile is the counter: you can see what you brought.
+      const snap: EntitySnapshot = {
+        id, kind: "npc", refId: id, name: "",
+        spriteUrl: RAFT_BUILD.sprites.plank,
+        x: this.cfg.assembly.x - 1.9 + col * 0.55,
+        y: this.cfg.assembly.y - 1.15 + row * 0.62,
+        facing: "down", moving: false, role: "flow1", status: "none",
+      };
+      this.cfg.addEntity(snap, RAFT_BUILD.displayH.plank);
+      this.planks.push(id);
+    }
+  }
+
+  /** The raft grows out of the pile: planks leave the sand and become deck, and the silhouette advances
+   *  through its stages. This — not a progress bar — is how holding [space] is legible. */
+  private growRaft() {
+    // The wood you carried is all bound in by the time the raft would float.
+    const bound = Math.min(this.planks.length, Math.floor((this.workMs / MIN_BUILD_MS) * this.planks.length));
+    while (this.planksUsed < bound) {
+      this.cfg.removeEntity(this.planks[this.planksUsed]);
+      this.planksUsed++;
+    }
+    // Stage the silhouette by held work. Re-skin ONLY on a crossing: setEntitySprite rebuilds a canvas +
+    // GPU texture each call, so a per-frame call would leak one texture per frame.
+    let idx = 0;
+    for (let i = 0; i < RAFT_STAGES.length; i++) if (this.workMs >= RAFT_STAGES[i].at) idx = i;
+    if (idx === this.stageIdx) return;
+    this.stageIdx = idx;
+    const st = RAFT_STAGES[idx];
+    if (!this.raftPlaced) {
+      this.raftPlaced = true;
+      const snap: EntitySnapshot = {
+        id: this.cfg.raftId, kind: "npc", refId: this.cfg.raftId, name: "",
+        spriteUrl: st.sprite, x: this.cfg.assembly.x, y: this.cfg.assembly.y,
+        facing: "down", moving: false, role: "flow1", status: "none",
+      };
+      this.cfg.addEntity(snap, st.h);
+    } else {
+      this.cfg.setEntitySprite(this.cfg.raftId, st.sprite, st.h);
+    }
+  }
+
+  /** The rope slips. Twice. Setting your feet and biting again is grit — the persistence-after-failure cue
+   *  the design doc rates highest and that the ingress has never actually received. */
+  private checkSlip(now: number) {
+    if (this.slipsHit >= RAFT_SLIPS.length) return;
+    const at = RAFT_SLIPS[this.slipsHit] * MIN_BUILD_MS;
+    if (this.workMs < at) return;
+    this.slipsHit++;
+    this.slipStallUntil = now + SLIP_STALL_MS;
+    this.slipPending = true;
+    this.cfg.onWhisper?.("the lashing slips loose. set your feet, take it again.");
+  }
+
+  /** Whether you worked through the slips instead of walking away. 0..1. */
+  private grit01(): number {
+    if (!this.slipsHit) return 0;
+    return Math.min(1, this.slipsRecovered / this.slipsHit);
+  }
+
+  /** What the build was worth — wood carried AND time held, independently. Never shown to the player. */
+  private seaworthiness(): number {
+    return seaworthiness(this.gathered, this.workMs, this.grit01(), this.cfg.needed, this.total);
   }
 
   private launch() {
-    this.emitLaunch(performance.now());
-    this.cfg.world.setSelfActivityState(null);
-    if (this.cfg.onLaunched) this.cfg.onLaunched();
+    const sea = this.seaworthiness();
+    this.emitLaunch(performance.now(), sea);
+    this.releaseActivity();
+    this.launchPrompt = null;
+    this.cfg.onPrompt?.(null);
+    // the raft goes in the water where you pushed it
+    this.cfg.addEntity(
+      {
+        id: this.cfg.raftId, kind: "npc", refId: this.cfg.raftId, name: "",
+        spriteUrl: RAFT_STAGES[Math.max(0, this.stageIdx)].sprite,
+        x: this.cfg.launch.x, y: this.cfg.launch.y,
+        facing: "down", moving: false, role: "flow1", status: "none",
+      },
+      RAFT_STAGES[Math.max(0, this.stageIdx)].h,
+    );
+    if (this.cfg.onLaunched) this.cfg.onLaunched(sea);
     else this.cfg.world.setSailing(true); // solo slice: unlock sailing client-side
     this.setPhase("launched");
-    this.cfg.onWhisper?.("you push the raft into the shallows. the water takes it. the far shore waits.");
+    this.cfg.onWhisper?.(
+      sea >= 0.66
+        ? "you push the raft into the shallows. it sits high and takes the water well. the far islands are not so far."
+        : sea >= 0.33
+          ? "you push the raft into the shallows. the water takes it. it will carry you a fair way."
+          : "you push the raft into the shallows. the water takes it. it will not carry you far.",
+    );
   }
 
   private setPhase(p: RaftPhase) {
     if (this.phase === p) return;
     this.phase = p;
     this.cfg.onPhase?.(p);
+    // the driftwood counter has done its job once the wood is laid out
+    if (p === "building") this.cfg.onProgress?.({ gathered: -1, needed: this.cfg.needed, total: this.total });
   }
 
   // ── the emit contract: continuous MANNER → raw_signals → the existing 16 features (ingest) ──────────
+  // One performed act = exactly one event. The world's consequence (reach) is a READ-ONLY function of the
+  // same performance and posts nothing of its own — physics reads the manner, the persona reads the manner,
+  // and they never read each other.
   private emit(action: string, raw: Record<string, unknown>, polarity?: "take" | "refuse") {
     const uid = this.cfg.actorId();
     if (!uid) return;
@@ -270,7 +468,7 @@ export class RaftBuild {
 
   private emitGather(now: number) {
     this.emit("gather_driftwood", {
-      // thoroughness: minimum (needed/total) ↔ obsessive (all of it) → persistence
+      // thoroughness: the minimum ↔ every last piece → persistence
       thoroughness01: Math.min(1, this.gathered / this.total),
       dwell_ms: Math.max(0, now - (this.gatherStartAt || now)),
     });
@@ -278,24 +476,28 @@ export class RaftBuild {
 
   private emitAssemble(now: number) {
     const deliberationMs = Math.max(0, this.firstPressAt - this.buildArrivedAt);
-    const decoration01 = Math.min(1, Math.max(0, this.progress - 1) / (DECOR_SPAN_MS / BUILD_FULL_MS));
+    // thoroughness01 was min(1, progress) — but this only ever fired at progress >= 1, so it was ALWAYS
+    // exactly 1.0 for every player who finished. `persistence` therefore carried zero information, and
+    // because ingest does tel["persistence"] = max(persistence, persist_after_fail), a constant 1.0 also
+    // silently ERASED the grit cue. Scaling by held work makes both live again.
+    const grit = this.grit01();
     this.emit("assemble_raft", {
-      thoroughness01: Math.min(1, this.progress),
-      ...(this.redo > 0 ? { persist_after_fail: Math.min(1, 0.6 + 0.12 * this.redo) } : {}),
+      thoroughness01: Math.min(1, this.workMs / LAVISH_BUILD_MS),
+      ...(grit > 0 ? { persist_after_fail: grit } : {}),
       edits: this.redo,
       decision_latency_ms: deliberationMs,
-      dwell_ms: this.buildMs,
-      decoration: decoration01,
+      dwell_ms: this.workMs,
+      decoration: Math.min(1, Math.max(0, this.workMs - SOLID_MS) / (LAVISH_BUILD_MS - SOLID_MS)),
     });
   }
 
-  private emitLaunch(now: number) {
+  private emitLaunch(now: number, _sea: number) {
     this.emit("launch_raft", { decision_latency_ms: Math.max(0, now - (this.completeAt || now)) });
   }
 
   /** Called by the scene if the player leaves F1 without finishing — non-action is data. */
   abandonIfUnfinished() {
-    if (this.phase === "building" && this.progress < 1) this.emit("assemble_raft", {}, "refuse");
+    if (this.phase === "building" && !this.floated) this.emit("assemble_raft", {}, "refuse");
     else if ((this.phase === "gather" || this.phase === "ready") && !this.gatherEmitted && this.gathered === 0)
       this.emit("gather_driftwood", {}, "refuse");
   }

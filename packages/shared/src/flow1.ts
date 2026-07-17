@@ -130,10 +130,29 @@ export const RAFT_BUILD = {
   /** Where the finished raft is pushed into the water (the crossing point, at the shore's edge). */
   launchSpot: { dx: -4, dy: 8 },
   /** Rendered heights (source px, avatar ≈ 24) so props read at gatherable scale, not their native PNG size. */
-  displayH: { driftwood: 17, raft: 26 },
+  displayH: { driftwood: 17, raft: 26, plank: 11 },
   /** The prop kind for each state (rendered via proc:<kind> → PROP_ASSETS PNG, procedural fallback). */
-  sprites: { driftwood: "proc:driftwood", raft: "proc:raft" },
+  sprites: { driftwood: "proc:driftwood", raft: "proc:raft", plank: "proc:driftwood" },
 } as const;
+
+/**
+ * The raft's silhouette IS the progress bar. It grows under your hands as you work the wood — from two
+ * crossed logs to a bound deck with a stub mast — so the hold is legible without a single number on screen.
+ * Keyed by held work in ms; `at` is the threshold you must reach to be drawn at that stage. The stage at
+ * MIN_BUILD_MS (raft_lashed) is the first that will float, which is why it is also the launch gate.
+ */
+export const RAFT_STAGES = [
+  { at: 0, sprite: "proc:raft_frame", h: 14 },
+  { at: 2100, sprite: "proc:raft_half", h: 18 },
+  { at: 4200, sprite: "proc:raft_lashed", h: 22 }, // = MIN_BUILD_MS — it floats from here
+  { at: 9000, sprite: "proc:raft_solid", h: 25 }, // = SOLID_MS
+  { at: 15000, sprite: "proc:raft_true", h: 29 }, // = LAVISH_BUILD_MS
+] as const;
+
+/** The lashing slips twice while you work (at these fractions of the minimum build). Setting your feet and
+ *  working through a slip is the grit cue — it is the highest-validity persistence signal in the doc, and
+ *  until now it was dead code in the ingress. */
+export const RAFT_SLIPS = [0.4, 0.75] as const;
 
 /** F1 → F2 transition (affordance-seepage). Launching the raft makes the sea crossable. */
 export const FLOW1_TO_FLOW2 = {
