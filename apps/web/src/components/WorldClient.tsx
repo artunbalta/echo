@@ -38,15 +38,20 @@ interface DayStation {
   dx: number;
   dy: number;
   name: string;
-  kind: "grain" | "wager" | "dwell" | "end" | "raft";
+  kind: "grain" | "wager" | "dwell" | "end";
   cat?: DayCat;
   hint?: string;
 }
+// The raft is still the ONE gate, and it is still self-imposed (blueprint I.3) — but it is no
+// longer a station with a menu. There was a `day_raft` prop here whose two buttons ("begin the
+// raft" / "leave it be") were the whole of it: clicking begin added 0.1 to a counter and handed
+// you the sea. The raft is now the driftwood on your shore — walked to, picked up, lashed by hand
+// (game/activities/raftBuild.ts) — and it was two rafts on one island until they were unified.
+// P4's cues did not go anywhere, they just became acts: start_ship commits on the first plank you
+// pick up, "let it lie" on standing over the wood and walking away, K4 at dusk if you never went
+// near it, and the build's own work is what persists and weathers.
 const DAY_STATIONS: DayStation[] = [
   { refId: "day_grain", sprite: "proc:grain_sprout", dx: -4, dy: -4, name: "a sprout", kind: "grain" },
-  // The raft is the ONE gate in the whole game, and it is self-imposed (blueprint I.3): the sea
-  // opens only after you choose to begin it. Never building it (K4) is first-class data (Law 2).
-  { refId: "day_raft", sprite: "proc:raft", dx: -7, dy: -3, name: "an unfinished raft", kind: "raft", cat: "build" },
   { refId: "day_bush", sprite: "proc:berry_bush", dx: 5, dy: -3, name: "a berry bush", kind: "dwell", cat: "earn", hint: "you forage — it feeds you while the light lasts" },
   { refId: "day_cairn", sprite: "proc:book_cairn", dx: -4, dy: 5, name: "a cairn of books", kind: "dwell", cat: "learn", hint: "you read the island, the tides, yourself" },
   { refId: "day_bedroll", sprite: "proc:bedroll", dx: 5, dy: 4, name: "a bedroll", kind: "dwell", cat: "leisure", hint: "you rest; strength returns as the day passes" },
@@ -244,6 +249,10 @@ export default function WorldClient() {
 
   // ── the survival day (P1): three clocks against a finite you ─────────────────────
   const [dayCommitted, setDayCommitted] = useState<Record<string, string>>({});
+  /** Mirrors dayCommitted for callers that live outside React's render — the F1 build's
+   *  leave-fork fires from the game loop's closure, which would otherwise read a stale value. */
+  const dayCommittedRef = useRef<Record<string, string>>({});
+  useEffect(() => { dayCommittedRef.current = dayCommitted; }, [dayCommitted]);
   const [grainForkReady, setGrainForkReady] = useState(false);
   const [duskReading, setDuskReading] = useState<DuskReadingData | null>(null);
   const [duskBusy, setDuskBusy] = useState(false);
@@ -639,10 +648,11 @@ export default function WorldClient() {
     [dayCommitted],
   );
 
-  /** Commit an irreversible day fork (grain / trap-line / the raft). No take-backs within the day. */
+  /** Commit an irreversible day fork (grain / trap-line). No take-backs within the day.
+   *  The raft's fork is no longer here: it is an act now, not a menu — see commitLeaveFork. */
   const commitDayFork = useCallback(
     (st: DayStation, optId: string) => {
-      const key = st.kind === "grain" ? "plant_or_spend" : st.kind === "raft" ? "start_ship" : "tide_wager";
+      const key = st.kind === "grain" ? "plant_or_spend" : "tide_wager";
       if (dayCommitted[key]) return;
       markFunnel(uidRef.current, "first_fork");
       const shownAt = daySeenAtRef.current[st.refId] ?? dayStartAtRef.current;
@@ -665,30 +675,6 @@ export default function WorldClient() {
           type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(),
           payload: { ...base, stake: DAY_WAGER.stake, expectedValue: side.expectedValue, variance: side.variance, chosenRisk: optId },
         });
-      } else if (st.kind === "raft") {
-        // The Stage-2 gate, self-imposed: beginning the raft opens the long work of leaving.
-        const leaving = optId === "start";
-        dayChoicesRef.current.push({
-          forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
-          detail: leaving ? "began the long work of leaving" : "let the raft lie",
-        });
-        events.push({ type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(), payload: base });
-        if (leaving) {
-          dayApiRef.current.noteBuildDelta(0.1);
-          // The commitment is still measured here, but it no longer HANDS you the sea: a raft you
-          // did not build is not a raft. Sailing comes from pushing a real hull in (RaftBuild →
-          // sendSetSail(true, sea)); this fork used to call sendSetSail(true) with no `sea`, which
-          // the server floors to s0 = 0 — a phantom zero-worth raft nobody built.
-          const secs = Math.round((Date.now() - dayStartAtRef.current) / 1000);
-          events.push({
-            type: "structure_progress", sessionId: sessionIdRef.current, ts: Date.now(),
-            payload: { structure: "ship", started: true, finished: false, delta01: 0.1, sessionSeconds: secs },
-          });
-          events.push({
-            type: "leave_intent", sessionId: sessionIdRef.current, ts: Date.now(),
-            payload: { stage: "started", dayIndex: dayApiRef.current.dayCount, shipProgress01: 0.1, secondsAlone: secs },
-          });
-        }
       } else {
         dayChoicesRef.current.push({
           forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
@@ -702,6 +688,75 @@ export default function WorldClient() {
     },
     [dayCommitted, dayForkContext, forwardDayEvents],
   );
+
+  /**
+   * The raft's self-imposed gate (P4's `start_ship`), fired by the F1 build instead of a menu:
+   * "start" when the first plank leaves the sand, "stay" when you stand over the wood and walk
+   * away from it. Never going near the wood commits nothing and is read as the K4 refusal at
+   * dusk — the same three events P4 emitted, off acts rather than buttons.
+   *
+   * `latencyMs` is measured from the day's start (the wood is on your shore from waking), which
+   * is the honest analog of the old "time since the station was first shown".
+   */
+  const commitLeaveFork = useCallback(
+    (option: "start" | "stay") => {
+      if (dayCommittedRef.current.start_ship) return; // irreversible, once per day
+      markFunnel(uidRef.current, "first_fork");
+      const now = Date.now();
+      const latencyMs = now - dayStartAtRef.current;
+      setDayCommitted((c) => ({ ...c, start_ship: option }));
+      const leaving = option === "start";
+      dayChoicesRef.current.push({
+        forkKey: "start_ship", option, dayIndex: dayApiRef.current.dayCount,
+        detail: leaving ? "began the long work of leaving" : "let the raft lie",
+      });
+      const events: TelemetryEvent[] = [{
+        type: "fork_decision", sessionId: sessionIdRef.current, ts: now,
+        payload: { forkKey: "start_ship", option, latencyMs, irreversible: true, ...dayForkContext() },
+      }];
+      if (leaving) {
+        const secs = Math.round((now - dayStartAtRef.current) / 1000);
+        // delta01/shipProgress01 are the DERIVED read of the real raft (structureProgress01), not
+        // a flat 0.1 for a click. On the first plank that is a small, true number.
+        const p01 = dayApiRef.current.structureProgress;
+        events.push({
+          type: "structure_progress", sessionId: sessionIdRef.current, ts: now,
+          payload: { structure: "ship", started: true, finished: false, delta01: p01, sessionSeconds: secs },
+        });
+        events.push({
+          type: "leave_intent", sessionId: sessionIdRef.current, ts: now,
+          payload: { stage: "started", dayIndex: dayApiRef.current.dayCount, shipProgress01: p01, secondsAlone: secs },
+        });
+      }
+      void forwardDayEvents(events);
+    },
+    [dayForkContext, forwardDayEvents],
+  );
+  /** Same reason as dayApiRef: the F1 build's hooks are bound once, at mount. */
+  const commitLeaveForkRef = useRef(commitLeaveFork);
+  commitLeaveForkRef.current = commitLeaveFork;
+
+  /**
+   * The raft is in the water: the structure is FINISHED. This is a genuinely new emit, and worth
+   * being explicit about — `structure_progress { finished: true }` has never fired in this product.
+   * The day loop's raft could only ever be "started" (a click), so the `persistence = 1.0` branch
+   * that has always existed in the ML ingress was dead code. Unifying the two rafts is what makes
+   * finishing real: you gathered the wood, you held the lashings through the slips, you pushed it
+   * in. Completing what you started is the conscientiousness read the fork alone could never give.
+   */
+  const finishRaft = useCallback(() => {
+    const secs = Math.round((Date.now() - dayStartAtRef.current) / 1000);
+    void forwardDayEvents([{
+      type: "structure_progress", sessionId: sessionIdRef.current, ts: Date.now(),
+      payload: { structure: "ship", started: true, finished: true, delta01: 1, sessionSeconds: secs },
+    }]);
+    // Deliberately NOT a second leave_intent here. The ingress binarizes it (stage "none" → 0.8,
+    // anything else → 0.2), so a "left" would be an identical second read of solitude_tol on top of
+    // the "started" one the fork already sent — the same disposition counted twice, no new
+    // information. The launch's real news is that the structure got FINISHED.
+  }, [forwardDayEvents]);
+  const finishRaftRef = useRef(finishRaft);
+  finishRaftRef.current = finishRaft;
 
   const harvestDayCrop = useCallback(() => {
     if (dayCommitted.harvest) return;
@@ -1185,14 +1240,25 @@ export default function WorldClient() {
             method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
           }).catch(() => { /* best-effort; never block the player */ });
         },
+        // Resume the raft you left on this shore. useDay has already aged it (the lashings work
+        // loose between sessions), so what the build restores from is the weathered raft.
+        restoreRaft: dayApiRef.current.raft,
         hooks: {
           onWhisper: (t) => setF1Whisper(t),
           onPrompt: (t) => setF1Prompt(t),
           onCounter: (g) => setF1Counter(g),
           onPhase: (p) => { if (p !== "gather" && p !== "ready") setF1Counter(null); },
+          // The build IS the day loop's raft — one source of truth, no second counter beside it.
+          onRaftState: (r) => dayApiRef.current.noteRaft(r),
+          // P4's self-imposed gate, as an act: first plank up = "start", standing over the wood
+          // and walking away = "stay". Never going near it stays uncommitted → K4 at dusk.
+          onLeaveFork: (opt) => commitLeaveForkRef.current(opt),
           // The raft goes in the water carrying what the build was worth — wood you gathered AND time you
           // held the lashings. The server fixes the reach from it and never raises it again.
-          onLaunched: (sea) => netRef.current?.sendSetSail(true, sea),
+          onLaunched: (sea) => {
+            netRef.current?.sendSetSail(true, sea);
+            finishRaftRef.current();
+          },
         },
       });
       f1Scene.entities(); // seed the scene's live entity set (merged into every snapshot below)
@@ -2063,28 +2129,10 @@ export default function WorldClient() {
                   </div>
                 );
               }
-              // ── the raft: the one self-imposed gate (Stage 2) ──
-              // Deciding to leave is still measured (start_ship, and K4 at dusk if never decided),
-              // but it no longer promises a sea it cannot deliver: the raft is the driftwood on your
-              // shore, gathered and lashed by hand. This station is incoherent until the F1 build and
-              // the day raft are unified — it is two rafts on one island — and it dissolves there.
-              if (st.kind === "raft") {
-                if (day.structureProgress > 0 || dayCommitted.start_ship === "start") {
-                  return <p className="text-sm italic text-parchment/80">your mind is set on leaving. the wood is on the shore — the raft is built by hand.</p>;
-                }
-                if (dayCommitted.start_ship === "stay") {
-                  return <p className="text-sm italic text-parchment/60">you let it lie, for now. the horizon keeps.</p>;
-                }
-                return (
-                  <div>
-                    <p className="mb-2 text-sm text-parchment/85">an unfinished raft. begin the long work of leaving — or let it lie.</p>
-                    <div className="flex flex-wrap gap-2">
-                      <button onClick={() => commitDayFork(st, "start")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">begin the raft</button>
-                      <button onClick={() => commitDayFork(st, "stay")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">leave it be</button>
-                    </div>
-                  </div>
-                );
-              }
+              // The raft's station used to be here, with two buttons that were the whole of the
+              // "one self-imposed gate". It is gone: the gate is the driftwood on your shore now,
+              // and its two arms are acts (first plank picked = begin, standing over the wood and
+              // walking away = let it lie). Nothing to render — the world is the menu.
               // the trap-line wager
               if (dayCommitted.tide_wager) {
                 const outcome =

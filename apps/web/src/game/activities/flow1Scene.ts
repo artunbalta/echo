@@ -12,7 +12,10 @@ import type { TileMap } from "../tilemap";
 import { RaftBuild, type RaftPhase } from "./raftBuild";
 import { Flow1Beats, type BeatSpec } from "./flow1Beats";
 import { LocomotionSampler } from "./sampler";
-import { RAFT_BUILD, reachTiles, type BehavioralEvent, type EntitySnapshot } from "@echo/shared";
+import {
+  RAFT_BUILD, reachTiles,
+  type BehavioralEvent, type EntitySnapshot, type RaftBuildState,
+} from "@echo/shared";
 
 export interface Flow1SceneHooks {
   onWhisper?: (t: string | null) => void;
@@ -25,6 +28,12 @@ export interface Flow1SceneHooks {
    *  /play). `seaworthiness` (0..1) is what the build was WORTH: it sets how much open water the raft can
    *  put behind it before the sea pushes back. The player is never shown this number. */
   onLaunched?: (seaworthiness: number) => void;
+  /** The raft as it now stands on the shore — the day loop's source of truth (it persists this
+   *  and derives its own 0..1 read from it). Fires on real changes only, never per frame. */
+  onRaftState?: (r: RaftBuildState) => void;
+  /** The self-imposed gate as an act, not a menu: "start" on the first plank picked up, "stay"
+   *  on standing over the wood and walking away. Never going near it commits nothing (K4). */
+  onLeaveFork?: (option: "start" | "stay") => void;
 }
 
 export interface Flow1SceneOpts {
@@ -35,6 +44,9 @@ export interface Flow1SceneOpts {
   sessionId: () => string;
   send: (events: BehavioralEvent[]) => void;
   hooks?: Flow1SceneHooks;
+  /** The raft persisted from earlier sessions (already weathered on load) — the build resumes
+   *  from it rather than starting over on a shore you already worked. */
+  restoreRaft?: RaftBuildState;
   /** Prefix for client-local entity ids (default "f1_"); keeps them distinct from room entities. */
   idPrefix?: string;
 }
@@ -162,6 +174,9 @@ export class Flow1Scene {
       onNearWood: (id) => { this.pickPrompt = id ? "pick up the driftwood — press [space]" : null; this.refreshPrompt(); },
       onPrompt: (t) => { this.pickPrompt = t; this.refreshPrompt(); },
       onProgress: (g) => this.o.hooks?.onCounter?.(g.gathered >= 0 ? { gathered: g.gathered, needed: g.needed } : null),
+      restore: this.o.restoreRaft,
+      onRaftState: (r) => this.o.hooks?.onRaftState?.(r),
+      onLeaveFork: (opt) => this.o.hooks?.onLeaveFork?.(opt),
       onLaunched: (sea) => {
         if (this.o.hooks?.onLaunched) {
           this.o.hooks.onLaunched(sea); // /play: the SERVER owns the raft (net.sendSetSail carries `sea`)

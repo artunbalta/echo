@@ -21,9 +21,12 @@ import {
   SURVIVAL,
   scarcityMultiplier,
   closeDay,
+  freshRaft,
+  structureProgress01,
   type CropStage,
   type DaySummary,
   type IslandDayState,
+  type RaftBuildState,
 } from "@echo/shared";
 
 /** Per-second vitality effect of lingering near a station category (fractions of max/sec).
@@ -49,6 +52,11 @@ export interface DayClockState {
   scarcityLevel: number;
   dayCount: number;
   crop: CropStage;
+  /** The raft on your shore as it persists across sessions — the F1 build's own state, which
+   *  the build restores from on load and writes back to. The source of truth. */
+  raft: RaftBuildState;
+  /** The day loop's 0..1 read of `raft` (K4, the station's language, leave_intent). DERIVED —
+   *  never stored, so it cannot drift from the wood and the work it describes. */
   structureProgress: number;
   /** In-tone "while you were gone" lines from wall-clock decay (the honest return hook). */
   changes: string[];
@@ -83,14 +91,15 @@ export interface UseDayApi extends DayClockState {
    * so the irreversible fork survives even a closed tab. Soft-irreversibility is real.
    */
   notePlanted: () => void;
-  /** Note the raft/structure work done today (persisted at close). */
-  noteBuildDelta: (delta01: number) => void;
+  /** The F1 build reports the raft as it now stands (persisted at close). The build is the
+   *  only writer; `structureProgress` is derived from this and never stored beside it. */
+  noteRaft: (raft: RaftBuildState) => void;
   /**
    * Close the day (the one write point): folds the summary through the pure closeDay and
    * persists. Returns the next-morning state (already saved) for the "new day" transition.
    */
   finishDay: (
-    summary: Omit<DaySummary, "endVitality01" | "buildDelta01" | "harvested">,
+    summary: Omit<DaySummary, "endVitality01" | "raft" | "harvested">,
     reason: DuskReason,
   ) => Promise<IslandDayState | null>;
   /** Begin the next day in place (after the dusk card): reset clocks from the saved state. */
@@ -105,6 +114,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     scarcityLevel: 0.15,
     dayCount: 0,
     crop: "none",
+    raft: freshRaft(),
     structureProgress: 0,
     changes: [],
     duskReason: null,
@@ -115,7 +125,10 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
   const phaseRef = useRef(0);
   const dwellCatRef = useRef<string | null>(null);
   const harvestedRef = useRef(false);
-  const buildDeltaRef = useRef(0);
+  /** The live raft, owned by the F1 build and mirrored here so dusk can fold it in. Null until
+   *  the build reports — a session where the build never ran must leave yesterday's raft alone
+   *  rather than overwrite it with a fresh zero. */
+  const raftRef = useRef<RaftBuildState | null>(null);
   const duskRef = useRef<DuskReason | null>(null);
   const lastTickEmitRef = useRef(0);
   const cbRef = useRef({ onSurvivalTick, onForcedDusk });
@@ -136,9 +149,12 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
       if (cancelled) return;
       const now = Date.now();
       const state: IslandDayState = loaded?.state ?? {
-        cropStage: "none", cropPlantedAt: null, structureProgress: 0, vitalityCarry: 0.85,
+        cropStage: "none", cropPlantedAt: null, raft: freshRaft(), vitalityCarry: 0.85,
         scarcityLevel: 0.15, dayCount: 0, tieWarmth: {}, updatedAt: now,
       };
+      // A state persisted before the raft was unified has no `raft` key; treat it as an
+      // untouched shore rather than crashing on a missing field.
+      if (!state.raft) state.raft = freshRaft();
       stateRef.current = state;
       vitalityRef.current = Math.max(0.05, state.vitalityCarry);
       phaseRef.current = 0;
@@ -149,7 +165,8 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
         scarcityLevel: state.scarcityLevel,
         dayCount: state.dayCount,
         crop: state.cropStage,
-        structureProgress: state.structureProgress,
+        raft: state.raft,
+        structureProgress: structureProgress01(state.raft),
         changes: loaded?.changes ?? [],
         duskReason: null,
       });
@@ -243,13 +260,20 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     }).catch(() => {});
   }, [userId]);
 
-  const noteBuildDelta = useCallback((delta01: number) => {
-    buildDeltaRef.current += delta01;
+  /**
+   * The F1 raft build reports what it actually is — wood gathered, work held, slips worked
+   * through. This replaced noteBuildDelta(0.1), which was called exactly once, from the
+   * "begin the raft" CLICK: a commitment accumulator that had no idea whether a plank had
+   * ever been touched. The build owns this state; the day loop only stores and reads it.
+   */
+  const noteRaft = useCallback((raft: RaftBuildState) => {
+    raftRef.current = raft;
+    setClock((c) => (c.raft === raft ? c : { ...c, raft, structureProgress: structureProgress01(raft) }));
   }, []);
 
   const finishDay = useCallback(
     async (
-      summary: Omit<DaySummary, "endVitality01" | "buildDelta01" | "harvested">,
+      summary: Omit<DaySummary, "endVitality01" | "raft" | "harvested">,
       reason: DuskReason,
     ): Promise<IslandDayState | null> => {
       const s = stateRef.current;
@@ -258,7 +282,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
       const full: DaySummary = {
         ...summary,
         harvested: harvestedRef.current,
-        buildDelta01: buildDeltaRef.current,
+        raft: raftRef.current,
         endVitality01: vitalityRef.current,
         collapse: reason === "collapse" || summary.collapse,
       };
@@ -288,7 +312,9 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     vitalityRef.current = Math.max(0.05, state.vitalityCarry);
     phaseRef.current = 0;
     harvestedRef.current = false;
-    buildDeltaRef.current = 0;
+    // The raft carries into the new morning exactly as the build left it (weathered by the
+    // wall-clock decay on load). It is NOT reset — that is the whole point of persisting it.
+    raftRef.current = state.raft;
     duskRef.current = null;
     setClock({
       ready: true,
@@ -297,7 +323,8 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
       scarcityLevel: state.scarcityLevel,
       dayCount: state.dayCount,
       crop: state.cropStage,
-      structureProgress: state.structureProgress,
+      raft: state.raft,
+      structureProgress: structureProgress01(state.raft),
       changes: [],
       duskReason: null,
     });
@@ -311,7 +338,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     noteCropHarvested,
     noteCropCleared,
     notePlanted,
-    noteBuildDelta,
+    noteRaft,
     finishDay,
     beginNextDay,
   };
