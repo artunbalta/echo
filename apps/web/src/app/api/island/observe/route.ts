@@ -20,8 +20,11 @@ import type { TelemetryEvent } from "@echo/shared";
 
 export const runtime = "nodejs";
 
-/** Event types that reveal a deliberate, (within-session) irreversible preference. */
-const CHOICE_TYPES = new Set(["choice_made", "allocation", "resource_bet", "structure_progress"]);
+/** Event types that reveal a deliberate, (within-session) irreversible preference.
+ *  fork_decision (P1) supersedes choice_made/resource_bet on the island forks — one event
+ *  per commit, carrying the survival context (scarcity, vitality, daylight, day) so the same
+ *  choice under different pressure stays distinguishable (Law 3). */
+const CHOICE_TYPES = new Set(["choice_made", "allocation", "resource_bet", "structure_progress", "fork_decision"]);
 
 export async function POST(req: Request) {
   let body: { userId?: string; sessionId?: string; events?: TelemetryEvent[] };
@@ -45,6 +48,7 @@ export async function POST(req: Request) {
           userId,
           action: actionText(ev),
           telemetry: behavioralTelemetry(ev),
+          context: eventContext(ev),
         });
         mocked = mocked || !!r.mocked;
       } else {
@@ -66,6 +70,13 @@ export async function POST(req: Request) {
 function actionText(ev: TelemetryEvent): string {
   const p = ev.payload ?? {};
   switch (ev.type) {
+    case "fork_decision": {
+      // The survival fork, in context: the same choice on a lean day says more (§IV.3).
+      const lean = num(p.scarcityLevel) >= 0.5 ? "a lean day" : "an even day";
+      if (p.option === "refused")
+        return `On ${lean} (day ${num(p.dayCount)}) they let the fork "${str(p.forkKey)}" go undecided; the day ended without choosing.`;
+      return `On ${lean} (day ${num(p.dayCount)}) they chose "${str(p.option)}" at fork "${str(p.forkKey)}".`;
+    }
     case "choice_made":
       return `On day ${num(p.dayIndex)} they chose "${str(p.option)}" over the alternatives at fork "${str(p.forkKey)}".`;
     case "allocation":
@@ -107,8 +118,31 @@ function behavioralTelemetry(ev: TelemetryEvent): Record<string, unknown> {
       tele.save_rate = p.option === "save" ? 1 : p.option === "spend" ? 0 : undefined;
       tele.decision_latency = p.latencyMs;
       break;
+    case "fork_decision":
+      // Same behavioral keys as the legacy events it supersedes, plus the survival context
+      // riding along for the P3/P5 featurizer (scarcity-conditioned save rate, risk, k).
+      if (p.forkKey === "plant_or_spend") {
+        tele.save_rate = p.option === "save" ? 1 : p.option === "spend" ? 0 : undefined;
+      }
+      if (p.forkKey === "tide_wager" && p.option !== "refused") {
+        tele.risk_index = p.variance;
+        tele.stake = p.stake;
+      }
+      if (typeof p.latencyMs === "number" && p.option !== "refused") tele.decision_latency = p.latencyMs;
+      tele.scarcity_level = p.scarcityLevel;
+      break;
   }
   return tele;
+}
+
+/** The context envelope forwarded with every choice (Law 3: record the conditions). */
+function eventContext(ev: TelemetryEvent): Record<string, unknown> {
+  const p = ev.payload ?? {};
+  const ctx: Record<string, unknown> = { stage: 1, audience_size: 0, public_or_private: "private" };
+  if (typeof p.scarcityLevel === "number") ctx.scarcity_level = p.scarcityLevel;
+  if (typeof p.dayCount === "number") ctx.day = p.dayCount;
+  if (typeof p.daylight01 === "number") ctx.time_pressure = 1 - (p.daylight01 as number);
+  return ctx;
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");

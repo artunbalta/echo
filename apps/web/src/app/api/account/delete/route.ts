@@ -11,6 +11,7 @@
  */
 import { NextResponse } from "next/server";
 import { deleteUser } from "@/lib/ml";
+import { deleteIslandState } from "@/lib/island-state";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,7 @@ const USER_KEYED: [string, string][] = [
   ["preference_pairs", "user_id"],
   ["meeting_outcomes", "user_id"],
   ["interactions", "actor_id"],
+  ["island_state", "user_id"], // P1 survival day-state (crop/structure/scarcity/tie warmth)
 ];
 
 async function supabaseDelete(uid: string): Promise<string[]> {
@@ -51,6 +53,6 @@ export async function POST(req: Request) {
   const uid = body.userId;
   if (!uid) return NextResponse.json({ error: "userId required" }, { status: 400 });
 
-  const [ml, wiped] = await Promise.all([deleteUser(uid), supabaseDelete(uid)]);
+  const [ml, wiped] = await Promise.all([deleteUser(uid), supabaseDelete(uid), deleteIslandState(uid)]);
   return NextResponse.json({ ok: true, ml, supabaseTablesWiped: wiped });
 }

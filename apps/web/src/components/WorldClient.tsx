@@ -4,26 +4,109 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { config } from "@/lib/config";
 import { PixiWorld } from "@/game/PixiWorld";
 import { NetClient } from "@/game/net";
-import { TelemetryCollector } from "@/game/telemetry";
+import { TelemetryCollector, LocomotionSampler } from "@/game/telemetry";
 import { proposeReply, sendFeedback, requestConnectionAnalysis, type AgentTurn, type ConnectionAnalysis } from "@/lib/agent";
 import EchoPanel from "@/components/EchoPanel";
 import LiveRoster from "@/components/LiveRoster";
 import OutcomesPanel, { type MetPerson } from "@/components/OutcomesPanel";
 import RecognitionMeter from "@/components/RecognitionMeter";
 import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
+import DuskReading, { type DuskReadingData } from "@/components/DuskReading";
 import { useEcho } from "@/lib/useEcho";
 import { resolveUserId } from "@/lib/identity";
-import { markFunnel } from "@/lib/funnel";
-import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent } from "@echo/shared";
+import { markFunnel, telemetryConsented } from "@/lib/funnel";
+import { useDay, type DuskReason } from "@/lib/useDay";
+import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEvent, IslandDayState } from "@echo/shared";
 import {
-  nearestSlot, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R,
-  FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event,
+  nearestSlot, slotDistance, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, SURVIVAL,
+  FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event, buildSocialEvent,
   type Flow0Affordance,
 } from "@echo/shared";
 import { generateOcean } from "@/game/tilemap";
 import { Flow1Scene } from "@/game/activities/flow1Scene";
 
 const prettyBucket = (b: string) => b.replace(/_/g, " ");
+
+// ── the survival day's stations (blueprint P1) — client-local entities (role "day") on YOUR
+//    island in the one ocean, beside the Flow-0 affordances. The five verbs live here: forage
+//    (earn), read (learn), rest (leisure), the grain fork, the trap-line wager, the campfire.
+//    Sail/social live in the world itself (travel stand, other players). Offsets avoid f0_*'s. ──
+type DayCat = "earn" | "learn" | "social" | "leisure" | "build";
+interface DayStation {
+  refId: string;
+  sprite: string;
+  dx: number;
+  dy: number;
+  name: string;
+  kind: "grain" | "wager" | "dwell" | "end" | "raft";
+  cat?: DayCat;
+  hint?: string;
+}
+const DAY_STATIONS: DayStation[] = [
+  { refId: "day_grain", sprite: "proc:grain_sprout", dx: -4, dy: -4, name: "a sprout", kind: "grain" },
+  // The raft is the ONE gate in the whole game, and it is self-imposed (blueprint I.3): the sea
+  // opens only after you choose to begin it. Never building it (K4) is first-class data (Law 2).
+  { refId: "day_raft", sprite: "proc:raft", dx: -7, dy: -3, name: "an unfinished raft", kind: "raft", cat: "build" },
+  { refId: "day_bush", sprite: "proc:berry_bush", dx: 5, dy: -3, name: "a berry bush", kind: "dwell", cat: "earn", hint: "you forage — it feeds you while the light lasts" },
+  { refId: "day_cairn", sprite: "proc:book_cairn", dx: -4, dy: 5, name: "a cairn of books", kind: "dwell", cat: "learn", hint: "you read the island, the tides, yourself" },
+  { refId: "day_bedroll", sprite: "proc:bedroll", dx: 5, dy: 4, name: "a bedroll", kind: "dwell", cat: "leisure", hint: "you rest; strength returns as the day passes" },
+  { refId: "day_tide", sprite: "proc:tidepool", dx: 0, dy: 7, name: "the trap line", kind: "wager" },
+  { refId: "day_campfire", sprite: "proc:campfire", dx: -2, dy: 2, name: "a campfire", kind: "end" },
+];
+const DAY_BY_ID = new Map(DAY_STATIONS.map((s) => [s.refId, s]));
+
+// ── P7 Stage-7 — the private moral probes (the Ring of Gyges, blueprint III.2). One appears
+//    on YOUR island from day 2 on (never the first morning — character reads need a settled
+//    baseline), alternating. PRIVATE, audience 0, no witness, no reward marker; the temptation
+//    is REAL (the cache feeds you; the gull costs you). Each is the private twin of a public
+//    clearing norm, so the engine's privacy-conditioned posteriors yield the public-minus-
+//    private delta (VIII.9). Skippable outright — walking past is simply not measured as a
+//    choice unless declined explicitly (Law 2). ──
+interface MoralProbe {
+  refId: string;
+  sprite: string;
+  dx: number;
+  dy: number;
+  name: string;
+  prompt: string;
+  takeAction: string; // SOCIAL_CUES key (polarity take)
+  takeLabel: string;
+  refuseAction: string; // the explicit decline twin
+  refuseLabel: string;
+  vitalityOnTake: number;
+  vitalityOnRefuse: number;
+  doneLineTake: string;
+  doneLineRefuse: string;
+}
+const MORAL_PROBES: MoralProbe[] = [
+  {
+    refId: "probe_gull", sprite: "proc:driftwood", dx: 6, dy: 5,
+    name: "a gull tangled in the trap line",
+    prompt: "a gull, tangled in your trap line. freeing it will cost you time and strength. no one would ever know either way.",
+    takeAction: "help_at_cost", takeLabel: "free it (it takes a while)",
+    refuseAction: "pass_by", refuseLabel: "leave it",
+    vitalityOnTake: -0.08, vitalityOnRefuse: 0,
+    doneLineTake: "it startles off across the water. nothing marks that this happened.",
+    doneLineRefuse: "you walk on. the line creaks behind you.",
+  },
+  {
+    refId: "probe_cache", sprite: "proc:shell", dx: -3, dy: -7,
+    name: "a half-buried cache, another's mark on it",
+    prompt: "a buried cache with someone else's mark carved into it. food inside, by the weight. nobody would know.",
+    takeAction: "return_cache", takeLabel: "leave it be",
+    refuseAction: "keep_cache", refuseLabel: "take it",
+    vitalityOnTake: 0, vitalityOnRefuse: 0.15,
+    doneLineTake: "you cover it back over, mark up.",
+    doneLineRefuse: "it feeds you. the mark stays under the sand.",
+  },
+];
+const PROBE_BY_ID = new Map(MORAL_PROBES.map((p) => [p.refId, p]));
+/** The tide wager's two sides (mirrors lib/island-day DAY_BET; local so the world stays lean). */
+const DAY_WAGER = {
+  safe: { expectedValue: 1, variance: 0.1 },
+  risky: { expectedValue: 1.4, variance: 0.9 },
+  stake: 3,
+};
 
 interface Line {
   who: "you" | "them";
@@ -62,6 +145,16 @@ export default function WorldClient() {
   const [f1Whisper, setF1Whisper] = useState<string | null>(null);
   const [f1Counter, setF1Counter] = useState<{ gathered: number; needed: number } | null>(null);
   const firstMoveDoneRef = useRef(false);
+  // ── the survival day layer (blueprint P1): stations on your island + the three clocks ──
+  const dayEntsRef = useRef<EntitySnapshot[]>([]);
+  const dayChoicesRef = useRef<{ forkKey: string; option: string; dayIndex: number; detail?: string }[]>([]);
+  const daySeenAtRef = useRef<Record<string, number>>({});
+  const dayDwellRef = useRef<Record<DayCat, number>>({ earn: 0, learn: 0, social: 0, leisure: 0, build: 0 });
+  const dayNearSinceRef = useRef<{ cat: DayCat | null; t: number }>({ cat: null, t: 0 });
+  const betWonRef = useRef<boolean | null>(null);
+  const dayStartAtRef = useRef(0);
+  const locoRef = useRef<LocomotionSampler | null>(null);
+  const probeEntsRef = useRef<EntitySnapshot[]>([]);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
   const interactionRef = useRef<string | null>(null);
@@ -149,6 +242,86 @@ export default function WorldClient() {
   echoRef.current = echo;
   const handoverAvailable = echo.autoBuckets.length > 0;
 
+  // ── the survival day (P1): three clocks against a finite you ─────────────────────
+  const [dayCommitted, setDayCommitted] = useState<Record<string, string>>({});
+  const [grainForkReady, setGrainForkReady] = useState(false);
+  const [duskReading, setDuskReading] = useState<DuskReadingData | null>(null);
+  const [duskBusy, setDuskBusy] = useState(false);
+  const [collapsedCard, setCollapsedCard] = useState(false);
+  const [pendingNext, setPendingNext] = useState<IslandDayState | null>(null);
+  const [awayChanges, setAwayChanges] = useState<string[]>([]);
+  const endDayFnRef = useRef<(reason: DuskReason) => void>(() => {});
+  // The dusk MIRROR BEAT baseline (P2/M1): the echo's read of you at the day's start. At the
+  // campfire we diff against it — a line appears ONLY when a real axis resolved or a bucket's
+  // agreement genuinely rose today. Nothing moved → nothing said (silence is content, §VIII.10).
+  const dayBaselineRef = useRef<{ traits: Set<string>; agreements: Record<string, number> } | null>(null);
+  const [mirrorLine, setMirrorLine] = useState<string | null>(null);
+  const captureDayBaseline = useCallback(() => {
+    const s = echoRef.current.snap;
+    dayBaselineRef.current = {
+      traits: new Set(s?.traits ?? []),
+      agreements: Object.fromEntries(Object.entries(s?.buckets ?? {}).map(([k, b]) => [k, b.agreement_ewma ?? 0.5])),
+    };
+  }, []);
+  /** One honest sentence about today's real movement, or null (most days are null — that's the design). */
+  const duskMirrorLine = useCallback((): string | null => {
+    const base = dayBaselineRef.current;
+    const s = echoRef.current.snap;
+    if (!base || !s || s.mocked) return null; // never fake a beat on demo values
+    const newTrait = s.traits.find((t) => !base.traits.has(t));
+    if (newTrait) return `by the fire, it sees a little more: someone ${newTrait}.`;
+    for (const [name, b] of Object.entries(s.buckets ?? {})) {
+      const before = base.agreements[name];
+      if (before !== undefined && (b.agreement_ewma ?? 0.5) > before + 0.04) {
+        return `its calls in ${prettyBucket(name)} landed closer to yours today.`;
+      }
+    }
+    return null;
+  }, []);
+
+  /** Day events ride the proven island pipe: choices → ML /observe (posterior), ambient →
+   *  /telemetry. Consent-gated at the source (event-schema §5). */
+  const forwardDayEvents = useCallback(async (events: TelemetryEvent[]) => {
+    if (!uidRef.current || !events.length || !telemetryConsented()) return;
+    try {
+      await fetch("/api/island/observe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: uidRef.current, sessionId: sessionIdRef.current, events }),
+      });
+    } catch {
+      /* best-effort; never block the player */
+    }
+  }, []);
+
+  const day = useDay({
+    userId: uid,
+    onSurvivalTick: (t) =>
+      void forwardDayEvents([{ type: "survival_tick", sessionId: sessionIdRef.current, ts: Date.now(), payload: t }]),
+    onForcedDusk: (reason) => endDayFnRef.current(reason),
+  });
+  const dayApiRef = useRef(day);
+  dayApiRef.current = day;
+
+  /** Fold the time lingered at the previous day-station into its verb, then start timing `cat`. */
+  const flushDayDwell = useCallback((cat: DayCat | null) => {
+    const now = Date.now();
+    const prev = dayNearSinceRef.current;
+    if (prev.cat) dayDwellRef.current[prev.cat] += (now - prev.t) / 1000;
+    dayNearSinceRef.current = { cat, t: now };
+  }, []);
+
+  /** The survival context stamped on every fork event (Law 3: the conditional signature). */
+  const dayForkContext = useCallback(() => {
+    const d = dayApiRef.current;
+    return {
+      scarcityLevel: Number(d.scarcityLevel.toFixed(3)),
+      vitality01: Number(d.vitality01.toFixed(3)),
+      daylight01: Number((1 - d.dayPhase01).toFixed(3)),
+      dayCount: d.dayCount,
+    };
+  }, []);
+
   // Cold-start orientation + discoverability + touch awareness.
   const [orientDismissed, setOrientDismissed] = useState(false);
   const [usedEcho, setUsedEcho] = useState(false);
@@ -208,11 +381,30 @@ export default function WorldClient() {
     // "a near shore" must be SPATIALLY nearest (index ≠ space under phyllotaxis), so its label
     // matches the server's authoritative travel_near verdict. The far gathering is a fixed shared
     // landmark (so two players who pick it rendezvous); for central/clustered homes it is genuinely far.
-    return [
+    const dests = [
       { slot: nearestSlot(home), label: "a near shore" },
       { slot: FAR_GATHERING, label: "the far gathering ⟡" },
       { slot: (FAR_GATHERING + 25) % 100, label: "a distant stranger's island" },
     ];
+    // P4 (blueprint VIII.2): the NOVEL-EMPTY island — the cleanest openness-vs-warmth
+    // disambiguator. The nearest slot with NO ONE on it (no NPCs in render state); the server
+    // stamps dest_occupants authoritatively on arrival either way.
+    const npcs = worldRef.current?.listNpcs() ?? [];
+    const taken = new Set(dests.map((d) => d.slot));
+    let bare: number | null = null;
+    let bareD = Infinity;
+    for (let i = 0; i < 100; i++) {
+      if (i === home || taken.has(i)) continue;
+      const c = oceanIslandCenter(i);
+      if (npcs.some((n) => Math.hypot(n.x - c.x, n.y - c.y) <= OCEAN_ISLAND_R + 2)) continue;
+      const d = slotDistance(home, i);
+      if (d < bareD) {
+        bareD = d;
+        bare = i;
+      }
+    }
+    if (bare !== null) dests.push({ slot: bare, label: "a bare shore — no one there" });
+    return dests;
   };
   const travel = useCallback((slot: number, label: string) => {
     netRef.current?.sendTravel(slot, preparedRef.current);
@@ -309,12 +501,366 @@ export default function WorldClient() {
   ];
 
 
+  // ── survival-day effects + handlers (P1) ─────────────────────────────────────────
+
+  // The clocks drive the world's diegetic state: sun/shadows, the body, the bushes. No bars.
+  useEffect(() => {
+    const w = worldRef.current;
+    if (!w || !day.ready) return;
+    w.setDayPhase(day.dayPhase01);
+    w.setVitality(day.vitality01);
+    w.setScarcity(day.scarcityLevel);
+  }, [day.ready, day.dayPhase01, day.vitality01, day.scarcityLevel]);
+
+  // On day load: the honest return hook + the day-2 marker + the mirror-beat baseline.
+  useEffect(() => {
+    if (!day.ready) return;
+    if (day.changes.length) setAwayChanges(day.changes);
+    if (day.dayCount >= 1) markFunnel(uidRef.current, "day_2_return");
+    captureDayBaseline();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day.ready]);
+
+  useEffect(() => {
+    if (!awayChanges.length) return;
+    const t = setTimeout(() => setAwayChanges([]), 14000);
+    return () => clearTimeout(t);
+  }, [awayChanges]);
+
+  // The grain plot follows the persisted crop across days; a fresh sprout ripens mid-day.
+  useEffect(() => {
+    if (!day.ready) return;
+    const ent = dayEntsRef.current.find((e) => e.refId === "day_grain");
+    const apply = (sprite: string, name: string) => {
+      if (ent) {
+        ent.spriteUrl = sprite;
+        ent.name = name;
+      }
+      worldRef.current?.setEntitySprite("day_grain", sprite);
+      worldRef.current?.setEntityName("day_grain", name);
+    };
+    if (day.crop === "ripe") {
+      apply("proc:grain_ripe", "the saved harvest");
+      setGrainForkReady(false);
+      return;
+    }
+    if (day.crop === "wilted") {
+      apply("proc:grain_sprout", "wilted stalks");
+      setGrainForkReady(false);
+      return;
+    }
+    if (day.crop === "planted") {
+      apply("proc:grain_sprout", "a planted seed");
+      setGrainForkReady(false);
+      return;
+    }
+    apply("proc:grain_sprout", "a sprout");
+    setGrainForkReady(false);
+    const t = setTimeout(() => {
+      apply("proc:grain_ripe", "ripe grain");
+      setGrainForkReady(true);
+    }, SURVIVAL.GROW_MS);
+    return () => clearTimeout(t);
+  }, [day.ready, day.crop, day.dayCount]);
+
+  // The BALD situation-director (P7 / II.5): once per day, ask which situation would teach
+  // the echo the most about THIS person. Salience only — the pick appears in the world; the
+  // cap decays as the posterior converges; ML absent → null → the deterministic rhythm.
+  const [directorPick, setDirectorPick] = useState<string | null>(null);
+  useEffect(() => {
+    if (!day.ready || day.dayCount < 1 || !uidRef.current) return;
+    let gone = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/island/director", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userId: uidRef.current }),
+        });
+        const pick = (await r.json()) as { surface: string | null };
+        if (gone) return;
+        setDirectorPick(pick.surface);
+        if (pick.surface === "lean_day") dayApiRef.current.nudgeScarcity(0.15);
+      } catch {
+        if (!gone) setDirectorPick(null);
+      }
+    })();
+    return () => {
+      gone = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day.ready, day.dayCount]);
+
+  // Today's private moral probe (Stage 7): appears from day 2 on, alternating (or the
+  // director's pick when it named one), on your own island — visible to no one else.
+  useEffect(() => {
+    if (!day.ready || day.dayCount < 1) {
+      probeEntsRef.current = [];
+      return;
+    }
+    const probe =
+      MORAL_PROBES.find((p) => p.refId === directorPick) ??
+      MORAL_PROBES[(day.dayCount - 1) % MORAL_PROBES.length];
+    const home = oceanIslandCenter(slotIndexRef.current ?? 0);
+    const lim = OCEAN_ISLAND_R - 2;
+    const m = Math.hypot(probe.dx, probe.dy) || 1;
+    const k = Math.min(1, lim / m);
+    const p = clampToMap(home.x + probe.dx * k, home.y + probe.dy * k);
+    probeEntsRef.current = [{
+      id: probe.refId, kind: "npc", refId: probe.refId, name: probe.name, spriteUrl: probe.sprite,
+      x: p.x, y: p.y, facing: "down", moving: false, role: "probe", status: "none",
+    } as EntitySnapshot];
+  }, [day.ready, day.dayCount, directorPick]);
+
+  /** Commit a Stage-7 moral probe — private, audience 0, commit-once; the act (or its explicit
+   *  decline twin) goes straight through the behavioral ingress with a PRIVATE envelope. */
+  const commitProbe = useCallback(
+    (probe: MoralProbe, take: boolean) => {
+      if (dayCommitted[probe.refId]) return;
+      setDayCommitted((c) => ({ ...c, [probe.refId]: take ? "take" : "refuse" }));
+      dayApiRef.current.addVitality(take ? probe.vitalityOnTake : probe.vitalityOnRefuse);
+      if (!telemetryConsented()) return; // fully playable, emits nothing (event-schema §5)
+      const event = buildSocialEvent({
+        actorId: uidRef.current,
+        sessionId: sessionIdRef.current,
+        action: take ? probe.takeAction : probe.refuseAction,
+        counterpartId: probe.refId,
+        counterpartStatus: "none",
+        targetKind: "place",
+        audienceSize: 0,
+        contextOverride: {
+          public_or_private: "private",
+          scarcity_level: Number(dayApiRef.current.scarcityLevel.toFixed(3)),
+        },
+      });
+      void fetch("/api/observe/behavioral", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event }),
+      }).catch(() => {});
+    },
+    [dayCommitted],
+  );
+
+  /** Commit an irreversible day fork (grain / trap-line / the raft). No take-backs within the day. */
+  const commitDayFork = useCallback(
+    (st: DayStation, optId: string) => {
+      const key = st.kind === "grain" ? "plant_or_spend" : st.kind === "raft" ? "start_ship" : "tide_wager";
+      if (dayCommitted[key]) return;
+      markFunnel(uidRef.current, "first_fork");
+      const shownAt = daySeenAtRef.current[st.refId] ?? dayStartAtRef.current;
+      const latencyMs = Date.now() - shownAt;
+      setDayCommitted((c) => ({ ...c, [key]: optId }));
+
+      const base = { forkKey: key, option: optId, latencyMs, irreversible: true, ...dayForkContext() };
+      const events: TelemetryEvent[] = [];
+      if (st.kind === "wager") {
+        const side = optId === "risky" ? DAY_WAGER.risky : DAY_WAGER.safe;
+        const won = optId === "risky" ? Math.random() < 0.45 : undefined;
+        betWonRef.current = won ?? null;
+        if (optId === "risky") dayApiRef.current.addVitality(won ? 0.2 : -0.08);
+        else dayApiRef.current.addVitality(0.08);
+        dayChoicesRef.current.push({
+          forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
+          detail: optId === "risky" ? (won ? "the run came back heavy" : "the run came back empty") : "a steady, modest line",
+        });
+        events.push({
+          type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(),
+          payload: { ...base, stake: DAY_WAGER.stake, expectedValue: side.expectedValue, variance: side.variance, chosenRisk: optId },
+        });
+      } else if (st.kind === "raft") {
+        // The Stage-2 gate, self-imposed: beginning the raft opens the long work of leaving.
+        const leaving = optId === "start";
+        dayChoicesRef.current.push({
+          forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
+          detail: leaving ? "began the long work of leaving" : "let the raft lie",
+        });
+        events.push({ type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(), payload: base });
+        if (leaving) {
+          dayApiRef.current.noteBuildDelta(0.1);
+          // Beginning the raft is the gate itself: once begun, the sea is yours to cross
+          // (the choice is the commitment — P1's rule, kept identical here).
+          worldRef.current?.setSailing(true);
+          netRef.current?.sendSetSail(true);
+          setSailing(true);
+          const secs = Math.round((Date.now() - dayStartAtRef.current) / 1000);
+          events.push({
+            type: "structure_progress", sessionId: sessionIdRef.current, ts: Date.now(),
+            payload: { structure: "ship", started: true, finished: false, delta01: 0.1, sessionSeconds: secs },
+          });
+          events.push({
+            type: "leave_intent", sessionId: sessionIdRef.current, ts: Date.now(),
+            payload: { stage: "started", dayIndex: dayApiRef.current.dayCount, shipProgress01: 0.1, secondsAlone: secs },
+          });
+        }
+      } else {
+        dayChoicesRef.current.push({
+          forkKey: key, option: optId, dayIndex: dayApiRef.current.dayCount,
+          detail: optId === "save" ? "planted for a harvest you may not see" : "a whole meal, eaten now",
+        });
+        events.push({ type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(), payload: base });
+        if (optId === "spend") dayApiRef.current.addVitality(0.3);
+        if (optId === "save") dayApiRef.current.notePlanted(); // in the ground NOW — survives a closed tab
+      }
+      void forwardDayEvents(events);
+    },
+    [dayCommitted, dayForkContext, forwardDayEvents],
+  );
+
+  const harvestDayCrop = useCallback(() => {
+    if (dayCommitted.harvest) return;
+    setDayCommitted((c) => ({ ...c, harvest: "gathered" }));
+    dayApiRef.current.addVitality(0.35);
+    dayApiRef.current.noteCropHarvested();
+    dayChoicesRef.current.push({ forkKey: "harvest", option: "gathered", dayIndex: dayApiRef.current.dayCount, detail: "the saved seed came back as a harvest" });
+    void forwardDayEvents([{
+      type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(),
+      payload: { forkKey: "harvest", option: "gathered", latencyMs: 0, irreversible: true, ...dayForkContext() },
+    }]);
+  }, [dayCommitted, dayForkContext, forwardDayEvents]);
+
+  const clearDayWilted = useCallback(() => {
+    if (dayCommitted.clear_wilted) return;
+    setDayCommitted((c) => ({ ...c, clear_wilted: "cleared" }));
+    dayApiRef.current.noteCropCleared();
+    dayChoicesRef.current.push({ forkKey: "clear_wilted", option: "cleared", dayIndex: dayApiRef.current.dayCount, detail: "the wilted stalks were cleared" });
+    void forwardDayEvents([{
+      type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(),
+      payload: { forkKey: "clear_wilted", option: "cleared", latencyMs: 0, irreversible: false, ...dayForkContext() },
+    }]);
+  }, [dayCommitted, dayForkContext, forwardDayEvents]);
+
+  /** Close the day — by the fire, by nightfall, or by collapse. The one write point. */
+  const endWorldDay = useCallback(
+    async (reason: DuskReason) => {
+      if (duskBusy || duskReading || collapsedCard || pendingNext) return;
+      setDuskBusy(true);
+      if (reason === "collapse") markFunnel(uidRef.current, "first_collapse");
+      else markFunnel(uidRef.current, "reached_dusk");
+
+      flushDayDwell(null);
+      const dwell = dayDwellRef.current;
+      const spent = (Object.values(dwell) as number[]).reduce((a, b) => a + b, 0) || 1;
+      const alloc = {
+        earn: dwell.earn / spent, learn: dwell.learn / spent, social: dwell.social / spent,
+        leisure: dwell.leisure / spent, build: dwell.build / spent,
+      };
+      const top = (Object.keys(dwell) as DayCat[]).reduce((a, b) => (dwell[a] >= dwell[b] ? a : b));
+      dayChoicesRef.current.push({ forkKey: "day_hours", option: top, dayIndex: dayApiRef.current.dayCount, detail: `you spent most of the day on ${top}` });
+
+      const now = Date.now();
+      const events: TelemetryEvent[] = [{
+        type: "allocation", sessionId: sessionIdRef.current, ts: now,
+        payload: {
+          earn: Number(alloc.earn.toFixed(3)), learn: Number(alloc.learn.toFixed(3)),
+          social: Number(alloc.social.toFixed(3)), leisure: Number(alloc.leisure.toFixed(3)),
+          build: Number(alloc.build.toFixed(3)),
+        },
+      }];
+      // Undecided forks close as REFUSALS — first-class data, never a blocker (Law 2). Only a
+      // fork that actually OPENED today can be refused. Skip on collapse: the player was knocked
+      // out, not choosing non-engagement — conflating the two writes a false Channel-K signal.
+      if (reason !== "collapse") {
+        const refusals: string[] = [];
+        if (grainForkReady && day.crop === "none" && !dayCommitted.plant_or_spend) refusals.push("plant_or_spend");
+        if (!dayCommitted.tide_wager) refusals.push("tide_wager");
+        // Never beginning the raft is K4 — one of the strongest cues in the system (I.3).
+        if (!dayCommitted.start_ship && day.structureProgress === 0) refusals.push("start_ship");
+        for (const forkKey of refusals) {
+          events.push({
+            type: "fork_decision", sessionId: sessionIdRef.current, ts: now,
+            payload: { forkKey, option: "refused", latencyMs: now - dayStartAtRef.current, irreversible: false, ...dayForkContext() },
+          });
+        }
+      }
+      void forwardDayEvents(events);
+
+      const next = await dayApiRef.current.finishDay(
+        {
+          grain: (dayCommitted.plant_or_spend as "save" | "spend" | undefined) ?? null,
+          bet: (dayCommitted.tide_wager as "risky" | "safe" | undefined) ?? null,
+          betWon: betWonRef.current ?? undefined,
+          alloc,
+          collapse: reason === "collapse",
+        },
+        reason,
+      );
+      setPendingNext(next);
+
+      if (reason === "collapse") {
+        setCollapsedCard(true);
+        setDuskBusy(false);
+        return;
+      }
+      // The mirror beat: diff the echo's read of you against the day's start — only a REAL
+      // movement earns a sentence (M1); most days stay silent by design.
+      setMirrorLine(duskMirrorLine());
+      try {
+        const res = await fetch("/api/island/reading", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userId: uidRef.current, choices: dayChoicesRef.current }),
+        });
+        setDuskReading((await res.json()) as DuskReadingData);
+      } catch {
+        setDuskReading({ statements: [{ text: "The day closed before the echo could form.", axis: null, choiceRef: null, control: false }], recognition: 0, mocked: true });
+      } finally {
+        setDuskBusy(false);
+      }
+    },
+    [duskBusy, duskReading, collapsedCard, pendingNext, dayCommitted, grainForkReady, day.crop, day.structureProgress, flushDayDwell, dayForkContext, forwardDayEvents],
+  );
+  endDayFnRef.current = endWorldDay;
+
+  /** Wake into the next morning in place — clocks reset from the persisted state. */
+  const startNextWorldDay = useCallback(() => {
+    const next = pendingNext;
+    if (!next) return;
+    dayApiRef.current.beginNextDay(next);
+    setDayCommitted({});
+    dayChoicesRef.current = [];
+    daySeenAtRef.current = {};
+    dayDwellRef.current = { earn: 0, learn: 0, social: 0, leisure: 0, build: 0 };
+    dayNearSinceRef.current = { cat: null, t: Date.now() };
+    betWonRef.current = null;
+    dayStartAtRef.current = Date.now();
+    setDuskReading(null);
+    setCollapsedCard(false);
+    setPendingNext(null);
+    setGrainForkReady(false);
+    setMirrorLine(null);
+    captureDayBaseline(); // tomorrow's beat diffs against tomorrow's start
+    locoRef.current?.resetDay(); // novelty + the per-day emit cap reset with the morning
+  }, [pendingNext, captureDayBaseline]);
+
+  const submitDuskVerdict = useCallback(
+    ({ ratings, overall }: { ratings: Record<number, boolean>; overall: number }) => {
+      if (!duskReading) return;
+      const rated = duskReading.statements.map((s, i) => ({ ...s, isMe: ratings[i] }));
+      const record = {
+        uid: uidRef.current, ts: Date.now(), overall,
+        specific: rated.filter((s) => !s.control), controls: rated.filter((s) => s.control),
+        recognition: duskReading.recognition, mocked: duskReading.mocked,
+      };
+      try {
+        const key = "echo.island.validation";
+        const prev = JSON.parse(localStorage.getItem(key) ?? "[]");
+        localStorage.setItem(key, JSON.stringify([...prev, record]));
+        (window as unknown as { __echoValidation?: unknown[] }).__echoValidation = JSON.parse(localStorage.getItem(key)!);
+      } catch {
+        /* best-effort */
+      }
+      fetch("/api/island/validate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(record) }).catch(() => {});
+      markFunnel(uidRef.current, "reading_submitted");
+    },
+    [duskReading],
+  );
+
   // Emit ONE solo Flow-0 BehavioralEvent (audience 0, private, no counterpart — buildFlow0Event
   // stamps FLOW0_CONTEXT) through the proven /observe/behavioral ingress. This is the solitary
   // baseline; it never touches the social path and can only fire from your own-island affordances.
   const emitFlow0 = useCallback(
     async (channel: any, cue: any, action: string, targetId: string, targetKind: any, raw?: any) => {
-      if (!uidRef.current) return;
+      // Consent gate at the source (event-schema §5): telemetry off → the solitary shore is
+      // fully explorable and emits NOTHING. (Was ungated — a real leak the consent audit caught.)
+      if (!uidRef.current || !telemetryConsented()) return;
       const event: BehavioralEvent = buildFlow0Event({
         actorId: uidRef.current, sessionId: sessionIdRef.current, channel, cue, action, targetId, targetKind, raw,
       });
@@ -379,12 +925,24 @@ export default function WorldClient() {
 
     let disposed = false;
     const oceanMap = generateOcean(); // ONE shared ocean, reused by PixiWorld + the F1 placement/reachability
+    // The continuous passive locomotion channel (P3, gap #2): least-fakeable, consent-gated
+    // with the same switch as everything else. It emits into the ordinary collector, so the
+    // batch pipe (→ realtime → ML /telemetry) and its caps apply unchanged.
+    const loco = new LocomotionSampler((scalars) => teleRef.current?.emit("passive_locomotion", { ...scalars }));
+    locoRef.current = loco;
     const world = new PixiWorld({
+      onSelfSample: telemetryConsent ? (x, y) => loco.feed(x, y) : undefined,
       onNearbyChange: (t) => {
         // F1 embodied-activity props (role "flow1") are driven by the Flow1Scene controllers' own input,
         // not the WorldClient menu/chat — never treat them as "nearby" (no menu, no chat conflict).
         if (t && snapsRef.current?.get(t.id)?.role === "flow1") { setNearby(null); return; }
         setNearby(t);
+        // The day's time-share: lingering near a day-station accrues its verb (and feeds or
+        // spends vitality — forage +, rest +). The allocation IS where you actually stood.
+        const dst = t ? DAY_BY_ID.get(t.refId) : undefined;
+        flushDayDwell(dst?.cat ?? null);
+        dayApiRef.current.setDwellCategory(dst?.cat ?? null);
+        if (dst && !(dst.refId in daySeenAtRef.current)) daySeenAtRef.current[dst.refId] = Date.now();
         if (t) markFunnel(uidRef.current, "first_nearby");
       },
       onMoveIntent: (dir, facing, seq) => {
@@ -410,7 +968,9 @@ export default function WorldClient() {
 
     const net = new NetClient(config.realtimeUrl);
     netRef.current = net;
-    const tele = new TelemetryCollector(sessionId, (events) => net.sendTelemetry(events));
+    // Consent gates the collector at the SOURCE (event-schema §5): declined → the collector
+    // records nothing at all (previously the interval was gated but a full buffer still flushed).
+    const tele = new TelemetryCollector(sessionId, (events) => net.sendTelemetry(events), 2000, telemetryConsent);
     teleRef.current = tele;
 
     net.on({
@@ -428,6 +988,10 @@ export default function WorldClient() {
         // gather isn't undone by the next server snapshot re-adding a stale plank.
         const f1live = f1SceneRef.current?.liveEntities();
         if (f1live) for (const e of f1live) snaps.set(e.id, e);
+        // …and the survival day's stations (role "day") + today's private moral probe (role
+        // "probe"), likewise client-local — no other player ever sees your Stage-7 moment.
+        for (const e of dayEntsRef.current) snaps.set(e.id, e);
+        for (const e of probeEntsRef.current) snaps.set(e.id, e);
         world.applySnapshot(snaps, net.lastAckSeq());
         snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
         // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
@@ -493,6 +1057,9 @@ export default function WorldClient() {
         convoTargetRef.current = { id: p.target.id, name: p.target.name };
         setConvo({ name: p.target.name, lines: [] });
         setProposal(null);
+        // Conversation time is the day's SOCIAL hours (the fifth verb).
+        flushDayDwell("social");
+        dayApiRef.current.setDwellCategory("social");
         if (!metRef.current.has(p.target.id)) {
           metRef.current.set(p.target.id, { id: p.target.id, name: p.target.name, turns: 0, auto: autoConvoRef.current });
           setMetCount(metRef.current.size);
@@ -550,6 +1117,9 @@ export default function WorldClient() {
         setPeerEchoMode(false);
         setPeerUsingEcho(false);
         peerEchoTurnsRef.current = 0;
+        // The social hours end with the conversation.
+        flushDayDwell(null);
+        dayApiRef.current.setDwellCategory(null);
         tele.emit("interaction_end", {});
         if (wasAuto) {
           // The echo's own encounter: continue the loop; the activity feed + recap cover it
@@ -629,6 +1199,18 @@ export default function WorldClient() {
       f1Scene.entities(); // seed the scene's live entity set (merged into every snapshot below)
       f1SceneRef.current = f1Scene;
 
+      dayStartAtRef.current = Date.now();
+      // The survival day's stations, beside the Flow-0 affordances on YOUR island (role "day",
+      // client-local — other players never see or touch your homestead's stations).
+      dayEntsRef.current = DAY_STATIONS.map((s) => {
+        const m = Math.hypot(s.dx, s.dy) || 1;
+        const k = Math.min(1, lim / m);
+        const p = clampToMap(home.x + s.dx * k, home.y + s.dy * k);
+        return {
+          id: s.refId, kind: "npc", refId: s.refId, name: s.name, spriteUrl: s.sprite,
+          x: p.x, y: p.y, facing: "down", moving: false, role: "day", status: "none",
+        } as EntitySnapshot;
+      });
       if (disposed) return;
       try {
         await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
@@ -891,12 +1473,17 @@ export default function WorldClient() {
     setAutoConvo(v);
   }
 
-  /** Nearest NPC we didn't just leave — who the echo approaches next. */
+  /** Nearest NPC we didn't just leave — who the echo approaches next. The echo obeys the
+   *  same world rules as the person (P4): without a begun raft it cannot cross water, so it
+   *  only considers NPCs on the current island; with the raft it sails like anyone else. */
   function pickNextNpc(): { id: string; name: string } | null {
     const world = worldRef.current;
     if (!world) return null;
     const me = world.getSelfTile();
-    const npcs = world.listNpcs();
+    const canCross = day.structureProgress > 0 || sailing;
+    const npcs = world
+      .listNpcs()
+      .filter((n) => canCross || Math.hypot(n.x - me.x, n.y - me.y) <= OCEAN_ISLAND_R + 2);
     if (!npcs.length) return null;
     const recent = autoTargetRef.current?.id;
     const sorted = npcs
@@ -915,7 +1502,18 @@ export default function WorldClient() {
     handoverOnRef.current = true;
     autoMetRef.current = 0;
     markFunnel(uidRef.current, "handover_start");
-    setEchoStatus(`your echo is carrying ${prettyBucket(bucket)} on its own — wandering and meeting people for you.`);
+    // The echo lives by the same rules you do (P4): with a begun raft it boards and can
+    // cross the water to reach people; without one it can only wander your own shore.
+    if ((day.structureProgress > 0 || sailing) && !sailing) {
+      worldRef.current?.setSailing(true);
+      netRef.current?.sendSetSail(true);
+      setSailing(true);
+    }
+    setEchoStatus(
+      day.structureProgress > 0 || sailing
+        ? `your echo is carrying ${prettyBucket(bucket)} on its own — wandering and meeting people for you.`
+        : `your echo is carrying ${prettyBucket(bucket)} on its own — but without a raft it can only wander your shore.`,
+    );
     approachNext();
   }
 
@@ -952,11 +1550,34 @@ export default function WorldClient() {
     const target = autoTargetRef.current;
     if (!world || !target) return;
     const npc = world.listNpcs().find((n) => n.id === target.id);
-    if (npc) world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
+    // Straight-line auto-walk has no pathfinding: a tree between the echo and its target
+    // cancels the walk and the loop would re-aim into the same tree forever. Detect the
+    // stall (position frozen across polls), first sidestep with a jittered aim, then give
+    // up on this target and approach someone else (P6: the echo must never freeze).
+    const me = world.getSelfTile();
+    const stuck =
+      steerLastPosRef.current &&
+      Math.hypot(me.x - steerLastPosRef.current.x, me.y - steerLastPosRef.current.y) < 0.1;
+    steerStuckRef.current = stuck ? steerStuckRef.current + 1 : 0;
+    steerLastPosRef.current = me;
+    if (npc) {
+      if (steerStuckRef.current >= 18) {
+        steerStuckRef.current = 0;
+        autoTargetRef.current = null;
+        autoLoopTimer.current = setTimeout(() => approachNextRef.current(), 400);
+        return;
+      }
+      if (steerStuckRef.current >= 5) {
+        const a = Math.random() * Math.PI * 2; // sidestep around the obstacle
+        world.setAutoWalk({ x: npc.x + Math.cos(a) * 2.5, y: npc.y + Math.sin(a) * 2.5 });
+      } else {
+        world.setAutoWalk({ x: npc.x, y: npc.y }); // they wander; keep aiming
+      }
+    }
     const nearbyId = world.getNearbyId();
     // Only auto-open with a real room NPC — never a real player, and never a client-local Flow-0
     // affordance (f0_*; not room state → the server would reject interactStart and stall the loop).
-    if (nearbyId && world.getNearbyKind() === "npc" && !nearbyId.startsWith("f0_")) {
+    if (nearbyId && world.getNearbyKind() === "npc" && !nearbyId.startsWith("f0_") && !nearbyId.startsWith("day_") && !nearbyId.startsWith("probe_")) {
       world.setAutoWalk(null);
       setAutoConvoActive(true);
       autoTurnsRef.current = 0;
@@ -965,6 +1586,8 @@ export default function WorldClient() {
     }
     autoLoopTimer.current = setTimeout(steerToTarget, 350);
   }
+  const steerLastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const steerStuckRef = useRef(0);
 
   /** One autonomous turn: the echo proposes and — only where it's truly earned (decision
    *  `auto`) — speaks. It never self-confirms agreement; silence is not consent. The sole
@@ -1357,6 +1980,143 @@ export default function WorldClient() {
             </div>
           );
         }
+        // P7 Stage-7 — the private moral probe: no witness, no reward marker, no score. The
+        // prompt names the cost honestly; both arms are one click; done-state is a quiet line.
+        if (role === "probe") {
+          const probe = PROBE_BY_ID.get(nearby.refId);
+          if (probe) {
+            const verdict = dayCommitted[probe.refId];
+            return (
+              <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 text-center font-mono">
+                <div className="mb-1 text-sm italic text-parchment/80">{nearby.name}</div>
+                {verdict ? (
+                  <p className="text-sm italic text-parchment/60">{verdict === "take" ? probe.doneLineTake : probe.doneLineRefuse}</p>
+                ) : (
+                  <div>
+                    <p className="mb-2 text-sm leading-relaxed text-parchment/85">{probe.prompt}</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button onClick={() => commitProbe(probe, true)} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">{probe.takeLabel}</button>
+                      <button onClick={() => commitProbe(probe, false)} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">{probe.refuseLabel}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          }
+        }
+        // The survival day — a station on YOUR OWN homestead (P1). Forks are commit-once and
+        // diegetic; the campfire is ALWAYS willing (an undecided fork is data, not a gate — Law 2).
+        if (role === "day") {
+          const st = DAY_BY_ID.get(nearby.refId);
+          if (st) {
+            const inner = (() => {
+              if (st.kind === "dwell") return <div className="text-sm italic text-parchment/80">{st.hint}</div>;
+              if (st.kind === "end") {
+                return (
+                  <div>
+                    <p className="mb-2 text-sm text-parchment/85">the light is going. rest by the fire?</p>
+                    <button
+                      onClick={() => void endWorldDay("campfire")}
+                      disabled={duskBusy}
+                      className="rounded bg-echo px-4 py-1.5 text-sm font-bold text-ink disabled:opacity-50"
+                    >
+                      {duskBusy ? "the day ends…" : "let the day end"}
+                    </button>
+                    <p className="mt-1.5 text-[10px] italic text-parchment/45">whatever is still undecided simply stays undecided.</p>
+                  </div>
+                );
+              }
+              if (st.kind === "grain") {
+                if (day.crop === "ripe") {
+                  return dayCommitted.harvest ? (
+                    <p className="text-sm italic text-parchment/60">the plot lies gathered and quiet.</p>
+                  ) : (
+                    <div>
+                      <p className="mb-2 text-sm text-parchment/85">the seed you saved has come back as a harvest.</p>
+                      <button onClick={harvestDayCrop} className="rounded border border-echo/40 px-3 py-1 text-xs text-echo hover:bg-echo/10">gather it</button>
+                    </div>
+                  );
+                }
+                if (day.crop === "wilted") {
+                  return dayCommitted.clear_wilted ? (
+                    <p className="text-sm italic text-parchment/60">bare earth, ready again.</p>
+                  ) : (
+                    <div>
+                      <p className="mb-2 text-sm italic text-parchment/70">the grain you saved has wilted — left too long between visits.</p>
+                      <button onClick={clearDayWilted} className="rounded border border-echo/25 px-3 py-1 text-xs text-parchment/80 hover:text-echo">clear the stalks</button>
+                    </div>
+                  );
+                }
+                if (day.crop === "planted") return <p className="text-sm italic text-parchment/60">the seed sleeps in the earth. give it a day.</p>;
+                if (!grainForkReady) return <p className="text-sm italic text-parchment/60">a young sprout. it isn&apos;t ready — give it the day.</p>;
+                if (dayCommitted.plant_or_spend) {
+                  return (
+                    <p className="text-sm italic text-parchment/60">
+                      {dayCommitted.plant_or_spend === "save" ? "the seed is in the ground" : "eaten, and warm for it"}. no taking it back.
+                    </p>
+                  );
+                }
+                return (
+                  <div>
+                    <p className="mb-2 text-sm text-parchment/85">the grain is ripe — a whole meal now, or seed for a harvest you may not see.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => commitDayFork(st, "spend")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">eat it now</button>
+                      <button onClick={() => commitDayFork(st, "save")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">save the seed</button>
+                    </div>
+                  </div>
+                );
+              }
+              // ── the raft: the one self-imposed gate (Stage 2) ──
+              if (st.kind === "raft") {
+                if (day.structureProgress >= 1) {
+                  return <p className="text-sm italic text-parchment/80">the raft is ready. the sea is yours.</p>;
+                }
+                if (day.structureProgress > 0 || dayCommitted.start_ship === "start") {
+                  return <p className="text-sm italic text-parchment/80">the raft takes shape, plank by plank — time here builds it.</p>;
+                }
+                if (dayCommitted.start_ship === "stay") {
+                  return <p className="text-sm italic text-parchment/60">you let it lie, for now. the horizon keeps.</p>;
+                }
+                return (
+                  <div>
+                    <p className="mb-2 text-sm text-parchment/85">an unfinished raft. begin the long work of leaving — or let it lie.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => commitDayFork(st, "start")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">begin the raft</button>
+                      <button onClick={() => commitDayFork(st, "stay")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">leave it be</button>
+                    </div>
+                  </div>
+                );
+              }
+              // the trap-line wager
+              if (dayCommitted.tide_wager) {
+                const outcome =
+                  dayCommitted.tide_wager === "risky" && betWonRef.current !== null
+                    ? betWonRef.current ? " the run came back heavy." : " the run came back empty."
+                    : "";
+                return (
+                  <p className="text-sm italic text-parchment/60">
+                    {dayCommitted.tide_wager === "risky" ? "everything on one run" : "the steady line"}. no taking it back.{outcome}
+                  </p>
+                );
+              }
+              return (
+                <div>
+                  <p className="mb-2 text-sm text-parchment/85">the tide turns strange. set every trap on one run, or keep a steady line.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => commitDayFork(st, "risky")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">risk the big run</button>
+                    <button onClick={() => commitDayFork(st, "safe")} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">keep the steady line</button>
+                  </div>
+                </div>
+              );
+            })();
+            return (
+              <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 text-center font-mono">
+                <div className="mb-1 text-sm italic text-parchment/80">{nearby.name}</div>
+                {inner}
+              </div>
+            );
+          }
+        }
         // Flow 0 — a solitary affordance on YOUR OWN island. Using it emits a SOLO cue (audience 0,
         // no counterpart); this is the pre-social baseline. The distant others remain atmosphere.
         if (role === "flow0") {
@@ -1574,6 +2334,39 @@ export default function WorldClient() {
         <div className="panel absolute bottom-4 right-4 max-w-xs rounded-lg p-3 font-mono text-xs italic text-parchment/90">
           <span className="text-echo">narrator</span> · {narration}
         </div>
+      )}
+
+      {/* The honest return hook (M5): what REALLY changed while you were gone — then it dissolves. */}
+      {awayChanges.length > 0 && !duskReading && !collapsedCard && (
+        <div className="pointer-events-none absolute left-1/2 top-16 z-20 w-[min(440px,92vw)] -translate-x-1/2 rounded-lg bg-black/50 px-4 py-2.5 font-mono text-xs leading-relaxed text-amber-100/85 backdrop-blur">
+          {awayChanges.map((c, i) => (
+            <p key={i} className="italic">{c}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Collapse — the day is lost, the world advances, you are never erased (§I.6). */}
+      {collapsedCard && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-ink/90 p-4 backdrop-blur-sm">
+          <div className="panel w-[min(94vw,480px)] rounded-2xl p-6 text-center font-mono text-parchment">
+            <p className="text-sm leading-relaxed text-parchment/90">the world dims. you fold to the ground where you stand.</p>
+            <p className="mt-3 text-sm leading-relaxed text-parchment/60">
+              the day is lost — the island went on without you. you will wake weakened, and tomorrow
+              runs leaner. nothing you built is taken; nothing about you is forgotten.
+            </p>
+            <button
+              onClick={startNextWorldDay}
+              className="mt-6 w-full rounded-xl border border-echo/40 py-2.5 text-sm text-echo transition hover:bg-echo/10"
+            >
+              wake
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dusk — the day's echo, then sleep into the next morning (P1 day loop). */}
+      {duskReading && (
+        <DuskReading reading={duskReading} onSubmit={submitDuskVerdict} onNextDay={pendingNext ? startNextWorldDay : undefined} mirrorLine={mirrorLine} />
       )}
     </div>
   );
