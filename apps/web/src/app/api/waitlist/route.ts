@@ -11,7 +11,7 @@ export const maxDuration = 60;
 
 /**
  * Waitlist signup (landing §1b/§3). Server-side insert only, via the service role — the anon key
- * must never be able to read this table back (db/migrations/0006_waitlist.sql enables RLS with zero
+ * must never be able to read this table back (db/migrations/0007_waitlist.sql enables RLS with zero
  * policies to guarantee that). Returns { ok: true, already } on success.
  *
  * Deliberately NOT /api/auth/signup: that endpoint creates a real Supabase Auth user with a

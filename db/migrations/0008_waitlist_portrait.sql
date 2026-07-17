@@ -1,8 +1,9 @@
 -- Waitlist portrait jobs (landing §1b, photo path). Adds the generated-character flow onto the
--- waitlist rows created by 0006_waitlist.sql.
+-- waitlist rows created by 0007_waitlist.sql.
 --
--- Apply via: psql $DATABASE_URL -f db/migrations/0007_waitlist_portrait.sql
--- Requires 0006_waitlist.sql to have been applied first.
+-- Apply via: psql $DATABASE_URL -f db/migrations/0008_waitlist_portrait.sql
+-- RENUMBERED from 0007 (see 0007_waitlist.sql). Not yet applied anywhere.
+-- Requires 0007_waitlist.sql to have been applied first.
 --
 -- THE ROW IS THE QUEUE. There is no Redis, no external job runner, and adding one for this would be
 -- a whole dependency for at most a few hundred jobs. Generation takes ~60s, far past a serverless

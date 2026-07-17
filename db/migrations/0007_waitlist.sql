@@ -2,7 +2,15 @@
 -- public landing page. Distinct from public.users / Supabase Auth (0001_init.sql): a waitlist row is
 -- an intent to be invited, NOT an account. There is no password, no auth_ref, and no island claim.
 --
--- Apply via: psql $DATABASE_URL -f db/migrations/0006_waitlist.sql
+-- Apply via: psql $DATABASE_URL -f db/migrations/0007_waitlist.sql
+--
+-- RENUMBERED from 0006 to 0007. It was written as 0006 by reading the migration folder on a stale
+-- branch, where 0005 was the last one; main already had 0006_island_state.sql (12 July), so there
+-- were briefly two 0006s and the order was a coin toss. island_state came first and keeps 0006.
+-- Renaming is safe here precisely because this repo applies migrations BY HAND: there is no runner
+-- and no schema_migrations table, so nothing recorded the old filename. If this table already
+-- exists in your database it was applied under the old name and needs no action; the file is
+-- idempotent (create table if not exists / create or replace) either way.
 --
 -- RLS — READ THIS. This is the FIRST table in the repo to enable row level security, and the
 -- departure is deliberate. Every other table relies on an implicit boundary ("the anon client never
