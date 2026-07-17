@@ -675,11 +675,10 @@ export default function WorldClient() {
         events.push({ type: "fork_decision", sessionId: sessionIdRef.current, ts: Date.now(), payload: base });
         if (leaving) {
           dayApiRef.current.noteBuildDelta(0.1);
-          // Beginning the raft is the gate itself: once begun, the sea is yours to cross
-          // (the choice is the commitment — P1's rule, kept identical here).
-          worldRef.current?.setSailing(true);
-          netRef.current?.sendSetSail(true);
-          setSailing(true);
+          // The commitment is still measured here, but it no longer HANDS you the sea: a raft you
+          // did not build is not a raft. Sailing comes from pushing a real hull in (RaftBuild →
+          // sendSetSail(true, sea)); this fork used to call sendSetSail(true) with no `sea`, which
+          // the server floors to s0 = 0 — a phantom zero-worth raft nobody built.
           const secs = Math.round((Date.now() - dayStartAtRef.current) / 1000);
           events.push({
             type: "structure_progress", sessionId: sessionIdRef.current, ts: Date.now(),
@@ -1474,13 +1473,14 @@ export default function WorldClient() {
   }
 
   /** Nearest NPC we didn't just leave — who the echo approaches next. The echo obeys the
-   *  same world rules as the person (P4): without a begun raft it cannot cross water, so it
-   *  only considers NPCs on the current island; with the raft it sails like anyone else. */
+   *  same world rules as the person (P4), and that rule is now the embodied one: without a raft
+   *  actually in the water it cannot cross, so it only considers NPCs on the current island.
+   *  Reads the AUTHORITATIVE sail flag, not a proxy for it. */
   function pickNextNpc(): { id: string; name: string } | null {
     const world = worldRef.current;
     if (!world) return null;
     const me = world.getSelfTile();
-    const canCross = day.structureProgress > 0 || sailing;
+    const canCross = sailing;
     const npcs = world
       .listNpcs()
       .filter((n) => canCross || Math.hypot(n.x - me.x, n.y - me.y) <= OCEAN_ISLAND_R + 2);
@@ -1502,17 +1502,14 @@ export default function WorldClient() {
     handoverOnRef.current = true;
     autoMetRef.current = 0;
     markFunnel(uidRef.current, "handover_start");
-    // The echo lives by the same rules you do (P4): with a begun raft it boards and can
-    // cross the water to reach people; without one it can only wander your own shore.
-    if ((day.structureProgress > 0 || sailing) && !sailing) {
-      worldRef.current?.setSailing(true);
-      netRef.current?.sendSetSail(true);
-      setSailing(true);
-    }
+    // The echo lives by the same rules you do (P4) — INCLUDING the raft. It used to grant itself
+    // the sea here (setSailing + a sea-less sendSetSail the server floors to s0 = 0), which handed
+    // it a phantom zero-worth raft the player never built. It doesn't get to cheat: if the hull
+    // isn't in the water, the echo walks your shore like you would.
     setEchoStatus(
-      day.structureProgress > 0 || sailing
+      sailing
         ? `your echo is carrying ${prettyBucket(bucket)} on its own — wandering and meeting people for you.`
-        : `your echo is carrying ${prettyBucket(bucket)} on its own — but without a raft it can only wander your shore.`,
+        : `your echo is carrying ${prettyBucket(bucket)} on its own — but with no raft in the water it can only wander your shore.`,
     );
     approachNext();
   }
@@ -2067,12 +2064,13 @@ export default function WorldClient() {
                 );
               }
               // ── the raft: the one self-imposed gate (Stage 2) ──
+              // Deciding to leave is still measured (start_ship, and K4 at dusk if never decided),
+              // but it no longer promises a sea it cannot deliver: the raft is the driftwood on your
+              // shore, gathered and lashed by hand. This station is incoherent until the F1 build and
+              // the day raft are unified — it is two rafts on one island — and it dissolves there.
               if (st.kind === "raft") {
-                if (day.structureProgress >= 1) {
-                  return <p className="text-sm italic text-parchment/80">the raft is ready. the sea is yours.</p>;
-                }
                 if (day.structureProgress > 0 || dayCommitted.start_ship === "start") {
-                  return <p className="text-sm italic text-parchment/80">the raft takes shape, plank by plank — time here builds it.</p>;
+                  return <p className="text-sm italic text-parchment/80">your mind is set on leaving. the wood is on the shore — the raft is built by hand.</p>;
                 }
                 if (dayCommitted.start_ship === "stay") {
                   return <p className="text-sm italic text-parchment/60">you let it lie, for now. the horizon keeps.</p>;
