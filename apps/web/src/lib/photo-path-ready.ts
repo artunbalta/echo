@@ -54,7 +54,7 @@ export async function photoPathReady(admin: SupabaseClient | null): Promise<Phot
     // 42703 = undefined_column, i.e. migration 0007 has not been applied.
     return miss(
       error.code === "42703"
-        ? "migration 0007_waitlist_portrait.sql not applied"
+        ? "migration 0008_waitlist_portrait.sql not applied"
         : `waitlist unreadable: ${error.message}`,
     );
   }
