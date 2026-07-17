@@ -27,7 +27,7 @@ import type { PixiWorld, ActivityKind } from "../PixiWorld";
 import {
   buildFlow1Event, FLOW1_CUES, RAFT_BUILD, RAFT_STAGES, RAFT_SLIPS,
   MIN_BUILD_MS, SOLID_MS, LAVISH_BUILD_MS, seaworthiness,
-  type BehavioralEvent, type EntitySnapshot,
+  type BehavioralEvent, type EntitySnapshot, type RaftBuildState,
 } from "@echo/shared";
 
 export type RaftPhase = "gather" | "ready" | "building" | "built" | "launched";
@@ -59,6 +59,23 @@ export interface RaftBuildConfig {
   onPrompt?: (text: string | null) => void;
   /** Gather counter changed (for the side "driftwood N / needed" readout). */
   onProgress?: (g: { gathered: number; needed: number; total: number }) => void;
+  /**
+   * The raft as it now stands — the day loop's SOURCE OF TRUTH for the shore. Fires on every
+   * real change (a pick, a slip, work crossing a stage, the launch), never per frame. The day
+   * loop stores this verbatim and derives its own 0..1 read from it, so there is no second
+   * counter to drift from the wood and the work this describes.
+   */
+  onRaftState?: (r: RaftBuildState) => void;
+  /**
+   * The self-imposed gate, now made of acts instead of a menu (P4's start_ship fork):
+   *  - "start": the first plank leaves the sand. You have begun the long work of leaving.
+   *  - "stay":  you stood over the wood long enough to be deciding, and walked away from it.
+   * Never touching the wood at all commits nothing — that is the K4 refusal, read at dusk.
+   */
+  onLeaveFork?: (option: "start" | "stay") => void;
+  /** The raft as persisted from earlier sessions (weathered on load) — the build resumes from
+   *  it instead of starting over. Undefined = an untouched shore. */
+  restore?: RaftBuildState;
   /** The raft was pushed off (the F1→F2 seam). The caller unlocks sailing — client-side in the solo
    *  slice (world.setSailing), or authoritatively in /play (net.sendSetSail). `sea` (0..1) is what the
    *  build was worth and sets the raft's reach; it is never displayed. */
@@ -71,6 +88,10 @@ const AT_STATION = 1.1; // "at the assembly" radius (tiles)
  *  meant a player carrying a finished raft could stand at the very edge, press, and have NOTHING happen,
  *  with no word as to why. Be generous, and say something when they are still short. */
 const AT_LAUNCH = 1.7;
+/** Standing-over-the-wood radius and dwell that read as "deciding" rather than passing by. Matches
+ *  flow1Beats' THRESHOLD/700ms leave-action shape, so the two beats feel like one world. */
+const DECIDE_R = 2.2;
+const DECIDE_MS = 700;
 const SLIP_STALL_MS = 420; // how long a slipped lashing refuses to take, before you can bite again
 const CADENCE_WINDOW_MS = 1500; // window over which we read how vigorously you are working
 
@@ -109,6 +130,10 @@ export class RaftBuild {
   private slipPending = false; // the rope has slipped and has not been taken up again yet
   private launchPrompt: string | null = null;
 
+  // the self-imposed gate, as acts: the first pick is "start", lingering-then-leaving is "stay"
+  private leaveForkSent = false;
+  private woodNearSince = 0; // when we entered the deciding radius of a plank we have not picked
+
   private strokes: number[] = []; // keydown timestamps, for the work cadence → animation intensity
   private actionDown = false; // action key currently held (build hold + rising-edge picks/launch)
   private ownsActivity = false; // we share ONE global activity slot with Flow1Beats — only clear our own
@@ -119,6 +144,32 @@ export class RaftBuild {
   constructor(private cfg: RaftBuildConfig) {
     this.remaining = [...cfg.wood];
     this.total = cfg.wood.length;
+    // Resume the raft you left on this shore (already weathered by the day loop's wall-clock
+    // decay on load). The planks you carried up are gone from the sand — you are holding them —
+    // and the lashing time you put in is still in the knots, minus what worked loose.
+    const r = cfg.restore;
+    if (r && !r.launched && (r.planks > 0 || r.workMs > 0)) {
+      this.gathered = Math.min(r.planks, this.total);
+      this.remaining = this.remaining.slice(this.gathered); // the ones already hauled up are off the beach
+      this.workMs = r.workMs;
+      this.slipsHit = r.slipsHit;
+      this.slipsRecovered = r.slipsRecovered;
+      this.floated = r.workMs >= MIN_BUILD_MS;
+      this.leaveForkSent = true; // you began on an earlier day; the fork is long since committed
+      if (this.gathered >= cfg.needed) this.phase = "ready";
+    }
+  }
+
+  /** The raft as it now stands — the day loop's source of truth for this shore. Called on real
+   *  changes only (a pick, a slip, a stage, the launch), never per frame. */
+  private reportRaft() {
+    this.cfg.onRaftState?.({
+      planks: this.gathered,
+      workMs: this.workMs,
+      slipsHit: this.slipsHit,
+      slipsRecovered: this.slipsRecovered,
+      launched: this.phase === "launched",
+    });
   }
 
   start() {
@@ -190,10 +241,17 @@ export class RaftBuild {
     const w = this.remaining.splice(idx, 1)[0];
     this.cfg.removeEntity(w.id);
     this.gathered++;
+    // The first plank off the sand IS "begin the raft" (P4's start_ship). It used to be a button
+    // in a menu; it is now the act itself, which is the only thing that was ever worth measuring.
+    if (!this.leaveForkSent) {
+      this.leaveForkSent = true;
+      this.cfg.onLeaveFork?.("start");
+    }
     if (!this.gatherStartAt) this.gatherStartAt = performance.now();
     this.nearWoodId = null;
     this.cfg.onNearWood?.(null);
     this.cfg.onProgress?.({ gathered: this.gathered, needed: this.cfg.needed, total: this.total });
+    this.reportRaft();
     // a brief embodied stoop, then keep the carried-wood overlay
     this.claimActivity("gather", { carrying: true });
     this.cfg.onWhisper?.(
@@ -208,6 +266,30 @@ export class RaftBuild {
 
   private dist(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  /**
+   * The other arm of the gate, embodied: stand over the wood long enough to be deciding
+   * (DECIDE_MS inside DECIDE_R), then walk away from it without picking any up. That is "let it
+   * lie" — an ACTIVE choice, and it must stay distinguishable from never going near the wood at
+   * all, which commits nothing and is read as the K4 refusal at dusk. Same linger-then-leave
+   * shape flow1Beats already uses for the gamble cave's `stay_safe`.
+   */
+  private trackLeaveFork(now: number, self: { x: number; y: number }) {
+    if (this.leaveForkSent || this.gathered > 0) return;
+    let nearest = Infinity;
+    for (const w of this.remaining) nearest = Math.min(nearest, this.dist(self, w));
+    if (nearest < DECIDE_R) {
+      if (!this.woodNearSince) this.woodNearSince = now;
+    } else if (this.woodNearSince) {
+      const lingered = now - this.woodNearSince;
+      this.woodNearSince = 0;
+      if (lingered > DECIDE_MS) {
+        this.leaveForkSent = true;
+        this.cfg.onLeaveFork?.("stay");
+        this.cfg.onWhisper?.("you let it lie, for now. the horizon keeps.");
+      }
+    }
   }
 
   /** The shared self-activity slot (Flow1Beats writes it too) — claim/release by OWNER, never blind-null.
@@ -248,6 +330,7 @@ export class RaftBuild {
         this.nearWoodId = near;
         this.cfg.onNearWood?.(near);
       }
+      this.trackLeaveFork(now, self);
       // Keep the carried-wood overlay while you have wood. Only touch the slot when WE have something to
       // say — a blind null here would wipe Flow1Beats' animation every frame (the bug, in reverse).
       if (this.gathered > 0) this.claimActivity("carry", { carrying: true });
@@ -289,6 +372,7 @@ export class RaftBuild {
       if (this.slipPending && !stalled && this.actionDown && near) {
         this.slipPending = false;
         this.slipsRecovered++;
+        this.reportRaft(); // grit is a channel of seaworthiness — it has to survive the night too
       }
 
       if (holding) {
@@ -377,6 +461,9 @@ export class RaftBuild {
     for (let i = 0; i < RAFT_STAGES.length; i++) if (this.workMs >= RAFT_STAGES[i].at) idx = i;
     if (idx === this.stageIdx) return;
     this.stageIdx = idx;
+    // A crossed stage is real, persistable progress at the lashings — and it is a change the
+    // silhouette already shows, so it is the honest place to checkpoint the shore.
+    this.reportRaft();
     const st = RAFT_STAGES[idx];
     if (!this.raftPlaced) {
       this.raftPlaced = true;
@@ -400,6 +487,7 @@ export class RaftBuild {
     this.slipsHit++;
     this.slipStallUntil = now + SLIP_STALL_MS;
     this.slipPending = true;
+    this.reportRaft();
     this.cfg.onWhisper?.("the lashing slips loose. set your feet, take it again.");
   }
 
@@ -433,6 +521,7 @@ export class RaftBuild {
     if (this.cfg.onLaunched) this.cfg.onLaunched(sea);
     else this.cfg.world.setSailing(true); // solo slice: unlock sailing client-side
     this.setPhase("launched");
+    this.reportRaft(); // the hull is in the water: a finished thing, and finished things never weather
     this.cfg.onWhisper?.(
       sea >= 0.66
         ? "you push the raft into the shallows. it sits high and takes the water well. the far islands are not so far."

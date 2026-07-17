@@ -10,10 +10,54 @@
  * Supabase when keyed and an in-memory store otherwise (the zero-key path).
  */
 import { SURVIVAL } from "./world.js";
+import { MIN_BUILD_MS } from "./raft.js";
+import { RAFT_BUILD } from "./flow1.js";
 
 // ── the persisted state ─────────────────────────────────────────────────────────
 
 export type CropStage = "none" | "planted" | "ripe" | "wilted";
+
+/**
+ * The raft, as it actually stands on your shore between sessions.
+ *
+ * This replaced a single `structureProgress: number` that only ever moved 0.1 per day, when you
+ * CLICKED "begin the raft" — a commitment accumulator wearing a build meter's name. The raft is
+ * now built by hand (gather the driftwood, hold the lashings), and these are the three channels
+ * seaworthiness is made of. They are stored, not derived, because `raft.ts` keeps them
+ * deliberately INDEPENDENT (0.45·work + 0.4·wood + 0.15·grit) — extra wood must be worth
+ * something without extra work — and no single 0..1 scalar can be un-mixed back into three.
+ * `structureProgress01()` below is the lossy projection the day loop reads; it is derived from
+ * THIS, never stored beside it, so the two can never drift apart.
+ */
+export interface RaftBuildState {
+  /** Driftwood lengths gathered, 0..RAFT_BUILD.driftwoodCount. Wood on a beach does not rot. */
+  planks: number;
+  /** Real held work at the lashings, ms. Weathers between sessions — lashings loosen. */
+  workMs: number;
+  /** Lashing slips met, and how many were worked through — the grit channel. */
+  slipsHit: number;
+  slipsRecovered: number;
+  /** Once the hull is in the water the build is over, and a finished thing never decays (§III.6). */
+  launched: boolean;
+}
+
+export function freshRaft(): RaftBuildState {
+  return { planks: 0, workMs: 0, slipsHit: 0, slipsRecovered: 0, launched: false };
+}
+
+/**
+ * The day loop's 0..1 read of the raft (K4's "never began it", the station's language, the
+ * `leave_intent` payload). Purely derived — half gathering, half lashing, 1 once it floats:
+ *   first pick      → > 0        (you began; K4 is satisfied by an act, not a click)
+ *   all 5 lengths   → 0.5
+ *   it would float  → 1.0
+ */
+export function structureProgress01(raft: RaftBuildState): number {
+  if (raft.launched) return 1;
+  const gathered = clamp01(raft.planks / RAFT_BUILD.needed);
+  const worked = clamp01(raft.workMs / MIN_BUILD_MS);
+  return clamp01(0.5 * gathered + 0.5 * worked);
+}
 
 export interface IslandDayState {
   /** The grain plot across days: a saved seed is planted, ripens by the next session,
@@ -21,8 +65,8 @@ export interface IslandDayState {
   cropStage: CropStage;
   /** Epoch ms when the seed was saved/planted (drives ripening + wilt). Null when no crop. */
   cropPlantedAt: number | null;
-  /** Raft/structure progress 0..1. Half-built structures weather between sessions. */
-  structureProgress: number;
+  /** The raft on your shore, as you left it. Half-built lashings weather between sessions. */
+  raft: RaftBuildState;
   /** Wake-up vitality 0..1 carried from the last day's end (collapse wakes you weakened). */
   vitalityCarry: number;
   /** Tomorrow's scarcity 0 (plenty) .. 1 (famine) — set by closeDay from today's choices. */
@@ -39,7 +83,7 @@ export function freshIslandState(now: number): IslandDayState {
   return {
     cropStage: "none",
     cropPlantedAt: null,
-    structureProgress: 0,
+    raft: freshRaft(),
     vitalityCarry: 0.85,
     scarcityLevel: 0.15,
     dayCount: 0,
@@ -70,7 +114,12 @@ export function applyWallClockDecay(state: IslandDayState, now: number): DecayRe
   if (elapsedMs === 0) return { state, changes: [] };
   const elapsedDays = elapsedMs / DAY_IN_MS;
   const changes: string[] = [];
-  const next: IslandDayState = { ...state, tieWarmth: { ...state.tieWarmth }, updatedAt: now };
+  const next: IslandDayState = {
+    ...state,
+    raft: { ...state.raft },
+    tieWarmth: { ...state.tieWarmth },
+    updatedAt: now,
+  };
 
   // Crop: planted → ripe by your next return; ripe/planted → wilted past the window.
   if ((state.cropStage === "planted" || state.cropStage === "ripe") && state.cropPlantedAt !== null) {
@@ -84,15 +133,16 @@ export function applyWallClockDecay(state: IslandDayState, now: number): DecayRe
     }
   }
 
-  // Structures: only unfinished work weathers.
-  if (state.structureProgress > 0 && state.structureProgress < 1) {
-    const weathered = Math.max(
-      0,
-      state.structureProgress - SURVIVAL.DECAY.STRUCT_WEATHER_PER_DAY * elapsedDays,
-    );
-    if (weathered < state.structureProgress - 1e-9) {
-      next.structureProgress = weathered;
-      if (elapsedDays >= 0.5) changes.push("the raft you started has weathered a little");
+  // The raft: only unfinished work weathers, and it weathers on the REAL quantity — the lashings
+  // loosen, so held work is what you lose. Wood already dragged up the beach does not rot, and a
+  // launched raft is a finished thing (§III.6: you can lose progress, never a completed thing).
+  // The rate is unchanged (STRUCT_WEATHER_PER_DAY, a fraction/day), just applied to workMs.
+  if (!state.raft.launched && state.raft.workMs > 0) {
+    const lost = SURVIVAL.DECAY.STRUCT_WEATHER_PER_DAY * elapsedDays * MIN_BUILD_MS;
+    const weathered = Math.max(0, state.raft.workMs - lost);
+    if (weathered < state.raft.workMs - 1e-9) {
+      next.raft.workMs = weathered;
+      if (elapsedDays >= 0.5) changes.push("the lashings on the raft you started have worked loose");
     }
   }
 
@@ -117,8 +167,11 @@ export interface DaySummary {
   bet: "risky" | "safe" | null;
   /** Outcome of a risky bet (undefined when no bet / safe). */
   betWon?: boolean;
-  /** Structure progress earned today (build dwell + started raft), 0..1 delta. */
-  buildDelta01: number;
+  /** The raft as it stands at dusk — the build's own state, carried forward verbatim. Not a
+   *  delta: the build IS the source of truth, so the day fold copies it rather than
+   *  accumulating a second number beside it that could drift. Null when the build never ran
+   *  (e.g. a session that never loaded the F1 scene), which leaves yesterday's raft alone. */
+  raft: RaftBuildState | null;
   /** Time-share fractions of the day (sum ~1). */
   alloc: { earn: number; learn: number; social: number; leisure: number; build: number };
   /** Vitality at the moment the day closed, 0..1. */
@@ -138,7 +191,12 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  * compounds (+0.25 scarcity, wake weakened at 0.30 vitality) but never resets (§I.6).
  */
 export function closeDay(state: IslandDayState, day: DaySummary, now: number): IslandDayState {
-  const next: IslandDayState = { ...state, tieWarmth: { ...state.tieWarmth }, updatedAt: now };
+  const next: IslandDayState = {
+    ...state,
+    raft: { ...state.raft },
+    tieWarmth: { ...state.tieWarmth },
+    updatedAt: now,
+  };
   next.dayCount = state.dayCount + 1;
 
   // The grain plot.
@@ -154,7 +212,9 @@ export function closeDay(state: IslandDayState, day: DaySummary, now: number): I
     next.cropPlantedAt = null;
   }
 
-  next.structureProgress = clamp01(state.structureProgress + day.buildDelta01);
+  // The raft the hands actually built, carried forward as-is — never re-derived, never summed
+  // with a parallel counter. Only the build writes it.
+  if (day.raft) next.raft = { ...day.raft };
 
   // Wake-up vitality: what you ended with, floored so tomorrow is playable; collapse wakes
   // you weakened at 0.30 — harder than Minecraft (loss compounds), never a clean-slate death.
