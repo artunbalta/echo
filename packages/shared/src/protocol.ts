@@ -26,8 +26,10 @@ export const C2S = {
    *  clusters). The server moves the actor to that island's ocean coordinate in the shared room
    *  (co-presence amplifier — reach far communities) and emits the per-actor travel cue. */
   TRAVEL: "travel",
-  /** Board a raft / drop anchor: toggle whether the open sea is traversable. Off (default) = the sea
-   *  is a wall and you're confined to your island on foot; on = you can sail across to a neighbour. */
+  /** Board the raft you built / haul it ashore: toggle whether the open sea is traversable. Off (default)
+   *  = the sea is a wall and you're confined to your island on foot. Boarding carries `sea` (0..1) — what
+   *  the build was worth — which sets how far the raft will take you before the current turns you back.
+   *  There is no message that RAISES a raft's reach: it is fixed at the moment you push it in. */
   SET_SAIL: "set_sail",
 } as const;
 
@@ -126,4 +128,13 @@ export interface EntitySnapshot {
   /** Whether this entity is sailing (the open sea is traversable for them) — drives the client's
    *  movement prediction + a boat render. Authoritative: the server only lets you anchor on land. */
   sailing?: boolean;
+  /** The raft under them (see raft.ts). `raftSea` = aged seaworthiness 0..1, `raftReach` = how far this
+   *  raft goes before the sea pushes back, `raftDepart*` = the shore it shoved off from (where the current
+   *  carries it home to). The client predicts the current from these so it never fights the server's
+   *  correction. How far you have GOT from the departure is not carried: the client derives it from its
+   *  own predicted position, so syncing it would be a 20 Hz delta nobody reads. */
+  raftSea?: number;
+  raftReach?: number;
+  raftDepartX?: number;
+  raftDepartY?: number;
 }

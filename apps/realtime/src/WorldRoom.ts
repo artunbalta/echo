@@ -33,6 +33,10 @@ import {
   type Facing,
   type TelemetryEvent,
   type CounterpartStatus,
+  effectiveSeaworthiness,
+  reachTiles,
+  hullSpeed,
+  driftVector,
 } from "@echo/shared";
 import { WorldState, Entity } from "./state.js";
 import { loadNpcs, loadNpcsAsync } from "./npcs.js";
@@ -255,14 +259,25 @@ export class WorldRoom extends Room<WorldState> {
 
     this.onMessage(C2S.TRAVEL, (client, msg: TravelMsg) => this.handleTravel(client, msg));
 
-    // Board a raft / drop anchor — toggle whether the open sea is traversable for this player.
-    this.onMessage(C2S.SET_SAIL, (client, msg: { on?: boolean }) => {
+    // Board the raft you built / haul it ashore.
+    this.onMessage(C2S.SET_SAIL, (client, msg: { on?: boolean; sea?: number }) => {
       const e = this.state.entities.get(client.sessionId);
       if (!e) return;
       const on = !!msg?.on;
-      // You can only DROP ANCHOR on land — anchoring mid-sea would strand you (water blocks on foot).
-      // Land includes the beach ring (same pad as the movement barrier), so anchoring at the shore works.
+      // You can only HAUL ASHORE on land — anchoring mid-sea would strand you (water blocks on foot).
+      // Land includes the beach ring (same pad as the movement barrier), so hauling out at the shore works.
       if (!on && !oceanLandAt(e.x, e.y, OCEAN_BEACH_W)) return;
+      if (on) {
+        // The raft's worth is fixed at the moment it is pushed in. Everything downstream (reach, hull
+        // speed, how fast it ages) is derived from it here, on the server, and never raised again.
+        // NOTE (client-first slice): the build itself still runs client-side, so `sea` is trusted here.
+        // Hardening it — driftwood as room state, server-clocked work time — is the next step; the
+        // PHYSICS below is already authoritative, which is what stops the client from simply sailing on.
+        const s0 = Math.max(0, Math.min(1, Number(msg?.sea) || 0));
+        e.raftS0 = s0;
+        e.raftWaterTiles = 0;
+        this.beginCrossing(e);
+      }
       e.sailing = on;
     });
   }
@@ -328,6 +343,10 @@ export class WorldRoom extends Room<WorldState> {
     e.dir = { x: 0, y: 0 };
     e.moving = false;
     e.lastSeen = Date.now();
+    // The stand carried you AND your raft to a new shore. Re-anchor the crossing here, or the current
+    // would still be measuring you against the beach you shoved off from — hundreds of tiles away — and
+    // would sweep you straight back out across the ocean the moment you touched the water.
+    if (e.sailing) this.beginCrossing(e);
     const welcome: WelcomePayload = {
       entityId: e.id,
       worldId: this.state.worldId,
@@ -656,28 +675,85 @@ export class WorldRoom extends Room<WorldState> {
     }
   }
 
+  /** Begin (or restart) a crossing: the shore you shove off from is the shore the current will carry you
+   *  back to, and your reach is recomputed from how worn the raft is by now. Called on launch and on every
+   *  landfall — so reach is a budget PER CROSSING. A scrap raft island-hops the archipelago one neighbour
+   *  at a time; a true raft goes straight out to a far shore. Both arrive. One takes an afternoon. */
+  private beginCrossing(e: Entity) {
+    e.raftSea = effectiveSeaworthiness(e.raftS0, e.raftWaterTiles);
+    e.raftReach = reachTiles(e.raftSea);
+    e.raftSpent = 0;
+    e.raftDepartX = e.x;
+    e.raftDepartY = e.y;
+  }
+
   private integrate(e: Entity, dt: number, speed: number) {
-    if (e.dir.x === 0 && e.dir.y === 0) {
-      e.moving = false;
-      return;
+    const px = e.x;
+    const py = e.y;
+    // ── the sea acts on you whether or not you are paddling, so this runs BEFORE the idle early-out:
+    //    stop rowing past your reach and the current simply takes you home. ──
+    const sailing = e.kind === "user" && e.sailing;
+    const afloat = sailing && !oceanLandAt(e.x, e.y, OCEAN_BEACH_W);
+    if (sailing) {
+      if (!afloat) {
+        // Landfall — the crossing is over. Everything the raft has carried you AGES it (this is the
+        // "durability lasts longer" the better build buys), and the next crossing is measured afresh
+        // from this new shore. So reach is a budget PER CROSSING, not a fuel tank that empties forever:
+        // a scrap raft island-hops one neighbour at a time and still gets everywhere.
+        if (e.raftSpent > 0 || e.raftDepartX !== e.x || e.raftDepartY !== e.y) this.beginCrossing(e);
+      } else {
+        const drift = driftVector(e.x, e.y, e.raftDepartX, e.raftDepartY, e.raftSpent, e.raftReach);
+        if (drift.x || drift.y) {
+          // While sailing every tile is passable, so the current can only ever carry you back onto a
+          // beach — which IS the recovery. It never sinks you, never seizes the keys, and never clears
+          // `sailing` out from under you mid-ocean (that would brick you: water blocks on foot).
+          const c = clampToMap(e.x + drift.x * dt, e.y + drift.y * dt);
+          e.x = c.x;
+          e.y = c.y;
+        }
+        // A raft is not a pair of legs: a true raft is quick, a scrap raft wallows. This is a property of
+        // being AFLOAT, not of owning a raft — applying it ashore too would have every player who beached
+        // a raft walking the island at the wrong speed until they thought to haul it out.
+        speed = hullSpeed(e.raftSea);
+      }
     }
-    // Normalize diagonal so movement speed is constant in all directions.
-    const len = Math.hypot(e.dir.x, e.dir.y) || 1;
-    const nx = e.x + (e.dir.x / len) * speed * dt;
-    const ny = e.y + (e.dir.y / len) * speed * dt;
-    // AUTHORITATIVE water barrier: the open sea blocks movement unless this entity is sailing.
-    // Per-axis so you slide along a coastline instead of sticking. This is what makes each island a
-    // real bounded space and confines NPCs to their own island — the server, not just the client.
-    // Walkable land includes the SAND RING (pad = OCEAN_BEACH_W): the beach is land you can stand on,
-    // and — critically — this matches EXACTLY the land the client renders + predicts against (the
-    // collision array / oceanLandAt with the same pad), so the authority and the prediction agree at
-    // the shoreline and there is no reconcile snap-back / rebound when you walk into the sea edge.
-    const c = clampToMap(nx, ny);
-    const passable = (x: number, y: number) => e.sailing || oceanLandAt(x, y, OCEAN_BEACH_W);
-    if (passable(c.x, e.y)) e.x = c.x;
-    if (passable(e.x, c.y)) e.y = c.y;
-    e.moving = true;
-    e.lastSeen = Date.now();
+
+    if (e.dir.x !== 0 || e.dir.y !== 0) {
+      // Normalize diagonal so movement speed is constant in all directions.
+      const len = Math.hypot(e.dir.x, e.dir.y) || 1;
+      const nx = e.x + (e.dir.x / len) * speed * dt;
+      const ny = e.y + (e.dir.y / len) * speed * dt;
+      // AUTHORITATIVE water barrier: the open sea blocks movement unless this entity is sailing.
+      // Per-axis so you slide along a coastline instead of sticking. This is what makes each island a
+      // real bounded space and confines NPCs to their own island — the server, not just the client.
+      // Walkable land includes the SAND RING (pad = OCEAN_BEACH_W): the beach is land you can stand on,
+      // and — critically — this matches EXACTLY the land the client renders + predicts against (the
+      // collision array / oceanLandAt with the same pad), so the authority and the prediction agree at
+      // the shoreline and there is no reconcile snap-back / rebound when you walk into the sea edge.
+      const c = clampToMap(nx, ny);
+      const passable = (x: number, y: number) => e.sailing || oceanLandAt(x, y, OCEAN_BEACH_W);
+      if (passable(c.x, e.y)) e.x = c.x;
+      if (passable(e.x, c.y)) e.y = c.y;
+      e.moving = true;
+      e.lastSeen = Date.now();
+    } else {
+      // The current may still have displaced us while we sat idle — that is movement, and remote clients
+      // key the walk cycle off this flag, so a drifting player must not read as standing perfectly still.
+      const drifted = Math.hypot(e.x - px, e.y - py) > 1e-4;
+      e.moving = drifted;
+      if (drifted) e.lastSeen = Date.now();
+    }
+
+    // ── raft accounting, after everything that could have moved this entity ──
+    if (sailing && !oceanLandAt(e.x, e.y, OCEAN_BEACH_W)) {
+      // WEAR is the real path travelled over open water: it is what ages the raft, lifetime.
+      e.raftWaterTiles += Math.hypot(e.x - px, e.y - py);
+      // REACH is spent RADIALLY — how far from the shore you shoved off from you have got. Deliberately
+      // not path length: with path length, a player who sailed 50 tiles out and turned for home would hit
+      // their limit halfway BACK and be fought by the current all the way in, which is exactly backwards.
+      // Radial means the sea holds you at arm's length from your departure and always lets you return.
+      e.raftSpent = Math.hypot(e.x - e.raftDepartX, e.y - e.raftDepartY);
+    }
   }
 
   /** Lightweight wander FSM (§8): idle at home, occasionally drift to a new point. */

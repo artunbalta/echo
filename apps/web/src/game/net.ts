@@ -76,6 +76,10 @@ export class NetClient {
           role: e.role ?? "",
           status: e.status ?? "none",
           sailing: e.sailing ?? false,
+          raftSea: e.raftSea ?? 0,
+          raftReach: e.raftReach ?? 0,
+          raftDepartX: e.raftDepartX ?? 0,
+          raftDepartY: e.raftDepartY ?? 0,
         });
       });
       this.cbs.onSnapshot?.(map, state.tick);
@@ -139,9 +143,10 @@ export class NetClient {
   sendTravel(destinationSlot: number, prepared?: boolean) {
     this.room?.send(C2S.TRAVEL, { destinationSlot, prepared });
   }
-  /** Board a raft / drop anchor — toggle whether the open sea is traversable for this player. */
-  sendSetSail(on: boolean) {
-    this.room?.send(C2S.SET_SAIL, { on });
+  /** Board the raft you built / haul it ashore. `sea` (0..1) is what the build was worth — it fixes how
+   *  far this raft carries you before the current turns you back, and is never raised afterwards. */
+  sendSetSail(on: boolean, sea?: number) {
+    this.room?.send(C2S.SET_SAIL, { on, sea });
   }
 
   leave() {

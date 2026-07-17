@@ -227,17 +227,19 @@ export default function WorldClient() {
   }, []);
   const [prepared, setPrepared] = useState(false);
 
-  // Board a raft / drop anchor — the crossing affordance. Toggling sets the client prediction
-  // (PixiWorld.canSail) AND syncs the authoritative server (SET_SAIL), so the open sea becomes
-  // traversable; without it the sea is a wall and you're confined to your island on foot.
+  // Sailing is no longer a button you press — it is a raft you BUILT and pushed into the water (the F1
+  // launch calls sendSetSail with what the build was worth). This state only mirrors the authoritative
+  // synced flag. The one thing you may still do from the HUD is HAUL THE RAFT ASHORE, and only on land:
+  // there used to be an unconditional "board a raft — set sail" button here, and it let a player cross
+  // the entire ocean with one click, having gathered no wood, built nothing and emitted no telemetry —
+  // which made every bit of effort in the raft build worth exactly nothing.
   const [sailing, setSailing] = useState(false);
-  const toggleSail = useCallback(() => {
-    setSailing((on) => {
-      const next = !on;
-      worldRef.current?.setSailing(next);
-      netRef.current?.sendSetSail(next);
-      return next;
-    });
+  const haulAshore = useCallback(() => {
+    // Ask, don't assume. The server refuses this anywhere but on land, and the authoritative snapshot is
+    // the only writer of the sail flag — predicting it here would, on a click made mid-ocean, instantly
+    // turn every water tile back into a wall while the player is standing on one, freezing them until the
+    // next snapshot undid it.
+    netRef.current?.sendSetSail(false);
   }, []);
   const [socialBeat, setSocialBeat] = useState<string | null>(null);
 
@@ -431,7 +433,19 @@ export default function WorldClient() {
         // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
         // anchor on land, so this corrects an optimistic toggle that tried to anchor mid-sea).
         const selfSnap = snaps.get(net.selfId);
-        if (selfSnap) { world.setSailing(!!selfSnap.sailing); setSailing(!!selfSnap.sailing); }
+        if (selfSnap) {
+          world.setSailing(!!selfSnap.sailing);
+          setSailing(!!selfSnap.sailing);
+          // Mirror the authoritative raft so the client predicts the SAME current the server integrates
+          // (shared raft.ts). Without this the drift would only exist server-side and would be felt as a
+          // 20 Hz rubber-band instead of as the sea.
+          world.setRaft({
+            sea: selfSnap.raftSea ?? 0,
+            reach: selfSnap.raftReach ?? 0,
+            departX: selfSnap.raftDepartX ?? 0,
+            departY: selfSnap.raftDepartY ?? 0,
+          });
+        }
         // Derive the "who's live now" roster straight from the synced state, and announce
         // a genuinely new arrival so two players notice each other.
         const live: { id: string; name: string; refId: string }[] = [];
@@ -607,7 +621,9 @@ export default function WorldClient() {
           onPrompt: (t) => setF1Prompt(t),
           onCounter: (g) => setF1Counter(g),
           onPhase: (p) => { if (p !== "gather" && p !== "ready") setF1Counter(null); },
-          onLaunched: () => netRef.current?.sendSetSail(true),
+          // The raft goes in the water carrying what the build was worth — wood you gathered AND time you
+          // held the lashings. The server fixes the reach from it and never raises it again.
+          onLaunched: (sea) => netRef.current?.sendSetSail(true, sea),
         },
       });
       f1Scene.entities(); // seed the scene's live entity set (merged into every snapshot below)
@@ -1123,14 +1139,15 @@ export default function WorldClient() {
         </div>
       )}
 
-      {/* The crossing affordance: board a raft to set sail (the open sea is a wall on foot). */}
-      {!offline && (
+      {/* You cross the sea on a raft you built. The only HUD affordance is hauling it back out of the
+          water — and the server refuses that anywhere but on land, so it can never strand you mid-ocean. */}
+      {!offline && sailing && (
         <button
-          onClick={toggleSail}
+          onClick={haulAshore}
           className="panel absolute bottom-4 left-4 z-30 rounded-lg px-3 py-2 font-mono text-[11px] text-parchment hover:text-echo"
-          title="The open sea is a wall on foot — board a raft to cross to another island."
+          title="Pull the raft up onto the sand. Only works ashore."
         >
-          {sailing ? "⚓ drop anchor" : "⛵ board a raft — set sail"}
+          ⚓ haul the raft ashore
         </button>
       )}
 

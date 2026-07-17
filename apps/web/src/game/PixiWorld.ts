@@ -25,6 +25,10 @@ import {
   presenceTier,
   oceanLandAt,
   OCEAN_BEACH_W,
+  clampToMap,
+  hullSpeed,
+  driftVector,
+  strain01,
   type EntitySnapshot,
   type Facing,
 } from "@echo/shared";
@@ -175,6 +179,13 @@ export class PixiWorld {
   private destroyed = false;
   /** When set, the sea is passable (the player has built a raft and can sail between islands). */
   private canSail = false;
+  /** The raft under the local player, mirrored from the AUTHORITATIVE snapshot. The client predicts the
+   *  current from the same shared functions the server integrates with (raft.ts) — if it did not, the
+   *  server would correct the drift 20×/sec and the player would snap. `spent` is not mirrored: it is
+   *  radial distance from `depart`, so the client derives it from its own predicted position. */
+  private raft = { sea: 0, reach: 0, departX: 0, departY: 0 };
+  /** How hard the sea is pushing back right now (0..1) — drives the wake/strain render, never a number. */
+  private raftStrain = 0;
   private portalCenter = { x: 0, y: 0 };
   private portalNear = false;
   // Mouse-wheel zoom: a multiplier on top of the base RENDER_SCALE, clamped.
@@ -724,11 +735,32 @@ export class PixiWorld {
         dy = ddy / d;
       }
     }
+    // ── the sea pushes back (predicted identically to WorldRoom.integrate, from the shared raft.ts) ──
+    // Past the raft's reach the current carries you home. It never seizes the keys: you can always paddle,
+    // you just stop making headway. Applied before (and independently of) your own input, so idling at the
+    // edge of your reach drifts you back rather than freezing you.
+    const afloat = this.canSail && !oceanLandAt(this.localX, this.localY, OCEAN_BEACH_W);
+    if (afloat) {
+      const spent = Math.hypot(this.localX - this.raft.departX, this.localY - this.raft.departY);
+      this.raftStrain = strain01(spent, this.raft.reach);
+      const df = driftVector(this.localX, this.localY, this.raft.departX, this.raft.departY, spent, this.raft.reach);
+      // Clamp to the SAME bounds the server integrates against (WorldRoom.integrate), or a player carried
+      // toward a map edge would predict a position outside it, be corrected, and snap.
+      const c = clampToMap(this.localX + df.x * dt, this.localY + df.y * dt);
+      this.localX = c.x;
+      this.localY = c.y;
+    } else {
+      this.raftStrain = 0;
+    }
+
     const moving = dx !== 0 || dy !== 0;
     if (moving) {
+      // A raft is not a pair of legs: a true raft is quick, a scrap raft wallows. Only while AFLOAT —
+      // beaching the raft must not leave you walking the island at the wrong speed (matches the server).
+      const speed = afloat ? hullSpeed(this.raft.sea) : WORLD.MOVE_SPEED;
       const len = Math.hypot(dx, dy) || 1;
-      const nx = this.localX + (dx / len) * WORLD.MOVE_SPEED * dt;
-      const ny = this.localY + (dy / len) * WORLD.MOVE_SPEED * dt;
+      const nx = this.localX + (dx / len) * speed * dt;
+      const ny = this.localY + (dy / len) * speed * dt;
       const beforeX = this.localX;
       const beforeY = this.localY;
       // client-side collision prediction (the sea is passable once sailing is unlocked)
@@ -1047,6 +1079,17 @@ export class PixiWorld {
     this.canSail = on;
   }
 
+  /** Mirror the authoritative raft (from the server snapshot) so the client predicts the same current.
+   *  In the solo slice there is no server, so the caller passes the freshly-built raft directly. */
+  setRaft(r: { sea: number; reach: number; departX: number; departY: number }) {
+    this.raft = { ...r };
+  }
+
+  /** How hard the sea is pushing back, 0..1 — for the wake/strain render. Never shown as a number. */
+  getRaftStrain(): number {
+    return this.raftStrain;
+  }
+
   /** Move a non-local entity toward a tile (the wandering pet). Interpolates + animates. */
   moveEntity(id: string, x: number, y: number, facing?: Facing) {
     const re = this.entities.get(id);
@@ -1110,10 +1153,25 @@ export class PixiWorld {
    *  it. `carrying` overlays a carried item above the hands. The animation itself is procedural — see
    *  drawEntity — so no sprite sheets are needed and it always runs zero-key. */
   /** Set the LOCAL player's activity animation (the controllers don't need to know the self entity id,
-   *  which is server-assigned in /play). */
-  setSelfActivityState(kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number }) {
-    if (this.selfId) this.setActivityState(this.selfId, kind, opts);
+   *  which is server-assigned in /play).
+   *
+   *  There is ONE self-activity slot and more than one F1 controller writing it (RaftBuild and Flow1Beats
+   *  both run their own rAF loop). So the slot is OWNED: `owner` claims it, and a clear (kind=null) is
+   *  ignored unless it comes from the current owner. Without this, whichever controller ticked last simply
+   *  erased the other — which is precisely why holding [space] to work the raft used to render nothing at
+   *  all: Flow1Beats nulled the slot every frame, in the same frame RaftBuild set "build" on it. */
+  setSelfActivityState(kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number; owner?: string }) {
+    if (!this.selfId) return;
+    const owner = opts?.owner;
+    if (!kind) {
+      if (owner && this.activityOwner && this.activityOwner !== owner) return; // not yours to clear
+      this.activityOwner = null;
+    } else if (owner) {
+      this.activityOwner = owner;
+    }
+    this.setActivityState(this.selfId, kind, opts);
   }
+  private activityOwner: string | null = null;
 
   setActivityState(id: string, kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number }) {
     const re = this.entities.get(id);

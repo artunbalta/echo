@@ -56,6 +56,9 @@ const THRESHOLD = 2.2; // outer radius where hesitation at a spot (e.g. the cave
 
 interface BeatState { arrivedAt: number; nearMs: number; studying: boolean; dwellMs: number; holdMs: number; slips: number; done: boolean; wasHolding: boolean; }
 
+/** Our claim token on the world's single self-activity slot (RaftBuild holds the other one). */
+const ACTIVITY_OWNER = "flow1Beats";
+
 export class Flow1Beats {
   private st = new Map<string, BeatState>();
   private actionDown = false;
@@ -67,6 +70,9 @@ export class Flow1Beats {
   private lastPos = { x: 0, y: 0 };
   private stillAccum = 0;
   private creatureShown = false;
+  /** Whether WE currently hold the world's single self-activity slot. RaftBuild writes the same slot, so
+   *  we may only ever clear what we ourselves set — see the comment at the `hold` branch below. */
+  private ownsActivity = false;
 
   constructor(private cfg: Flow1BeatsConfig) {
     for (const b of cfg.beats) this.st.set(b.id, { arrivedAt: 0, nearMs: 0, studying: false, dwellMs: 0, holdMs: 0, slips: 0, done: false, wasHolding: false });
@@ -111,6 +117,20 @@ export class Flow1Beats {
     return this.cfg.beats.find((b) => b.id === id);
   }
 
+  /** Claim the shared self-activity slot (owned — see PixiWorld.setSelfActivityState). */
+  private claimActivity(kind: ActivityKind | null, opts?: { carrying?: boolean; intensity?: number }) {
+    this.ownsActivity = true;
+    this.cfg.world.setSelfActivityState(kind, { ...opts, owner: ACTIVITY_OWNER });
+  }
+
+  /** Release it. The world ignores this if RaftBuild has since taken the slot, so a stale timer can never
+   *  wipe another controller's animation. */
+  private releaseActivity() {
+    if (!this.ownsActivity) return;
+    this.ownsActivity = false;
+    this.cfg.world.setSelfActivityState(null, { owner: ACTIVITY_OWNER });
+  }
+
   private dist(a: { x: number; y: number }, b: { x: number; y: number }) {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
@@ -133,7 +153,10 @@ export class Flow1Beats {
     // ── stillness → the shy creature ──
     if (this.cfg.stillness && !this.creatureShown) {
       const moved = this.dist(self, this.lastPos);
-      if (moved < 0.06) this.stillAccum += dtMs; else this.stillAccum = 0;
+      // Standing over a raft hammering wood together is NOT stillness. Without this, working the lashings
+      // (which holds you in one spot for many seconds) would trip the shy-creature beat, and it would
+      // steal the whisper line right out from under the build — the player's hands are plainly busy.
+      if (moved < 0.06 && !this.actionDown) this.stillAccum += dtMs; else this.stillAccum = 0;
       this.lastPos = self;
       if (this.stillAccum >= (this.cfg.stillness.stillMs ?? 8000)) {
         this.creatureShown = true;
@@ -175,12 +198,12 @@ export class Flow1Beats {
       if (b.mode === "dwell" && s.studying) {
         if (near) {
           s.dwellMs += dtMs;
-          this.cfg.world.setSelfActivityState(b.anim, {});
+          this.claimActivity(b.anim, {});
           if (b.reveal && s.dwellMs > (b.needMs ?? 2500) && !s.wasHolding) { s.wasHolding = true; this.cfg.onWhisper?.(b.reveal); }
         } else {
           // walked away from the stone → the study is over; emit what was learned
           s.studying = false; s.done = true;
-          this.cfg.world.setSelfActivityState(null);
+          this.releaseActivity();
           this.emit(b.action, { dwell_ms: s.dwellMs });
           b.onDone?.();
         }
@@ -188,7 +211,7 @@ export class Flow1Beats {
         const holding = this.actionDown && near && this.activeId === b.id;
         if (holding) {
           s.holdMs += dtMs;
-          this.cfg.world.setSelfActivityState(b.anim, { intensity: 1 });
+          this.claimActivity(b.anim, { intensity: 1 });
           // resistance: the cache yields only after `fails` slips (persistence after failure)
           const per = (b.needMs ?? 3600) / ((b.fails ?? 2) + 1);
           if (s.slips < (b.fails ?? 2) && s.holdMs > per * (s.slips + 1)) {
@@ -197,13 +220,17 @@ export class Flow1Beats {
           }
           if (s.holdMs >= (b.needMs ?? 3600)) {
             s.done = true;
-            this.cfg.world.setSelfActivityState(null);
+            this.releaseActivity();
             this.emit(b.action, { persist_after_fail: Math.min(1, 0.55 + 0.15 * s.slips), dwell_ms: s.holdMs });
             if (b.reveal) this.cfg.onWhisper?.(b.reveal);
             b.onDone?.();
           }
         } else if (!near || this.activeId !== b.id) {
-          if (b.anim && this.activeId !== b.id) this.cfg.world.setSelfActivityState(null);
+          // Only clear the activity slot if WE are the ones who claimed it. The slot is a single global
+          // (PixiWorld.setSelfActivityState) shared with the other F1 controller — RaftBuild — so an
+          // unconditional null here ran every frame and wiped RaftBuild's "build" state in the same frame
+          // it was set, which is why holding [space] to work the wood rendered nothing at all.
+          if (b.anim && this.ownsActivity) this.releaseActivity();
         }
       }
     }
@@ -211,8 +238,8 @@ export class Flow1Beats {
 
   private completePress(b: BeatSpec, s: BeatState) {
     s.done = true;
-    this.cfg.world.setSelfActivityState(b.anim, {});
-    setTimeout(() => !this.disposed && this.cfg.world.setSelfActivityState(null), 700);
+    this.claimActivity(b.anim, {});
+    setTimeout(() => !this.disposed && this.releaseActivity(), 700);
     // manner: plant vs eat → save_rate; cave enter → risk + hesitation
     const raw: Record<string, unknown> =
       b.action === "plant_seed" ? { delayed: true }
