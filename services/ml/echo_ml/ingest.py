@@ -154,19 +154,24 @@ def _embodied_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     save_rate). Returns True iff `action` is an embodied cue, so the caller skips the generic per-channel
     blocks and prior behaviour is byte-identical.
 
-    Openness-intended manner (exploration ratio, decorative flourish) has NO telemetry→openness path in
-    the committed W (docs/known-gaps.md, the cross-flow gap): it is carried HONESTLY on the nearest
-    own-axis feature (decoration = extra build effort → ts_build) and never silently re-routed to
-    dominance/warmth; the one-time W re-anchor will learn the openness direction from these clean cues."""
+    Openness-intended manner (decorative flourish) is still carried HONESTLY on the nearest own-axis
+    feature (decoration = extra build effort → ts_build), never silently re-routed. NOTE: the ★ P5
+    re-anchor (2026-07-12) DID give W an openness path — novel_tile_ratio / path_tortuosity /
+    travel_novelty / curiosity — but those directions were anchored on the P3 passive sampler's and the
+    F0/F2 choice cues' scalar definitions. Whether `decoration` belongs on `curiosity` is a real routing
+    decision with its own evidence bar (does it load onto openness?), not a rename: it stays ⚑ in
+    docs/known-gaps.md #6 until that is shown, because guessing here is the silent re-route the
+    cross-cutting rule forbids."""
     if action not in _EMBODIED_CUES:
         return False
 
-    # The debounced continuous passive sampler (~1 aggregate / ~1.5s, capped per flow). Its only cue with
-    # a real telemetry→axis path under the committed W is stillness/dwell → solitude_tol (calm, the low
-    # end of energy). heading-variance / speed-variance / exploration ratio are the doc's OPENNESS/pace
-    # signals (⚑ known-gaps #2) with NO W path yet — they ride in raw_signals (captured for the one-time
-    # W re-anchor) but are deliberately NOT mapped to a feature here, so a high-frequency sampler cannot
-    # contaminate dominance/warmth before the re-anchor learns their true direction.
+    # The F1 activity sampler's window. Its one mapped signal is stillness/dwell → solitude_tol (calm, the
+    # low end of energy). heading_var / speed_var / explore_ratio stay UNMAPPED here on purpose: the ★ P5
+    # re-anchor learned openness from the P3 `passive_locomotion` sampler (game/telemetry.ts), and its
+    # path_tortuosity is a normalized ≥1 ratio — NOT the same quantity as this block's heading_var (4-way
+    # facing changes per distance). Feeding one into the other's learned direction would be a silent
+    # re-route into a W anchored on different definitions. passive_locomotion is the canonical
+    # locomotion→openness channel; this branch keeps only the job it alone does (still_ms).
     if action == "movement_sample":
         still = rs.get("still_ms")
         if still is not None:
@@ -208,8 +213,10 @@ def _embodied_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
         share = _clip01(float(dwell) / 12000.0) if dwell is not None else 0.4
         tel[ts_key] = max(tel.get(ts_key, 0.0), share)
 
-    # ⚑ decorative flourish / non-functional extra effort: doc-intended OPENNESS, but W has no openness
-    # path — carried honestly as extra build-time (ts_build), flagged in known-gaps, NOT re-routed.
+    # ⚑ decorative flourish / non-functional extra effort: doc-intended OPENNESS. W now HAS an openness
+    # path (★ P5), but `curiosity` was anchored on choice cues (enter_unmarked / eggs / asks_question),
+    # not on "spent longer making it ornate" — so this stays carried honestly as extra build-time
+    # (ts_build) and flagged in known-gaps #6 until routing it is shown to load onto openness.
     if rs.get("decoration") is not None:
         tel["ts_build"] = max(tel.get("ts_build", 0.0), _clip01(0.4 + 0.5 * _clip01(float(rs["decoration"]))))
 
