@@ -110,8 +110,13 @@ Gaps #1 and #3 below are the per-flow detail of this single milestone.
   high-frequency sampler cannot contaminate dominance/warmth before the re-anchor learns their true
   (openness/pace) direction. So the sampler infrastructure is done; the openness *routing* remains
   deferred to the re-anchor.
-- **Status:** OPEN (routing only) — sampler built; heading/explore captured-but-unrouted, co-deferred
-  to the **W re-anchor milestone**.
+- **UPDATE (2026-07-16):** superseded. The ★ P5 re-anchor closed this via the **P3
+  `passive_locomotion` sampler** (`game/telemetry.ts`), whose `novel_tile_ratio` / `path_tortuosity`
+  ARE the anchored openness directions. There are now two samplers; `passive_locomotion` is canonical
+  and this branch's F1 `movement_sample` keeps only `still_ms → solitude_tol`. See #6 for why the two
+  sets of scalars are not interchangeable.
+- **Status:** CLOSED for the locomotion→openness routing (via P5 + `passive_locomotion`); see #6 for
+  the remaining `decoration` flag.
 
 ## 6. Embodied-activity openness cues route off-axis / are captured-unrouted (same W gap as #1)
 
@@ -127,14 +132,28 @@ Gaps #1 and #3 below are the per-flow detail of this single milestone.
   `dwell_ms` → `ts_build`/`ts_earn`/`ts_learn` (industriousness/curiosity time-share), `risk01` →
   `risk_index` (dominance), `delayed` → `save_rate` (time-discounting→pace), `still_ms` →
   `solitude_tol` (calm).
-- **Root cause:** identical to #1/#3 — W has no telemetry→openness path (anchored on the day-loop
-  economy). Not re-routed; carried on the nearest honest own-axis feature or captured-unrouted.
-- **Why we are NOT fixing it now:** same as #1 — re-anchor W **once** on the full multi-flow cue set
-  (now including the embodied F1 manner cues), not piecemeal.
-- **Resolution criterion:** after the multi-flow re-anchor, `decoration`/`explore_ratio`/`heading_var`
-  load predominantly onto openness in the embodied walkthroughs; numerics gate + the embodied
-  individuation walkthrough stay green.
-- **Status:** OPEN — folded into the **W re-anchor milestone** (same one as #1, #2, #3).
+- **Root cause (ORIGINAL):** identical to #1/#3 — W had no telemetry→openness path (anchored on the
+  day-loop economy). Not re-routed; carried on the nearest honest own-axis feature or captured-unrouted.
+- **UPDATE (2026-07-16, the 2D→3D renderer migration merged main in):** the ★ P5 re-anchor **is done**
+  and W now HAS an openness path (`novel_tile_ratio`, `path_tortuosity`, `travel_novelty`, `curiosity`).
+  This gap does **not** close automatically, because those directions were anchored on *other cues'*
+  scalar definitions:
+  - `explore_ratio` / `heading_var` (this branch's F1 `movement_sample`) are **not the same quantities**
+    as the P3 `passive_locomotion` sampler's `novel_tile_ratio` / `path_tortuosity` — the latter is a
+    normalized ≥1 tortuosity ratio, the former a 4-way facing-change count per distance. **Decision:
+    `passive_locomotion` (P3, `game/telemetry.ts`) is the canonical locomotion→openness channel**;
+    `movement_sample` keeps only the job it alone does (`still_ms → solitude_tol`). Feeding one
+    sampler's scalars into the other's learned direction would be exactly the silent re-route
+    cross-cutting rule #1 forbids.
+  - `decoration` ("spent longer making the raft ornate") has no anchored direction of its own:
+    `curiosity` was anchored on *choice* cues (`enter_unmarked`, the eggs, `asks_question`,
+    `self_disclosure`, `deviate_custom`). Routing decoration onto it is a real hypothesis, not a
+    rename — so it stays carried honestly as `ts_build` and stays ⚑ until evidence.
+- **Resolution criterion (revised):** `decoration` is shown to load predominantly onto openness before
+  it is routed there (its own change, its own evidence); the numerics gate and the embodied
+  individuation walkthrough stay green. Do NOT re-train W for this — the re-anchor was one-time.
+- **Status:** OPEN (narrowed) — `explore_ratio`/`heading_var` **resolved by decision** (superseded by
+  `passive_locomotion`, not routed); `decoration` still ⚑ pending evidence.
 
 ## 3. F2/F3/travel openness-intended cues route to other axes (same W gap as #1)
 
