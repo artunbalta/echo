@@ -24,7 +24,16 @@ export const maxDuration = 60;
  *
  * One row per invocation on purpose. maxDuration is 60s and finishing a job means a pipeline pass
  * plus an email; a batch would risk being killed halfway and leaving a row claimed-but-unfinished.
- * At one per minute this drains far faster than a 500-seat cap can fill.
+ *
+ * SCHEDULE: DAILY (vercel.json). Not a preference — Vercel's Hobby plan permits at most one cron run
+ * per day and rejects the whole DEPLOYMENT, not just the cron, if the schedule is more frequent. A
+ * per-minute schedule silently stopped a production deploy dead for 12 hours. So: the WEBHOOK is the
+ * delivery path and it is immediate; this sweep is the safety net that catches strays, and on a
+ * daily cadence a dropped webhook means a slow character, never a lost one. If the plan allows more,
+ * raise the schedule in vercel.json and it costs nothing.
+ *
+ * It also only claims ONE row per run, so a daily sweep clears one stray per day. Trigger it by hand
+ * (GET with the CRON_SECRET) to drain faster, or raise the schedule on a paid plan.
  */
 
 function authorized(req: Request): boolean {
