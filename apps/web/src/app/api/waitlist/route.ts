@@ -331,6 +331,28 @@ export async function POST(req: Request) {
  * no PII — the one thing about this table the world may know. Never cached: a stale "3 left" is a
  * lie with extra steps, and this is a single indexed count.
  */
+/**
+ * Opportunistic rescue. Vercel's Hobby plan allows ONE cron run per day, so the sweeper alone could
+ * leave a stuck job waiting up to 24 hours — and a stuck job means a person who uploaded their face
+ * and heard nothing. Every read of this endpoint (the landing polls it) also nudges the sweeper, so
+ * in practice a stray is picked up within a page view rather than within a day.
+ *
+ * Fire-and-forget and never awaited: this is a read for the scarcity line, and it must not get
+ * slower or fail because a background rescue had a bad minute.
+ */
+function nudgeSweeper() {
+  const secret = process.env.CRON_SECRET;
+  const base =
+    process.env.WAITLIST_PUBLIC_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "");
+  if (!secret || !base) return;
+  fetch(`${base}/api/cron/waitlist-sweep`, {
+    headers: { authorization: `Bearer ${secret}` },
+  }).catch(() => {});
+}
+
 export async function GET() {
   const admin = adminClient();
   if (!admin) {
@@ -348,6 +370,7 @@ export async function GET() {
   // returned: it names our infrastructure, and a browser has no business knowing which migration is
   // outstanding.
   const gate = await photoPathReady(admin);
+  nudgeSweeper();
   return NextResponse.json({
     cap: CAP,
     taken,

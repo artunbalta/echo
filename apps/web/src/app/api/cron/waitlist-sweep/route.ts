@@ -32,8 +32,10 @@ export const maxDuration = 60;
  * daily cadence a dropped webhook means a slow character, never a lost one. If the plan allows more,
  * raise the schedule in vercel.json and it costs nothing.
  *
- * It also only claims ONE row per run, so a daily sweep clears one stray per day. Trigger it by hand
- * (GET with the CRON_SECRET) to drain faster, or raise the schedule on a paid plan.
+ * It also only claims ONE row per run. A daily cron alone would therefore clear one stray per day,
+ * which is why GET /api/waitlist nudges this endpoint on every read: the landing polls that on load,
+ * so in practice a stray is rescued within a page view. The cron is the floor, not the mechanism.
+ * Trigger by hand with the CRON_SECRET to drain faster, or raise the schedule on a paid plan.
  */
 
 function authorized(req: Request): boolean {
