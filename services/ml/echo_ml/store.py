@@ -40,6 +40,11 @@ class UserState:
     calib: list[tuple[float, int]] = field(default_factory=list)
     # snapshot of the persona prior mean for drift comparison
     baseline_mu: np.ndarray | None = None
+    # P3: passive locomotion scalars (heading_change_rate, path_tortuosity, novel_tile_ratio,
+    # backtrack_rate, ...) RECORDED as the * re-anchor's training corpus (known-gaps #2).
+    # Deliberately NOT featurized yet - the committed W has no telemetry->openness path; these
+    # start moving the posterior only after the one-time P5 re-anchor. Bounded ring buffer.
+    locomotion: list[dict] = field(default_factory=list)
 
     def bucket(self, name: str) -> Bucket:
         if name not in self.buckets:

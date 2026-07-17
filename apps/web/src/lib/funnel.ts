@@ -22,14 +22,20 @@ export type FunnelStage =
   | "first_pet_talk"
   | "first_fork"
   | "reached_dusk"
-  | "reading_submitted";
+  | "reading_submitted"
+  // ── P1 survival spine (blueprint V.9) — the loop's own milestones ──
+  | "day_2_return"
+  | "first_collapse";
 
 interface FunnelRecord {
   t: number; // epoch ms of first occurrence
   sinceEnterMs?: number; // delay from world_enter
 }
 
-function telemetryConsented(): boolean {
+/** Whether the user has telemetry consent ON (the one gate the whole client pipe respects —
+ *  event-schema.md §5: telemetry OFF → the world stays fully playable and emits nothing). */
+export function telemetryConsented(): boolean {
+  if (typeof window === "undefined") return false;
   try {
     return JSON.parse(localStorage.getItem("echo.consent") ?? "{}").telemetry !== false;
   } catch {

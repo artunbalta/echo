@@ -1,5 +1,6 @@
 export * from "./world.js";
 export * from "./archipelago.js";
+export * from "./islandState.js";
 export * from "./ocean.js";
 export * from "./flow0.js";
 export * from "./flow1.js";

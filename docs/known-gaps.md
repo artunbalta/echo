@@ -5,7 +5,32 @@ why we are not fixing it now, the resolution criterion, and status.
 
 ---
 
-## ★ SCHEDULED MILESTONE — the one-time W re-anchor (after Step 6/7)
+## ★ MILESTONE RESOLVED — the one-time W re-anchor (ECHO P5, 2026-07-12)
+
+**DONE.** The re-anchor ran exactly once, on the full multi-flow cue set (F0 exploration from
+the P3 passive sampler + F2/F3 dialogue + P4 travel with `dest_occupants`), via
+`scripts/train_measurement.py` + `anchor_alignment`. What changed:
+
+- `persona.py` grew four IDENTIFIED openness features (F 62 → 66): `novel_tile_ratio`,
+  `path_tortuosity`, `travel_novelty`, `curiosity` — the telemetry→openness path W lacked.
+- `ingest.py` re-routed every ⚑ cue onto them (`enter_unmarked`, `approach_distant_lone`,
+  `egg_horizon_seen`, `egg_hollow`, `asks_question`, `self_disclosure`, `deviate_custom`,
+  `travel_far` incl. the bare-shore modulation); `passive_locomotion` now featurizes.
+- New committed `measurement.npz`; openness's top loadings are now
+  `path_tortuosity +0.47, travel_novelty +0.41, curiosity +0.41`.
+
+**Acceptance, verified:** all 8 flagged cues load PREDOMINANTLY onto openness (delta
+projection, 8/8); flow0 walkthrough now *asserts* openness for the four F0 cues and passes;
+the numerics regression gate + all 126 ML tests stay green; `individuation_eval.py` passes;
+telemetry-block Fisher information for openness rose 4.06 → 44.9 (13.7×, no near-zero
+eigenvalue on the openness direction). New north-star: `scripts/brs_eval.py` (BRS —
+held-out next-choice per context bucket) passes at 1.00 conditional / 0.50 pooled-control.
+
+The original milestone text is kept below for the record.
+
+---
+
+## ★ (historical) SCHEDULED MILESTONE — the one-time W re-anchor (after Step 6/7)
 
 **openness is, as of Step 4, effectively UNMEASURED across the whole product.** The ⚑ routing gap
 is now **cross-flow**, not an F0 quirk: every cue whose design-doc prior is *openness* loads off-axis

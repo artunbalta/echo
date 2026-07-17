@@ -27,9 +27,16 @@ export interface DuskReadingData {
 export default function DuskReading({
   reading,
   onSubmit,
+  onNextDay,
+  mirrorLine,
 }: {
   reading: DuskReadingData;
   onSubmit: (verdict: { ratings: Record<number, boolean>; overall: number }) => void;
+  /** P1 day loop: offered after the verdict — sleep, and wake into the next morning. */
+  onNextDay?: () => void;
+  /** The dusk MIRROR BEAT (M1): one in-tone sentence, present ONLY when a real axis/bucket
+   *  moved today (diffed against the day's start). Absent → silence is content (§VIII.10). */
+  mirrorLine?: string | null;
 }) {
   const [ratings, setRatings] = useState<Record<number, boolean>>({});
   const [overall, setOverall] = useState<number | null>(null);
@@ -61,6 +68,11 @@ export default function DuskReading({
         <p className="mb-5 text-[10px] text-parchment/45">
           it knows you {pct}%{reading.mocked ? " · running on demo values" : ""}
         </p>
+
+        {/* the mirror beat — only ever a REAL movement, never manufactured daily */}
+        {mirrorLine && (
+          <p className="mb-5 border-l-2 border-echo/50 pl-3 text-sm italic leading-snug text-echo/90">{mirrorLine}</p>
+        )}
 
         {/* the statements — each bound to a real axis + choice */}
         <ol className="space-y-3.5">
@@ -119,7 +131,17 @@ export default function DuskReading({
             </button>
           </div>
         ) : (
-          <p className="mt-6 text-center text-sm text-parchment/55">the echo remains. thank you.</p>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-parchment/55">the echo remains. thank you.</p>
+            {onNextDay && (
+              <button
+                onClick={onNextDay}
+                className="mt-4 w-full rounded-xl border border-echo/40 py-2.5 text-sm text-echo transition hover:bg-echo/10"
+              >
+                sleep — meet the morning
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

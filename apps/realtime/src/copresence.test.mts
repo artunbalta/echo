@@ -23,7 +23,7 @@ import { strict as assert } from "node:assert";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { Client } from "colyseus.js";
-import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, presenceTier, oceanLandAt, OCEAN_BEACH_W, type EventContext } from "@echo/shared";
+import { WORLD, tileDistance, islandSlot, OCEAN, clampToMap, presenceTier, PRESENCE, oceanLandAt, OCEAN_BEACH_W, type EventContext } from "@echo/shared";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function waitFor(pred: () => boolean, timeoutMs = 8000, label = "condition"): Promise<void> {
@@ -45,9 +45,13 @@ const REQUIRED_CONTEXT = [
 interface CapturedEvent {
   actor_id: string; action: string; channel: string;
   target: { id: string; status: string }; context: EventContext;
+  raw_signals?: Record<string, number>;
 }
 const captured: CapturedEvent[] = [];
 const evsBy = (action: string) => captured.filter((e) => e.action === action);
+// The Stage-2 SIGHTING (P4) is a SOLITARY cue that deliberately fires while a figure is still
+// far + anonymous — it is not social. The "zero social until CLOSE" invariant checks these.
+const socialCaptured = () => captured.filter((e) => e.action !== "egg_horizon_seen");
 
 function assertFullContext(e: CapturedEvent, stage: number, label: string) {
   for (const k of REQUIRED_CONTEXT) {
@@ -95,8 +99,14 @@ async function main() {
   const roomB = await clientB.joinOrCreate("world", { userId: "userB", name: "Bob", slotIndex: 1 });
   roomA.onMessage("welcome", () => {});
   roomB.onMessage("welcome", () => {});
-  roomA.onMessage("interact_opened", () => {});
+  // P3: capture the interaction id so a real chat turn can be sent through the live pipe.
+  let iidA = "";
+  roomA.onMessage("interact_opened", (p: { interactionId: string }) => { iidA = p.interactionId; });
   roomB.onMessage("interact_opened", () => {});
+  roomA.onMessage("interact_turn", () => {});
+  roomB.onMessage("interact_turn", () => {});
+  roomA.onMessage("interact_closed", () => {});
+  roomB.onMessage("interact_closed", () => {});
   roomA.onMessage("error", () => {});
 
   const ent = (room: any, id: string) => room.state?.entities?.get?.(id);
@@ -141,7 +151,7 @@ async function main() {
   //    Tier 1 (CLOSE). So while A & B are merely distant, the Flow-0 baseline cannot leak — ZERO social.
   //    (Names are gated the same way: shown only within CLOSE; see the name-gate assertion below.) ──
   assert.notEqual(presenceTier(gap0), "close", "adjacent-slot neighbours spawn FAR (not at the interactable CLOSE tier)");
-  assert.equal(captured.length, 0, "ZERO social events while not CLOSE (a sharp distant player never starts measurement)");
+  assert.equal(socialCaptured().length, 0, "ZERO social events while not CLOSE (a sharp distant player never starts measurement)");
   // name-gate (#5): identity (the name label) appears ONLY within near/interaction range, never far.
   assert.notEqual(presenceTier(gap0), "close", "#5 a distant player is anonymous — no name shown far (name gate = tier 'close')");
   assert.equal(presenceTier(0.5), "close", "#5 a near player IS named — the name resolves in only within CLOSE");
@@ -157,8 +167,24 @@ async function main() {
   await sleep(150);
   const walkedGap = tileDistance(A().x, A().y, B().x, B().y);
   assert.notEqual(presenceTier(walkedGap), "close", `on foot A cannot reach B across water (gap ${walkedGap.toFixed(1)}, ${presenceTier(walkedGap)})`);
-  assert.equal(captured.length, 0, "still ZERO social events — the water barrier kept A off B's island");
+  assert.equal(socialCaptured().length, 0, "still ZERO social events — the water barrier kept A off B's island");
   log(`\n[barrier] A walked straight at B for ~3s WITHOUT sailing → gap ${walkedGap.toFixed(1)} (${presenceTier(walkedGap)}); the sea held.`);
+
+  // ── P4 STAGE-2 SIGHTING: a far, sharp, ANONYMOUS figure across the water is itself a cue
+  //    (egg_horizon_seen, once per pair, both viewers) — SOLITARY context (audience 0, private,
+  //    no counterpart: nothing social has begun; naming/social start only at CLOSE). ──
+  await waitFor(() => evsBy("egg_horizon_seen").length >= 2, 6000, "sighting fired for both viewers");
+  const sA = evsBy("egg_horizon_seen").find((e) => e.actor_id === "userA")!;
+  const sB = evsBy("egg_horizon_seen").find((e) => e.actor_id === "userB")!;
+  assert.ok(sA && sB, "one sighting per viewer (per-actor, once per pair)");
+  for (const s of [sA, sB]) {
+    assert.equal(s.context.audience_size, 0, "sighting is solitary (audience 0)");
+    assert.equal(s.context.public_or_private, "private", "sighting is private (no social has begun)");
+    assert.equal(s.context.counterpart_status, "none", "the figure is ANONYMOUS at that tier");
+    assert.ok((s.raw_signals?.distance ?? 0) > PRESENCE.APPROACH, "sighted while genuinely far");
+  }
+  assert.equal(evsBy("egg_horizon_seen").length, 2, "exactly once per (viewer, seen) pair — no re-fires");
+  log(`[P4 sighting] egg_horizon_seen fired once per viewer at gap ~${sA.raw_signals?.distance} tiles — solitary, anonymous, capped`);
 
   // ── #4 SHORELINE CLAMP, NO REBOUND (clean pure-axis test): the barrier walk above pushed A
   //    diagonally, so A slid ALONG its curved coast (sliding ≠ rebound — the server only ever clamps,
@@ -218,6 +244,28 @@ async function main() {
   assertFullContext(ow, 2, "opener_warm");
   log(`[4] F2 SOCIAL_CUE opener_warm → actor=${ow.actor_id} counterpart=${ow.target.id}(${ow.target.status}) stage=${ow.context.stage}`);
 
+  // ── (4b) P3 PER-ACTOR CHAT ROWS (event-schema Rule 3): one live chat turn from A produces TWO
+  //    rows — A's dialogue_turn (with the implicit C1 latency / B3 edits riding raw_signals) AND
+  //    B's receives_turn from B's OWN vantage. Then closing with B never having spoken emits B's
+  //    K1 refusal twin (declines_to_engage) — non-action is first-class data (Law 2). ──
+  await waitFor(() => !!iidA, 3000, "interaction id captured");
+  roomA.send("chat", { interactionId: iidA, text: "hello across the water", latencyMs: 1500, editsCount: 2 });
+  await waitFor(() => evsBy("dialogue_turn").length >= 1 && evsBy("receives_turn").length >= 1, 4000, "per-actor chat rows (both vantages)");
+  const dturn = evsBy("dialogue_turn").find((e) => e.actor_id === "userA")!;
+  const rturn = evsBy("receives_turn").find((e) => e.actor_id === "userB")!;
+  assert.ok(dturn, "sender's dialogue_turn row (their vantage)");
+  assert.ok(rturn, "recipient's receives_turn row (their vantage)");
+  assert.equal(dturn.target.id, "userB"); assert.equal(rturn.target.id, "userA");
+  assertFullContext(dturn, 2, "dialogue_turn"); assertFullContext(rturn, 2, "receives_turn");
+  assert.equal(dturn.context.counterpart_status, "peer"); assert.equal(rturn.context.counterpart_status, "peer");
+  roomA.send("interact_end", { interactionId: iidA });
+  await waitFor(() => evsBy("declines_to_engage").length >= 1, 4000, "K1 refusal twin for the silent side");
+  const k1 = evsBy("declines_to_engage").find((e) => e.actor_id === "userB")!;
+  assert.ok(k1, "declines_to_engage emitted for the participant who never answered");
+  assert.equal(k1.target.id, "userA");
+  assertFullContext(k1, 2, "declines_to_engage");
+  log(`[4b] P3 chat turn → dialogue_turn(userA→userB) + receives_turn(userB←userA), both full-context; close with B silent → K1 declines_to_engage(userB) — Rule 3 holds`);
+
   // ── (5) TRAVEL STAND — the co-presence amplifier: reach a FAR, non-adjacent island ───────────
   const FAR = 60; // a fixed distant landmark (A is on slot 0, B on slot 1 — both near the centre)
   const sx = WORLD.MAP_WIDTH / OCEAN.EXTENT, sy = WORLD.MAP_HEIGHT / OCEAN.EXTENT;
@@ -230,6 +278,10 @@ async function main() {
   assert.ok(tv, "travel_far emitted for the traveller");
   assert.equal(tv.target.id, `island_${FAR}`);
   assertFullContext(tv, 2, "travel_far");
+  // P4: the empty-vs-peopled probe + the life-scale crossing read ride the travel event.
+  assert.ok(typeof tv.raw_signals?.dest_occupants === "number", "dest_occupants stamped authoritatively (empty-vs-peopled probe, VIII.2)");
+  assert.ok((tv.raw_signals?.crossing_latency_ms ?? -1) >= 0, "first-ever sail carries crossing_latency_ms (VIII.11)");
+  log(`[P4 travel raw] dest_occupants=${tv.raw_signals?.dest_occupants} crossing_latency_ms=${tv.raw_signals?.crossing_latency_ms}`);
   assert.ok(evsBy("prepare_before_travel").length >= 1, "prepare_before_travel emitted (kit readied)");
   const hopHome = tileDistance(aBefore.x, aBefore.y, A().x, A().y);
   assert.ok(hopHome > 8, `A travelled a long way from its home region (${hopHome.toFixed(1)} tiles)`);

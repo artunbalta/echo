@@ -249,6 +249,33 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
             tele["save_rate"] = 1.0 if opt == "save" else 0.0
         if payload.get("latencyMs") is not None:
             tele["decision_latency"] = payload.get("latencyMs")
+    elif t == "fork_decision":
+        # P1's richer island fork (supersedes choice_made there): same behavioural reads;
+        # the survival context (scarcityLevel, ...) rides along in the payload for P5.
+        opt = payload.get("option")
+        if payload.get("forkKey") == "plant_or_spend" and opt in ("save", "spend"):
+            tele["save_rate"] = 1.0 if opt == "save" else 0.0
+        if payload.get("forkKey") == "tide_wager" and opt != "refused" and payload.get("variance") is not None:
+            tele["risk_index"] = payload.get("variance")
+        if payload.get("latencyMs") is not None and opt != "refused":
+            tele["decision_latency"] = payload.get("latencyMs")
+    elif t == "passive_locomotion":
+        # P3 recorded this channel; the ★ P5 re-anchor gave W a real telemetry→openness path
+        # (novel_tile_ratio / path_tortuosity are identified directions now), so the least-
+        # fakeable channel finally moves the posterior — AND stays recorded for drift/retrain.
+        scalars = {
+            k: float(payload[k])
+            for k in ("heading_change_rate", "path_tortuosity", "novel_tile_ratio", "backtrack_rate", "dwell_ms", "tiles")
+            if isinstance(payload.get(k), (int, float))
+        }
+        if scalars:
+            st.locomotion.append(scalars)
+            if len(st.locomotion) > 2000:  # bounded ring
+                del st.locomotion[: len(st.locomotion) - 2000]
+            if "novel_tile_ratio" in scalars:
+                tele["novel_tile_ratio"] = scalars["novel_tile_ratio"]
+            if "path_tortuosity" in scalars:
+                tele["path_tortuosity"] = scalars["path_tortuosity"]
     if tele:
         st.posterior = P.observe(st.posterior, "", tele)
     return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}
@@ -312,6 +339,12 @@ def feedback(req: FeedbackReq, authorization: str = Header(None)):
         xp = embed(f"{req.context} || {req.chosen}")
         xn = embed(f"{req.context} || {req.rejected}")
         st.reward.step_pair(xp, xn)
+    # 1b) the VETO (P6 / blueprint II.6): agreed=false on a rejected utterance with no
+    # correction — "that wasn't me" on a REAL autonomous act, the highest-value signal the
+    # system receives. No winner exists to pair, so it anchors the reward head as a negative
+    # OUTCOME on that action (BCE y=0); the bucket demotion below happens regardless.
+    elif req.rejected and not req.agreed:
+        st.reward.step_outcome(embed(f"{req.context} || {req.rejected}"), 0.0)
 
     # 2) autonomy bucket + calibration data
     bucket = st.bucket(req.bucket)
@@ -375,6 +408,8 @@ def get_persona(uid: str, authorization: str = Header(None)):
         "correlation": _top_correlation(st.posterior),
         "uncertainty": float(np.mean(st.posterior.var)),
         "behaviors": len(st.behaviors),
+        # P3: recorded passive-locomotion windows — the ★ re-anchor's corpus volume (gap #2).
+        "locomotion": len(st.locomotion),
         "temperature": round(st.temperature, 3),
         "ece": round(G.expected_calibration_error(confs, corr), 3) if confs else None,
         "buckets": {k: v.to_dict() for k, v in st.buckets.items()},
@@ -383,6 +418,17 @@ def get_persona(uid: str, authorization: str = Header(None)):
         # with context flow through /observe/behavioral.
         "conditional_keys": sorted(st.cond.keys()),
         "conditional": {k: v.mu.tolist() for k, v in st.cond.items()},
+        # P7 (blueprint VIII.9 / III.3): the PUBLIC-MINUS-PRIVATE delta — self-monitoring as a
+        # stored, first-class read (the operational Ring of Gyges). Built from the Channel-H
+        # privacy-conditioned posteriors; null until both vantages have real evidence.
+        "self_monitoring": (
+            lambda pub, priv: {
+                "delta": [round(float(a - b), 4) for a, b in zip(pub.mu, priv.mu)],
+                "warmth_delta": round(float(pub.mu[0] - priv.mu[0]), 4),
+            }
+            if pub is not None and priv is not None
+            else None
+        )(st.cond.get("privacy:public"), st.cond.get("privacy:private")),
         "reward_version": st.reward.version,
         # "which raw features load on each axis" — replaces the hard-coded explanation when a
         # learned measurement matrix is active; null on a clean checkout (heuristic fallback).
@@ -402,6 +448,35 @@ def select_npc(req: SelectNpcReq, authorization: str = Header(None)):
         "selected": scores[0].npc_id if scores else None,
         "ranking": [
             {"npc": s.npc_id, "info_gain": round(s.score, 4), "p": round(s.predictive_p, 3)}
+            for s in scores[:10]
+        ],
+    }
+
+
+@app.post("/select-situation")
+def select_situation(req: SelectNpcReq, authorization: str = Header(None)):
+    """P7 — the BALD SITUATION-DIRECTOR (blueprint II.5 / IV.5 / stage-map §11): the same
+    expected-information-gain acquisition, generalized from NPCs to (affordance, context)
+    candidates — a lean day, a moral probe, a wager framing. The math is unchanged; only the
+    candidate space grew. The director RAISES SALIENCE of the max-MI candidate, never coerces
+    (Law 2): the caller surfaces the pick; refusing it is a K-cue, not a penalty.
+
+    The per-session intervention CAP decays as the posterior tightens (BALD's diminishing
+    returns made explicit): probing days early, calm mastery later — the felt curve falls out
+    of the math (IV.5). cap = ceil(3 · mean(Σ)/prior_var), floored at 0.
+    """
+    _auth(authorization)
+    st = STORE.get(req.userId)
+    cands = [(n["id"], np.array(n["axes_vec"], dtype=float)) for n in req.npcs]
+    scores = bald_scores(st.posterior, cands, samples=req.samples)
+    unc01 = float(np.clip(np.mean(st.posterior.var) / P.HYPER.prior_var, 0.0, 1.0))
+    cap = int(np.ceil(3.0 * unc01))
+    return {
+        "selected": scores[0].npc_id if scores else None,
+        "cap": cap,
+        "uncertainty01": round(unc01, 3),
+        "ranking": [
+            {"candidate": s.npc_id, "info_gain": round(s.score, 4), "p": round(s.predictive_p, 3)}
             for s in scores[:10]
         ],
     }

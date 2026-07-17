@@ -69,6 +69,8 @@ interface RenderEntity {
   label: Text;
   /** Soft glow ring beneath live players (not NPCs) so real humans stand out on the map. */
   ring?: Graphics;
+  /** Cast shadow — its length/direction track the sun arc (diegetic daylight, blueprint V.1). */
+  shadow?: Graphics;
   frames: Record<Facing, Texture[]>;
   // interpolation buffer (remote)
   prevX: number;
@@ -120,6 +122,9 @@ export interface WorldHooks {
   emitTelemetry?: (type: string, payload: Record<string, unknown>) => void;
   /** Fires when the local player steps in/out of the portal doorway's interaction radius. */
   onPortalChange?: (near: boolean) => void;
+  /** The local player's predicted tile position, every frame — feeds the passive
+   *  locomotion sampler (P3). The consumer throttles; positions never leave the client. */
+  onSelfSample?: (x: number, y: number) => void;
 }
 
 export class PixiWorld {
@@ -204,6 +209,14 @@ export class PixiWorld {
   private pointerStart = { x: 0, y: 0 };
   private pointerMoved = false;
   private static readonly DRAG_THRESHOLD = 6; // px before a press counts as a drag, not a click
+  // ── the diegetic survival state (blueprint V.1: in the WORLD, never a HUD bar) ──
+  // Daylight = the sky (ambient light + shadow length); vitality = the body (self-sprite
+  // posture tint); scarcity = the world (bushes thin out). Set by the day-loop each tick.
+  private dayPhase = 0.35; // 0 dawn → 1 nightfall; default mid-morning until the loop drives it
+  private vitality = 1; // 0..1; below ~0.5 the self avatar visibly cools/slumps
+  private scarcity = 0; // 0..1; drives bush thinning
+  private ambient: Graphics | null = null; // screen-space light wash over the world
+  private bushSprites: Sprite[] = []; // recorded at build for scarcity thinning
 
   constructor(hooks: WorldHooks, opts: { map?: TileMap; proceduralArt?: boolean; artDir?: string } = {}) {
     this.hooks = hooks;
@@ -253,6 +266,10 @@ export class PixiWorld {
     this.fxLayer.addChild(this.fx);
     this.world.addChild(this.fxLayer);
     this.buildPortal();
+
+    // The sky's light, washed over the whole view in screen space (diegetic daylight).
+    this.ambient = new Graphics();
+    this.app.stage.addChild(this.ambient);
 
     this.bindInput();
     this.app.ticker.add((t) => this.update(t.deltaMS));
@@ -397,6 +414,8 @@ export class PixiWorld {
         s.y = d.y * TILE + TILE;
         (s as any).zIndex = s.y;
         this.entityLayer.addChild(s); // share z-sort with entities
+        // Bushes are the visible larder: on lean days a fraction thin out (setScarcity).
+        if (d.kind === "bush") this.bushSprites.push(s);
       }
     }
     this.entityLayer.sortableChildren = true;
@@ -465,6 +484,13 @@ export class PixiWorld {
       re.ring = ring;
       this.entityLayer.addChild(ring);
     }
+    // Cast shadow under every entity: its length/direction track the sun arc, so the hour
+    // is readable off the ground itself (diegetic daylight — blueprint V.1, no clock UI).
+    const shadow = new Graphics();
+    shadow.ellipse(0, 0, SPRITE.FRAME_W * 0.42, SPRITE.FRAME_W * 0.16).fill({ color: 0x0b0e14, alpha: 1 });
+    shadow.alpha = 0.18;
+    re.shadow = shadow;
+    this.entityLayer.addChild(shadow);
     this.entityLayer.addChild(sprite);
     this.entityLayer.addChild(label);
     // If the entity has a real generated/uploaded sheet, swap it in once loaded.
@@ -538,6 +564,7 @@ export class PixiWorld {
         re.label.destroy();
         re.ring?.destroy();
         re.carry?.destroy();
+        re.shadow?.destroy();
         this.entities.delete(id);
       }
     }
@@ -636,6 +663,7 @@ export class PixiWorld {
     this.detectProximity(dt);
     this.detectPortal();
     this.stepParticles(dt);
+    this.updateAmbient();
   }
 
   /** Integrate + draw embodied-activity particles (dig dust / build sparks). Cheap: a capped pool
@@ -673,6 +701,70 @@ export class PixiWorld {
         vx: Math.cos(ang) * spread, vy: -spread * 0.6 - (i % 3) * 4,
         life: 0.5 + (i % 3) * 0.15, max: 0.8, color,
       });
+    }
+  }
+
+  /** The sky's light over the day: clear at midday, amber toward dusk, a deep blue-dark at
+   *  nightfall. One screen-space rect, redrawn cheaply; the world beneath stays readable. */
+  private updateAmbient() {
+    if (!this.ambient) return;
+    const p = this.dayPhase;
+    let color = 0x000000;
+    let alpha = 0;
+    if (p < 0.12) {
+      color = 0xffc98a; // dawn warmth, fading as the sun climbs
+      alpha = 0.1 * (1 - p / 0.12);
+    } else if (p > 0.62 && p <= 0.85) {
+      color = 0xff9a3d; // the long amber of late day
+      alpha = 0.16 * ((p - 0.62) / 0.23);
+    } else if (p > 0.85) {
+      color = 0x1a2440; // dusk gives way to a deep blue dark
+      alpha = 0.16 + 0.3 * ((p - 0.85) / 0.15);
+    }
+    this.ambient.clear();
+    if (alpha > 0.004) {
+      this.ambient.rect(0, 0, this.app.screen.width, this.app.screen.height).fill({ color, alpha });
+    }
+  }
+
+  /** Self-avatar tint from vitality: full colour above half, cooling toward a wan
+   *  grey-blue as it falls (the body IS the meter — no red bar anywhere). */
+  private vitalityTint(): number {
+    const v = Math.max(0, Math.min(1, this.vitality));
+    if (v >= 0.5) return 0xffffff;
+    const t = 1 - v / 0.5; // 0 at half vitality → 1 at collapse
+    const lerp = (a: number, b: number) => Math.round(a + (b - a) * t);
+    return (lerp(0xff, 0x8e) << 16) | (lerp(0xff, 0xa4) << 8) | lerp(0xff, 0xc2);
+  }
+
+  // ── the day-loop drives the world's diegetic state (blueprint V.1) ──────────────
+
+  /** 0 dawn → 1 nightfall. Moves the ambient light and every cast shadow. */
+  setDayPhase(phase01: number) {
+    this.dayPhase = Math.max(0, Math.min(1, phase01));
+  }
+
+  /** 0 collapsed → 1 full. Cools the local avatar's body below half. */
+  setVitality(v01: number) {
+    this.vitality = Math.max(0, Math.min(1, v01));
+  }
+
+  /** 0 plenty → 1 famine. Thins the bushes — the larder visibly empties on lean days. */
+  setScarcity(level01: number) {
+    const s = Math.max(0, Math.min(1, level01));
+    if (Math.abs(s - this.scarcity) < 0.01 && this.scarcity !== 0) return;
+    this.scarcity = s;
+    const n = this.bushSprites.length;
+    for (let i = 0; i < n; i++) {
+      const bush = this.bushSprites[i];
+      // Deterministic thinning: bush i disappears once scarcity passes its threshold, so
+      // lean days visibly empty the island and recovery visibly refills it.
+      const threshold = ((i * 2654435761) >>> 0) / 4294967296; // hashed, stable per bush
+      bush.visible = s < 0.25 || threshold > s * 0.7;
+      // Survivors dry toward straw as scarcity deepens.
+      const t = Math.min(1, s * 0.8);
+      const lerp = (a: number, b: number) => Math.round(a + (b - a) * t);
+      bush.tint = (lerp(0xff, 0xd8) << 16) | (lerp(0xff, 0xc4) << 8) | lerp(0xff, 0x9a);
     }
   }
 
@@ -811,6 +903,7 @@ export class PixiWorld {
     if (self) {
       this.drawEntity(self, this.localX, this.localY, this.localFacing, moving, dt);
     }
+    this.hooks.onSelfSample?.(this.localX, this.localY);
   }
 
   private stepRemotes(dt: number) {
@@ -869,13 +962,30 @@ export class PixiWorld {
     //    measurement — they stay non-interactable until you sail close.
     //    YOUR OWN island's Flow-0 affordances ("f0_*", client-local) belong to you, so they always
     //    render sharp + named (distance 0 → Tier 1). ──
-    const dist = re.id.startsWith("f0_") ? 0 : Math.hypot(this.localX - tileX, this.localY - tileY);
+    // Your OWN island's affordances (f0_*) and day stations (day_*) belong to you — always named.
+    const dist = re.id.startsWith("f0_") || re.id.startsWith("day_") || re.id.startsWith("probe_") ? 0 : Math.hypot(this.localX - tileX, this.localY - tileY);
     const named = presenceTier(dist) === "close"; // identity only at near/interaction range
     re.sprite.visible = true;
     re.sprite.alpha = 1; // sharp at every distance — no silhouette, no alpha-dim
-    re.sprite.tint = 0xffffff; // no ink-mauve silhouette tint
+    // Vitality is the BODY, not a bar (blueprint V.1): as the local player's vitality
+    // decays below half, their avatar visibly cools toward a wan grey-blue. Everyone
+    // else stays untinted (presence rule: sharp, no silhouette).
+    re.sprite.tint = re.id === this.selfId ? this.vitalityTint() : 0xffffff;
     re.label.visible = named;
     re.label.alpha = 1;
+
+    // The cast shadow: length + direction follow the sun (morning: long toward the west;
+    // noon: a tight pool; dusk: long toward the east, fading as the light goes).
+    if (re.shadow) {
+      const p = this.dayPhase;
+      const stretch = 0.35 + Math.abs(p - 0.5) * 2 * 1.5; // 0.35 at noon → ~1.85 at the edges
+      const dir = p < 0.5 ? -1 : 1;
+      re.shadow.x = px + dir * stretch * SPRITE.FRAME_W * 0.3;
+      re.shadow.y = py - 1;
+      re.shadow.scale.set(stretch, 1);
+      re.shadow.alpha = p > 0.9 ? 0.18 * (1 - (p - 0.9) / 0.1) : 0.18; // shadows dissolve at nightfall
+      (re.shadow as any).zIndex = py - 0.2; // beneath the ring and the sprite
+    }
 
     if (re.ring) {
       re.ring.visible = true; // the echo-violet glint marks every live human on the map, near or far
@@ -1036,7 +1146,7 @@ export class PixiWorld {
     const out: { id: string; refId: string; name: string; x: number; y: number }[] = [];
     for (const [id, re] of this.entities) {
       if (re.kind !== "npc") continue;
-      if (id.startsWith("f0_")) continue; // client-local own-island affordances aren't room NPCs the echo can approach
+      if (id.startsWith("f0_") || id.startsWith("day_") || id.startsWith("probe_")) continue; // client-local own-island affordances/stations/probes aren't room NPCs the echo can approach
       const x = (re as { _tx?: number })._tx ?? re.targetX;
       const y = (re as { _ty?: number })._ty ?? re.targetY;
       out.push({ id, refId: re.refId, name: re.name, x, y });
