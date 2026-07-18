@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { config } from "@/lib/config";
-import { PixiWorld } from "@/game/PixiWorld";
+import { ThreeWorld } from "@/game/ThreeWorld";
 import { NetClient } from "@/game/net";
 import { TelemetryCollector, LocomotionSampler } from "@/game/telemetry";
 import { proposeReply, sendFeedback, requestConnectionAnalysis, type AgentTurn, type ConnectionAnalysis } from "@/lib/agent";
@@ -134,7 +134,7 @@ function sameIds(a: { id: string }[], b: { id: string }[]): boolean {
 
 export default function WorldClient() {
   const mountRef = useRef<HTMLDivElement>(null);
-  const worldRef = useRef<PixiWorld | null>(null);
+  const worldRef = useRef<ThreeWorld | null>(null);
   // ── Flow 0 own-island layer (world-unify §3): the solitary baseline lives on YOUR island in the
   //    one ocean — client-local affordance entities (role "flow0", not room state) that emit SOLO
   //    cues (audience 0, private, no counterpart). Other players are atmosphere until Tier 1. ──
@@ -984,7 +984,7 @@ export default function WorldClient() {
     // batch pipe (→ realtime → ML /telemetry) and its caps apply unchanged.
     const loco = new LocomotionSampler((scalars) => teleRef.current?.emit("passive_locomotion", { ...scalars }));
     locoRef.current = loco;
-    const world = new PixiWorld({
+    const world = new ThreeWorld({
       onSelfSample: telemetryConsent ? (x, y) => loco.feed(x, y) : undefined,
       onNearbyChange: (t) => {
         // F1 embodied-activity props (role "flow1") are driven by the Flow1Scene controllers' own input,
@@ -1017,7 +1017,7 @@ export default function WorldClient() {
         else if (type === "dwell") d.dwell++;
         else if (type === "revisit") d.revisits++;
       },
-    }, { map: oceanMap, artDir: "/assets/island" }); // ONE shared ocean: 100 islands in one sea
+    }, { map: oceanMap }); // ONE shared ocean: 100 islands in one sea
     worldRef.current = world;
 
     const net = new NetClient(config.realtimeUrl);

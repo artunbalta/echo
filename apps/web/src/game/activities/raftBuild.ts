@@ -23,7 +23,8 @@
  * The player is never shown a number. There is no quality meter and no score: there is a pile of wood, an
  * amount of time you chose to spend on the lashings, and an ocean.
  */
-import type { PixiWorld, ActivityKind } from "../PixiWorld";
+import type { ThreeWorld } from "../ThreeWorld";
+import type { ActivityKind } from "../WorldCore";
 import {
   buildFlow1Event, FLOW1_CUES, RAFT_BUILD, RAFT_STAGES, RAFT_SLIPS,
   MIN_BUILD_MS, SOLID_MS, LAVISH_BUILD_MS, seaworthiness,
@@ -33,7 +34,7 @@ import {
 export type RaftPhase = "gather" | "ready" | "building" | "built" | "launched";
 
 export interface RaftBuildConfig {
-  world: PixiWorld;
+  world: ThreeWorld;
   /** The driftwood entities placed on the shore (client-local). */
   wood: { id: string; x: number; y: number }[];
   assembly: { x: number; y: number };
