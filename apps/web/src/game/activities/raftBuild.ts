@@ -161,6 +161,11 @@ export class RaftBuild {
     }
   }
 
+  /** Live build state, for the individuation capture harness only. Read-only; changes nothing. */
+  debugState() {
+    return { phase: this.phase, workMs: Math.round(this.workMs), floated: this.floated, gathered: this.gathered };
+  }
+
   /** The raft as it now stands — the day loop's source of truth for this shore. Called on real
    *  changes only (a pick, a slip, a stage, the launch), never per frame. */
   private reportRaft() {

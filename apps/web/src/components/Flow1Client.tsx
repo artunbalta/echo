@@ -113,6 +113,19 @@ export default function Flow1Client() {
       world.setSelf("player1", spawn.x, spawn.y);
       world.applySnapshot(snapMap, 0);
       scene.begin(); // applies display heights + starts the controllers
+
+      // Test hook (the individuation harness drives the REAL client through this): it exposes only
+      // the real player-facing surface — walk the real movement/collision path, read the placed
+      // objects' real positions. It commands nothing the measurement reads; every emitted cue still
+      // comes from raftBuild/flow1Beats reacting to real motion and real key presses. Harmless in
+      // the product: /flow1 is a dev slice, and this just surfaces refs already in the DOM.
+      (window as unknown as { __echo?: unknown }).__echo = {
+        walkTo: (x: number, y: number) => world!.setAutoWalk({ x, y }),
+        self: () => world!.getSelfTile(),
+        objects: snaps.map((s) => ({ id: s.id, x: s.x, y: s.y, url: s.spriteUrl })),
+        points: () => scene.points(),
+        raft: () => scene.raftDebug(),
+      };
     })();
 
     return () => {

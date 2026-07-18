@@ -152,6 +152,17 @@ export class Flow1Scene {
   private launch = { x: 0, y: 0 };
   private beatPos: Record<string, { x: number; y: number }> = {};
 
+  /** The scene's key positions, for the individuation capture harness (it walks the real player to
+   *  each and performs the real activity). Read-only geometry; commands nothing the measurement sees. */
+  points(): { wood: { id: string; x: number; y: number }[]; assembly: { x: number; y: number }; launch: { x: number; y: number }; beats: Record<string, { x: number; y: number }> } {
+    return { wood: this.woodPos, assembly: this.assembly, launch: this.launch, beats: this.beatPos };
+  }
+
+  /** Live raft build state, for the capture harness. */
+  raftDebug() {
+    return this.raft?.debugState() ?? null;
+  }
+
   private refreshPrompt() {
     // the raft "pick" prompt takes priority while gathering; else the nearest beat's prompt
     this.o.hooks?.onPrompt?.(this.pickPrompt ?? this.beatPrompt);
