@@ -5,11 +5,15 @@
  * math intact, because the pieces it owns are the ones we cannot afford to "port":
  *
  *   • Local movement prediction. The client and the AUTHORITATIVE server (WorldRoom.integrate) run
- *     the same geometry over the same shared functions (oceanLandAt / clampToMap / driftVector /
- *     hullSpeed / strain01), and the proven drift between them is 0.0000. That invariant was
- *     expensive to win. It survives the renderer migration for exactly one reason: it never had
- *     anything to do with the renderer. Gameplay is (x, y) on a flat plane in TILE units, and stays
- *     there — 3D height is visual only and never reaches this file.
+ *     the SAME geometry over the SAME shared functions (oceanLandAt / clampToMap / driftVector /
+ *     hullSpeed / strain01) at the SAME variable dt (dtMs/1000, unclamped, both sides) — so they
+ *     SHOULD stay together. Note "should", not "proven 0.0000": the old copresence "drift 0.0000"
+ *     was a SERVER-side no-rebound test, and the client reconcile error compared the predictor to
+ *     the snapshot on the same client ticker — neither actually measured client-predicted vs
+ *     server-authoritative divergence for the same entity. That real number is now measured
+ *     directly (getDrift(), sampled in applySnapshot before reconcile) instead of assumed. Keep the
+ *     two integrators identical and DON'T re-introduce a clamp or fixed step on one side only.
+ *     Gameplay is (x, y) on a flat plane in TILE units, and stays there — 3D height is visual only.
  *   • The separate-axis collision test (X against the old Y, then Y against the new X). That is
  *     what produces wall-sliding, and it is what the server does. A "tidier" single 2D test would
  *     change movement feel AND desync from the server. Do not.
@@ -186,6 +190,20 @@ export class WorldCore {
   vitality = 1;
   scarcity = 0;
 
+  /** Client-vs-server drift, in tiles. Sampled per self-snapshot in applySnapshot, before reconcile.
+   *  Split by whether the local player was moving, because those measure different things:
+   *   • MOVING: dominated by the client-side predictor leading a snapshot that reflects the server a
+   *     moment ago (≈ MOVE_SPEED × snapshot age). Expected and benign — a predictor is supposed to
+   *     be ahead of the last stale snapshot.
+   *   • SETTLED (not moving): no lead, so this is the true position-AGREEMENT number. If the two
+   *     integrators actually disagreed, it would show here; it should collapse toward ~0. */
+  private drift = { last: 0, moving: { max: 0, sum: 0, n: 0 }, settled: { max: 0, sum: 0, n: 0 } };
+  private selfMoving = false;
+  /** performance.now() of the last frame the local player was moving — so the settled bucket can
+   *  wait out the post-stop convergence transient (the client stops instantly; the server keeps
+   *  integrating the last input for ~one round-trip) and measure only the truly-converged rest. */
+  private lastMovingAt = 0;
+
   particles: Particle[] = [];
 
   constructor(hooks: WorldHooks, map: TileMap) {
@@ -246,7 +264,8 @@ export class WorldCore {
     return d.x !== 0 || d.y !== 0 || this.clickTarget !== null;
   }
 
-  // ── collision — the drift-0.0000 invariant. Same geometry as WorldRoom.integrate. ──
+  // ── collision — same geometry as WorldRoom.integrate, so client and server agree (measured by
+  //    getDrift(), not assumed). ──
 
   blockedAt(x: number, y: number): boolean {
     if (this.isSharedOcean()) {
@@ -368,6 +387,8 @@ export class WorldCore {
       self.facing = this.localFacing;
       self.moving = moving;
     }
+    this.selfMoving = moving; // for the drift instrument's moving/settled split
+    if (moving) this.lastMovingAt = performance.now();
     this.hooks.onSelfSample?.(this.localX, this.localY);
   }
 
@@ -448,8 +469,29 @@ export class WorldCore {
     for (const [id, snap] of snaps) {
       const e = this.ensureEntity(snap);
       if (id === this.selfId) {
-        // Local player: reconcile only if prediction drifted far.
+        // ── the honest client-vs-server drift instrument ──
+        // This is the invariant that actually matters and was never measured: the divergence
+        // between the CLIENT'S predicted (x,y) and the SERVER'S authoritative (x,y) for the SAME
+        // entity (self), sampled the instant a fresh server snapshot lands. It is recorded BEFORE
+        // the reconcile below, so a snap can never mask it — that masking is exactly how the old
+        // "drift 0.0000" story hid the fact it was measuring the predictor against a same-ticker tap
+        // rather than against the server. (Caveat: on a real network the snapshot reflects the
+        // server a latency ago, so this reads a floor; on the local three-service run latency is a
+        // tick or two and this is the real number. Fully tick-aligned via acked-seq history is the
+        // rigorous form — see known-gaps.)
         const err = Math.hypot(this.localX - snap.x, this.localY - snap.y);
+        this.drift.last = err;
+        // Moving → the predictor-lead bucket. Not-moving-and-settled (still for >400ms, past the
+        // post-stop convergence transient) → the true position-agreement bucket. The brief window
+        // right after stopping counts as neither, so it doesn't inflate "settled".
+        const settled = !this.selfMoving && performance.now() - this.lastMovingAt > 400;
+        const bucket = this.selfMoving ? this.drift.moving : settled ? this.drift.settled : null;
+        if (bucket) {
+          if (err > bucket.max) bucket.max = err;
+          bucket.sum += err;
+          bucket.n += 1;
+        }
+        // Reconcile only if prediction drifted far (measured above first, so it stays honest).
         if (err > 1.5) {
           this.localX = snap.x;
           this.localY = snap.y;
@@ -689,6 +731,23 @@ export class WorldCore {
     }
   }
 
+  /** The real client-vs-server drift (tiles). `settled` is the true position-agreement number
+   *  (no prediction lead); `moving` includes the predictor's expected lead over a stale snapshot.
+   *  Zero samples until the first self-snapshot arrives (i.e. a server is actually connected). */
+  getDrift(): {
+    last: number;
+    moving: { max: number; mean: number; samples: number };
+    settled: { max: number; mean: number; samples: number };
+  } {
+    const m = this.drift.moving;
+    const s = this.drift.settled;
+    return {
+      last: this.drift.last,
+      moving: { max: m.max, mean: m.n ? m.sum / m.n : 0, samples: m.n },
+      settled: { max: s.max, mean: s.n ? s.sum / s.n : 0, samples: s.n },
+    };
+  }
+
   getNearbyId(): string | null {
     return this.nearbyId;
   }
@@ -843,9 +902,15 @@ export class WorldCore {
   // ── the frame ───────────────────────────────────────────────────────────────────
 
   /** One simulation step. The renderer calls this, then draws. Order is load-bearing:
-   *  detectProximity reads the interpolated positions stepRemotes just wrote. */
+   *  detectProximity reads the interpolated positions stepRemotes just wrote.
+   *
+   *  dt is the raw render-frame delta, NOT clamped and NOT fixed — because the AUTHORITATIVE server
+   *  integrates at exactly this shape (WorldRoom.tick: `dt = dtMs/1000`, variable, no clamp). A
+   *  clamp or a fixed step here would make the client integrate differently from the server on any
+   *  hitched frame, which is divergence we would then have to reconcile away. The real guard against
+   *  a backgrounded tab is clearing the keys on blur (the renderer does that), not capping dt. */
   step(dtMs: number) {
-    const dt = Math.min(dtMs, 50) / 1000; // clamp: a backgrounded tab must not teleport you
+    const dt = dtMs / 1000;
     this.stepLocal(dt);
     this.stepRemotes();
     this.detectProximity(dt);
