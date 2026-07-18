@@ -138,3 +138,39 @@ asset in `ECHO_level_design_7flows.md`, and the stands in §5.)
   back to the procedural generators (`game/art.ts`, `game/props.ts`).
 - Rendering reuses the proven Pixi conventions (`PixiWorld` + `artDir`, VenueScene/TownScene/
   WorldClient). **No new rendering path; no measurement change.**
+
+---
+
+## 8. ADDENDUM — the 2D→3D migration (2026-07-17)
+
+This is written consciously, not silently, because §1 says "do not drift" and this drifts one of the
+anchors on purpose. The world moved from 2D Pixi to **third-person low-poly 3D (Three.js/R3F)**. What
+that supersedes, and what it does not:
+
+**Superseded (say so out loud):**
+- §1 "**16-bit top-down orthographic RPG. Crisp pixels, nearest-neighbour, 16px tiles**" — gone. The
+  camera is third-person behind the avatar; forms are **soft low-poly, flat-shaded, carved-clay**
+  geometry, not pixels. You see your own body (which is why gaze/orientation are cues now).
+- §7 "**No new rendering path**" — there is a new rendering path; that was the entire task. **The
+  measurement change is still none:** the spine is renderer-independent, gameplay stays (x, y) on the
+  flat plane, the server diff is empty, protected files byte-untouched against main.
+- §6 sample `hf gen` prompts and the Higgsfield/PNG pipeline (§7) are dormant for the world: every
+  world asset is **procedural geometry** now (`game/three/*`, `game/props3d.ts`), zero GLB, nothing
+  to gen or commit. (The **landing** still uses its committed PNGs — untouched.)
+
+**Carried over UNCHANGED (the soul was never about pixels):**
+- **One light, always** — a single low **western dusk** key, everything lit by it. Now a real
+  `DirectionalLight`, which is what the 2D screen-wash was imitating.
+- **Long soft shadows, ink not black** — real soft shadow maps; the shadow/ground tint is ink
+  (`#0b0e14`), and `#000000` is still banned.
+- **Dusk saturation** — vivid but value-muted; the 9-family palette (`game/three/palette.ts`) is the
+  bible's, hue for hue.
+- **echo-violet `#a06cd5` sacred and rare, ≤5%** — it marks live humans (the presence ring), the
+  marker-stone glyph, and will mark the doppelgänger. Never decoration. This rule is load-bearing and
+  fully intact.
+- **Pooled warm lantern light vs cool dusk** — the campfire is the one warm pooled light against the
+  cool key; nature is organic (spheres/cones/irregular solids), built things geometric (boxes, clean
+  rails). The emotional contrast survives.
+
+The one thing 3D ADDS that 2D could not: the body is visible and orientable, so **gaze/heading and
+posture** are legible — new embodied signals for the flows to read.
