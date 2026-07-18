@@ -224,3 +224,24 @@ Gaps #1 and #3 below are the per-flow detail of this single milestone.
 _Decision recorded for Step 3: the passive sampler is left here (not built this turn) for the two
 reasons above — flood risk + it shares the openness-routing gap, so it would be reworked at the
 re-anchor regardless._
+
+---
+
+## ⚑ 7. W learned `persistence` = 1.0 from data where 1.0 was never observed (2026-07-17)
+
+- **Opened:** 2026-07-17 (the raft unification, `a4f8a8c` — the day-loop and the F1 build became one
+  raft, which is what first fires `structure_progress { finished: true }`).
+- **What:** `finished: true` maps to `persistence = 1.0` in the ingress (`app.py`), and that value is
+  now emitted for real when the raft is launched (the hull hits the water). Before the unification it
+  had **never fired in the product's life** — a click-station could only ever say `started` (→ 0.5).
+  So the committed W learned the `persistence` loading from a corpus in which the feature's **1.0 edge
+  was never present**; every training row sat at ≤ 0.5.
+- **Why it's a ⚑, not a bug:** a linear-Gaussian measurement model (factor analysis + Kalman) is least
+  reliable **extrapolating to the edge of a feature's range it never saw**. The 1.0 reads are honest
+  and the posterior stays finite (numerics gate green, individuation green), so nothing is broken
+  today — but the loading at 1.0 is an extrapolation, not a fit. Do not silently trust it as if it
+  were interpolated.
+- **Resolution:** the **next** scheduled W re-anchor (whenever it comes — NOT now, the P5 one-time
+  re-anchor is done) will have real `finished: true` rows in its corpus, so `persistence`'s top of
+  range gets fit from data instead of extrapolated. Until then: flagged, not re-routed, not retrained.
+- **Status:** OPEN — carried to the next re-anchor's corpus. No action before then.

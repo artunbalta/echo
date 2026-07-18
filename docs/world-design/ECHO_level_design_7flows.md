@@ -393,6 +393,14 @@ echo #a06cd5 / grass #74c365 / bark #7a4a2b, dusk light, soft grain. Each `hf ge
 a seamless tileset or sprite sheet, reusing VenueScene/TownScene conventions already in the repo so the new
 scenes drop into the proven Pixi + BehavioralEvent pipeline without a new rendering path.
 
+> **SUPERSEDED (2026-07-17, the 2D→3D migration).** This paragraph's rendering assumptions no longer
+> hold, recorded here rather than silently ignored. The world is now **third-person low-poly 3D
+> (Three.js/R3F)** with **procedural geometry** — there is a new rendering path, and the Higgsfield/
+> Pixi/16-bit-tileset pipeline is dormant for the world (the landing keeps its PNGs). What this note
+> got RIGHT and still holds: the scenes still feed **the proven `/observe/behavioral` ingress, no
+> parallel measurement path** — that line is the one that mattered, and it survived. See
+> `docs/world-design/art-bible.md §8` for the full addendum and what carried over unchanged.
+
 ---
 
 ## What the build prompt (next step) will demand
