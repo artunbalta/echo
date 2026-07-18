@@ -192,7 +192,7 @@ async function main() {
   //    EAST straight into the open sea. A must stop CLEANLY at the last walkable tile (the sand's
   //    outer edge) and STAY there under continued push — no drift, no snap-back, never onto the water.
   //    Because the server's barrier predicate is oceanLandAt(x,y,beach) — the SAME function
-  //    PixiWorld.blockedAt uses for the shared ocean — the client's predicted wall and the server's
+  //    WorldCore.blockedAt uses for the shared ocean — the client's predicted wall and the server's
   //    authoritative wall are identical, so the client is never reconciled backward (the judder). ──
   const sxA = WORLD.MAP_WIDTH / OCEAN.EXTENT, syA = WORLD.MAP_HEIGHT / OCEAN.EXTENT;
   const homeC = { x: islandSlot(0).x * sxA, y: islandSlot(0).y * syA }; // A's island centre

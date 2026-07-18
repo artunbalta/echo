@@ -17,7 +17,8 @@
  * so it never fights the raft-build controller (their zones are disjoint). All animation is procedural
  * (PixiWorld.setActivityState); everything routes through buildFlow1Event → /observe/behavioral.
  */
-import type { PixiWorld, ActivityKind } from "../PixiWorld";
+import type { ThreeWorld } from "../ThreeWorld";
+import type { ActivityKind } from "../WorldCore";
 import { buildFlow1Event, FLOW1_CUES, type BehavioralEvent, type EntitySnapshot } from "@echo/shared";
 
 export interface BeatSpec {
@@ -38,7 +39,7 @@ export interface BeatSpec {
 }
 
 export interface Flow1BeatsConfig {
-  world: PixiWorld;
+  world: ThreeWorld;
   beats: BeatSpec[];
   actorId: () => string;
   sessionId: () => string;

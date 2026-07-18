@@ -10,7 +10,7 @@
  * animation; the measurement backend is untouched.
  */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { PixiWorld } from "@/game/PixiWorld";
+import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import { Flow1Scene } from "@/game/activities/flow1Scene";
 import { type RaftPhase } from "@/game/activities/raftBuild";
@@ -21,7 +21,7 @@ interface LiveResult { delta_mu?: number; mocked?: boolean; cond_key?: string }
 
 export default function Flow1Client() {
   const mountRef = useRef<HTMLDivElement>(null);
-  const worldRef = useRef<PixiWorld | null>(null);
+  const worldRef = useRef<ThreeWorld | null>(null);
   const sceneRef = useRef<Flow1Scene | null>(null);
   const uidRef = useRef("");
   const sessionRef = useRef("");
@@ -58,7 +58,7 @@ export default function Flow1Client() {
     sessionRef.current = "s_" + Math.random().toString(36).slice(2, 10);
 
     let disposed = false;
-    let world: PixiWorld | null = null;
+    let world: ThreeWorld | null = null;
 
     (async () => {
       let seed = 7;
@@ -75,7 +75,7 @@ export default function Flow1Client() {
       const home = map.homeCenter ?? { x: Math.round(map.width / 2), y: Math.round(map.height / 2) };
       const spawn = { x: home.x, y: home.y + 5 };
 
-      world = new PixiWorld({}, { map, artDir: "/assets/island" });
+      world = new ThreeWorld({}, { map });
       worldRef.current = world;
 
       // The shared orchestrator computes positions (snapped to walkable land) + the entity snapshots.

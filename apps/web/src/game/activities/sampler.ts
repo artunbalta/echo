@@ -10,11 +10,11 @@
  * `explore_ratio` ride in raw_signals captured for the one-time W re-anchor (unrouted in ingest so a
  * high-frequency sampler cannot bias dominance/warmth before the re-anchor — known-gaps #2/#6).
  */
-import type { PixiWorld } from "../PixiWorld";
+import type { ThreeWorld } from "../ThreeWorld";
 import { buildFlow1Event, MOVEMENT_SAMPLE, type BehavioralEvent, type LifeStage } from "@echo/shared";
 
 export interface SamplerOpts {
-  world: PixiWorld;
+  world: ThreeWorld;
   actorId: () => string;
   sessionId: () => string;
   /** POST a batch of events to /observe/behavioral (the scene owns the fetch). */

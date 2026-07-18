@@ -20,7 +20,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { PixiWorld } from "@/game/PixiWorld";
+import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import {
   FLOW0_AFFORDANCES,
@@ -40,7 +40,7 @@ interface LiveResult { delta_mu?: number; mocked?: boolean; cond_key?: string }
 export default function Flow0Client() {
   const router = useRouter();
   const mountRef = useRef<HTMLDivElement>(null);
-  const worldRef = useRef<PixiWorld | null>(null);
+  const worldRef = useRef<ThreeWorld | null>(null);
   const uidRef = useRef("");
   const sessionRef = useRef("");
   const sceneReadyAtRef = useRef(0);
@@ -117,7 +117,7 @@ export default function Flow0Client() {
     sessionRef.current = "s_" + Math.random().toString(36).slice(2, 10);
 
     let disposed = false;
-    let world: PixiWorld | null = null;
+    let world: ThreeWorld | null = null;
 
     (async () => {
       // Claim (or recover) this user's home island — slot + deterministic terrain seed.
@@ -150,7 +150,7 @@ export default function Flow0Client() {
           }
       }
 
-      world = new PixiWorld(
+      world = new ThreeWorld(
         {
           onNearbyChange: (t) => {
             const aff = t ? FLOW0_AFFORDANCES.find((a) => a.id === t.refId) ?? null : null;
@@ -159,7 +159,7 @@ export default function Flow0Client() {
           },
           onMoveIntent: () => onFirstInput(),
         },
-        { map, artDir: "/assets/island" },
+        { map },
       );
       worldRef.current = world;
 

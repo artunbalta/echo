@@ -7,7 +7,7 @@
  * through the proven /observe/behavioral ingress (buildFlow1Event, solo context). Zero-key, procedural
  * animation, backend math untouched.
  */
-import type { PixiWorld } from "../PixiWorld";
+import type { ThreeWorld } from "../ThreeWorld";
 import type { TileMap } from "../tilemap";
 import { RaftBuild, type RaftPhase } from "./raftBuild";
 import { Flow1Beats, type BeatSpec } from "./flow1Beats";
@@ -37,7 +37,7 @@ export interface Flow1SceneHooks {
 }
 
 export interface Flow1SceneOpts {
-  world: PixiWorld;
+  world: ThreeWorld;
   map: TileMap;
   home: { x: number; y: number };
   actorId: () => string;
