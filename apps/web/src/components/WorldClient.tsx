@@ -135,6 +135,25 @@ function sameIds(a: { id: string }[], b: { id: string }[]): boolean {
 export default function WorldClient() {
   const mountRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<ThreeWorld | null>(null);
+  // Dev drift HUD (?drift): the REAL client-vs-server divergence, in tiles — the invariant the old
+  // "drift 0.0000" never actually measured. Off unless the flag is present; writes textContent
+  // directly (no re-render churn). Also parked on window.__drift for the measurement harness.
+  const driftHudRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (typeof window === "undefined" || !new URLSearchParams(window.location.search).has("drift")) return;
+    const t = setInterval(() => {
+      const d = worldRef.current?.core.getDrift();
+      if (!d) return;
+      (window as unknown as { __drift?: unknown }).__drift = d;
+      if (driftHudRef.current) {
+        const total = d.moving.samples + d.settled.samples;
+        driftHudRef.current.textContent = total
+          ? `client↔server drift (tiles)  settled ${d.settled.mean.toFixed(3)}/${d.settled.max.toFixed(3)} (n=${d.settled.samples})   moving ${d.moving.mean.toFixed(3)}/${d.moving.max.toFixed(3)} (n=${d.moving.samples})`
+          : "client↔server drift  (waiting for server snapshots…)";
+      }
+    }, 400);
+    return () => clearInterval(t);
+  }, []);
   // ── Flow 0 own-island layer (world-unify §3): the solitary baseline lives on YOUR island in the
   //    one ocean — client-local affordance entities (role "flow0", not room state) that emit SOLO
   //    cues (audience 0, private, no counterpart). Other players are atmosphere until Tier 1. ──
@@ -1801,6 +1820,13 @@ export default function WorldClient() {
       <div ref={mountRef} className="absolute inset-0" />
       {/* Atmospheric vignette over the world (below the UI panels in DOM order). */}
       <div className="world-vignette absolute inset-0" />
+
+      {/* Dev drift HUD (?drift only) — the real client-vs-server divergence, measured not assumed. */}
+      <div
+        ref={driftHudRef}
+        className="pointer-events-none absolute left-2 top-2 z-50 rounded bg-black/70 px-2 py-1 font-mono text-[10px] text-[#8fe]/90"
+        style={{ display: typeof window !== "undefined" && new URLSearchParams(window.location.search).has("drift") ? "block" : "none" }}
+      />
 
       {/* ── Flow 1 own-island embodied activities (raft build + beats) — diegetic overlays only ── */}
       {f1Whisper && (

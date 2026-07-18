@@ -245,3 +245,56 @@ re-anchor regardless._
   re-anchor is done) will have real `finished: true` rows in its corpus, so `persistence`'s top of
   range gets fit from data instead of extrapolated. Until then: flagged, not re-routed, not retrained.
 - **Status:** OPEN — carried to the next re-anchor's corpus. No action before then.
+
+---
+
+## ⚑ 8. "drift 0.0000" never measured client-vs-server; the real invariant was unmeasured (2026-07-17)
+
+- **Opened:** 2026-07-17 (the 2D→3D migration, reviewing what the drift claim actually proved).
+- **What:** The product has long cited **"drift 0.0000"** as proof that the client's predicted (x,y)
+  and the server's authoritative (x,y) stay together. **They were never compared.** Two different
+  things wore that number:
+  - The **copresence integration test** (`apps/realtime/src/copresence.test.mts`, `#4 no-rebound`)
+    walks an entity **on the server only** and checks it stops cleanly at the shoreline with no
+    rebound. That is a real, valuable **server-side no-jitter** test — but it never runs the client
+    predictor, so it cannot measure client↔server divergence.
+  - The client **reconcile error** in `WorldCore.applySnapshot` (`err = |localX − snap.x|`, snap if
+    `> 1.5`) compares the predictor to the incoming snapshot — but historically this was described/
+    used as if it proved agreement, when a hard snap on `> 1.5` **masks** any real divergence, and
+    the predictor + the thing it was checked against were driven by the **same client ticker**.
+  - Net: **the real invariant — client-predicted vs server-authoritative (x,y) for the same entity
+    at the same tick — was unmeasured.** "0.0000" was a comforting mask, not a guarantee. Do not cite
+    it as one.
+- **What's done now (not deferred):** `WorldCore.getDrift()` measures it directly — sampled per
+  self-snapshot in `applySnapshot`, **before** the reconcile snap, so a correction cannot hide it —
+  and the `/play?drift` dev HUD surfaces `last / max / mean`. This is the honest instrument; the
+  reported 3D number comes from it.
+- **Still open (the rigorous form):** the direct sample compares the client's CURRENT prediction
+  against a snapshot that, on a real network, reflects the server a latency ago — so over the
+  internet it reads a floor, not the tick-exact error. The fully tick-aligned version keeps a ring
+  of the client's predicted position keyed by input `seq` and compares against the snapshot's acked
+  `seq`. Deferred (the local three-service run has ~1–2 ticks of latency, where the direct sample is
+  already the real number); flagged so nobody mistakes the local floor for the networked worst case.
+- **Status:** OPEN (rigorous seq-aligned form) — direct instrument shipped; do not resurrect
+  "drift 0.0000" as proof.
+
+## ⚑ 9. A fixed client simulation step must move both sides together (option B), deferred (2026-07-17)
+
+- **Opened:** 2026-07-17 (reverting a client-only fixed/clamped step introduced during the migration).
+- **What:** The client integrates local movement at the **render-frame delta** (`WorldCore.step`:
+  `dt = dtMs/1000`, unclamped), because the **authoritative server integrates at exactly that shape**
+  (`WorldRoom.tick`: `dt = dtMs/1000` from `setSimulationInterval`, variable, **not** a fixed 20 Hz).
+  A migration-era change clamped/fixed the client step alone; it was **reverted**, because a fixed
+  client stepping against a variable-dt server agrees **less**, not more — the reconcile error grew
+  under it, which is the tell. A client-only step change is always wrong here.
+- **Why a fixed step could still be wanted:** a fixed simulation step (accumulator, both sides) makes
+  integration deterministic and frame-rate-independent, which is the textbook basis for input replay
+  / rollback reconciliation. It is a legitimate future direction.
+- **Resolution (the correct fix, deferred):** **option B — change BOTH sides together.** Client and
+  server adopt the same fixed step + accumulator, and reconciliation becomes seq-aligned replay
+  rather than a `> 1.5` snap. This is its own piece of work with its own verification (the
+  `getDrift()` instrument from ⚑8 is the acceptance test: the fixed-both-sides number must beat the
+  variable-both-sides number, not just the broken variable-vs-fixed one). **Do NOT touch one side
+  alone.**
+- **Status:** OPEN — deferred by design; guarded by the comment in `WorldCore.step` and by ⚑8's
+  instrument.
