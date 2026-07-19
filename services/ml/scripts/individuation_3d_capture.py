@@ -123,7 +123,11 @@ def drive(page, persona: str, thorough: bool) -> dict:
     # into decoration, Hank stops the moment it is seaworthy.
     if walk_to(assembly["x"], assembly["y"], tol=1.0):
         trace["reached_assembly"] = True
-        build_ms = 16500 if thorough else 5300
+        # Hasty still means "float it and stop" — 6500ms lands ~5800 workMs, comfortably past the
+        # float gate (MIN 4200) so launch fires reliably even when headless render jank steals frames,
+        # yet far below SOLID (9000) so there is still zero decoration. The manner contrast is
+        # unchanged (thoroughness ~0.39 vs ~1.0); only the drive's reliability improves.
+        build_ms = 16500 if thorough else 6500
         hold(build_ms)
         trace["built_ms"] = build_ms
         trace["raft_after_build"] = page.evaluate("() => window.__echo.raft && window.__echo.raft()")
@@ -257,38 +261,66 @@ def main() -> int:
                   "— NOT a measurement result.")
             return 2
 
+    # Every counted run must be a COMPLETE performance: each persona's characteristic beats must have
+    # fired. Otherwise a timing-sensitive beat that mis-fires in headless (e.g. the cave fork not
+    # landing) silently deflates the pooled L2 and pollutes the 2D-vs-3D comparison with drive luck
+    # rather than cue fidelity. A missing beat is INFRA (drive flakiness), never a low number.
+    def actions(evs):
+        return {e.get("action") for e in evs}
+
+    REQUIRED = {
+        "Tessa": {"plant_seed", "study_marker", "dig_cache", "stay_safe", "sit_still", "launch_raft"},
+        "Hank": {"eat_now", "study_marker", "enter_cave", "launch_raft"},
+    }
+    for name, evs in (("Tessa", tessa_ev), ("Hank", hank_ev)):
+        missing = REQUIRED[name] - actions(evs)
+        if missing:
+            print(f"[INFRA] {name} did not perform every beat this run (missing {sorted(missing)}). "
+                  "A timing-sensitive beat mis-fired in headless — drive flakiness, NOT a measurement "
+                  "result. Re-run; do not count this number.")
+            return 2
+
     if not tessa_ev or not hank_ev:
         print("[INFRA] no events captured — the client did not emit. Not a measurement result.")
         return 2
 
+    # LABEL keys the ML users AND the dump files, so 2D and 3D can be captured against ONE ML
+    # instance without their posteriors colliding (the whole point of the real-2D-vs-real-3D run).
+    label = os.environ.get("LABEL", "ind3d")
     if os.environ.get("DUMP"):
-        with open("/tmp/ind3d_tessa.json", "w") as f:
+        with open(f"/tmp/{label}_tessa.json", "w") as f:
             json.dump(tessa_ev, f, indent=2)
-        with open("/tmp/ind3d_hank.json", "w") as f:
+        with open(f"/tmp/{label}_hank.json", "w") as f:
             json.dump(hank_ev, f, indent=2)
-        print("  dumped raw events to /tmp/ind3d_{tessa,hank}.json")
+        print(f"  dumped raw events to /tmp/{label}_{{tessa,hank}}.json")
 
-    # ── assert the captured raw_signals actually diverge (the thing the spine test can't see) ──
+    # ── the locomotion cues get their own look: these are the render-independent sampler outputs
+    #    (speed/heading/novelty/still) that a bad port would smear. Report them separately so a drop
+    #    can be traced to the sampler vs the discrete beats. ──
     def raw_of(evs, key):
         vals = [e.get("raw_signals", {}).get(key) for e in evs]
         return [v for v in vals if isinstance(v, (int, float))]
 
+    def stat(evs, key):
+        v = raw_of(evs, key)
+        return (max(v) if v else 0.0, sum(v) / len(v) if v else 0.0, len(v))
+
     print()
-    print("captured raw_signals (real, off the client):")
+    print("captured raw_signals (real, off the client) — max shown:")
     diverged = False
-    for k in ("thoroughness01", "decoration", "persist_after_fail", "dwell_ms", "still_ms"):
-        t = raw_of(tessa_ev, k)
-        h = raw_of(hank_ev, k)
-        tm = max(t) if t else 0.0
-        hm = max(h) if h else 0.0
+    for k in ("thoroughness01", "decoration", "persist_after_fail", "dwell_ms", "still_ms",
+              "speed_var", "heading_var", "explore_ratio"):
+        tm, _, _ = stat(tessa_ev, k)
+        hm, _, _ = stat(hank_ev, k)
         mark = "  ⟵ diverges" if abs(tm - hm) > 1e-3 else ""
         if abs(tm - hm) > 1e-3:
             diverged = True
-        print(f"  {k:<20} tessa_max={tm:<10.3f} hank_max={hm:<10.3f}{mark}")
+        tag = " [locomotion]" if k in ("speed_var", "heading_var", "explore_ratio", "still_ms") else ""
+        print(f"  {k:<20} tessa={tm:<10.3f} hank={hm:<10.3f}{mark}{tag}")
 
     # ── feed each stream to a fresh posterior through the REAL ingress, measure the distance ──
-    tessa_uid = "ind3d_tessa"
-    hank_uid = "ind3d_hank"
+    tessa_uid = f"{label}_tessa"
+    hank_uid = f"{label}_hank"
     # Re-key the captured events onto clean users so the two posteriors are independent.
     for ev in tessa_ev:
         ev = dict(ev)
@@ -310,19 +342,28 @@ def main() -> int:
     mu_t = np.array(ml_get(f"/persona/{tessa_uid}")["persona"]["mu"], dtype=float)
     mu_h = np.array(ml_get(f"/persona/{hank_uid}")["persona"]["mu"], dtype=float)
     dist = float(np.linalg.norm(mu_t - mu_h))
+    axes = ["warmth", "dominance", "openness", "energy", "formality", "intellect", "pace", "affect"]
+    diff = (mu_t - mu_h).tolist()
 
     print()
     print(BAR)
-    print(f"‖μ_tessa − μ_hank‖ = {dist:.4f}    (2D baseline on the merged tree: 0.2620)")
-    axes = ["warmth", "dominance", "openness", "energy", "formality", "intellect", "pace", "affect"]
-    gaps = sorted(zip(axes, (mu_t - mu_h).tolist()), key=lambda kv: -abs(kv[1]))
-    print("  biggest axis gaps:", ", ".join(f"{a} {v:+.2f}" for a, v in gaps[:4]))
+    print(f"‖μ_tessa − μ_hank‖ = {dist:.4f}   [{label}]")
+    print("  FULL per-axis separation (μ_tessa − μ_hank):")
+    for a, dv, mt, mh in sorted(zip(axes, diff, mu_t.tolist(), mu_h.tolist()), key=lambda z: -abs(z[1])):
+        loco = "  ← locomotion-driven" if a in ("pace", "openness", "energy") else ""
+        print(f"    {a:<10} {dv:+.4f}   (tessa {mt:+.3f}  hank {mh:+.3f}){loco}")
     finite = bool(np.all(np.isfinite(mu_t)) and np.all(np.isfinite(mu_h)))
     ok = diverged and finite and dist > 0.05
     print()
     print(f"  raw_signals diverge: {diverged}    posteriors finite: {finite}    distance > 0.05: {dist > 0.05}")
     print(f"RESULT: {'PASS ✅' if ok else 'FAIL ❌'}")
     print(BAR)
+
+    # Machine-readable result for the real-2D vs real-3D comparison.
+    with open(f"/tmp/{label}_result.json", "w") as f:
+        json.dump({"label": label, "dist": dist, "axes": axes, "diff": diff,
+                   "mu_tessa": mu_t.tolist(), "mu_hank": mu_h.tolist()}, f, indent=2)
+    print(f"  wrote /tmp/{label}_result.json")
     return 0 if ok else 1
 
 
