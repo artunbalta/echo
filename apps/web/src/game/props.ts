@@ -46,6 +46,12 @@ export const PROP_KINDS = [
   "marker_stone",  // a weathered standing stone with a faint glyph — study it (non-instrumental knowledge)
   "buried_cache",  // a marked digging spot — dig it out (persistence after failure)
   "shy_creature",  // a small creature that appears only when the player is still & quiet
+  // ── Flow 5 ("Pressure & the Unobserved Self") probe objects. The owner's mark reuses
+  //    `marker_stone` and the emptied cache reuses `buried_cache`, so only what has no existing
+  //    form is new: the gull in two states, and the cache while it still carries another's mark. ──
+  "gull_tangled",  // a gull caught in the trap line — the help-at-cost probe, before
+  "gull_free",     // the same gull, loosed — the after state (the silhouette IS the progress)
+  "cache_marked",  // a half-buried cache with SOMEONE ELSE'S mark carved into the lid
   // ── the stand archetypes (Step 6). These are STRUCTURES (bark frame + parchment awning), so the
   //    assets-absent fallback must be a stall silhouette, NOT a humanoid character sheet. ──
   "travel_stand",
@@ -382,6 +388,50 @@ function drawShyCreature(ctx: CanvasRenderingContext2D, ox: number, oy: number, 
   rect(ctx, ox + 9, oy + 16, 1, 1, "#241a14");
 }
 
+/** The tangled gull: a hunched bird with one wing bound down by a taut line. It struggles on the
+ *  frame beat, which is what makes the hold feel resisted rather than timed. */
+function drawGullTangled(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 8);
+  const st = frame === 1 ? -1 : 0; // the struggle
+  p(5, 15 + st, 6, 5, "#e2e0d8");      // body, hunched
+  p(5, 15 + st, 6, 1, "#f2f0ea");      // lit top edge
+  p(10, 13 + st, 2, 3, "#e2e0d8");     // head/neck
+  rect(ctx, ox + 11, oy + 14 + st, 1, 1, "#241a14");   // eye
+  p(12, 15 + st, 2, 1, "#d8a24a");     // beak
+  p(4, 18, 5, 1, "#8a7f6e");           // the wing pinned down
+  // the line, taut across the wing
+  p(3, 17, 9, 1, "#a89268");
+  p(7, 16, 1, 4, "#a89268");
+}
+
+/** The same gull, loosed: upright, wings free, about to go. */
+function drawGullFree(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 6);
+  const lift = frame === 1 ? -1 : 0;
+  p(6, 13 + lift, 5, 5, "#f2f0ea");     // body, upright
+  p(10, 11 + lift, 2, 3, "#f2f0ea");    // head
+  rect(ctx, ox + 11, oy + 12 + lift, 1, 1, "#241a14");
+  p(12, 13 + lift, 2, 1, "#d8a24a");
+  p(3, 12 + lift, 4, 1, "#e2e0d8");     // wings open
+  p(10, 12 + lift, 4, 1, "#e2e0d8");
+}
+
+/** The marked cache: a mound of turned sand with a carved sign on the lid. The mark is the whole
+ *  point of the object, so it reads at a glance even before you are close enough to make it out. */
+function drawCacheMarked(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, _frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 10);
+  p(3, 16, 10, 5, "#9a7e54");   // the mound
+  p(3, 16, 10, 1, "#c9ad79");   // lit crest
+  p(5, 14, 6, 3, "#7a4a2b");    // the lid
+  p(5, 14, 6, 1, "#9a6238");
+  // the owner's mark, carved
+  rect(ctx, ox + 7, oy + 15, 2, 1, "#e8d3a0");
+  rect(ctx, ox + 8, oy + 14, 1, 3, "#e8d3a0");
+}
+
 /** A built stall — bark posts + a parchment-canvas awning + a warm lantern. The procedural fallback
  *  for the stand archetypes when their bible PNG is absent, so a stall reads as a STRUCTURE (not a
  *  humanoid). `accent` tints the awning so the four stands read as distinct at a glance. */
@@ -399,6 +449,9 @@ function drawStand(ctx: CanvasRenderingContext2D, ox: number, oy: number, accent
 }
 
 const DRAW: Record<PropKind, Draw> = {
+  gull_tangled: drawGullTangled,
+  gull_free: drawGullFree,
+  cache_marked: drawCacheMarked,
   dog: drawDog,
   grain_sprout: (c, x, y) => drawGrainSprout(c, x, y),
   grain_ripe: drawGrainRipe,

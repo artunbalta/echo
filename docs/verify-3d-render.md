@@ -171,6 +171,46 @@ unreachable the world should still be a world rather than a modal. **Stop the re
 Then start the realtime service again and reload, and confirm the online path is unchanged: the
 notice is gone, co-presence works, and section 2 still passes.
 
+## 7. Flow 5, the two moral probes, embodied
+
+New with F5. These replaced a centre-screen popup with two buttons, so what you are checking is that
+they are now something you *do*. **A single tab is enough; the probes are client-local and private.**
+
+The probe alternates by day and the privacy condition alternates with it, so you may need to end the
+day at the campfire and come back to see the other one.
+
+**The gull (help at cost).** Walk east along the shore until you find a gull tangled in the trap line.
+
+- [ ] Holding [space] near it plays a working animation and the **line visibly comes free in stages**.
+      There is no bar, no percentage and no timer anywhere on screen.
+- [ ] The hold **slips twice** and has to be re-taken, the same way the raft's lashings do.
+- [ ] Working it costs you: **vitality drains** while you hold.
+- [ ] **Walking away half done is allowed** and is not an error. The gull stays partly free.
+- [ ] Freeing it completely changes the gull's posture and it leaves.
+
+**The cache (honesty unobserved).** Walk northwest until you find a half-buried cache.
+
+- [ ] You have to get **within about a tile to read the owner's mark**. From further away you cannot
+      tell it is someone else's.
+- [ ] Holding [space] at the mound **digs, progressively**, and the mound visibly empties. Stopping
+      early takes less.
+- [ ] There is a **separate marker stone beside it**. Holding [space] there instead presses the mark
+      back and covers the mound over. Doing the honest thing costs you the walk to a different spot.
+- [ ] Walking past either probe without acting does nothing at all and is not recorded.
+
+**The privacy condition, which is the point of the flow.**
+
+- [ ] On one day, **nobody is anywhere near** the probe.
+- [ ] On the next, **someone stands further up the shore, in sight**. They are outside talking range:
+      walking toward them offers no conversation. Being seen is a fact about the situation.
+- [ ] With devtools on the Network tab, filter to `observe/behavioral` and confirm the probe's event
+      carries `public_or_private` matching what you saw, and `audience_size` 1 or 0 to match.
+
+**Two tabs, `?u=alice` and `?u=bob`.**
+
+- [ ] Neither tab can see the other's probe. These are client-local and private by construction, so
+      alice's gull must not appear on bob's island and the witness must not be a real player.
+
 ---
 
 ## If anything above fails

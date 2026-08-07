@@ -25,6 +25,7 @@ import {
 } from "@echo/shared";
 import { generateOcean } from "@/game/tilemap";
 import { Flow1Scene } from "@/game/activities/flow1Scene";
+import { Flow5Probes } from "@/game/activities/flow5Probes";
 
 const prettyBucket = (b: string) => b.replace(/_/g, " ");
 
@@ -200,6 +201,9 @@ export default function WorldClient() {
   const dayStartAtRef = useRef(0);
   const locoRef = useRef<LocomotionSampler | null>(null);
   const probeEntsRef = useRef<EntitySnapshot[]>([]);
+  /** The F5 probe as a PERFORMED activity. Replaces P7's two-button popup: the decision cue and
+   *  its routing are unchanged, what is added is the manner of performing it. */
+  const f5Ref = useRef<Flow5Probes | null>(null);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
   // ── the solo session (no room reachable) ──
@@ -678,11 +682,45 @@ export default function WorldClient() {
     const lim = OCEAN_ISLAND_R - 2;
     const m = Math.hypot(probe.dx, probe.dy) || 1;
     const k = Math.min(1, lim / m);
-    const p = clampToMap(home.x + probe.dx * k, home.y + probe.dy * k);
-    probeEntsRef.current = [{
-      id: probe.refId, kind: "npc", refId: probe.refId, name: probe.name, spriteUrl: probe.sprite,
-      x: p.x, y: p.y, facing: "down", moving: false, role: "probe", status: "none",
-    } as EntitySnapshot];
+    void k;
+    // The probe is a PERFORMED activity now, not a popup. The controller owns its own entities (the
+    // probe, the owner's mark, and the public condition's witness) and merges them through
+    // probeEntsRef, which mergeLocal already carries into every snapshot.
+    const place = (dx: number, dy: number) => {
+      const m2 = Math.hypot(dx, dy) || 1;
+      const k2 = Math.min(1, lim / m2);
+      return clampToMap(home.x + dx * k2, home.y + dy * k2);
+    };
+    f5Ref.current?.dispose();
+    const kind: "gull" | "cache" = probe.refId === "probe_gull" ? "gull" : "cache";
+    // THE PRIVACY CONDITION IS THE THESIS OF F5, so the same player has to meet both. P7's probes
+    // were always private (audience 0), which makes the public-minus-private delta unmeasurable by
+    // construction: there is no public arm to subtract. Alternate by day, deterministically, so a
+    // returning player performs the same beat observed and unobserved across sessions and the
+    // conditional buckets have both halves. The witness is present or absent; nothing is announced.
+    const privacy: "public" | "private" = day.dayCount % 2 === 0 ? "public" : "private";
+    const ctrl = new Flow5Probes({
+      world: worldRef.current!, probe: kind, privacy, home, place,
+      actorId: () => uidRef.current, sessionId: () => sessionIdRef.current,
+      send: (events) => {
+        if (!telemetryConsented()) return;
+        void fetch("/api/observe/behavioral", {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+        }).catch(() => {});
+      },
+      addEntity: (snap) => { probeEntsRef.current = [...probeEntsRef.current.filter((e) => e.id !== snap.id), snap]; },
+      setEntitySprite: (id, spriteUrl) => {
+        probeEntsRef.current = probeEntsRef.current.map((e) => (e.id === id ? { ...e, spriteUrl } : e));
+        worldRef.current?.setEntitySprite(id, spriteUrl);
+      },
+      spendVitality: (amt) => dayApiRef.current.addVitality(-amt),
+      onWhisper: (t) => setF1Whisper(t),
+      onPrompt: (t) => setF1Prompt(t),
+    });
+    probeEntsRef.current = ctrl.entities();
+    f5Ref.current = ctrl;
+    if (worldRef.current) ctrl.start();
+    return () => { ctrl.dispose(); f5Ref.current = null; };
   }, [day.ready, day.dayCount, directorPick]);
 
   /** Commit a Stage-7 moral probe — private, audience 0, commit-once; the act (or its explicit
@@ -2238,30 +2276,14 @@ export default function WorldClient() {
             </div>
           );
         }
-        // P7 Stage-7 — the private moral probe: no witness, no reward marker, no score. The
-        // prompt names the cost honestly; both arms are one click; done-state is a quiet line.
-        if (role === "probe") {
-          const probe = PROBE_BY_ID.get(nearby.refId);
-          if (probe) {
-            const verdict = dayCommitted[probe.refId];
-            return (
-              <div className="panel absolute bottom-20 left-1/2 w-[min(520px,94vw)] -translate-x-1/2 rounded-lg p-3 text-center font-mono">
-                <div className="mb-1 text-sm italic text-parchment/80">{nearby.name}</div>
-                {verdict ? (
-                  <p className="text-sm italic text-parchment/60">{verdict === "take" ? probe.doneLineTake : probe.doneLineRefuse}</p>
-                ) : (
-                  <div>
-                    <p className="mb-2 text-sm leading-relaxed text-parchment/85">{probe.prompt}</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      <button onClick={() => commitProbe(probe, true)} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">{probe.takeLabel}</button>
-                      <button onClick={() => commitProbe(probe, false)} className="rounded border border-echo/30 px-2.5 py-1 text-[12px] text-parchment hover:border-echo hover:text-echo">{probe.refuseLabel}</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          }
-        }
+        // Flow 5 — the private moral probes. These used to render a centre-screen popup with two
+        // buttons here, which is the disguised multiple-choice questionnaire the project's own record
+        // rules out: every behaviour collapsed to "which button", and a button cannot individuate
+        // people. They are performed activities now (game/activities/flow5Probes.ts), driven by the
+        // same hold-and-approach input the raft build uses, so the manner of the act is what is
+        // measured. The controller owns its own prompt and whisper lines, so there is nothing to
+        // render here and the probe roles fall through to no panel at all.
+        if (role === "flow5" || role === "flow5_witness" || role === "probe") return null;
         // The survival day — a station on YOUR OWN homestead (P1). Forks are commit-once and
         // diegetic; the campfire is ALWAYS willing (an undecided fork is data, not a gate — Law 2).
         if (role === "day") {
