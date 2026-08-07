@@ -126,3 +126,35 @@ export function driftVector(
   const v = c * DRIFT_SPEED;
   return { x: (dx / d) * v, y: (dy / d) * v };
 }
+
+/** The state a crossing starts from. See {@link beginCrossing}. */
+export interface RaftCrossing {
+  /** Aged seaworthiness at the moment this crossing began, 0..1. */
+  sea: number;
+  /** Tiles of open water this crossing gets before the sea starts pushing back. */
+  reach: number;
+  /** Radial distance from the departure shore, reset to 0 by definition. */
+  spent: number;
+  /** The shore shoved off from, which is the shore the current carries you back to. */
+  departX: number;
+  departY: number;
+}
+
+/**
+ * Begin (or restart) a crossing. Reach is a budget PER CROSSING, not a fuel tank that empties
+ * forever: everything the raft has already carried you AGES it (which is the longer durability a
+ * better build buys), and the next crossing is then measured afresh from the new shore. So a scrap
+ * raft island-hops one neighbour at a time and still gets everywhere.
+ *
+ * Called at launch and at every landfall. Like everything else in this file it is PURE and is
+ * imported by BOTH the authoritative server (WorldRoom.beginCrossing) and the client (the solo
+ * session, which has no server to do it). That shared import is the point: a solo raft has to
+ * re-budget and age on exactly the same curve an online one does, or the two sessions would grant
+ * different amounts of travel for the same behaviour.
+ *
+ * `waterTiles` is the LIFETIME open-water path this raft has carried you, which is what ages it.
+ */
+export function beginCrossing(s0: number, waterTiles: number, x: number, y: number): RaftCrossing {
+  const sea = effectiveSeaworthiness(s0, waterTiles);
+  return { sea, reach: reachTiles(sea), spent: 0, departX: x, departY: y };
+}

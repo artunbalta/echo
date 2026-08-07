@@ -20,7 +20,7 @@ import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEve
 import {
   nearestSlot, slotDistance, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, OCEAN_BEACH_W, SURVIVAL,
   FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event, buildSocialEvent,
-  WORLD, oceanLandAt, effectiveSeaworthiness, reachTiles,
+  WORLD, oceanLandAt, beginCrossing,
   type Flow0Affordance,
 } from "@echo/shared";
 import { generateOcean } from "@/game/tilemap";
@@ -208,9 +208,15 @@ export default function WorldClient() {
   const soloRef = useRef(false);
   /** The solo tick's interval id, cleared in the effect cleanup beside net.leave(). */
   const soloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  /** Local stand-in for the raft fields the authoritative snapshot would otherwise carry. Written
-   *  only by the solo launch/haul branches, read only by the solo tick. */
-  const soloRaftRef = useRef({ sailing: false, sea: 0, reach: 0, departX: 0, departY: 0 });
+  /** Local stand-in for the raft state the server would otherwise own. `sea`, `reach` and `depart*`
+   *  are the fields the authoritative snapshot carries; `s0`, `waterTiles` and `spent` are the
+   *  server-only accounting (WorldRoom's raftS0 / raftWaterTiles / raftSpent) that the solo tick has
+   *  to keep itself, because they are what age the raft and re-budget each crossing. `last*` is the
+   *  previous tick's position, so open-water path length can be accumulated. */
+  const soloRaftRef = useRef({
+    sailing: false, sea: 0, reach: 0, departX: 0, departY: 0,
+    s0: 0, waterTiles: 0, spent: 0, lastX: 0, lastY: 0,
+  });
   const interactionRef = useRef<string | null>(null);
   const inputFocusedAt = useRef<number>(0);
   const editsRef = useRef<number>(0);
@@ -1330,20 +1336,21 @@ export default function WorldClient() {
           onLaunched: (sea) => {
             netRef.current?.sendSetSail(true, sea);
             // Solo: no room, so sendSetSail is a no-op and a raft that was genuinely built would never
-            // grant sailing. Apply the SAME effect the server's SET_SAIL handler applies, from the same
-            // shared raft.ts, using the same `sea` the build earned. At launch waterTiles is 0, so
-            // effectiveSeaworthiness is s0 exactly; the shore you shove off from is the shore the
-            // current carries you back to. Reach is fixed here by what the build was worth and is never
-            // raised afterwards, which is the rule the online path enforces. Sailing stays EARNED.
+            // grant sailing. Apply the SAME effect the server's SET_SAIL handler applies: clamp the
+            // earned seaworthiness to s0, reset the raft's lifetime water tiles, and begin a crossing
+            // through the SAME shared beginCrossing the server calls. Reach is fixed here by what the
+            // build was worth and is never raised afterwards, which is the rule the online path
+            // enforces. Sailing stays EARNED, never granted.
             if (soloRef.current) {
               const p = world.getSelfTile();
               const s0 = Math.max(0, Math.min(1, Number(sea) || 0));
-              const sEff = effectiveSeaworthiness(s0, 0);
+              const c = beginCrossing(s0, 0, p.x, p.y);
               soloRaftRef.current = {
-                sailing: true, sea: sEff, reach: reachTiles(sEff), departX: p.x, departY: p.y,
+                sailing: true, sea: c.sea, reach: c.reach, departX: c.departX, departY: c.departY,
+                s0, waterTiles: 0, spent: c.spent, lastX: p.x, lastY: p.y,
               };
               world.setSailing(true);
-              world.setRaft({ sea: sEff, reach: reachTiles(sEff), departX: p.x, departY: p.y });
+              world.setRaft({ sea: c.sea, reach: c.reach, departX: c.departX, departY: c.departY });
               setSailing(true);
             }
             finishRaftRef.current();
@@ -1391,6 +1398,35 @@ export default function WorldClient() {
         soloTimerRef.current = setInterval(() => {
           const p = world.getSelfTile();
           const r = soloRaftRef.current;
+          // ── the raft accounting the server's integrate() would otherwise be doing ──
+          // Mirrors WorldRoom.integrate tick for tick, over the SAME shared oceanLandAt and the SAME
+          // shared beginCrossing. Without it a solo raft would keep its launch-time reach forever
+          // and never age, so a solo player could island-hop indefinitely while an online one is
+          // held to a per-crossing budget. That is not a gameplay nicety: unlimited travel inflates
+          // novel_tile_ratio, path_tortuosity, travel_novelty and curiosity, which are exactly the
+          // four openness features the P5 W re-anchor added, so an unbudgeted solo session would
+          // bias the newest axis upward for the same behaviour. See known-gaps 10.
+          if (r.sailing) {
+            if (oceanLandAt(p.x, p.y, OCEAN_BEACH_W)) {
+              // Landfall: the crossing is over. Everything the raft has carried AGES it, and the next
+              // crossing is measured afresh from this new shore.
+              if (r.spent > 0 || r.departX !== p.x || r.departY !== p.y) {
+                const c = beginCrossing(r.s0, r.waterTiles, p.x, p.y);
+                r.sea = c.sea; r.reach = c.reach; r.spent = c.spent;
+                r.departX = c.departX; r.departY = c.departY;
+                world.setRaft({ sea: c.sea, reach: c.reach, departX: c.departX, departY: c.departY });
+              }
+            } else {
+              // WEAR is the real path travelled over open water. REACH is spent RADIALLY from the
+              // departure shore, deliberately not path length, so the sea holds you at arm's length
+              // and always lets you return.
+              r.waterTiles += Math.hypot(p.x - r.lastX, p.y - r.lastY);
+              r.spent = Math.hypot(p.x - r.departX, p.y - r.departY);
+            }
+          }
+          r.lastX = p.x;
+          r.lastY = p.y;
+
           const snaps = new Map<string, EntitySnapshot>();
           snaps.set(SOLO_SELF_ID, {
             id: SOLO_SELF_ID, kind: "user", refId: userId, name, spriteUrl,
