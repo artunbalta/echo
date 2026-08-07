@@ -279,3 +279,45 @@ test("P1: the terrain window follows the player rather than being built once", (
     "the old window must be disposed, or rebuilding leaks a few thousand triangles per crossing",
   );
 });
+
+// ── the shoreline z-fight ─────────────────────────────────────────────────────────
+
+test("the beach is coplanar with the sea, so the sea must carry polygonOffset", () => {
+  // This is asserted on the source because the artefact is TEMPORAL: the depth test flips per pixel
+  // per frame as the camera moves, so a still screenshot cannot see it. See known-gaps 11 for why
+  // that makes a source invariant the right instrument here rather than a rendered comparison.
+  const home = oceanIslandCenter(0);
+
+  // The coplanarity itself, which is the cause. groundHeight collapses to zero at OCEAN_ISLAND_R and
+  // is exactly zero beyond it, so the whole sand ring sits at the sea plane's own y.
+  // At exactly r = OCEAN_ISLAND_R the dome term is cos(pi/2)**1.6, which floating point makes 2e-26
+  // rather than a literal 0. That is 25 orders of magnitude below any depth buffer's resolution, so
+  // it is coplanar in every sense that matters here; the epsilon says so without pretending the
+  // arithmetic is exact.
+  const COPLANAR = 1e-12;
+  for (const r of [OCEAN_ISLAND_R, OCEAN_ISLAND_R + OCEAN_BEACH_W / 2, OCEAN_ISLAND_R + OCEAN_BEACH_W]) {
+    const h = groundHeight(home.x + r, home.y);
+    assert.ok(h < COPLANAR, `the sand ring at r=${r} sits at y=${h}, coplanar with the sea plane`);
+  }
+  // Beyond the island radius it is exactly zero, because groundHeight skips the island entirely.
+  assert.equal(groundHeight(home.x + OCEAN_ISLAND_R + OCEAN_BEACH_W, home.y), 0);
+  // ...and just inside it the land is genuinely above the water, so this is a beach-ring property
+  // rather than the whole island being flat.
+  assert.ok(groundHeight(home.x + OCEAN_ISLAND_R - 1, home.y) > 0, "the grass just inland is above y=0");
+
+  const seaMat = TERRAIN_SRC.match(/const sea = new THREE\.Mesh\([\s\S]*?\n  \);/)?.[0] ?? "";
+  assert.ok(seaMat.length > 0, "the sea mesh should still be constructed in buildTerrain");
+  assert.ok(/polygonOffset:\s*true/.test(seaMat), "the sea material must set polygonOffset");
+  assert.ok(/polygonOffsetFactor:\s*[1-9]/.test(seaMat), "with a non-zero factor");
+
+  // The fix must NOT be to move either surface: the beach has to keep meeting the sea flush, and the
+  // silhouette has to stay an exact function of OCEAN_ISLAND_R.
+  assert.ok(
+    /sea\.position\.set\(WORLD\.MAP_WIDTH \/ 2, 0, WORLD\.MAP_HEIGHT \/ 2\)/.test(TERRAIN_SRC),
+    "the sea must still sit at exactly y=0",
+  );
+  assert.ok(
+    /const h = Math\.cos\(d \* Math\.PI \* 0\.5\) \*\* 1\.6 \* DOME_H;/.test(TERRAIN_SRC),
+    "and groundHeight must be untouched, so the shoreline is where it always was",
+  );
+});

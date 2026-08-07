@@ -210,9 +210,32 @@ export function buildTerrain(centerX: number, centerY: number, radius = 90): Ter
   const bushes: THREE.Mesh[] = [];
 
   // ── the sea: one big plane at y=0, the waterline the collision already agrees on ──
+  //
+  // THE BEACH AND THE SEA ARE COPLANAR, ON PURPOSE, AND THAT IS WHY THIS NEEDS polygonOffset.
+  // groundHeight() flattens to exactly 0 at OCEAN_ISLAND_R and stays there, so every vertex of the
+  // 1.5-tile sand ring sits at y = 0, which is this plane's own y:
+  //
+  //     r = 12.9   h = 0.001623   grass
+  //     r = 13.0   h = 0.000000   SAND RING, coplanar with the sea
+  //     r = 14.5   h = 0.000000   SAND RING, coplanar with the sea
+  //
+  // Two coplanar surfaces at identical depth make the depth test a per-pixel coin flip, so the
+  // waterline shimmered and crawled as the camera moved. That is a wide artefact, not a hairline
+  // seam: 1.5 tiles all the way around every island.
+  //
+  // polygonOffset moves the depth COMPARISON without moving the geometry, so the beach still meets
+  // the sea flush at exactly y = 0 and the silhouette stays an exact function of OCEAN_ISLAND_R.
+  // Lowering the sea, or lifting the sand, would fix the fight by opening a visible lip at every
+  // shoreline, which the art bible's flush waterline does not allow.
   const sea = new THREE.Mesh(
     new THREE.PlaneGeometry(WORLD.MAP_WIDTH * 1.5, WORLD.MAP_HEIGHT * 1.5, 1, 1),
-    new THREE.MeshLambertMaterial({ color: PALETTE.seaShallow, flatShading: true }),
+    new THREE.MeshLambertMaterial({
+      color: PALETTE.seaShallow,
+      flatShading: true,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    }),
   );
   sea.rotation.x = -Math.PI / 2;
   sea.position.set(WORLD.MAP_WIDTH / 2, 0, WORLD.MAP_HEIGHT / 2);
