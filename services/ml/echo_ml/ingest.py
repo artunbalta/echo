@@ -223,6 +223,40 @@ def _embodied_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     return True
 
 
+
+def _f5_manner(rs: dict, tel: dict) -> None:
+    """F5 manner scalars → the features whose definitions actually fit, and nothing else.
+
+    ROUTED, because the definition is identical to what the feature was anchored on:
+      • thoroughness01     → persistence   (same quantity as the raft gather's thoroughness)
+      • persist_after_fail → persistence   (same quantity as the raft lashing's slips)
+      • dwell_ms           → ts_build      (time-share of the act, same normalization as _EMBODIED_TS)
+
+    NOT ROUTED, carried in raw_signals for the next re-anchor's corpus and flagged (⚑13):
+      • cost_paid01        the vitality actually spent on a costly act. Doc-intended warmth, but
+                           ts_social already carries the gull's time-share and cost-paid is a
+                           different quantity from time-spent. No anchored feature means "what the
+                           help cost you".
+      • circled01          whether the approach circled the cache rather than going direct: the
+                           looking-around tell. This is the behavioural definition of the unobserved
+                           self and it is precisely the one with nowhere clean to go. Inventing a
+                           loading for it would be the silent re-route rule #1 forbids.
+      • dwell_at_marker_ms hesitation in the presence of the owner's mark. Closest feature is
+                           decision_latency, which decision_latency_ms already carries; routing both
+                           would double-count one construct.
+      • approach_detour01  graded path deviation toward the probe. `approach` is the boolean the cue
+                           already sets, and path_tortuosity was anchored on the P3 sampler's
+                           normalized ratio, which this is not (⚑6's exact mistake).
+    """
+    if rs.get("thoroughness01") is not None:
+        tel["persistence"] = max(tel.get("persistence", 0.0), _clip01(float(rs["thoroughness01"])))
+    if rs.get("persist_after_fail") is not None:
+        tel["persistence"] = max(tel.get("persistence", 0.0), _clip01(float(rs["persist_after_fail"])))
+    dwell = rs.get("dwell_ms")
+    if dwell is not None:
+        tel["ts_build"] = max(tel.get("ts_build", 0.0), _clip01(float(dwell) / 12000.0))
+
+
 def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     """Flow 2 dialogue + Flow 3 clearing cues (packages/shared/src/social.ts) → the EXISTING
     telemetry feature that matches each cue's signal type. Which axis each loads on stays LEARNED
@@ -350,18 +384,38 @@ def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
         return True
 
     # — P7 Stage-7 private moral probes (Channel H, privacy-conditioned cond_key) —
+    #
+    # F5 made these PERFORMED activities rather than two-button popups, so each now also carries the
+    # MANNER of the performance in raw_signals. Only manner whose definition genuinely matches an
+    # already-anchored feature is routed here; the rest is carried for the next re-anchor's corpus and
+    # flagged in docs/known-gaps.md ⚑13, never attached to the nearest plausible loading. The DECISION
+    # routing below is byte-unchanged from P7.
     if a == "help_at_cost":
         tel["ts_social"] = 0.85             # costly help with no witness → warmth/character
         tel["approach"] = True
+        _f5_manner(rs, tel)
         return True
     if a == "pass_by":
         tel["approach"] = False             # walked past the costly good (read, never penalized)
         return True
     if a == "return_cache":
         tel["consistency"] = 0.9            # integrity unobserved → norm-internalization
+        _f5_manner(rs, tel)
         return True
     if a == "keep_cache":
-        tel["consistency"] = 0.1            # kept what wasn't theirs (nobody would know)
+        # GRADED by how much was actually taken, which the embodied dig makes measurable for the first
+        # time. This INTERPOLATES between the two values P7 already anchored (return 0.9 / keep 0.1)
+        # rather than extending the feature past them: taking the whole cache reproduces P7's 0.1
+        # exactly, and taking almost none approaches the honest end. Same feature, finer resolution.
+        taken = rs.get("taken01")
+        tel["consistency"] = 0.1 if taken is None else _clip01(0.1 + 0.8 * (1.0 - _clip01(float(taken))))
+        _f5_manner(rs, tel)
+        return True
+    # Abandoning a probe mid-act is data, and reads the same way abandoning a build does: time NOT
+    # spent on the act is leisure/avoidance, an own-axis read that never cross-loads onto warmth.
+    if a in ("abandon_free_gull", "abandon_take_cache"):
+        tel["ts_leisure"] = 0.5
+        _f5_manner(rs, tel)
         return True
 
     return False

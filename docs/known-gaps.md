@@ -556,3 +556,37 @@ change and its own piece of work, and it is forbidden here, so it is named as an
 - **Status:** OPEN. Analysis only. No behaviour changed, no constant flipped, no field added, no
   protected file touched. Options 0 through 3 are laid out; the choice is the human's, and per the
   timing argument above it is the more urgent half of ⚑10 point 3.
+
+## ⚑ 13. Four of F5's manner scalars have no anchored feature and are carried unrouted (2026-08-07)
+
+- **Opened:** 2026-08-07 (F5 embodied, `feat/f5-embodied`).
+- **What:** F5's two Ring-of-Gyges probes became performed activities, so each now emits the MANNER of
+  the act alongside the decision cue P7 already shipped. Six manner scalars land on features whose
+  definitions genuinely fit. **Four do not, and are carried in `raw_signals` and left unrouted:**
+  - `circled01`, whether the approach circled the cache before acting rather than going direct. This
+    is the looking-around tell, and it is the **behavioural definition of the unobserved self**, which
+    is the whole thesis of F5. There is no existing feature for "checked whether anyone was watching".
+  - `dwell_at_marker_ms`, hesitation while standing over the owner's carved mark, before acting. The
+    closest existing feature is `decision_latency`, which `decision_latency_ms` already carries on the
+    same event; routing both would double-count one construct.
+  - `cost_paid01`, the vitality actually spent freeing the gull. Doc-intended warmth, but `ts_social`
+    already carries the act's time-share and cost-paid is a different quantity from time-spent.
+  - `approach_detour01`, graded path deviation toward the probe. `approach` is a boolean the cue
+    already sets, and `path_tortuosity` was anchored on the P3 sampler's normalized ratio, which this
+    is not. Routing it there would be ⚑6's exact mistake with a different scalar.
+- **Why unrouted rather than approximated:** cue-to-axis loadings stay LEARNED (cross-cutting rule
+  #1). Attaching these to the nearest plausible feature is the silent re-route the rule forbids, and
+  `circled01` is the case where the temptation is strongest precisely because it is the most valuable
+  signal in the flow.
+- **What IS routed, and why each is safe:** `thoroughness01` and `persist_after_fail` → `persistence`
+  (byte-identical definitions to the raft's gather and its slips, which are what the feature was
+  anchored on); `dwell_ms` → `ts_build` (the existing `_EMBODIED_TS` normalization); `taken01` →
+  `consistency`, **interpolating** between the two values P7 already anchored (`return_cache` 0.9 and
+  `keep_cache` 0.1) rather than extending the feature past them, so taking the whole cache reproduces
+  P7's 0.1 exactly; `decision_latency_ms` → `decision_latency` via the generic top block;
+  `abandon_free_gull` / `abandon_take_cache` → `ts_leisure` via the existing abandon branch.
+- **Resolution:** the second W re-anchor happens ONCE, after all flows exist, on the full cue set.
+  These four will be in that corpus with real behavioural data behind them, which is the right time to
+  learn whether they load anywhere. Do NOT retrain W for them. Do not route them meanwhile.
+- **Status:** OPEN by design. 6 routed, 4 flagged. The flagged four are emitted and recorded, so the
+  corpus accumulates even while the posterior cannot read them.

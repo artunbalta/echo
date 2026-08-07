@@ -409,6 +409,72 @@ const BUILDERS: Record<PropKind, () => THREE.Group> = {
     return g;
   },
 
+  // ── Flow 5: the Ring-of-Gyges probes. Nature is organic (the bird is spheres and cones), built
+  //    things are geometric (the cache is boxes), per the art bible. ──
+  gull_tangled: () => {
+    const g = new THREE.Group();
+    const feather = lam(0xe2e0d8);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.17, 6, 5), feather);
+    body.position.y = 0.15;
+    body.scale.set(1, 0.8, 1.25);         // hunched, pulled down by the line
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 5, 4), feather);
+    head.position.set(0.02, 0.29, 0.13);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.11, 4), lam(0xd8a24a));
+    beak.rotation.x = Math.PI / 2;
+    beak.position.set(0.02, 0.29, 0.24);
+    // the wing pinned down, and the line across it
+    const wing = new THREE.Mesh(box(0.30, 0.04, 0.16), lam(0xcfcdc4));
+    wing.position.set(-0.13, 0.11, 0.02);
+    wing.rotation.z = 0.35;
+    const line1 = new THREE.Mesh(cyl(0.012, 0.012, 0.52, 4), M.rope);
+    line1.rotation.z = Math.PI / 2;
+    line1.position.set(0, 0.17, 0.04);
+    const line2 = new THREE.Mesh(cyl(0.012, 0.012, 0.42, 4), M.rope);
+    line2.rotation.x = Math.PI / 2;
+    line2.position.set(-0.05, 0.15, 0);
+    g.add(body, head, beak, wing, line1, line2);
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
+  gull_free: () => {
+    const g = new THREE.Group();
+    const feather = lam(0xf2f0ea);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.17, 6, 5), feather);
+    body.position.y = 0.22;              // upright now, lifted
+    body.scale.set(1, 1.05, 1.15);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 5, 4), feather);
+    head.position.set(0, 0.42, 0.10);
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.11, 4), lam(0xd8a24a));
+    beak.rotation.x = Math.PI / 2;
+    beak.position.set(0, 0.42, 0.21);
+    const wing = (s: number) => {
+      const w = new THREE.Mesh(box(0.34, 0.035, 0.13), lam(0xe2e0d8));
+      w.position.set(s * 0.22, 0.30, 0);
+      w.rotation.z = s * -0.6;           // open, about to go
+      return w;
+    };
+    g.add(body, head, beak, wing(-1), wing(1));
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
+  cache_marked: () => {
+    const g = new THREE.Group();
+    const mound = new THREE.Mesh(cyl(0.34, 0.42, 0.16, 8), M.sand);
+    mound.position.y = 0.08;
+    const lid = new THREE.Mesh(box(0.42, 0.07, 0.34), M.wood);
+    lid.position.y = 0.19;
+    // the owner's mark, carved into the lid and cut in parchment so it reads before you are close
+    const markV = new THREE.Mesh(box(0.045, 0.02, 0.20), lam(0xe8d3a0));
+    markV.position.set(0, 0.235, 0);
+    const markH = new THREE.Mesh(box(0.20, 0.02, 0.045), lam(0xe8d3a0));
+    markH.position.set(0, 0.235, 0.05);
+    g.add(mound, lid, markV, markH);
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
   shy_creature: () => {
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), lam(0x9a8ea8));
