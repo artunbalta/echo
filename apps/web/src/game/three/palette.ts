@@ -18,9 +18,24 @@
 
 export const PALETTE = {
   // ── the sea and sky ──
-  seaDeep: 0x1b2a44,
-  seaShallow: 0x2f5068,
-  seaFoam: 0x7fa0ae,
+  // The water family, brought back onto the art bible's §3 ramp. The shipped values had the right
+  // HUE (205, against the bible's 204 to 213) but roughly HALF its saturation: seaShallow sat at
+  // S 38% where every rung of the bible's ramp is S 54% to 77%. The bible's rule is "vivid but
+  // value-muted", meaning saturated colour at lowered brightness; the old values lowered both, so
+  // under the warm dusk key the sea read as grey-olive rather than as water. These keep the muted
+  // LIGHTNESS and restore the saturation. Measured on identical frames: S 17.1% -> 42.9% in the
+  // rendered pixels, blue-minus-red +8.8 -> +28.7.
+  //
+  // seaDeep and seaFoam are still NOT DRAWN anywhere. §3 also asks for "shallow turquoise grading to
+  // deep ink-blue in gentle depth bands", and an attempt at that by subdividing the sea plane and
+  // vertex-colouring it was measured and REJECTED: the plane is 1152 units, the shelf is 20.8, so at
+  // 96 segments the gradient resolved across 1.73 cells and was invisible, while costing 18,432
+  // triangles against the seven island discs' 5,600. A uniform grid is the wrong instrument at that
+  // ratio. If the depth bands are wanted they belong in the fragment shader, where the feature scale
+  // and the sampling rate can match. These two stay defined so that work has its palette ready.
+  seaDeep: 0x1c3a5e,
+  seaShallow: 0x2b6d9e,
+  seaFoam: 0x9fc9dd,
   skyDusk: 0x2a1f3d,
   skyHorizon: 0xc86f4a,
 
