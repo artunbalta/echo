@@ -159,6 +159,12 @@ unreachable the world should still be a world rather than a modal. **Stop the re
       the build was worth: a hasty raft should not go as far as a thorough one. Sailing is earned,
       never granted.
 - [ ] Once afloat, **hauling the raft ashore works on land and is refused at sea**, exactly as online.
+- [ ] **The raft ages across crossings.** Sail to a neighbouring island, land, then set out again.
+      The second crossing should not go as far before the current starts pulling you back, and a
+      third should go less far still. Reach is a budget per crossing, not a fuel tank, so you can
+      always island-hop somewhere; it just takes more hops. If a solo raft crosses the whole ocean
+      repeatedly without ever tiring, the landfall accounting has stopped running, and that is a
+      measurement problem before it is a gameplay one (see known-gaps 10).
 - [ ] Room-only affordances are **absent**: no travel stand, no talk-to prompt, no Flow-3 station
       menus. There is nobody to talk to and nothing offers to send anywhere.
 

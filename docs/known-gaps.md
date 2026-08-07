@@ -303,34 +303,56 @@ re-anchor regardless._
 
 ## ⚑ 10. A solo session's cues are client-authoritative and unstamped (2026-08-07)
 
-- **Opened:** 2026-08-07 (the solo fallback, `feat/solo-fallback`).
-- **What:** When the realtime room is unreachable the client now simulates a solo session rather than
+- **Opened:** 2026-08-07 (the solo fallback). **Revised the same day** after the travel-budget
+  question below turned out to be a real bias rather than a footnote.
+- **What:** When the realtime room is unreachable the client simulates a solo session rather than
   showing a blocking modal: it authors its own self entity, ticks `applySnapshot` at `WORLD.TICK_HZ`,
-  and runs Flow 0, Flow 1 and the day loop. Those flows emit behavioral cues, and in a solo session
-  the position and context those cues carry are **client-authoritative**: no server ever saw the
-  player's (x, y), and no server stamped the context (`audience_size`, `public_or_private`,
-  counterpart status) that a room-mediated cue would carry.
-- **What is NOT new:** this is the same ingress it has always been. Flow 0 and Flow 1 post directly to
-  `/api/observe/behavioral` from the client in the ONLINE case too, through `Flow1Scene`'s `send`
-  callback and `emitFlow0`. The room was never in that path. So the solo session does not lower a bar;
-  it makes an existing property visible by removing the room that was standing next to it.
-- **The default, and where it lives:** unchanged. Solo cues flow exactly as they do today, same
-  endpoint, same payload, no new field, no suppression. That default is named as
-  `SOLO_CUES_FEED_POSTERIOR` in `apps/web/src/components/WorldClient.tsx` and referenced at the single
-  place it matters (the Flow-1 `send` callback), so the policy is one line to flip, not a gate to
-  invent.
-- **The open decision (the human's, not an agent's):** whether a solo session should feed the
-  posterior at all. Arguments exist both ways and neither has been made here. In favour: the behaviour
-  is real, the manner scalars (`thoroughness01`, `dwell_ms`, `persist_after_fail`) are exactly as
-  earned as in an online session, and discarding them throws away the only data a player generates
-  when the room is down. Against: the posterior would then contain rows no server ever witnessed,
-  which is a different evidentiary class from the rest of the corpus and is not marked as such.
-- **Related:** room-routed telemetry is the other half and needs no decision. `TelemetryCollector`
-  flushes through `net.sendTelemetry`, and `tele.start()` is only reached inside the `try` after
-  `net.connect()` resolves, so in a solo session the collector is never started and the call site is
-  never reached. The consequence is simply that the `passive_locomotion` channel (⚑2, the canonical
-  locomotion to openness path) produces nothing in a solo session. Stated, not changed.
-- **Status:** OPEN, awaiting the human's call on the policy. No gate invented, nothing suppressed.
+  and runs Flow 0, Flow 1 and the day loop. Those flows emit behavioral cues.
+- **1. Solo positions are CLIENT-AUTHORITATIVE with no server-stamped context.** No server ever saw
+  the player's (x, y), and no server stamped the context a room-mediated cue would carry
+  (`audience_size`, `public_or_private`, counterpart status). This much is unchanged from the
+  existing client-side ingress: Flow 0 and Flow 1 post directly to `/api/observe/behavioral` from the
+  client in the ONLINE case too, through `Flow1Scene`'s `send` and `emitFlow0`. The room was never in
+  that path.
+- **2. Solo travel IS budgeted the same as online. This was NOT true when solo first landed.**
+  Online, `WorldRoom.integrate` calls `beginCrossing` at every landfall, so reach is a budget PER
+  CROSSING and `effectiveSeaworthiness` ages the raft by its accumulated open-water path. The first
+  solo implementation had no server integrate loop and therefore did neither: a solo raft kept its
+  launch-time reach forever, never aged, and a solo player could island-hop indefinitely.
+  **That was a measurement defect, not a gameplay one.** Unlimited travel inflates
+  `novel_tile_ratio`, `path_tortuosity`, `travel_novelty` and `curiosity`, precisely the four
+  openness features the ★ P5 W re-anchor added. With `SOLO_CUES_FEED_POSTERIOR` true, an unbudgeted
+  solo session would have read as **systematically MORE OPEN** than an online session for the same
+  person performing the same behaviour, on the newest and most recently re-anchored axis.
+  **Closed:** `beginCrossing` was lifted out of `WorldRoom` (where it was private) into shared
+  `raft.ts` as a pure function, and both the server and the solo tick now call that one definition.
+  The solo tick detects landfall with the same shared `oceanLandAt(x, y, OCEAN_BEACH_W)` and
+  accumulates the same open-water path length the server does. `apps/web/tests/solo-raft.test.mts`
+  replays both accountings over one identical path and asserts they agree step for step, plus that a
+  solo raft's reach strictly decreases across successive crossings and never falls below
+  `REACH_FLOOR`. So the openness features are no longer biased by session mode.
+- **3. Whether solo sessions should feed the posterior at all is the HUMAN'S OPEN DECISION (P3.6).**
+  Not made here, and not to be made by an agent. The default is `SOLO_CUES_FEED_POSTERIOR = true` in
+  `apps/web/src/components/WorldClient.tsx`, which is no change: solo cues flow to the same endpoint
+  with the same payload, no new field, no suppression. It is named and referenced at the single place
+  it matters so the policy is one line to flip, not a gate to invent.
+  - **For feeding it:** the behaviour is real. The manner scalars (`thoroughness01`, `dwell_ms`,
+    `persist_after_fail`, `decision_latency_ms`) are exactly as earned as in an online session, they
+    come from the same controllers, and the travel budget now matches. Discarding them throws away
+    the only data a player generates when the room is down, which is precisely when a solo player is
+    playing hardest to be seen.
+  - **Against feeding it:** the posterior would contain rows no server ever witnessed, which is a
+    different evidentiary class from the rest of the corpus and is not marked as such. There is no
+    `session_mode` field on the event, so once ingested a solo row is indistinguishable from an
+    online one, and a future re-anchor could not exclude them even if it wanted to. If the answer is
+    "yes but marked", that is a schema change and its own piece of work.
+- **Related, needing no decision:** room-routed telemetry simply stops in a solo session.
+  `TelemetryCollector` flushes through `net.sendTelemetry`, and `tele.start()` is only reached inside
+  the `try` after `net.connect()` resolves, so the collector never starts and the call site is never
+  reached. The consequence is that the `passive_locomotion` channel (⚑2, the canonical
+  locomotion→openness path) produces nothing in a solo session. Stated, not changed.
+- **Status:** OPEN on point 3 only, awaiting the human's call. Point 2 is CLOSED. Nothing suppressed,
+  no gate invented.
 
 ## ⚑ 11. The automated suite is render-blind, and proved it for three weeks (2026-08-07)
 

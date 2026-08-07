@@ -37,10 +37,9 @@ import {
   type Facing,
   type TelemetryEvent,
   type CounterpartStatus,
-  effectiveSeaworthiness,
-  reachTiles,
   hullSpeed,
   driftVector,
+  beginCrossing as sharedBeginCrossing,
 } from "@echo/shared";
 import { WorldState, Entity } from "./state.js";
 import { loadNpcs, loadNpcsAsync } from "./npcs.js";
@@ -827,11 +826,16 @@ export class WorldRoom extends Room<WorldState> {
    *  landfall — so reach is a budget PER CROSSING. A scrap raft island-hops the archipelago one neighbour
    *  at a time; a true raft goes straight out to a far shore. Both arrive. One takes an afternoon. */
   private beginCrossing(e: Entity) {
-    e.raftSea = effectiveSeaworthiness(e.raftS0, e.raftWaterTiles);
-    e.raftReach = reachTiles(e.raftSea);
-    e.raftSpent = 0;
-    e.raftDepartX = e.x;
-    e.raftDepartY = e.y;
+    // The four values are computed by the shared beginCrossing so the solo client can re-budget a
+    // crossing on EXACTLY this curve. Behaviour here is unchanged: it is the same
+    // effectiveSeaworthiness / reachTiles this method already called, lifted into raft.ts so there is
+    // one definition rather than two that could drift.
+    const c = sharedBeginCrossing(e.raftS0, e.raftWaterTiles, e.x, e.y);
+    e.raftSea = c.sea;
+    e.raftReach = c.reach;
+    e.raftSpent = c.spent;
+    e.raftDepartX = c.departX;
+    e.raftDepartY = c.departY;
   }
 
   private integrate(e: Entity, dt: number, speed: number) {
