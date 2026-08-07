@@ -476,7 +476,8 @@ That endpoint takes `BehavioralEvent`s with the eight mandatory context fields, 
 `passive_locomotion` handler lives on `/telemetry`, not on the behavioral ingress. Making this work
 would need a new event shape, which the constraints forbid.
 
-**Option 2, keep the channel and change only the transport.** A Next API route that forwards a
+**Option 2, keep the channel and change only the transport. The correction above makes this the
+cheapest option, not the riskiest.** A Next API route that forwards a
 `TelemetryEvent` to the ML service's existing `/telemetry`, used by the solo path in place of
 `net.sendTelemetry`. For this **not** to be silent re-routing, all of the following must hold, and
 all of them can:
@@ -495,14 +496,32 @@ the `/telemetry` endpoint and the `passive_locomotion` branch already exist and 
 thing. What would change is one new Next route and the `send` callback in `WorldClient`. No new field
 on `BehavioralEvent`, no scalar change, no threshold change, no retraining.
 
-**What would stamp the mandatory context in the absence of a server?** Nothing needs to, and this is
-the part that is easy to get wrong. The eight context fields live on `BehavioralEvent`, not on
-`TelemetryEvent`. `passive_locomotion` has **never** carried them, online or offline: the server
-stamps only `userId` and `sessionId` (`WorldRoom.ts:246-248`). The single thing a solo path would
-have to supply is `userId`, which the client would assert about itself. That introduces no new class
-of trust, because Flow 0 and Flow 1 already assert exactly that when they post to
-`/api/observe/behavioral` with `actorId: uidRef.current`. It is the same trust boundary that already
-exists, extended to one more channel.
+**What would stamp the mandatory context in the absence of a server? Nothing needs to, and the
+online path contributes far less than it looks like it does.** The eight context fields live on
+`BehavioralEvent`, not on `TelemetryEvent`, so `passive_locomotion` has **never** carried them,
+online or offline.
+
+What the room actually does with a telemetry batch, end to end:
+
+```
+game/telemetry.ts:122-190     LocomotionSampler.tryEmit   <- the scalars are computed HERE, on the client
+                              (WorldCore.ts:911 sampleLocomotion() likewise, for F1's movement_sample)
+realtime/WorldRoom.ts:134     e.refId = options.userId ?? client.sessionId   <- client-asserted at join
+realtime/WorldRoom.ts:245-252 onMessage(C2S.TELEMETRY, ...)
+                                userId = state.entities.get(sessionId)?.refId
+                                logTelemetry(userId, sessionId, ev)
+```
+
+**The room recomputes nothing, validates nothing and clamps nothing.** It looks up a `userId` the
+client asserted at join and relays the batch with a `sessionId` attached. So **online locomotion
+scalars were never server-witnessed either.**
+
+That materially lowers the bar for the decision below, and an earlier draft of this entry overstated
+it. Routing locomotion in a solo session is **not** "letting unwitnessed data into the posterior": it
+is restoring a channel that was already unwitnessed, over a different transport, with the same
+sampler and the same scalars. The only thing genuinely lost in solo is **`sessionId` continuity**,
+because the room is what mints and tracks the session. Anything an attacker or a bug could do to
+solo locomotion scalars, it could already do to online ones.
 
 **Option 3, buffer solo locomotion and replay it when a room becomes reachable.** Preserves server
 stamping, but the timestamps are stale by then, the session is over, and the posterior's update is
