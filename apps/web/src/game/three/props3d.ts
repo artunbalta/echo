@@ -451,7 +451,12 @@ const BUILDERS: Record<PropKind, () => THREE.Group> = {
     const out: THREE.Object3D[] = [];
     for (let i = 0; i < 4; i++) {
       const f = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 4), i % 2 ? M.grainRipe : lam(0xa33b4a));
-      out.push(Object.assign(f, { position: new THREE.Vector3(-0.36 + i * 0.24, 0.72, 0.1) }));
+      // position.set, never Object.assign. Object3D defines `position` with a value descriptor and no
+      // `writable`, so assigning to it throws in strict mode (which every ES module is), and the throw
+      // escapes buildProp3D -> addView -> onEntityAdded, leaving the entity registered in the core but
+      // with no view. Guarded by tests/props3d.test.mts.
+      f.position.set(-0.36 + i * 0.24, 0.72, 0.1);
+      out.push(f);
     }
     return out;
   }),
