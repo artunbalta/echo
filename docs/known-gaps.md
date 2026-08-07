@@ -346,11 +346,13 @@ re-anchor regardless._
     `session_mode` field on the event, so once ingested a solo row is indistinguishable from an
     online one, and a future re-anchor could not exclude them even if it wanted to. If the answer is
     "yes but marked", that is a schema change and its own piece of work.
-- **Related, needing no decision:** room-routed telemetry simply stops in a solo session.
+- **Related, and it DOES need a decision (see ⚑12):** room-routed telemetry simply stops in a solo session.
   `TelemetryCollector` flushes through `net.sendTelemetry`, and `tele.start()` is only reached inside
   the `try` after `net.connect()` resolves, so the collector never starts and the call site is never
   reached. The consequence is that the `passive_locomotion` channel (⚑2, the canonical
-  locomotion→openness path) produces nothing in a solo session. Stated, not changed.
+  locomotion→openness path) produces nothing in a solo session. **⚑12 works this through and finds
+  it is not a footnote: three of the four openness features the ★ P5 re-anchor added receive zero
+  evidence in a solo session, and the fourth receives two one-shot sources out of seven.**
 - **Status:** OPEN on point 3 only, awaiting the human's call. Point 2 is CLOSED. Nothing suppressed,
   no gate invented.
 
@@ -388,3 +390,169 @@ re-anchor regardless._
   leaves one island. It is a step in `docs/verify-3d-render.md` instead.
 - **Status:** OPEN as a standing property of the suite, not a bug to fix. Recorded so nobody reads a
   green board as evidence about the render again.
+
+## ⚑ 12. A solo session contributes almost no openness evidence (2026-08-07)
+
+- **Opened:** 2026-08-07, investigating a line filed too lightly in ⚑10 ("the collector never starts
+  in solo, so `passive_locomotion` produces nothing. Stated, not changed."). That is true and it is
+  not a footnote. **No behaviour was changed here. This entry is analysis; the decision is the
+  human's.**
+
+### The routing, end to end
+
+`passive_locomotion` is the canonical locomotion to openness channel (⚑2, ⚑6). It is **room-routed**,
+and it never touches `/observe/behavioral` at all:
+
+| # | Step | File |
+|---|---|---|
+| 1 | `this.hooks.onSelfSample?.(this.localX, this.localY)` every step | `game/WorldCore.ts:409` |
+| 2 | `onSelfSample: telemetryConsent ? (x, y) => loco.feed(x, y) : undefined` | `components/WorldClient.tsx:1007` |
+| 3 | `LocomotionSampler.feed` samples at `SAMPLE_MS` 250ms, emits at most one window per `EMIT_MS` 1500ms, skips windows under `MIN_PATH_TILES` 0.5, change-thresholds against the last emit, caps at `MAX_EMITS_PER_DAY` 400 | `game/telemetry.ts:82-86, 100-190` |
+| 4 | scalars: `heading_change_rate`, `path_tortuosity` (raw path/net ratio, >= 1), `novel_tile_ratio`, `backtrack_rate`, `dwell_ms`, `tiles` | `game/telemetry.ts:167-174` |
+| 5 | `teleRef.current?.emit("passive_locomotion", { ...scalars })` | `components/WorldClient.tsx:1004` |
+| 6 | `TelemetryCollector.emit` buffers; flushes on a 2000ms timer **or** at 25 buffered events | `game/telemetry.ts:34-49` |
+| 7 | the collector's sender is `(events) => net.sendTelemetry(events)` | `components/WorldClient.tsx:1101` |
+| 8 | **`sendTelemetry(events) { this.room?.send(C2S.TELEMETRY, { events }); }`** | `game/net.ts:124-126` |
+| 9 | server handler; returns early unless `userId` resolves from room state | `realtime/WorldRoom.ts:245-252` |
+| 10 | `logTelemetry` POSTs `{ userId, sessionId, event }` to `${ML_URL}/telemetry` | `realtime/persistence.ts:46-53` |
+| 11 | the `passive_locomotion` branch sets `tele["novel_tile_ratio"]` and `tele["path_tortuosity"]`, then `P.observe(st.posterior, "", tele)` | `services/ml/echo_ml/app.py:262-279` |
+
+Step 8 is the whole of it. With no room, `this.room` is undefined and the send is a silent no-op.
+
+**Sharper than ⚑10 had it.** `tele.start()` is only reached inside the `try` after `net.connect()`
+resolves (`WorldClient.tsx:1409-1411`), so in solo the 2000ms flush timer never starts. But `emit()`
+still buffers, and it still calls `flush()` at 25 events, and `stop()` flushes again on unmount. So
+the events are constructed, accumulated, handed to a no-op, and discarded. Nothing is sent, nothing
+errors, nothing is logged. The failure is completely silent.
+
+### What one solo session loses, against one online session of identical behaviour
+
+The ★ P5 re-anchor added four IDENTIFIED openness features and took openness Fisher information from
+4.06 to 44.9. Their complete set of sources:
+
+| Feature | Fed by | Solo |
+|---|---|---|
+| `novel_tile_ratio` | `passive_locomotion` only (`app.py:271`) | **none** |
+| `path_tortuosity` | `passive_locomotion` only (`app.py:273`) | **none** |
+| `travel_novelty` | `travel_far` only (`ingest.py:304`), emitted by the server's travel stand | **none** |
+| `curiosity` | `enter_unmarked` (`ingest.py:82`), `approach_distant_lone` (109), `egg_horizon_seen` (112), `egg_hollow` (118), `deviate_custom` (265), `asks_question` (342), `self_disclosure` (345) | **2 of 7** |
+
+Of `curiosity`'s seven sources, only `enter_unmarked` and `egg_hollow` survive: both are client-side
+F0 cues posted straight to `/api/observe/behavioral`, and both are **one-shot eggs**, not continuous
+channels. `egg_horizon_seen` is server-emitted (`WorldRoom.ts:792`). `approach_distant_lone` needs
+another person. `deviate_custom`, `asks_question` and `self_disclosure` are F2/F3, room-only.
+
+So: **three of the four openness features receive zero evidence in a solo session, and the fourth
+receives two one-shot sources out of seven.** Everything else the flows measure is unaffected, because
+F0 and F1 post client-side either way: `persistence`, `decision_latency`, `editsCount`, the `ts_*`
+time-shares, `risk_index`, `save_rate` and `solitude_tol` all arrive normally. The loss is
+concentrated almost entirely on openness, with a smaller secondary loss on the social axes (warmth,
+dominance) because F2/F3 cannot happen with nobody there.
+
+**Why this matters right now:** with the Render services suspended, every visitor to the deployed
+site is in a solo session. Openness is therefore going unmeasured product-wide again, which is the
+exact condition ★ P5 was built to end.
+
+### This runs OPPOSITE to the bias ⚑10 records, and both must be said together
+
+⚑10 point 2 records that an unbudgeted solo raft would have inflated these same four features, and
+that P12 closed it. This entry records that the channel carrying three of them does not fire in solo
+at all. Both are true, and either alone is misleading: **the P12 inflation was latent rather than
+active.** It would only have become active if locomotion were ever routed in solo. Anyone who reads
+⚑10 and concludes "solo openness is now correct" has it wrong; anyone who reads this entry and
+concludes "so the P12 fix was unnecessary" also has it wrong, because routing locomotion in solo is
+exactly the option under consideration below, and it would activate the inflation if P12 had not
+landed first.
+
+### The options, including doing nothing
+
+**Option 0, do nothing.** Solo sessions contribute no locomotion openness evidence. Zero risk, zero
+code, no possibility of silent re-routing. The cost is that openness stays unmeasured for every solo
+player, which is currently all of them, and that the posterior quietly reports low openness for
+people who may simply never have had the channel read.
+
+**Option 1, send `passive_locomotion` to `/observe/behavioral` in solo.** Rejected on inspection.
+That endpoint takes `BehavioralEvent`s with the eight mandatory context fields, and the ML's
+`passive_locomotion` handler lives on `/telemetry`, not on the behavioral ingress. Making this work
+would need a new event shape, which the constraints forbid.
+
+**Option 2, keep the channel and change only the transport. The correction above makes this the
+cheapest option, not the riskiest.** A Next API route that forwards a
+`TelemetryEvent` to the ML service's existing `/telemetry`, used by the solo path in place of
+`net.sendTelemetry`. For this **not** to be silent re-routing, all of the following must hold, and
+all of them can:
+
+- the same sampler instance, `LocomotionSampler` in `game/telemetry.ts`, unmodified;
+- the same scalar definitions, in particular `path_tortuosity` as the raw path/net ratio >= 1 that
+  `persona.py:454` expects and NOT the F1 sampler's 4-way facing-change count (the exact confusion
+  ⚑6 forbids);
+- the same accumulation window and caps: `SAMPLE_MS` 250, `EMIT_MS` 1500, `MIN_PATH_TILES` 0.5, the
+  change threshold, `MAX_EMITS_PER_DAY` 400;
+- the same ML branch, `app.py:262`, unmodified;
+- differing **only** in transport.
+
+Achievable without touching protected files: **yes.** `services/ml/**` needs no change at all, because
+the `/telemetry` endpoint and the `passive_locomotion` branch already exist and already do the right
+thing. What would change is one new Next route and the `send` callback in `WorldClient`. No new field
+on `BehavioralEvent`, no scalar change, no threshold change, no retraining.
+
+**What would stamp the mandatory context in the absence of a server? Nothing needs to, and the
+online path contributes far less than it looks like it does.** The eight context fields live on
+`BehavioralEvent`, not on `TelemetryEvent`, so `passive_locomotion` has **never** carried them,
+online or offline.
+
+What the room actually does with a telemetry batch, end to end:
+
+```
+game/telemetry.ts:122-190     LocomotionSampler.tryEmit   <- the scalars are computed HERE, on the client
+                              (WorldCore.ts:911 sampleLocomotion() likewise, for F1's movement_sample)
+realtime/WorldRoom.ts:134     e.refId = options.userId ?? client.sessionId   <- client-asserted at join
+realtime/WorldRoom.ts:245-252 onMessage(C2S.TELEMETRY, ...)
+                                userId = state.entities.get(sessionId)?.refId
+                                logTelemetry(userId, sessionId, ev)
+```
+
+**The room recomputes nothing, validates nothing and clamps nothing.** It looks up a `userId` the
+client asserted at join and relays the batch with a `sessionId` attached. So **online locomotion
+scalars were never server-witnessed either.**
+
+That materially lowers the bar for the decision below, and an earlier draft of this entry overstated
+it. Routing locomotion in a solo session is **not** "letting unwitnessed data into the posterior": it
+is restoring a channel that was already unwitnessed, over a different transport, with the same
+sampler and the same scalars. The only thing genuinely lost in solo is **`sessionId` continuity**,
+because the room is what mints and tracks the session. Anything an attacker or a bug could do to
+solo locomotion scalars, it could already do to online ones.
+
+**Option 3, buffer solo locomotion and replay it when a room becomes reachable.** Preserves server
+stamping, but the timestamps are stale by then, the session is over, and the posterior's update is
+order-sensitive. More machinery and more ways to be wrong than option 2. Not recommended.
+
+### What this implies for P3.6, and for the TIMING of that decision
+
+⚑10 point 3 asks whether solo sessions should feed the posterior at all. This entry collapses that
+into one question with the `session_mode` question, because solo and online sessions do not produce
+the same cue set. A solo row is not an online row with some fields missing; it is a structurally
+different composition, openness-poor by construction.
+
+So if solo cues feed the posterior as they do today, they feed a systematically openness-POOR subset.
+That is a downward bias on openness for solo players, and it is the mirror image of the upward bias
+P12 closed. Under option 2 the composition would come much closer to matching, and the question would
+weaken accordingly.
+
+**The timing consequence is the load-bearing part.** There is no `session_mode` field on the event,
+so once a solo row is ingested it is indistinguishable from an online one forever. A future re-anchor
+could not exclude solo rows from its corpus even if it wanted to, because it could not find them.
+Therefore:
+
+> **The P3.6 decision has to be made BEFORE the second W re-anchor, not after.** After the re-anchor
+> the corpus is fixed and the rows are unlabelled inside it. If the human later concludes that solo
+> rows should not have counted, or should have counted differently, the only remedy is another
+> re-anchor, and ★ P5 was explicitly one-time.
+
+The cheapest thing that keeps every option open is to decide the policy, or add the label, before the
+corpus for the next re-anchor starts accumulating. Adding a `session_mode` field is itself a schema
+change and its own piece of work, and it is forbidden here, so it is named as an option and not taken.
+
+- **Status:** OPEN. Analysis only. No behaviour changed, no constant flipped, no field added, no
+  protected file touched. Options 0 through 3 are laid out; the choice is the human's, and per the
+  timing argument above it is the more urgent half of ⚑10 point 3.
