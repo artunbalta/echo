@@ -12,6 +12,9 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
 
 TOKEN="${ML_SERVICE_TOKEN:-dev-ml-token-change-me}"
+# Web port only. Lets a run sit beside an unrelated dev server already holding 3000.
+# Port, nothing else: no logic, no timing, no gate.
+WEB_PORT="${ECHO_WEB_PORT:-3000}"
 export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/Library/Caches/ms-playwright}"
 LOG="$(mktemp -d)"
 
@@ -23,7 +26,8 @@ echo "booting ML…"
 ML_PID=$!
 
 echo "booting web…"
-ML_SERVICE_URL=http://127.0.0.1:8000 ML_SERVICE_TOKEN="$TOKEN" npm run dev:web >"$LOG/web.log" 2>&1 &
+( cd apps/web && ML_SERVICE_URL=http://127.0.0.1:8000 ML_SERVICE_TOKEN="$TOKEN" \
+    npx next dev -p "$WEB_PORT" ) >"$LOG/web.log" 2>&1 &
 WEB_PID=$!
 
 cleanup() { kill "$ML_PID" "$WEB_PID" 2>/dev/null || true; }
@@ -32,10 +36,10 @@ trap cleanup EXIT
 echo "waiting for services…"
 for i in $(seq 1 40); do
   curl -sf "http://127.0.0.1:8000/health" -H "authorization: Bearer $TOKEN" >/dev/null 2>&1 \
-    && curl -sf -o /dev/null "http://localhost:3000/flow1" && break
+    && curl -sf -o /dev/null "http://localhost:$WEB_PORT/flow1" && break
   sleep 1
 done
 
 echo "running capture…"
-WEB=http://localhost:3000 ML=http://127.0.0.1:8000 ML_SERVICE_TOKEN="$TOKEN" \
+WEB=http://localhost:$WEB_PORT ML=http://127.0.0.1:8000 ML_SERVICE_TOKEN="$TOKEN" \
   services/ml/.venv/bin/python services/ml/scripts/individuation_3d_capture.py
