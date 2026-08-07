@@ -18,14 +18,35 @@ import { markFunnel, telemetryConsented } from "@/lib/funnel";
 import { useDay, type DuskReason } from "@/lib/useDay";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEvent, IslandDayState } from "@echo/shared";
 import {
-  nearestSlot, slotDistance, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, SURVIVAL,
+  nearestSlot, slotDistance, clampToMap, oceanIslandCenter, OCEAN_ISLAND_R, OCEAN_BEACH_W, SURVIVAL,
   FLOW0_AFFORDANCES, FLOW0_FIRST_MOVE, FLOW0_EGGS, buildFlow0Event, buildSocialEvent,
+  WORLD, oceanLandAt, effectiveSeaworthiness, reachTiles,
   type Flow0Affordance,
 } from "@echo/shared";
 import { generateOcean } from "@/game/tilemap";
 import { Flow1Scene } from "@/game/activities/flow1Scene";
 
 const prettyBucket = (b: string) => b.replace(/_/g, " ");
+
+/** The self entity's id in a solo session. Online this is the room's sessionId, which no longer
+ *  exists when the room is unreachable, so the solo tick authors its own stable one. */
+const SOLO_SELF_ID = "solo_self";
+
+/**
+ * MEASUREMENT POLICY, and it is the human's to set, not this file's.
+ *
+ * Flow 0 and Flow 1 already post their cues client-side, straight to /api/observe/behavioral, in the
+ * online case exactly as in the offline one. So the DEFAULT here is no change at all: a solo session's
+ * cues flow exactly as they do today, same endpoint, same payload, no new field, no suppression. This
+ * constant exists so that default is named and reversible in one line rather than implicit, and it is
+ * referenced at the single place it matters (the Flow-1 `send` callback below).
+ *
+ * What is genuinely open, and recorded as known-gaps ⚑10: a solo session's cues are produced under
+ * CLIENT-authoritative position with no server-stamped context. That is unchanged from the existing
+ * client-side F0/F1 ingress rather than new, but whether solo sessions should feed the posterior at
+ * all is a decision nobody has made yet. Flip this to false to stop them; do not invent a gate here.
+ */
+const SOLO_CUES_FEED_POSTERIOR = true;
 
 // ── the survival day's stations (blueprint P1) — client-local entities (role "day") on YOUR
 //    island in the one ocean, beside the Flow-0 affordances. The five verbs live here: forage
@@ -181,6 +202,15 @@ export default function WorldClient() {
   const probeEntsRef = useRef<EntitySnapshot[]>([]);
   const netRef = useRef<NetClient | null>(null);
   const teleRef = useRef<TelemetryCollector | null>(null);
+  // ── the solo session (no room reachable) ──
+  /** True once the room proved unreachable and the solo session took over. Read by the callbacks
+   *  that would otherwise have sent to the room (the raft launch, hauling ashore). */
+  const soloRef = useRef(false);
+  /** The solo tick's interval id, cleared in the effect cleanup beside net.leave(). */
+  const soloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Local stand-in for the raft fields the authoritative snapshot would otherwise carry. Written
+   *  only by the solo launch/haul branches, read only by the solo tick. */
+  const soloRaftRef = useRef({ sailing: false, sea: 0, reach: 0, departX: 0, departY: 0 });
   const interactionRef = useRef<string | null>(null);
   const inputFocusedAt = useRef<number>(0);
   const editsRef = useRef<number>(0);
@@ -460,6 +490,16 @@ export default function WorldClient() {
     // turn every water tile back into a wall while the player is standing on one, freezing them until the
     // next snapshot undid it.
     netRef.current?.sendSetSail(false);
+    // Solo: there is no server to ask, so apply the server's own rule here instead of skipping it. The
+    // refusal is the load-bearing half: hauling out mid-sea would turn the water under the player back
+    // into a wall and strand them, which is exactly why the online path never predicts this.
+    if (soloRef.current) {
+      const p = worldRef.current?.getSelfTile();
+      if (!p || !oceanLandAt(p.x, p.y, OCEAN_BEACH_W)) return;
+      soloRaftRef.current = { ...soloRaftRef.current, sailing: false };
+      worldRef.current?.setSailing(false);
+      setSailing(false);
+    }
   }, []);
   const [socialBeat, setSocialBeat] = useState<string | null>(null);
 
@@ -1041,6 +1081,21 @@ export default function WorldClient() {
 
     const net = new NetClient(config.realtimeUrl);
     netRef.current = net;
+
+    // Everything client-local that must render whether or not the room answered: this island's Flow-0
+    // affordances, the LIVE Flow-1 set, the day's stations, and today's private probe. Extracted so the
+    // online path and the solo path cannot drift apart: WorldCore.applySnapshot culls every id absent
+    // from the map it is handed, so a path that forgets one of these deletes those props outright.
+    const mergeLocal = (snaps: Map<string, EntitySnapshot>) => {
+      for (const e of f0EntsRef.current) snaps.set(e.id, e);
+      // The F1 LIVE set (not a static list): picks remove + the raft adds are reflected here, so a
+      // gather isn't undone by the next server snapshot re-adding a stale plank.
+      const f1live = f1SceneRef.current?.liveEntities();
+      if (f1live) for (const e of f1live) snaps.set(e.id, e);
+      for (const e of dayEntsRef.current) snaps.set(e.id, e);
+      for (const e of probeEntsRef.current) snaps.set(e.id, e);
+      return snaps;
+    };
     // Consent gates the collector at the SOURCE (event-schema §5): declined → the collector
     // records nothing at all (previously the interval was gated but a full buffer still flushed).
     const tele = new TelemetryCollector(sessionId, (events) => net.sendTelemetry(events), 2000, telemetryConsent);
@@ -1054,17 +1109,10 @@ export default function WorldClient() {
         f1SceneRef.current?.begin(); // start the F1 controllers now the self entity exists
       },
       onSnapshot: (snaps, _tick) => {
-        // Merge in this player's own-island Flow-0 affordances + Flow-1 activity props (client-local;
-        // not room state) so they render alongside the live room entities.
-        for (const e of f0EntsRef.current) snaps.set(e.id, e);
-        // The F1 LIVE set (not a static list): picks remove + the raft adds are reflected here, so a
-        // gather isn't undone by the next server snapshot re-adding a stale plank.
-        const f1live = f1SceneRef.current?.liveEntities();
-        if (f1live) for (const e of f1live) snaps.set(e.id, e);
-        // …and the survival day's stations (role "day") + today's private moral probe (role
-        // "probe"), likewise client-local — no other player ever sees your Stage-7 moment.
-        for (const e of dayEntsRef.current) snaps.set(e.id, e);
-        for (const e of probeEntsRef.current) snaps.set(e.id, e);
+        // Merge in this player's own-island Flow-0 affordances + Flow-1 activity props + the day's
+        // stations + today's private probe (all client-local, never room state) so they render
+        // alongside the live room entities. No other player ever sees your Stage-7 moment.
+        mergeLocal(snaps);
         world.applySnapshot(snaps, net.lastAckSeq());
         snapsRef.current = snaps; // keep role/status available for the Flow-3 station + Flow-0 menus
         // Drive the client's sail state from the AUTHORITATIVE synced flag (the server only lets you
@@ -1255,6 +1303,11 @@ export default function WorldClient() {
         world, map: oceanMap, home,
         actorId: () => uidRef.current, sessionId: () => sessionIdRef.current,
         send: (events) => {
+          // The one place the solo measurement policy is expressed. Default is no change: a solo
+          // session's cues go to the same endpoint with the same payload as an online one, because
+          // they always did, because this ingress is client-side either way. See SOLO_CUES_FEED_POSTERIOR
+          // and known-gaps ⚑10; flipping that constant is the whole of the decision.
+          if (soloRef.current && !SOLO_CUES_FEED_POSTERIOR) return;
           void fetch("/api/observe/behavioral", {
             method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
           }).catch(() => { /* best-effort; never block the player */ });
@@ -1276,6 +1329,23 @@ export default function WorldClient() {
           // held the lashings. The server fixes the reach from it and never raises it again.
           onLaunched: (sea) => {
             netRef.current?.sendSetSail(true, sea);
+            // Solo: no room, so sendSetSail is a no-op and a raft that was genuinely built would never
+            // grant sailing. Apply the SAME effect the server's SET_SAIL handler applies, from the same
+            // shared raft.ts, using the same `sea` the build earned. At launch waterTiles is 0, so
+            // effectiveSeaworthiness is s0 exactly; the shore you shove off from is the shore the
+            // current carries you back to. Reach is fixed here by what the build was worth and is never
+            // raised afterwards, which is the rule the online path enforces. Sailing stays EARNED.
+            if (soloRef.current) {
+              const p = world.getSelfTile();
+              const s0 = Math.max(0, Math.min(1, Number(sea) || 0));
+              const sEff = effectiveSeaworthiness(s0, 0);
+              soloRaftRef.current = {
+                sailing: true, sea: sEff, reach: reachTiles(sEff), departX: p.x, departY: p.y,
+              };
+              world.setSailing(true);
+              world.setRaft({ sea: sEff, reach: reachTiles(sEff), departX: p.x, departY: p.y });
+              setSailing(true);
+            }
             finishRaftRef.current();
           },
         },
@@ -1295,14 +1365,57 @@ export default function WorldClient() {
           x: p.x, y: p.y, facing: "down", moving: false, role: "day", status: "none",
         } as EntitySnapshot;
       });
+      /**
+       * The solo session. The room is only genuinely needed for OTHER PEOPLE: co-presence, the Flow 2
+       * and Flow 3 social cues, and the travel stand. Flow 0, Flow 1 and the day loop are already
+       * client-local entities built above, and Flow 1 already posts its own cues straight to
+       * /api/observe/behavioral through its `send` callback, independent of the room. So the
+       * single-player world runs without it, and this bends no architecture to get there: it supplies
+       * the two things the room was the only source of, a self entity and a snapshot tick.
+       *
+       * Note the spawn. `slotIndex` came from /api/island/assign, which is a Next route and answers
+       * with the realtime service down, so a solo player lands on their REAL island rather than on the
+       * pre-connect default at map centre. That is what puts a non-zero slot under the camera and makes
+       * ThreeWorld.ensureTerrain do its work without a room existing at all.
+       */
+      const startSolo = () => {
+        soloRef.current = true;
+        world.setSelf(SOLO_SELF_ID, home.x, home.y);
+        // Keep this session out of the drift histogram: the self snapshot below is our own position
+        // handed back to us, so it would read a structural zero rather than a measurement.
+        world.setSoloAuthority(true);
+        markFunnel(uidRef.current, "world_enter");
+        f1SceneRef.current?.begin(); // start the F1 controllers now the self entity exists
+        // The room's own tick rate, so the F1 controllers and the day loop see the cadence they were
+        // written against rather than a second, different clock.
+        soloTimerRef.current = setInterval(() => {
+          const p = world.getSelfTile();
+          const r = soloRaftRef.current;
+          const snaps = new Map<string, EntitySnapshot>();
+          snaps.set(SOLO_SELF_ID, {
+            id: SOLO_SELF_ID, kind: "user", refId: userId, name, spriteUrl,
+            x: p.x, y: p.y, facing: world.getSelfFacing(), moving: world.isSelfMoving(),
+            sailing: r.sailing, raftSea: r.sea, raftReach: r.reach,
+            raftDepartX: r.departX, raftDepartY: r.departY,
+          });
+          mergeLocal(snaps);
+          world.applySnapshot(snaps);
+          snapsRef.current = snaps;
+        }, 1000 / WORLD.TICK_HZ);
+      };
+
       if (disposed) return;
       try {
         await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
         // Respect telemetry consent (§2, §13): only collect if the user opted in.
         if (telemetryConsent) tele.start();
-      } catch (err) {
+      } catch {
+        // Solo fallback. The room is only needed for other people: co-presence, the Flow 2 and Flow 3
+        // social cues, and the travel stand. Flow 0, Flow 1 and the day loop are client-local and post
+        // their own cues, so the single-player world runs without it.
         setStatus("");
         setOffline(true);
+        startSolo();
       }
     })();
 
@@ -1311,6 +1424,11 @@ export default function WorldClient() {
       f1SceneRef.current?.dispose();
       tele.stop();
       net.leave();
+      if (soloTimerRef.current) {
+        clearInterval(soloTimerRef.current);
+        soloTimerRef.current = null;
+      }
+      soloRef.current = false;
       world.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1853,7 +1971,9 @@ export default function WorldClient() {
 
       {/* You cross the sea on a raft you built. The only HUD affordance is hauling it back out of the
           water — and the server refuses that anywhere but on land, so it can never strand you mid-ocean. */}
-      {!offline && sailing && (
+      {/* Not gated on being online any more: a solo session can genuinely earn a raft, so it must be
+          able to haul it back out of the water too, or a solo player who launches is stuck afloat. */}
+      {sailing && (
         <button
           onClick={haulAshore}
           className="panel absolute bottom-4 left-4 z-30 rounded-lg px-3 py-2 font-mono text-[11px] text-parchment hover:text-echo"
@@ -1863,22 +1983,28 @@ export default function WorldClient() {
         </button>
       )}
 
-      {offline ? (
-        <div className="panel absolute left-1/2 top-1/2 w-[min(420px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-lg px-6 py-5 text-center font-mono text-sm text-parchment">
-          <div className="glow-echo mb-1 text-base font-bold text-echo">The world is resting</div>
-          <p className="mb-4 leading-relaxed text-parchment/70">
-            We couldn&apos;t reach the live world right now — it may be waking up. Try again in a moment.
+      {/* The solo session's only chrome. This used to be a centre-screen modal over the whole world,
+          which was accurate when nothing but the terrain rendered and is a lie now: the island, the
+          day and Flow 1 are all playable without a room. So it is a quiet standing note instead,
+          tucked under the HUD, clear of the toolbar and of everything along the bottom edge. It says
+          what is actually missing, which is other people, and nothing more. */}
+      {offline && (
+        <div className="panel absolute left-3 top-[84px] z-10 w-[min(300px,70vw)] rounded-lg px-3 py-2 font-mono text-[11px] text-parchment/75">
+          <div className="mb-0.5 text-parchment/90">a solo session</div>
+          <p className="leading-relaxed text-parchment/55">
+            The shared world is out of reach, so no one else is here. Your island, your day and
+            everything on your own shore go on as they are.
           </p>
-          <div className="flex justify-center gap-2">
-            <button onClick={() => window.location.reload()} className="rounded bg-echo px-4 py-2 font-bold text-ink">
-              Try again
-            </button>
-            <a href="/" className="rounded border border-echo/40 px-4 py-2 text-parchment/80 hover:text-parchment">
-              Home
-            </a>
-          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-1.5 text-[10px] text-parchment/45 underline-offset-2 hover:text-parchment hover:underline"
+          >
+            look for the world again
+          </button>
         </div>
-      ) : status ? (
+      )}
+
+      {status ? (
         <div className="panel absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded px-6 py-4 font-mono text-sm text-parchment">
           {status}
         </div>
@@ -2040,6 +2166,13 @@ export default function WorldClient() {
         // NPC's counterpart_status, so courtesy-to-server vs courtesy-to-elder form the gradient).
         const snap = nearby.kind === "npc" ? snapsRef.current.get(nearby.id) : undefined;
         const role = snap?.role;
+        // Solo: every branch below except flow0 / day / probe belongs to a ROOM entity and sends on
+        // `net`: the travel stand, the Flow-3 station menus, and the ordinary talk-to. With no room
+        // none of those entities can be in a snapshot in the first place (mergeLocal contributes only
+        // the client-local four), so this is belt and braces rather than the mechanism. It is here
+        // because a room-routed affordance must never be clickable in a session that has no room to
+        // route it to, and "it cannot appear" is a weaker guarantee than "it is not offered".
+        if (offline && role !== "flow0" && role !== "day" && role !== "probe") return null;
         // Travel stand: a destination menu (archipelago slots), not social cues. Far choices read
         // novelty/openness; the far gathering is a shared landmark so players can rendezvous there.
         if (role === "travel") {

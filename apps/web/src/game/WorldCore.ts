@@ -199,6 +199,11 @@ export class WorldCore {
    *     integrators actually disagreed, it would show here; it should collapse toward ~0. */
   private drift = { last: 0, moving: { max: 0, sum: 0, n: 0 }, settled: { max: 0, sum: 0, n: 0 } };
   private selfMoving = false;
+  /** True only while the room is unreachable and the client is simulating a solo session. The self
+   *  snapshot is then the client's own position handed back to itself, so the drift instrument would
+   *  read a structural zero rather than a measurement. Skip it, and skip reconcile, which has nothing
+   *  authoritative to reconcile against. Never set this while a room is connected. */
+  private soloAuthority = false;
   /** performance.now() of the last frame the local player was moving — so the settled bucket can
    *  wait out the post-stop convergence transient (the client stops instantly; the server keeps
    *  integrating the last input for ~one round-trip) and measure only the truly-converged rest. */
@@ -228,6 +233,18 @@ export class WorldCore {
 
   getSelfTile(): { x: number; y: number } {
     return { x: this.localX, y: this.localY };
+  }
+
+  /** Whether the local player moved on the last step. Read by the solo tick, which has to author the
+   *  self snapshot the room would otherwise send, and by the drift instrument's moving/settled split. */
+  isSelfMoving(): boolean {
+    return this.selfMoving;
+  }
+
+  /** Turn solo authority on or off. See {@link soloAuthority}: this exists to keep a session with no
+   *  server out of the drift histogram, not to make the client authoritative in any other sense. */
+  setSoloAuthority(on: boolean) {
+    this.soloAuthority = on;
   }
 
   isSharedOcean(): boolean {
@@ -469,6 +486,14 @@ export class WorldCore {
     for (const [id, snap] of snaps) {
       const e = this.ensureEntity(snap);
       if (id === this.selfId) {
+        // In a solo session this snapshot is our own position handed straight back to us, so `err`
+        // below would be exactly 0 by construction. Feeding that into the histogram would push a
+        // stream of structural zeros into the settled bucket and manufacture the very "drift 0.0000"
+        // mask known-gaps #8 documents as a mask rather than a proof. The instrument compares the
+        // client against a REAL server or it does not run. Reconcile is skipped for the same reason:
+        // there is nothing authoritative here to reconcile against. ensureEntity above still ran, so
+        // the self entity gets a view and the renderer draws an avatar.
+        if (this.soloAuthority) continue;
         // ── the honest client-vs-server drift instrument ──
         // This is the invariant that actually matters and was never measured: the divergence
         // between the CLIENT'S predicted (x,y) and the SERVER'S authoritative (x,y) for the SAME
