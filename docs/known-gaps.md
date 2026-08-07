@@ -298,3 +298,71 @@ re-anchor regardless._
   alone.**
 - **Status:** OPEN — deferred by design; guarded by the comment in `WorldCore.step` and by ⚑8's
   instrument.
+
+---
+
+## ⚑ 10. A solo session's cues are client-authoritative and unstamped (2026-08-07)
+
+- **Opened:** 2026-08-07 (the solo fallback, `feat/solo-fallback`).
+- **What:** When the realtime room is unreachable the client now simulates a solo session rather than
+  showing a blocking modal: it authors its own self entity, ticks `applySnapshot` at `WORLD.TICK_HZ`,
+  and runs Flow 0, Flow 1 and the day loop. Those flows emit behavioral cues, and in a solo session
+  the position and context those cues carry are **client-authoritative**: no server ever saw the
+  player's (x, y), and no server stamped the context (`audience_size`, `public_or_private`,
+  counterpart status) that a room-mediated cue would carry.
+- **What is NOT new:** this is the same ingress it has always been. Flow 0 and Flow 1 post directly to
+  `/api/observe/behavioral` from the client in the ONLINE case too, through `Flow1Scene`'s `send`
+  callback and `emitFlow0`. The room was never in that path. So the solo session does not lower a bar;
+  it makes an existing property visible by removing the room that was standing next to it.
+- **The default, and where it lives:** unchanged. Solo cues flow exactly as they do today, same
+  endpoint, same payload, no new field, no suppression. That default is named as
+  `SOLO_CUES_FEED_POSTERIOR` in `apps/web/src/components/WorldClient.tsx` and referenced at the single
+  place it matters (the Flow-1 `send` callback), so the policy is one line to flip, not a gate to
+  invent.
+- **The open decision (the human's, not an agent's):** whether a solo session should feed the
+  posterior at all. Arguments exist both ways and neither has been made here. In favour: the behaviour
+  is real, the manner scalars (`thoroughness01`, `dwell_ms`, `persist_after_fail`) are exactly as
+  earned as in an online session, and discarding them throws away the only data a player generates
+  when the room is down. Against: the posterior would then contain rows no server ever witnessed,
+  which is a different evidentiary class from the rest of the corpus and is not marked as such.
+- **Related:** room-routed telemetry is the other half and needs no decision. `TelemetryCollector`
+  flushes through `net.sendTelemetry`, and `tele.start()` is only reached inside the `try` after
+  `net.connect()` resolves, so in a solo session the collector is never started and the call site is
+  never reached. The consequence is simply that the `passive_locomotion` channel (⚑2, the canonical
+  locomotion to openness path) produces nothing in a solo session. Stated, not changed.
+- **Status:** OPEN, awaiting the human's call on the policy. No gate invented, nothing suppressed.
+
+## ⚑ 11. The automated suite is render-blind, and proved it for three weeks (2026-08-07)
+
+- **Opened:** 2026-08-07 (after the invisible-landmass defect, `353e729`).
+- **What:** From 2026-07-18 to 2026-08-07 the island landmass did not render in production at all.
+  `buildIsland()` wound every triangle so its geometric normal pointed at `-Y`,
+  `computeVertexNormals()` derived the normals from that winding, and `MeshLambertMaterial` defaults
+  to `THREE.FrontSide`, so the whole disc was back-face culled from a camera above it. Players saw
+  bare sea with the per-island flora apparently floating on it. **Every automated gate stayed green
+  throughout.**
+- **Why the gates could not see it:** the measurement spine is renderer-independent **by design**. It
+  reads timing, path, hesitation, thoroughness and persistence, and knows nothing about how the world
+  is drawn. Collision runs on `oceanLandAt(x, y, OCEAN_BEACH_W)` over the flat plane and never
+  consults `groundHeight()`. So a player can walk the island, perform every Flow-1 beat and emit a
+  fully valid cue stream through a world in which the land is not drawn. The individuation harness
+  (`run_individuation_3d.sh`) does drive the REAL client through Playwright, which is what makes this
+  worth recording: it reads `/observe/behavioral` events off the **network**, never the framebuffer,
+  so it passed against an invisible landmass and its number was correct while it did.
+- **The load-bearing consequence:** a green `npm run build`, 129 passing ML tests, an empty protected
+  `services/ml/` diff and a passing individuation number **jointly prove nothing about the render**.
+  The human browser check (`docs/verify-3d-render.md`) is not a formality layered on top of the
+  automated suite. For this class of defect it is the only coverage that exists.
+- **The mitigation that worked, and the pattern to reuse:** `apps/web/tests/terrain.test.mts` is
+  renderer-free. It touches no WebGL and does not import `three`. It parses the real constants and the
+  actual `idx.push` order out of `terrain.ts`, replays the vertex grid over the real shared geometry,
+  and asserts a **geometric invariant** (no triangle winds downward) plus a structural one
+  (`draw()` calls `ensureTerrain`). It was verified to fail against the pre-fix code. **When adding 3D
+  coverage, reach for an invariant over the geometry rather than a screenshot**, because headless
+  WebGL is not trustworthy in this project and a pixel assertion would be both flakier and weaker.
+- **Still uncovered:** the mid-session terrain rebuild. `ensureTerrain` disposes and reconstructs up to
+  seven island discs plus their flora synchronously while the player is moving and the scene is live.
+  No automated test exercises that path and no harness does either, because a Flow-1 capture never
+  leaves one island. It is a step in `docs/verify-3d-render.md` instead.
+- **Status:** OPEN as a standing property of the suite, not a bug to fix. Recorded so nobody reads a
+  green board as evidence about the render again.

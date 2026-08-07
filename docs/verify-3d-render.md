@@ -116,6 +116,55 @@ that ever emits `persistence = 1.0`, and known-gaps ⚑7 tracks that the committ
 loading from a corpus where 1.0 was never observed. If it stops firing, that gap silently changes
 shape.
 
+## 5. The mid-session terrain rebuild
+
+Section 3 covers the terrain window **at spawn**: slot 9 is outside the window `init()` built, so the
+rebuild happens on the first frame after the room answers, before you have moved. The **mid-session**
+rebuild is a different situation and has no automated test and no harness coverage, because a Flow-1
+capture never leaves one island. `ensureTerrain` disposes and reconstructs up to seven island discs
+plus all of their flora **synchronously, on a frame, while you are moving and the scene is live.**
+
+The window follows you once you get `TERRAIN_R * 0.45` from where it was last built, which is
+**40.5 tiles**. Cross that threshold in one session: sail between islands on a launched raft, or use
+the travel stand if a second player has put one in reach.
+
+- [ ] Cross the 40.5-tile threshold without reloading the page.
+- [ ] Watch for a **visible hitch** at the moment of the rebuild. A frame of stutter is expected and
+      acceptable; a freeze of a second or more is not, and is worth reporting.
+- [ ] The **new islands appear** as you approach them, with land under you the whole way.
+- [ ] The **old islands are gone**, not still floating behind you. Accumulation would mean the
+      dispose path is not running, and every crossing would add a few thousand triangles for the rest
+      of the session.
+- [ ] Keep going and cross the threshold a second time. Memory should be flat across crossings, not
+      climbing (devtools Memory, or just watch for the tab getting slower).
+
+## 6. The solo path, with the realtime service stopped
+
+New with the solo fallback. The shared room is only genuinely needed for other people, so with it
+unreachable the world should still be a world rather than a modal. **Stop the realtime terminal**
+(Ctrl-C in terminal 2) and reload <http://localhost:3000/play>.
+
+- [ ] There is **no blocking modal**. The old centre-screen "The world is resting" card is gone.
+- [ ] A small notice reading **"a solo session"** sits under the HUD at the top left, clear of the
+      toolbar and of everything along the bottom edge. It does not cover the world and does not
+      intercept clicks: you can still click-to-move through the space it occupies.
+- [ ] **Your avatar renders** and walks. This is the thing that would not work if the solo tick were
+      not feeding snapshots, because every entity in the game goes through that path.
+- [ ] The **Flow-0 affordances and Flow-1 props are present** on your island: the driftwood, the hill,
+      the tide pool, the thicket, the day stations.
+- [ ] You are on **your assigned slot**, not always slot 0. Use section 3's curl recipe first, then
+      load `?u=faraway`. `/api/island/assign` is a Next route and answers with the realtime service
+      down, which is what makes this checkable at all.
+- [ ] **The raft can be built and launched**, and launching grants sailing. Reach must still be what
+      the build was worth: a hasty raft should not go as far as a thorough one. Sailing is earned,
+      never granted.
+- [ ] Once afloat, **hauling the raft ashore works on land and is refused at sea**, exactly as online.
+- [ ] Room-only affordances are **absent**: no travel stand, no talk-to prompt, no Flow-3 station
+      menus. There is nobody to talk to and nothing offers to send anywhere.
+
+Then start the realtime service again and reload, and confirm the online path is unchanged: the
+notice is gone, co-presence works, and section 2 still passes.
+
 ---
 
 ## If anything above fails

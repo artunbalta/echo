@@ -498,6 +498,15 @@ export class ThreeWorld {
   applySnapshot(snaps: Map<string, EntitySnapshot>, ackSeq?: number) {
     this.core.applySnapshot(snaps, ackSeq);
   }
+  setSoloAuthority(on: boolean) {
+    this.core.setSoloAuthority(on);
+  }
+  isSelfMoving() {
+    return this.core.isSelfMoving();
+  }
+  getSelfFacing(): Facing {
+    return this.core.localFacing;
+  }
   addEntity(snap: EntitySnapshot) {
     this.core.addEntity(snap);
   }
