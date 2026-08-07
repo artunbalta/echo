@@ -1,302 +1,218 @@
-# ECHO Individuation Eval (Deliverable #6 — the proof the instrument individuates)
+# Individuation harness: measured variance
 
-> **Status:** canonical test protocol. Conforms to the cue spine
-> ([`cue-catalog.md`](./cue-catalog.md)) and the instrumentation contract
-> ([`event-schema.md`](./event-schema.md)). Every cue ID below is defined in the catalog; every
-> engine function named below is real and cited by file + symbol. The protocol runs as a
-> deterministic `pytest` under [`services/ml/tests/`](../../services/ml/tests) against the
-> **actual** measurement engine — no mocks of the engine, no hardcoded loadings.
+What `services/ml/scripts/run_individuation_3d.sh` actually returns, run many times, so the numbers
+the project gates on stop being point estimates. This is the regression anchor the second W re-anchor
+and every future flow gets checked against, which is why it lives here rather than in a report.
 
----
-
-## 0. What "individuates" means here, and why the naive test fails
-
-The acceptance bar is **not** "two different people get different doppelgängers" — that is
-trivial (different axis means → different posteriors). The hard claim ECHO makes is the
-**conditional-signature** claim of Invariant 5: *identity lives in the deviation-from-the-crowd
-conditional* ("warm to friends / cold to strangers"), not in the marginal average. So the test
-is adversarial **by construction**:
-
-> Two synthetic personas **P** and **Q** are built so their **marginal 8-axis means are equal**
-> (statistically indistinguishable on every axis). They differ **only** in how their cues
-> respond to the *context envelope* (`counterpart_status`, `scarcity_level`, `time_pressure`,
-> `public_or_private`, …). A naive marginal read of `Posterior.mu` cannot tell them apart. The
-> instrument passes **iff** its *conditional* read — the posterior built from events filtered to
-> context A vs context B — separates them.
-
-This directly stresses the part of the engine the brief says carries identity: the context-keyed
-behavior, folded through the **learned** measurement matrix `W` (`persona_model.py`), never a
-hardcoded mapping.
+Pure measurement. Nothing was tuned to move any number.
 
 ---
 
-## 1. The two personas (concrete cue × context response functions)
+## 2026-08-07: the first characterization, 20 runs
 
-Each persona is a deterministic function `behave(cue_id, context) -> raw_signals/payload` that
-emits the telemetry scalars the engine actually reads
-(`persona.TELEMETRY_FEATURE_NAMES`, L396–411) plus a short context-appropriate utterance for the
-content channel. The seeds (`rng`) add realistic within-persona noise so a *single* act is noise
-and only the *pattern* separates them (Invariant 4).
+### Method
 
-**One-line definitions:**
+Two arms, 10 runs each, on one machine in one sitting, **sequentially and never in parallel**, since
+parallel runs contend on ports and skew exactly the timing the harness measures.
 
-- **Persona P — "conditional/structured":** *warm-to-friends, cold-to-strangers; generous with money, stingy with time.* Its `warmth`/`affect` cues (A1 approach distance, D5 self-disclosure, E5 initiative, C1 reply latency) **swing hard on `counterpart_status`** (warm to `peer`/`high`, cold to `stranger`), and its economic cues split **money-generous / time-stingy** (F7 shares freely, F1/F2 low save-rate = spends down to give, but A5/F12 hoards *time* — short sessions, fast exits, low `ts_social`).
-- **Persona Q — "uniform/flat":** *uniformly mild to everyone; stingy with money, generous with time.* Its warmth/affect cues are **context-flat** (the same mild value for `stranger`, `peer`, and `high` — `counterpart_status` has ~zero slope), and its economic cues are the **mirror** of P: **money-stingy / time-generous** (F1/F2 high save-rate, F7 keeps resources, but A5/C3 long sessions, lingering dusk dwell C10, high `ts_social`).
-
-### 1.1 The matching constraint (how the marginals are forced equal)
-
-The marginal mean of a cue over a session is its average across all contexts visited. The
-generator visits a **fixed, identical context schedule** for both personas (same number of
-`stranger`/`peer`/`high` encounters, same scarcity days, same timed/untimed forks — see §2.2), so:
-
-| Axis driver | Persona P (conditional) | Persona Q (flat) | Marginal mean (forced equal) |
-|---|---|---|---|
-| **warmth/affect** (A1, D5, E5, I-valence) | `+0.8` to friends, `−0.8` to strangers | `0.0` to everyone | both average to **≈ 0** over the 50/50 friend/stranger schedule |
-| **money** (F1 save, F2 save-rate, F7 generosity) | generous: low save, high give | stingy: high save, low give | P's `−` and Q's `+` are **swapped vs time**, and the generator scales them so the *money+time composite* nets equal (see below) |
-| **time** (A5 `ts_*`, C3 session length, C10 dusk, F12) | stingy: short sessions, fast exits | generous: long sessions, lingering | mirror of money |
-
-The money/time mirror is what keeps the **economic axis means** (`intellect`/`dominance`/`pace`,
-which the catalog hypothesizes load on F1/F2/F3/F12) equal: P is `(money+, time−)`, Q is
-`(money−, time+)`; the generator centers each persona's `(save_rate, ts_social, session_norm,
-generosity)` block so the **per-axis projection through the learned W** has equal expectation
-while the **joint conditional pattern** differs. Concretely the generator enforces, per persona,
-across the full schedule:
-
-```
-mean(save_rate)  + mean(generosity_inv)          ≈ const   # money composite matched
-mean(ts_social)  + mean(session_norm) + mean(dwell_norm) ≈ const   # time composite matched
-mean_over_contexts( warmth_cue )                 ≈ 0       # warmth marginal matched
-```
-
-and a **pre-flight assertion (§3, gate 0)** verifies the two personas' marginal axis means are
-within tolerance *before* the distinguishability test is even allowed to run — otherwise the test
-would be cheating by smuggling a marginal difference in.
-
-### 1.2 Cue × context response table (the generator's core)
-
-`status ∈ {stranger, peer, high}`, `scarcity ∈ [0,1]`, `time_pressure ∈ {0,1}`. Values are the
-emitted `raw_signals`/payload scalars (the engine reads them via `_telemetry_features`,
-`persona.py` L414–440). `~` = small gaussian jitter per emission.
-
-| Cue (catalog) | Emitted scalar(s) → engine feature | **Persona P** | **Persona Q** |
-|---|---|---|---|
-| **A1** approach distance | `raw_signals.distance`, `approach` (→ `approach`) | `approach=+1` if status∈{peer,high} else `−1`; distance `~1` to friends, `~5` to strangers | `approach` `~0` (holds mid distance `~3`) **for every status** |
-| **C1** reply latency | `latencyMs` (→ `latency_norm`) | fast to friends (`~500ms`), slow to strangers (`~3500ms`) | uniform `~1800ms` for all status |
-| **D5** self-disclosure | utterance text + `valence` | intimate text to friends, guarded text to strangers | mild, equally shallow text to all |
-| **E5/G1** initiative | per-actor event presence | initiates with friends, only-responds to strangers | responds at a flat rate to all |
-| **A5** time-share | `ts_earn/ts_learn/ts_social/ts_leisure` | **low `ts_social`**, brisk earn (time-stingy) | **high `ts_social`**, lingering (time-generous) |
-| **C3/C10** session/dusk | `secondsAlone`, dusk `dwell_ms` | short sessions, `ends_abruptly` (K12) | long sessions, `lingers_at_dusk` |
-| **F1/F2** save vs spend | `save_rate` | **low save_rate** (spends down to give) | **high save_rate** (hoards money) |
-| **F7** generosity | `generosity` (proposed feat, §4 schema) / payload `amount` | **shares freely** (high give) | **keeps all** (low give) |
-| **F3** risk index | `risk_index`, `variance` | moderate, status-independent | moderate, status-independent (held equal — a control) |
-| **I4** pet-talk | `pet_talk.valence`, `pet_attach` | warm (private, no audience effect) | warm (held equal — a control) |
-
-Cues **F3** and **I4** are deliberately held **identical** across P and Q: they are *controls* that
-must **not** separate the personas, proving the separation comes from the conditional signature and
-not from leakage.
-
-The two personas live as `Persona` dataclasses in the test file (see §2.1); each is a pure
-function of `(cue_id, EventContext)` → emitted `BehavioralEvent` payload, seeded for determinism.
-
----
-
-## 2. The harness — driving the REAL engine
-
-### 2.1 What we call (all real symbols, no engine mocks)
-
-The harness drives the production online path exactly as `app.py POST /observe` does:
-
-1. **Fit a measurement model `W`** so the *learned* path is active (not the heuristic fallback).
-   Use the real offline fitters on a synthetic population:
-   - `persona_model.anchor_alignment(Phi_centered, Z_target, ridge)` → `(W (8×F), Psi)`
-   - optional `persona_model.fit_state_factors(residual, k_state)` → `(V, Sigma_m, Psi)` to
-     exercise the **trait/state split** (WI-5) for §4's bad-mood check.
-   - assemble `PersonaModel(W=W, mu_phi=mu_phi, Psi=Psi, V=V, Sigma_m=Sigma_m,
-     feature_names=persona.feature_names())` and install it with
-     `persona_model.set_persona_model(model)` so `observe()` picks it up.
-   The population `Phi`/`Z_target` is generated from the **same cue catalog priors** (the
-   axis-hypothesis columns seed the anchor labels), so `W` is learned, never hardcoded — honoring
-   Invariant: *"loadings are LEARNED"* (`event-schema.md` Appendix rule 5).
-
-   > If a committed `artifacts/measurement.npz` exists, the harness may instead just
-   > `set_persona_model(None); get_persona_model()` and skip if `not model.trained`
-   > (mirrors `test_committed_artifact_*` in `test_persona_model.py`). The fit-synthetic path is
-   > the default so the eval is hermetic and runs on a clean checkout.
-
-2. **Simulate each persona into a `BehavioralEvent` stream.** For a fixed schedule of
-   `(cue_id, context)` slots (§2.2), call `persona.behave(cue_id, ctx)` to get the event's
-   `text` + `telemetry` dict (the engine reads `telemetry` keys from
-   `BehavioralEvent.raw_signals`/`payload` per `event-schema.md §4`).
-
-3. **Fold each event into the posterior** via the real online update — the engine entry point:
-   ```python
-   post = persona.observe(post, ev.text, ev.telemetry)     # → robust_kalman_update internally
-   ```
-   `observe()` (`persona.py` L472–510) calls `featurize_raw(text, telemetry)` →
-   `model.apply(phi)` → `model.center(phi)` →
-   `robust_kalman_update(post, φ−μ_φ, Wᵀ, Ψ·reliability_noise_scale)` (Joseph form, Student-t
-   downweight, Mahalanobis gate). This is **byte-for-byte the production path**; the harness adds
-   nothing. Optionally pass `trace={}` to capture `mahalanobis_d2`/`weight`/`surprising` for the
-   outlier check (§4.2).
-
-4. **Build per-context conditional posteriors.** The crux. For each persona we fold **two extra
-   posteriors** alongside the marginal one, by routing each event into the conditional posterior
-   keyed by its context:
-   - `post_friend` ← only events with `context.counterpart_status ∈ {peer, high}`
-   - `post_stranger` ← only events with `context.counterpart_status == stranger`
-   (and analogously `post_scarce` vs `post_plenty`, `post_timed` vs `post_untimed` for the
-   economic/time conditionals). Each conditional posterior starts from `persona.prior()` and is
-   updated only by its slice of the stream — these are **predictions of behavior given context**.
-
-### 2.2 The fixed schedule (identical for P and Q)
-
-`N = 240` events per persona over a simulated `D_days = 12` (so `consistency` is non-zero — it is 0
-within a single session, `persona.py` L410). Context slots are drawn from a **fixed seeded
-schedule shared by both personas**:
-
-- 50% `counterpart_status=stranger`, 50% `∈{peer,high}` (forces the warmth marginal to match).
-- scarcity alternates `{0.1 plenty, 0.8 famine}` day-by-day (same days for both).
-- `time_pressure ∈ {0,1}` balanced 50/50, same slots.
-- `audience_size`/`public_or_private` balanced, same slots.
-
-Because the schedule is identical, any divergence in the **marginal** posterior is bounded by the
-matching tolerance (gate 0); all real signal is in the **conditional** posteriors.
-
-### 2.3 Where this lives
-
-`services/ml/tests/test_individuation.py` (new), peer of `test_trait_state.py` /
-`test_persona_model.py`. Runs under the existing `pytest.ini`. Pattern, fixtures, and
-`set_persona_model` discipline mirror `test_persona_model.py::test_committed_artifact_*` exactly.
-Deterministic (`np.random.default_rng(seed)`); the embedder is the offline deterministic
-hash provider (`embeddings._hash_embed`, used automatically when no `VOYAGE_API_KEY`), so content
-cues are reproducible and the whole eval is hermetic.
-
----
-
-## 3. Distinguishability metric + PASS/FAIL
-
-Let `KL(·‖·) = persona.gaussian_kl` (full-covariance, `persona.py` L60–84), and reuse
-`autonomy.persona_drift_kl(mu_a, mu_b, Sig_a, Sig_b)` as the named wrapper for the symmetric-ish
-posterior divergence. Define the **conditional contrast vector** of a persona as the difference of
-its two conditional posterior means:
-
-```
-Δ_P = post_P_friend.mu − post_P_stranger.mu          # P's friend-vs-stranger swing (R^8)
-Δ_Q = post_Q_friend.mu − post_Q_stranger.mu          # Q's friend-vs-stranger swing (R^8)
-```
-
-### Gate 0 — marginal indistinguishability (the test must be honest)
-```
-for each axis i:  | post_P.mu[i] − post_Q.mu[i] |  <  τ_marg      (τ_marg = 0.15)
-AND  KL_marg = max( drift_kl(P‖Q), drift_kl(Q‖P) )  <  κ_marg     (κ_marg = 0.5)
-```
-If gate 0 **fails**, the personas were not actually matched on the marginal → the whole eval is
-**invalid** (not a pass), because any later separation could be smuggled marginal difference.
-
-### Primary PASS criterion — conditional separation
-The instrument **individuates** iff, with the marginals matched (gate 0), the **conditional**
-reads diverge by a wide margin:
-
-```
-PASS  ⇔   gate0_holds
-      AND  KL_cond = max( drift_kl(post_P_friend ‖ post_P_stranger),     # P's own conditional gap
-                          drift_kl(post_Q_friend ‖ post_Q_stranger) )    #   (P should be large)
-      AND  ‖Δ_P − Δ_Q‖₂  >  ρ · max(‖Δ_P‖, ε)                            # P swings, Q is flat
-      AND  KL_cond(P) ≥ SEP · KL_cond(Q)                                  # P's slope ≫ Q's slope
-```
-
-with thresholds:
-
-| Symbol | Value | Meaning |
+| Arm | Commit | What it is |
 |---|---|---|
-| `τ_marg` | `0.15` | per-axis marginal-mean tolerance (gate 0) |
-| `κ_marg` | `0.5` | marginal posterior-KL ceiling (gate 0) |
-| `ρ` | `0.6` | the conditional-contrast vectors of P and Q must differ by ≥60% of P's swing magnitude |
-| `SEP` | `4.0` | P's friend↔stranger conditional KL must be ≥4× Q's (reuses `config.drift_kl_threshold = 4.0`) |
-| `ε` | `1e-6` | numeric floor |
+| **A** | `dd50f8e` | current `main` |
+| **B** | `48e529f` | the pre-hotfix state, in which **the island landmass did not render at all** |
 
-**Plain English:** P and Q look identical on the average dashboard (gate 0), but when you ask the
-posterior to *predict behavior toward a friend vs a stranger*, **P predicts a large warmth swing
-and Q predicts none** — `Δ_P` is big, `Δ_Q` ≈ 0, so `‖Δ_P − Δ_Q‖` is large and
-`KL_cond(P) ≫ KL_cond(Q)`. The same structure is asserted on the **money/time conditional**
-(`scarcity`/`session` slices): P is money-generous/time-stingy, Q the mirror, so
-`Δ^money_P ≈ −Δ^money_Q` (opposite-signed), giving a large `‖Δ^money_P − Δ^money_Q‖` even though
-the money+time *composite* marginal matched. **The pass metric is the conditional, not the
-marginal — which is the entire point of the instrument.**
+Arm B is not a curiosity. It is the direct demonstration behind known-gaps ⚑11: that a correct
+individuation number was produced against a world in which the land was not drawn. The prediction was
+that the two arms would be indistinguishable, because the measurement spine is renderer-independent
+and collision was never touched. That is confirmed statistically below rather than asserted.
 
-### Control assertion (no-leakage)
-The held-equal cues **F3** (risk) and **I4** (pet-talk) must **not** separate the personas:
-`| post_P.mu[i] − post_Q.mu[i] | < τ_marg` on the axes those cues primarily drive — proving the
-separation is the conditional signature, not an accidental marginal leak.
+`services/ml/**` is **byte-identical between the two commits** (`git diff 48e529f main -- services/ml/`
+is empty), verified before the run, so this compares application code and nothing else. The harness
+web port was parameterized (`ECHO_WEB_PORT`, default 3000) for this run because an unrelated dev
+server held 3000; port only, no logic, no timing, no gate.
 
----
+Each run records the completeness verdict, pooled `‖μ_tessa − μ_hank‖`, the per-axis delta for all
+eight axes, the `still_ms` maxima the harness already logs, and wall clock. No new instrumentation
+was added.
 
-## 4. Secondary checks (each tied to a brief invariant)
+### Per-run results
 
-All four run in the same test module, reusing the harness.
+`still_T` and `still_H` are the per-persona `still_ms` maxima the harness prints.
 
-### 4.1 Trait/state separation — a bad mood is noise, not trait (Invariant 5 / WI-5)
-Re-run **persona P** but inject a transient **bad-mood state** on a contiguous block of days:
-set `context.mood_proxy = −1` and add a fluctuation along the fitted state directions `V` to each
-event's φ (the mood loads on `V`, marginalized into `Ψ_total` via `model.apply`,
-`persona_model.py` L63–70). Fold with the **state-aware** model.
-**PASS:** `‖post_P_badmood.mu − post_P.mu‖₂ < δ_state` (`δ_state = 0.1`) — the bad-mood run stays
-close in `z` to the baseline P. Mirror of `test_trait_state.py::test_state_fluctuation_does_not_move_trait`.
+| run | verdict | secs | pooled | warmth | dominance | openness | energy | formality | intellect | pace | affect | still_T | still_H |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A1 | COMPLETE | 93 | 0.1612 | +0.0095 | -0.1169 | +0.0496 | -0.0823 | -0.0239 | +0.0494 | +0.0005 | -0.0028 | 8005.2 | 1502.8 |
+| A2 | COMPLETE | 94 | 0.1610 | +0.0096 | -0.1166 | +0.0495 | -0.0824 | -0.0237 | +0.0492 | +0.0005 | -0.0027 | 8005.7 | 1501.2 |
+| A3 | COMPLETE | 98 | 0.2044 | -0.0159 | -0.0936 | +0.0791 | -0.1433 | -0.0273 | +0.0012 | -0.0008 | +0.0721 | 8022.2 | 1509.6 |
+| A4 | COMPLETE | 98 | 0.1610 | +0.0104 | -0.1167 | +0.0499 | -0.0818 | -0.0233 | +0.0496 | -0.0004 | -0.0026 | 8004.0 | 1507.7 |
+| A5 | COMPLETE | 87 | 0.1609 | +0.0108 | -0.1167 | +0.0501 | -0.0815 | -0.0230 | +0.0497 | -0.0009 | -0.0026 | 8007.0 | 1504.1 |
+| A6 | COMPLETE | 87 | 0.1610 | +0.0105 | -0.1167 | +0.0503 | -0.0817 | -0.0232 | +0.0493 | -0.0003 | -0.0027 | 8009.8 | 1503.6 |
+| A7 | COMPLETE | 86 | 0.1611 | +0.0099 | -0.1168 | +0.0498 | -0.0822 | -0.0237 | +0.0494 | -0.0000 | -0.0028 | 8009.2 | 1510.9 |
+| A8 | COMPLETE | 87 | 0.1610 | +0.0098 | -0.1166 | +0.0502 | -0.0824 | -0.0235 | +0.0486 | +0.0012 | -0.0026 | 8012.1 | 1503.5 |
+| A9 | COMPLETE | 89 | 0.1615 | +0.0099 | -0.1169 | +0.0502 | -0.0823 | -0.0238 | +0.0494 | -0.0002 | -0.0026 | 8009.4 | 1501.7 |
+| A10 | COMPLETE | 87 | 0.1612 | +0.0107 | -0.1167 | +0.0508 | -0.0816 | -0.0232 | +0.0497 | -0.0007 | -0.0026 | 8011.4 | 1503.5 |
+| B1 | COMPLETE | 87 | 0.1598 | +0.0114 | -0.1166 | +0.0487 | -0.0815 | -0.0200 | +0.0479 | +0.0092 | -0.0021 | 8002.6 | 1507.8 |
+| B2 | COMPLETE | 86 | 0.1599 | +0.0119 | -0.1168 | +0.0492 | -0.0810 | -0.0198 | +0.0482 | +0.0084 | -0.0022 | 8012.4 | 1502.6 |
+| B3 | COMPLETE | 87 | 0.1615 | +0.0096 | -0.1169 | +0.0501 | -0.0825 | -0.0239 | +0.0492 | +0.0002 | -0.0027 | 8009.7 | 1502.1 |
+| B4 | COMPLETE | 86 | 0.1616 | +0.0095 | -0.1170 | +0.0501 | -0.0825 | -0.0241 | +0.0493 | -0.0000 | -0.0027 | 8009.3 | 1508.1 |
+| B5 | COMPLETE | 86 | 0.1600 | +0.0113 | -0.1167 | +0.0490 | -0.0817 | -0.0201 | +0.0478 | +0.0094 | -0.0021 | 8001.3 | 1505.8 |
+| B6 | COMPLETE | 86 | 0.1611 | +0.0098 | -0.1168 | +0.0497 | -0.0821 | -0.0237 | +0.0493 | +0.0001 | -0.0028 | 8007.6 | 1504.3 |
+| B7 | COMPLETE | 88 | 0.1621 | +0.0095 | -0.1172 | +0.0499 | -0.0826 | -0.0245 | +0.0503 | -0.0015 | -0.0028 | 8000.8 | 1505.8 |
+| B8 | COMPLETE | 88 | 0.1611 | +0.0098 | -0.1167 | +0.0497 | -0.0823 | -0.0236 | +0.0492 | +0.0003 | -0.0027 | 8005.3 | 1508.8 |
+| B9 | COMPLETE | 86 | 0.1602 | +0.0121 | -0.1169 | +0.0495 | -0.0813 | -0.0198 | +0.0484 | +0.0080 | -0.0019 | 8008.0 | 1508.7 |
+| B10 | COMPLETE | 86 | 0.1613 | +0.0098 | -0.1168 | +0.0498 | -0.0823 | -0.0237 | +0.0494 | -0.0000 | -0.0026 | 8009.9 | 1507.3 |
+### Completeness
 
-### 4.2 Outlier robustness — one dramatic out-of-character act barely moves z (Invariant 5, §9.8)
-After P's stream converges, inject **one** wildly out-of-character event (e.g. an `affect=+5`,
-`latencyMs=50`, all-caps tirade) and fold it with `trace={}`.
-**PASS:** the trace reports `surprising=True` and `weight < 0.2` (Student-t downweight), **and**
-`‖post_after − post_before‖₂ < δ_outlier` (`δ_outlier = 0.05`) — the doppelgänger is not
-rewritten by one act. Mirrors the robustness intent of `test_robust.py` and
-`robust_kalman_update` (`persona.py` L231–283).
+**0 of 20 runs were INFRA. All 20 were COMPLETE and exited PASS.** The completeness gate added in
+`0a485df` did not have to reject anything in this sitting, so on this evidence the harness is not
+flaky and is a usable gate. That is a stronger result than expected and should be re-checked rather
+than assumed: it is one sitting on one machine, and the earlier per-beat gate exists precisely because
+drive flakiness has been seen before.
 
-### 4.3 Population-relative individuation (Invariant 5 — signal is deviation from the crowd)
-Generate a **crowd** of `M = 200` synthetic personas with random axis means and the *same*
-context schedule. Standardize each persona's marginal `mu` against the crowd
-(`z_score = (mu − crowd_mean) / crowd_std`). **PASS:** P and Q have **near-zero** marginal z-scores
-(they sit at the crowd center — that's the matched-marginal design) **but** their **conditional
-contrast vectors** `Δ_P`, `Δ_Q` are **outliers** vs the crowd's conditional-contrast distribution
-(`|z_score(‖Δ‖)| > 2` for P, ≈ 0 for Q). Identity = the deviation in the *conditional*, not the
-marginal.
+Wall clock was 86 to 98 seconds per run, 90.6s mean on arm A and 86.6s on arm B. A 10-run arm is
+about 15 minutes.
 
-### 4.4 Calibration — ECE against held-out outcomes (§9.5)
-Hold out `H = 60` future `(cue, context)` slots per persona. From each persona's posterior, predict
-a **binary behavioral outcome** (e.g. "will approach the next `peer`?" via `P(approach=+1)` from the
-posterior-implied feature mean), with a confidence. Score against the generator's ground-truth
-emission for those held-out slots and compute
-`gate.expected_calibration_error(confidences, correct, bins=10)` (`gate.py` L134–151).
-**PASS:** `ECE_P < 0.1` and `ECE_Q < 0.1` — the posterior's confidence matches its hit-rate on
-held-out behavior, so the conditional predictions are *trustworthy*, not just *separated*.
+### Summary over COMPLETE runs
 
----
+**Arm A, `main` (n=10)**
 
-## 5. How to run
+| metric | mean | sd | min | max |
+|---|---|---|---|---|
+| pooled L2 | 0.1654 | 0.0137 | 0.1609 | 0.2044 |
+| warmth | +0.0075 | 0.0082 | -0.0159 | +0.0108 |
+| dominance | -0.1144 | 0.0073 | -0.1169 | -0.0936 |
+| openness | +0.0530 | 0.0092 | +0.0495 | +0.0791 |
+| energy | -0.0882 | 0.0194 | -0.1433 | -0.0815 |
+| formality | -0.0239 | 0.0012 | -0.0273 | -0.0230 |
+| intellect | +0.0445 | 0.0152 | +0.0012 | +0.0497 |
+| pace | -0.0001 | 0.0007 | -0.0009 | +0.0012 |
+| affect | +0.0048 | 0.0236 | -0.0028 | +0.0721 |
 
-```bash
-cd services/ml
-.venv/bin/pytest tests/test_individuation.py -q
-# gate 0 (marginals matched) → primary conditional PASS → 4 secondary checks
-```
+**Arm B, `48e529f`, invisible landmass (n=10)**
 
-Deterministic, hermetic (hash embedder, no network, no API keys), no committed artifact required
-(fits `W` in-process via `anchor_alignment`). Asserts exactly the §3 criterion plus the four §4
-checks; a regression that flattens the conditional read (e.g. someone reintroducing a marginal-only
-featurizer, or breaking the context fan-out) fails gate `KL_cond(P) ≥ 4·KL_cond(Q)`.
+| metric | mean | sd | min | max |
+|---|---|---|---|---|
+| pooled L2 | 0.1609 | 0.0008 | 0.1598 | 0.1621 |
+| warmth | +0.0105 | 0.0011 | +0.0095 | +0.0121 |
+| dominance | -0.1168 | 0.0002 | -0.1172 | -0.1166 |
+| openness | +0.0496 | 0.0005 | +0.0487 | +0.0501 |
+| energy | -0.0820 | 0.0006 | -0.0826 | -0.0810 |
+| formality | -0.0223 | 0.0021 | -0.0245 | -0.0198 |
+| intellect | +0.0489 | 0.0008 | +0.0478 | +0.0503 |
+| pace | +0.0034 | 0.0046 | -0.0015 | +0.0094 |
+| affect | -0.0025 | 0.0003 | -0.0028 | -0.0019 |
 
----
+### Paired comparison, arm A against arm B
 
-## Appendix — engine symbols this protocol exercises (all real)
+Welch's two-sided t-test. Intervals are mean ± 2sd.
 
-| Step | Symbol | File |
-|---|---|---|
-| online update | `persona.observe` → `robust_kalman_update` → `kalman_update_general` | `services/ml/echo_ml/persona.py` |
-| featurize | `persona.featurize_raw`, `_telemetry_features`, `TELEMETRY_FEATURE_NAMES` | `persona.py` |
-| learned W | `persona_model.anchor_alignment`, `fa_em`, `PersonaModel.apply/center` | `persona_model.py` |
-| trait/state | `persona_model.fit_state_factors`, `V`, `Sigma_m`, `Ψ_total` | `persona_model.py` |
-| model install | `persona_model.set_persona_model` / `get_persona_model` | `persona_model.py` |
-| divergence metric | `persona.gaussian_kl`, `autonomy.persona_drift_kl` | `persona.py`, `autonomy.py` |
-| calibration | `gate.expected_calibration_error` | `gate.py` |
-| outlier trace | `robust_kalman_update(..., trace={})` → `mahalanobis_d2`, `weight`, `surprising` | `persona.py` |
-| axes/order | `persona_axes.AXIS_KEYS`, `AXIS_INDEX` | `persona_axes.py` |
-```
+| metric | A mean | B mean | diff | A ± 2sd | B ± 2sd | overlap | p |
+|---|---|---|---|---|---|---|---|
+| pooled | 0.1654 | 0.1609 | +0.0046 | [0.1381, 0.1928] | [0.1592, 0.1625] | yes | 0.317 |
+| warmth | +0.0075 | +0.0105 | -0.0030 | [-0.0090, 0.0240] | [0.0083, 0.0126] | yes | 0.289 |
+| dominance | -0.1144 | -0.1168 | +0.0024 | [-0.1291, -0.0998] | [-0.1172, -0.1165] | yes | 0.321 |
+| openness | +0.0530 | +0.0496 | +0.0034 | [0.0346, 0.0714] | [0.0486, 0.0505] | yes | 0.276 |
+| energy | -0.0882 | -0.0820 | -0.0062 | [-0.1269, -0.0494] | [-0.0831, -0.0808] | yes | 0.339 |
+| formality | -0.0239 | -0.0223 | -0.0015 | [-0.0263, -0.0214] | [-0.0265, -0.0181] | yes | 0.065 |
+| intellect | +0.0445 | +0.0489 | -0.0044 | [0.0141, 0.0750] | [0.0474, 0.0505] | yes | 0.388 |
+| pace | -0.0001 | +0.0034 | -0.0035 | [-0.0015, 0.0012] | [-0.0059, 0.0127] | yes | 0.040 |
+| affect | +0.0048 | -0.0025 | +0.0073 | [-0.0425, 0.0521] | [-0.0032, -0.0018] | yes | 0.355 |
+
+**Verdict: the arms are indistinguishable.** Every axis and the pooled distance overlap at ± 2sd. The
+smallest p is `pace` at 0.040 and `formality` at 0.065; across nine comparisons a single p near 0.04
+is what chance produces (a Bonferroni threshold here would be 0.05/9 = 0.006), and neither survives
+that. **⚑11 is confirmed with statistics rather than by assertion: the harness returns the same
+individuation number whether or not the world's land is drawn.** It reads `/observe/behavioral` events
+off the network and never the framebuffer, so a green individuation number says nothing about the
+render.
+
+### Where the variance actually lives
+
+The two arms' spreads are very different, and that is not an arm effect. **Arm A's larger sd is one
+run.** Run A3 is a single large excursion (pooled 0.2044 against 0.1610 typical, dominance -0.0936
+against -0.1167). Excluding it, dominance over the remaining 19 runs has **sd 0.00016** and a range of
+[-0.11724, -0.11659]. The harness is far more deterministic than the arm-A table alone suggests.
+
+Arm B shows a second, smaller mode: runs B1, B2, B5 and B9 sit at `pace` about +0.009 and `formality`
+about -0.020, against about 0.000 and -0.024 for the rest. So there are at least two discrete modes,
+not a continuous spread.
+
+**The variance is essentially all in the Tessa (thorough) arm.** Standard deviation of each persona's
+own posterior across all 20 COMPLETE runs:
+
+| axis | sd μ_tessa | sd μ_hank | ratio |
+|---|---|---|---|
+| warmth | 0.00598 | 0.00033 | 18× |
+| dominance | 0.00514 | 0.00018 | 29× |
+| openness | 0.00662 | 0.00022 | 30× |
+| energy | 0.01376 | 0.00023 | 59× |
+| formality | 0.00195 | 0.00032 | 6× |
+| intellect | 0.01072 | 0.00031 | 34× |
+| pace | 0.00369 | 0.00058 | 6× |
+| affect | 0.01668 | 0.00010 | 161× |
+
+Hank, the hasty persona, is effectively deterministic. Tessa is not, and she is the one who holds the
+build for 16.5 seconds and sits still through the shy-creature beat. That long hold is where
+frame-timing noise enters.
+
+`still_ms` for Tessa: mean 8008.1, sd 4.7, range [8000.8, 8022.2], against the 8000ms threshold in
+`ingest.py` (`solitude_tol = clip01(still_ms / 8000)`). **Every run cleared 8000, in the worst case by
+0.8ms.** That is a knife edge, but it is not the driver of the excursions: the value clips at 1.0, so
+variation above 8000 is absorbed.
+
+**What the driver is, honestly: not established.** The raw-signal maxima the harness already logs
+(`still_ms`, `speed_var`, `heading_var`, `explore_ratio`, `dwell_ms`) do **not** separate the two
+modes in arm B; the ALT and main runs overlap on every one. And `heading_var` / `speed_var` /
+`explore_ratio` are documented in ⚑6 as deliberately unmapped in `ingest.py`, so they cannot move the
+posterior directly. The remaining hypothesis is that the *number and composition* of
+`movement_sample` events during Tessa's long hold varies with frame timing, which changes how many
+times `solitude_tol` is observed rather than what value it takes. Confirming that needs the
+per-event dump the harness already supports (`DUMP=1`, which writes `/tmp/<label>_{tessa,hank}.json`)
+captured on a run that happens to land in the excursion mode. No new instrumentation was added for
+this, per the brief.
+
+### Where the previously quoted readings fall
+
+Over all 20 COMPLETE runs:
+
+| axis | measured mean | sd | range |
+|---|---|---|---|
+| dominance | -0.1156 | 0.0052 | [-0.1172, -0.0936] |
+| energy | -0.0851 | 0.0137 | [-0.1433, -0.0810] |
+| pace | +0.0016 | 0.0037 | [-0.0015, +0.0094] |
+
+- **dominance** quoted at -0.117, -0.1167, -0.1166, -0.1168: all inside, all within 0.3 sd of the
+  measured mean. The axis the project has been gating on is genuinely the stable one.
+- **energy** quoted at -0.076, -0.0827, -0.0821, -0.0814: the last three are inside; **-0.076 is
+  outside the measured range** (z = +0.66, but above the observed maximum of -0.0810). That reading
+  came from an earlier session on a different code state, so it is not a contradiction, but it does
+  mean the -0.076 to -0.0827 "band" quoted in earlier briefs was never a characterized band and
+  should not be used as one.
+- **pace** quoted at -0.0001, +0.0009, +0.0094: -0.0001 and +0.0009 are inside; **+0.0094 sits at the
+  very top of the measured range** (z = +2.10, equal to the observed maximum). It corresponds to the
+  arm-B alternate mode, so it is a real mode rather than an outlier.
+
+### Proposed regression gate, NOT enforced
+
+Written down so the human can decide. **The gate is off. Nothing in CI checks this.**
+
+> **Proposal: `dominance`, median of n = 3 runs, must fall within -0.1168 ± 4 × 0.00016, i.e.
+> [-0.11742, -0.11615]. COMPLETE runs only; INFRA runs are re-run, never counted.**
+
+- **Why `dominance`:** it is the cave fork, the strongest individuator, and it is measurably the most
+  stable axis (clean-mode sd 0.00016). `energy` and `pace` are locomotion-driven and demonstrably
+  bimodal, so they would false-alarm.
+- **Why the median, and why n = 3:** the observed failure mode is a *single-run excursion*, seen once
+  in 20 (5%). A mean of 3 is dragged by one excursion; a median of 3 is immune to it. The probability
+  that a median of 3 is itself an excursion is P(2 or 3 of 3) = 0.73%. Three runs cost about 4.5
+  minutes, which is cheap enough to run per branch.
+- **Why k = 4, against the clean-mode sd:** the sd over all 20 runs (0.0052) is inflated 32× by the
+  single excursion, and a band built from it would be [-0.136, -0.095], wide enough to miss a real
+  regression of 0.02. Taking the median first removes the excursion, so the band should be built from
+  the clean-mode sd, which makes the gate genuinely sensitive: it would catch any shift larger than
+  about 0.0006.
+- **False-alarm rate against the 20 runs just collected: 0.** Across all 18 consecutive 3-run windows,
+  every median falls inside the band. For comparison, a *single-run* gate at the same band would have
+  fired once (on A3), a 5% false-alarm rate.
+
+Re-measure this before trusting it on different hardware. Every number above is one machine, one
+sitting, 2026-08-07.
