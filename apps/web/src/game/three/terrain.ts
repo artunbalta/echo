@@ -92,7 +92,11 @@ function buildIsland(cx: number, cy: number, seed: number): THREE.Group {
     for (let s = 0; s < SEGS; s++) {
       const a = r * (SEGS + 1) + s;
       const b = a + SEGS + 1;
-      idx.push(a, b, a + 1, b, b + 1, a + 1);
+      // CCW seen from +Y so the land faces the camera. The previous order wound every triangle
+      // downward: computeVertexNormals() derived -Y normals and FrontSide culled the whole
+      // landmass, so the island rendered as bare sea with its flora apparently floating on it.
+      // Guarded by apps/web/tests/terrain.test.mts, which replays this loop over the real constants.
+      idx.push(a, a + 1, b, b, a + 1, b + 1);
     }
   }
   const bg = new THREE.BufferGeometry();

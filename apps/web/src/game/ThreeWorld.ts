@@ -65,6 +65,10 @@ export class ThreeWorld {
   private labelLayer: HTMLDivElement | null = null;
 
   private terrain: TerrainBuild | null = null;
+  /** Where the player stood when the current terrain window was built, in tiles. */
+  private terrainAt = { x: 0, y: 0 };
+  /** The terrain window's radius, in tiles. Must match what is handed to buildTerrain. */
+  private static readonly TERRAIN_R = 90;
   private views = new Map<string, EntityView>();
   private particleGeo: THREE.BufferGeometry | null = null;
   private particlePts: THREE.Points | null = null;
@@ -159,7 +163,8 @@ export class ThreeWorld {
     this.fillLight = fill;
 
     const self = this.core.getSelfTile();
-    this.terrain = buildTerrain(self.x, self.y);
+    this.terrain = buildTerrain(self.x, self.y, ThreeWorld.TERRAIN_R);
+    this.terrainAt = { x: self.x, y: self.y };
     this.scene.add(this.terrain.group);
 
     // Particles: one Points cloud, capped at the core's 80.
@@ -339,8 +344,27 @@ export class ThreeWorld {
 
   // ── the draw pass ───────────────────────────────────────────────────────────────
 
+  /** The terrain window is built around wherever the player stood when it was built, and init() runs
+   *  before the room answers. WELCOME and the travel stand both teleport across the ocean, so rebuild
+   *  once the player leaves the built window. Without this, any archipelago slot further than TERRAIN_R
+   *  from the pre-connect spawn renders as bare sea with no land under the player. Slot 7 is the first
+   *  index out that far (95.25 tiles), but the placement rule gets there sooner than the index suggests:
+   *  nearest-empty-to-most-recently-joined re-anchors on each new arrival, so the sequence runs
+   *  0, 1, 4, 9, 17, ... and the FOURTH distinct user already lands 108 tiles out. */
+  private ensureTerrain(self: { x: number; y: number }) {
+    if (!this.terrain) return;
+    const d = Math.hypot(self.x - this.terrainAt.x, self.y - this.terrainAt.y);
+    if (d < ThreeWorld.TERRAIN_R * 0.45) return;
+    this.scene.remove(this.terrain.group);
+    this.terrain.dispose();
+    this.terrain = buildTerrain(self.x, self.y, ThreeWorld.TERRAIN_R);
+    this.terrainAt = { x: self.x, y: self.y };
+    this.scene.add(this.terrain.group);
+  }
+
   private draw(dt: number) {
     const self = this.core.getSelfTile();
+    this.ensureTerrain(self);
 
     for (const [id, e] of this.core.entities) {
       const v = this.views.get(id);
