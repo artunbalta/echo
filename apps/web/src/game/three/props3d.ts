@@ -459,6 +459,77 @@ const BUILDERS: Record<PropKind, () => THREE.Group> = {
     return g;
   },
 
+  // ── Flow 4: the one partner you meet again, their post, and the cache you share ──
+
+  recurring_partner: () => {
+    const g = new THREE.Group();
+    const skin = lam(0xc9a882);
+    const cloth = lam(0x6a7f8c);   // a worn sea-grey tunic; they are not a station, they are someone
+    const legs = new THREE.Mesh(cyl(0.11, 0.13, 0.42, 6), lam(0x4a3b2e));
+    legs.position.y = 0.21;
+    const torso = new THREE.Mesh(cyl(0.15, 0.17, 0.48, 6), cloth);
+    torso.position.y = 0.66;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 6, 5), skin);
+    head.position.y = 1.02;
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.145, 6, 5), lam(0x4a3b52));
+    hair.position.y = 1.06;
+    hair.scale.set(1, 0.62, 1);
+    const arm = (s: number) => {
+      const a = new THREE.Mesh(cyl(0.045, 0.045, 0.38, 5), cloth);
+      a.position.set(s * 0.19, 0.66, 0);
+      a.rotation.z = s * 0.08;     // arms down, waiting rather than gesturing
+      return a;
+    };
+    g.add(legs, torso, head, hair, arm(-1), arm(1));
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
+  promise_post: () => {
+    const g = new THREE.Group();
+    const stake = new THREE.Mesh(cyl(0.09, 0.11, 0.95, 6), M.wood);
+    stake.position.y = 0.48;
+    // the hollow worn smooth by palms — the affordance IS the wear, so nothing has to say "press here"
+    const hollow = new THREE.Mesh(new THREE.SphereGeometry(0.085, 6, 5), lam(0x4a2e1b));
+    hollow.position.set(0, 0.66, 0.07);
+    hollow.scale.set(1, 1.25, 0.5);
+    const earth = new THREE.Mesh(cyl(0.2, 0.26, 0.08, 8), M.soil);
+    earth.position.y = 0.04;
+    g.add(stake, hollow, earth);
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
+  shared_cache: () => {
+    const g = new THREE.Group();
+    const basket = new THREE.Mesh(cyl(0.36, 0.28, 0.34, 8), M.woodLight);
+    basket.position.y = 0.17;
+    const inside = new THREE.Mesh(cyl(0.31, 0.31, 0.04, 8), M.dark);   // open, and legibly empty
+    inside.position.y = 0.33;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.032, 4, 10), M.rope);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.34;
+    g.add(basket, inside, rim);
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
+  shared_cache_full: () => {
+    const g = new THREE.Group();
+    const basket = new THREE.Mesh(cyl(0.36, 0.28, 0.34, 8), M.woodLight);
+    basket.position.y = 0.17;
+    // what was put in heaps ABOVE the rim, so the silhouette is the state and no bar is needed
+    const heap = new THREE.Mesh(new THREE.SphereGeometry(0.3, 7, 5), M.grainRipe);
+    heap.position.y = 0.4;
+    heap.scale.set(1, 0.6, 1);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.032, 4, 10), M.rope);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.34;
+    g.add(basket, heap, rim);
+    g.traverse((o) => { (o as THREE.Mesh).castShadow = true; });
+    return g;
+  },
+
   cache_marked: () => {
     const g = new THREE.Group();
     const mound = new THREE.Mesh(cyl(0.34, 0.42, 0.16, 8), M.sand);

@@ -4,8 +4,10 @@ The design table for F4, written before the code, in the shape of `f5-beats.md` 
 is the document the acceptance bars are judged against, and it exists before any F4 gameplay because
 the standing rule is measurement before feature.
 
-Status: **designed, not built.** The capture (`harness/f4/`) is built and passing on everything that
-does not need the flow. The beats below are not implemented.
+Status: **built.** `packages/shared/src/flow4.ts` (cue vocabulary + scene),
+`apps/web/src/game/activities/flow4Trust.ts` (the four beats), `/flow4` (the isolated slice),
+`_f4_features` in `services/ml/echo_ml/ingest.py` (the routing), `harness/f4/f4_bars.py` (the two
+bars). The capture in `harness/f4/` was built first and was green before any of it was written.
 
 ---
 
@@ -152,28 +154,40 @@ one sees. Nothing is owed. Nothing comes back.
 
 ---
 
-## Routing, expected
+## Routing, as built
 
-F4's cues are new and most will have no clean existing feature. **Expect to flag more than is
-routed**, as F5 did at five and five. First reading, to be confirmed against `ingest.py` when the
-beats are built:
+F4's cues are new and most have no clean existing feature. **More is flagged than routed**, as F5 was
+at five and five. This table is the first reading above, corrected against `ingest.py` while the
+beats were being built; the two corrections are called out below it.
 
-| Scalar | Likely disposition |
-|---|---|
-| `return_latency_ms`, `place_latency_ms`, `give_latency_ms`, `approach_latency_ms` | routed, `decision_latency`, identical definition to every other beat's |
-| `rounds_cooperated / rounds_total` | routed, `consistency`, which is norm-internalization and is what a cooperation rate is |
-| `repair_hold_ms`, `trips` | routed, `persistence`, same definition as the raft's slips and the gather's thoroughness |
-| `promise_kept` / `promise_broken` | routed, `consistency`, the highest-validity integrity cue in the flow |
-| `cost_paid01` | **⚑**, same argument as F5's: no anchored feature means what an act cost you |
-| `return_directness01`, `circled01` | **⚑**, same argument as F5's `approach_detour01` and `circled01`; `path_tortuosity` was anchored on the P3 sampler's normalized ratio, which these are not |
-| `settle_distance` | **⚑**, proxemics of a grievance. `proxemics_close` / `proxemics_far` exist as F2 cues but were anchored at the interaction-open gate, which is a different quantity from where you choose to stop when angry |
-| `response_to_defect01` | **⚑**, the tit-for-tat signature. This is the single most F4-specific signal in the flow and it is exactly the one with nowhere clean to go, the same shape as F5's `circled01` |
-| `detoured_first01`, `amount01`, `unprompted` | **⚑** pending, no obviously fitting anchored feature |
+| Scalar | Disposition | Why |
+|---|---|---|
+| every beat's own latency | **routed**, `decision_latency` | emitted as `decision_latency_ms`, which the generic top-block of `event_to_observation` already carries. The beat-specific names (`return_latency_ms`, `approach_latency_ms`, `give_latency_ms`) ride along in `raw_signals` for the corpus but are NOT routed a second time — routing both would double-count one construct, which is exactly why F5 left `dwell_at_marker_ms` alone |
+| `promise_kept` / `promise_broken` | **routed**, `consistency` 0.9 / 0.1 | identical in shape to the `return_cache` / `keep_cache` anchor P7 set. Doing what you said you would, across real elapsed sessions, is the highest-validity integrity cue in the flow |
+| `rounds_cooperated / rounds_total` | **routed**, `consistency`, graded | a cooperation rate over rounds is norm-internalization at a coarser grain than one act, which is what `wait_in_queue` and `conform_custom` anchored. Interpolates between `cut_queue` (0.1) and those (0.85). Only ever set on the FINAL round's event, so a single defection can never by itself make someone a defector |
+| `repair_hold01` | **routed**, `persistence` | held work on a thing that resists — the raft lashing's own anchor |
+| `trips` | **routed**, `persistence` | going back for more is effort past the minimum, the gather's thoroughness anchor. Scaled as `(trips - 1) / 3`, so one trip is just doing the thing |
+| `gift_amount01` | **routed**, `ts_social` | **corrected from the first reading.** Not a new direction: the existing Channel-F `give/tip/share` branch already sets `ts_social = amount`, and a non-reciprocal gift IS that branch's construct |
+| `forgive` / `withdraw` / `retaliate` | **routed** to `approach` / `approach`+`solitude_tol` / `risk_index` | the existing withdrawal and dominance-driving anchors, unchanged |
+| `defect` / `withhold_unreciprocated` | **routed**, `ts_leisure` | time NOT spent on the act, the own-axis read the abandon branch already uses, so the K-twin never cross-loads a non-gift onto warmth |
+| `response_to_defect01` | **⚑** | the tit-for-tat signature, and F4's whole reason to exist. `consistency` is the cooperation LEVEL, not its conditional response to being wronged; routing it there would collapse a forgiving cooperator and a steadfast one into one number |
+| `settle_distance` | **⚑** | the proxemics of a grievance. `proxemics_close` / `proxemics_far` exist as F2 cues but were anchored at the interaction-OPEN gate, a different quantity from where you choose to stop when you are angry |
+| `return_directness01`, `circled01` | **⚑** | same argument as F5's `approach_detour01` and `circled01`: `path_tortuosity` was anchored on the P3 sampler's normalized ratio, which these are not (⚑6's exact mistake) |
+| `stake_amount01` | **⚑** | **split out from the first reading's single `amount01`.** How much you put into a SHARED cache is a reciprocal stake in an exchange, not generosity with no return, so it does not inherit `gift_amount01`'s F7 anchor |
+| `detoured_first01` | **⚑** | closest feature is a `ts_*` time-share, but this is a fraction of a DELAY, not a share of a day |
+| `unprompted` | **⚑** | no anchored feature means self-starting, and `decision_latency` already carries the timing |
+| `cost_paid01` | **⚑** | same argument as F5's ⚑13: no anchored feature means what an act cost you |
 
-`response_to_defect01` being unroutable is worth stating plainly now rather than discovering it
-later: **the iterated-game signature is F4's whole reason to exist, and the committed W has no
-feature for it.** It will be emitted, carried in `raw_signals`, and flagged for the one-time second
-re-anchor, which is the correct outcome and not a failure.
+**The two corrections to the first reading**, both found by checking against `ingest.py` rather than
+by reasoning about it: `amount01` was one scalar and is two, because a gift and a stake are different
+constructs and only the gift has an anchor; and the four named latencies collapse to one routed cue
+rather than four, because they are one construct measured in four places.
+
+`response_to_defect01` being unroutable is the thing to keep in view: **the iterated-game signature
+is F4's whole reason to exist, and the committed W has no feature for it.** It is emitted, carried in
+`raw_signals`, and flagged for the one-time second re-anchor. That is the correct outcome and not a
+failure, but it means a passing acceptance bar shows the pipeline carrying a difference through
+generic manner cues, not the flow measuring what it was designed to measure.
 
 ---
 

@@ -265,6 +265,120 @@ def _f5_manner(rs: dict, tel: dict) -> None:
     # plausible feature.
 
 
+def _f4_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
+    """Flow 4 (repeated games and trust) cues → the features whose definitions actually fit.
+
+    ROUTED, because the definition is the same quantity the feature was already anchored on:
+      • promise_kept / promise_broken   → consistency 0.9 / 0.1. Byte-identical in shape to the
+                                          return_cache / keep_cache anchor P7 set: did you do the
+                                          thing the norm says, when nothing forced you to. Doing what
+                                          you said you would, across real elapsed sessions, is the
+                                          highest-validity integrity cue in the flow.
+      • rounds_cooperated/rounds_total  → consistency, GRADED. A cooperation rate over rounds is
+                                          norm-internalization at a coarser grain than one act, which
+                                          is what wait_in_queue (0.85) and conform_custom (0.85)
+                                          anchored. The spec's own note is load-bearing: a single
+                                          defection is not a defector, so the PATTERN is the cue and
+                                          a single round never sets this.
+      • repair_hold01                   → persistence. Held work on a thing that resists, the same
+                                          quantity the raft's lashings anchored.
+      • trips                           → persistence. Going back for more is effort past the
+                                          minimum, which is exactly the gather's thoroughness anchor.
+      • gift_amount01                   → ts_social. NOT a new direction: the existing Channel-F
+                                          give/tip/share branch already sets ts_social = amount, and
+                                          a non-reciprocal gift IS that branch's construct. This is
+                                          the same route reached from an embodied cue.
+      • retaliate                       → risk_index, the existing dominance-driving anchor that
+                                          asserts / bargain_hard / fairness_split_greedy already set.
+      • withdraw                        → approach False + solitude_tol, the existing withdrawal read
+                                          (cold_response_withdraw / group_avoid), an own-axis read so
+                                          the K-twin never cross-loads it onto warmth.
+      • forgive                         → approach True. You came close and did nothing back; the
+                                          proxemic approach feature is exactly that.
+
+    NOT ROUTED, carried in raw_signals for the second re-anchor's corpus and flagged (⚑, f4-beats.md):
+      • response_to_defect01  what you did in the round AFTER they took more than their share. The
+                              tit-for-tat signature, and the single most F4-specific signal there is.
+                              The committed W has NO feature for it: consistency is the cooperation
+                              LEVEL, not its conditional response to being wronged, and routing it
+                              there would collapse a forgiving cooperator and a steadfast one into
+                              the same number. This is the ⚑ case exactly and it stays unrouted.
+      • settle_distance       the proxemics of a grievance. proxemics_close / proxemics_far exist as
+                              F2 cues, but they were anchored at the interaction-OPEN gate, which is
+                              a different quantity from where you choose to stop when you are angry.
+      • return_directness01   graded path deviation on the way back. Same argument that keeps F5's
+                              approach_detour01 unrouted: path_tortuosity was anchored on the P3
+                              sampler's normalized ratio, which this is not (⚑6's exact mistake).
+      • circled01             identical to F5's, and unrouted for the identical reason.
+      • detoured_first01      how much of your own business you did first. Closest feature is a
+                              ts_* time-share, but this is a FRACTION OF A DELAY, not a share of a
+                              day, and no anchored feature means "you got to it eventually".
+      • unprompted            arrived before the world noticed. No anchored feature means
+                              self-starting; decision_latency already carries the timing itself.
+      • stake_amount01        how much you put into a SHARED cache. Deliberately kept apart from
+                              gift_amount01: the F7 anchor is give/tip/share, i.e. generosity with no
+                              return, and a reciprocal stake in an exchange is a different construct.
+      • cost_paid01           what the act cost you. Unrouted for the same reason as in F5 (⚑13).
+
+    Returns True iff `action` is an F4 cue, so the caller skips the generic per-channel blocks and
+    every prior cue keeps its exact behaviour.
+    """
+    if action == "promise_made":
+        # Committing is not keeping. Carried by the action embedding and the generic latency block;
+        # the KEEPING is what the integrity read is anchored on.
+        return True
+
+    if action in ("promise_kept", "promise_broken"):
+        tel["consistency"] = 0.9 if action == "promise_kept" else 0.1
+        return True
+
+    if action in ("cooperate", "defect"):
+        # The PATTERN over rounds, never a single round. rounds_* only ride the final round's event,
+        # so an early defection cannot by itself make someone a defector.
+        done = rs.get("rounds_total")
+        if done:
+            rate = _clip01(float(rs.get("rounds_cooperated", 0)) / max(1.0, float(done)))
+            # interpolates between the anchors cut_queue (0.1) and conform_custom (0.85) already set
+            tel["consistency"] = _clip01(0.1 + 0.75 * rate)
+        if action == "defect":
+            # walking off with your stake is time NOT spent on the exchange — an own-axis read
+            tel["ts_leisure"] = max(tel.get("ts_leisure", 0.0), 0.4)
+        return True
+
+    if action == "repair":
+        if rs.get("repair_hold01") is not None:
+            tel["persistence"] = max(tel.get("persistence", 0.0), _clip01(float(rs["repair_hold01"])))
+        tel["approach"] = True
+        return True
+    if action == "forgive":
+        tel["approach"] = True
+        return True
+    if action == "retaliate":
+        tel["risk_index"] = 0.7
+        return True
+    if action == "withdraw":
+        tel["approach"] = False
+        tel["solitude_tol"] = 0.8
+        return True
+
+    if action == "give_unreciprocated":
+        amt = rs.get("gift_amount01")
+        tel["ts_social"] = _clip01(float(amt)) if amt is not None else 0.6
+        tel["approach"] = True
+        if rs.get("trips") is not None:
+            # more than one trip is effort past the minimum; one trip is just doing the thing
+            tel["persistence"] = max(tel.get("persistence", 0.0),
+                                     _clip01((float(rs["trips"]) - 1.0) / 3.0))
+        return True
+    if action == "withhold_unreciprocated":
+        # came, stood there with it, left anyway. Read, never penalized: an own-axis leisure read so
+        # the K-twin does not cross-load a non-gift onto warmth.
+        tel["ts_leisure"] = 0.5
+        return True
+
+    return False
+
+
 def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     """Flow 2 dialogue + Flow 3 clearing cues (packages/shared/src/social.ts) → the EXISTING
     telemetry feature that matches each cue's signal type. Which axis each loads on stays LEARNED
@@ -464,8 +578,9 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
     #   behaviour stays byte-identical. Dispatch is exclusive (first handler wins).
     flow0 = _flow0_features(action, take, rs, tel)
     embodied = (not flow0) and _embodied_features(action, take, rs, tel)
-    social = (not flow0 and not embodied) and _social_features(action, take, rs, tel)
-    handled = flow0 or embodied or social
+    f4 = (not flow0 and not embodied) and _f4_features(action, take, rs, tel)
+    social = (not flow0 and not embodied and not f4) and _social_features(action, take, rs, tel)
+    handled = flow0 or embodied or f4 or social
 
     # — locomotion / approach (Channel A, G1) —
     if not handled and channel in ("A", "G"):
