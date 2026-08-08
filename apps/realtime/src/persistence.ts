@@ -68,7 +68,7 @@ export async function logTelemetry(
  * Fire-and-forget, best-effort: a no-op when ML isn't configured, so the room never blocks.
  * Returns the ML response (or null) so an integration test can assert the emission.
  */
-export async function observeBehavioral(event: BehavioralEvent): Promise<unknown | null> {
+async function postObservation(event: BehavioralEvent): Promise<unknown | null> {
   if (!ML_URL) {
     warnOnce();
     return null;
@@ -84,6 +84,45 @@ export async function observeBehavioral(event: BehavioralEvent): Promise<unknown
   } catch {
     return null;
   }
+}
+
+/**
+ * One in-flight observation per actor at a time.
+ *
+ * A persona update is a read-modify-write on that actor's posterior, so two updates for the SAME
+ * actor in flight at once lose one of them. This is not hypothetical: the F4 interaction-path
+ * siloing check found it. `emitFirstContact` fires TWO events per actor back to back with `void`,
+ * and the ML service recorded both in the behavior index while advancing the posterior only once —
+ * four events, four behaviors, two versions. Eight concurrent events for one actor produced two
+ * updates. Half of every live player-to-player interaction's measurement was being dropped, on the
+ * exact path F4's repeated games run on.
+ *
+ * The web app's own forwarder already does this, for the same stated reason ("Forward sequentially:
+ * persona updates are stateful and order-sensitive within an actor"); the realtime server did not.
+ * Keyed PER ACTOR because the loss is per actor: six users' events posted concurrently each landed
+ * intact, so serializing globally would cost throughput and buy nothing.
+ *
+ * Callers keep their fire-and-forget `void` semantics — the chain never blocks the room's tick, and
+ * a rejected link never poisons the next one.
+ *
+ * NOTE, and it is flagged in docs/known-gaps.md: this closes the emission site, not the underlying
+ * defect. The persona store has no per-actor lock of its own, so any OTHER concurrent writer for one
+ * actor still loses updates. That fix lives in services/ml, which is frozen.
+ */
+const observeChain = new Map<string, Promise<unknown | null>>();
+
+export function observeBehavioral(event: BehavioralEvent): Promise<unknown | null> {
+  const key = String(event.actor_id ?? "");
+  const prev = observeChain.get(key) ?? Promise.resolve(null);
+  const next = prev.then(() => postObservation(event), () => postObservation(event));
+  // Keep the chain settled so one failure never blocks the actor's later observations, and drop the
+  // entry once it is the tail again so a long-lived room does not accumulate one promise per visitor.
+  const settled = next.catch(() => null);
+  observeChain.set(key, settled);
+  void settled.then(() => {
+    if (observeChain.get(key) === settled) observeChain.delete(key);
+  });
+  return next;
 }
 
 export interface InteractionLog {

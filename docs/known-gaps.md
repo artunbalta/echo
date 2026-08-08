@@ -666,10 +666,78 @@ change and its own piece of work, and it is forbidden here, so it is named as an
     0.20 to 0.04). The same `(state, now)` gives byte-identical output twice, a different `now`
     changes it, and a launched raft never weathers. `islandState.ts` contains no `Date.now`,
     `new Date`, `performance.now` or `Math.random`.
-- **One honest limitation:** the HTTP route calls `loadIslandState(userId)` with its default
-  `now = Date.now()`, so the injectable clock is not reachable over HTTP. The crop branch was
-  exercised end to end because decay reads `cropPlantedAt` directly, but the raft-weather and
-  tie-cool branches key off `now - updatedAt`, which POST re-stamps, so those two were proven on the
-  pure core rather than over the wire. If a future test needs compressed decay through the route, the
-  route would have to accept an injected `now`, and that is a change nobody has needed yet.
+- **One honest limitation, CLOSED 2026-08-08 (same day):** the HTTP route called
+  `loadIslandState(userId)` with its default `now = Date.now()`, so the injectable clock was not
+  reachable over HTTP. The crop branch was exercised end to end because decay reads `cropPlantedAt`
+  directly, but the raft-weather and tie-cool branches key off `now - updatedAt`, which POST
+  re-stamps, so those two were proven on the pure core rather than over the wire. This was filed as
+  "a change nobody has needed yet", and that was wrong within the same round: **`tieWarmth` is the
+  exact substrate F4 rides on**, so the one cross-session mechanism the harness could demonstrate
+  was the one F4 does not use. The route now accepts an injected `now` behind a server-side gate
+  (see the route's own comment, and P30 in the F4 report, for what makes it unreachable from a
+  production client), and the harness shows a tie cooling 0.60 to 0.36 across a session boundary
+  over HTTP.
 - **Status:** CLOSED as a correction. The substrate F4 needs is real, durable and decaying.
+
+## ⚑ 16. Concurrent observations for ONE actor silently lost the posterior update (2026-08-08)
+
+- **Opened:** 2026-08-08, building the interaction-path siloing check the F4 harness needed.
+- **What was happening:** a persona update is a read-modify-write on that actor's posterior, and the
+  store has no per-actor lock. `WorldRoom.emitFirstContact` fires **two** events per actor back to
+  back with `void observeBehavioral(...)`, so both were in flight at once and one update was lost.
+  The behavior index recorded both; the posterior advanced once.
+- **The evidence, measured rather than reasoned:**
+  - A live four-client run: actor A, **4 events, `behaviors` 4, `persona.version` 2**. Every
+    interaction contributed one update instead of two.
+  - Direct probe: the same two events posted **sequentially** gave `version 2`; posted
+    **concurrently** gave `version 1`. **Eight** concurrent events for one actor gave `version 2` and
+    `behaviors 8` — six observations recorded and discarded.
+  - It is strictly **within one actor**: six users' events posted concurrently each landed intact
+    (`version 1, behaviors 1` for all six).
+  - The update itself is deterministic and time-independent: the same two events posted back to back
+    and posted three seconds apart give `||mu_a - mu_b|| = 0.000e+00`. So this was pure lost-update,
+    not ordering sensitivity.
+- **Why nothing caught it:** the copresence integration test asserts both events are **emitted**, and
+  they were. `behaviors` counted them, and it was right. Nothing compared the number of events an
+  actor emitted against the number of updates its posterior took. This is ⚑14's shape again: every
+  component was individually correct and only the relation between two of them was wrong.
+- **What it cost:** roughly **half of every live player-to-player interaction's measurement**, on the
+  exact path F4's repeated games run on. F0/F1/F5 were never affected: the web forwarder
+  (`api/observe/behavioral/route.ts`) already loops sequentially, with a comment saying why.
+- **Fixed at the emission site:** `apps/realtime/src/persistence.ts` now chains observations **per
+  actor**, so one is in flight at a time. Keyed per actor because the loss is per actor; a global
+  chain would cost throughput and buy nothing. Callers keep their fire-and-forget `void` semantics.
+  After the fix the same run gives `version 4` for 4 events, and a fresh posterior replayed with
+  exactly that actor's own events lands **byte-identically** on the live one (`0.00e+00`, all four
+  actors).
+- **NOT fixed, and this is the open half:** the underlying defect is that the persona store has no
+  per-actor lock, so **any other concurrent writer for one actor still loses updates** — two browser
+  tabs, a modified client, or any future caller that does not serialize. That fix lives in
+  `services/ml`, which is frozen this round.
+- **Status:** OPEN for the store-level lock. CLOSED for the realtime emission site.
+
+## ⚑ 17. F4 is measured against an NPC partner, and that may not generalize to human partners (2026-08-08)
+
+- **Opened:** 2026-08-08, resolving F4's partner fork.
+- **The decision, which stands:** F4's recurring partner is an **NPC**, resolved from the design
+  rather than from convenience (the F4 asset manifest names `f4_recurring_partner` with relationship
+  states neutral to ally to wronged; the easter egg is an NPC who becomes a steadfast ally; the F3 to
+  F4 transition is the clearing's NPCs beginning to persist and recognize the player). The argument
+  for it is that F4 measures the **player's** pattern — tit-for-tat versus exploit versus forgive,
+  promise-keeping across elapsed sessions, response to being wronged, giving when nothing returns —
+  and every one of those is a property of the player rather than of the pair. The counterpart must
+  persist, must have done something to you, and must remember; it need not be human.
+- **What that argument does NOT settle:** whether a promise made to a visibly artificial partner is
+  **the same construct** as a promise made to a person. F5's entire thesis is that people behave
+  differently depending on who is watching, and there is no principled reason that logic stops at the
+  boundary between people and NPCs. If it does not, then F4's integrity and loyalty reads are
+  measured under a condition that systematically differs from the one they are meant to generalize
+  to, and the direction of the bias is not obvious: a player might be freer with an NPC (nothing real
+  at stake) or more consistent (no social pressure to perform).
+- **This is a construct-validity question, and the harness cannot answer it.** No synthetic drive
+  can: a scripted persona keeps a promise because the script says so, and it has no opinion about who
+  it made the promise to. Answering it needs the same beats run against a human partner with real
+  people on both ends, which is an experiment, not a test.
+- **Not a blocker.** F4 is built and measured against the NPC partner. This is recorded so that no
+  later reader treats an F4 pass as evidence about promises to people.
+- **Status:** OPEN, and open in the way that does not resolve by building more.
