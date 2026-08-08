@@ -632,3 +632,44 @@ change and its own piece of work, and it is forbidden here, so it is named as an
   harness measures the delta directly. See the acceptance numbers in the F5 report.
 - **Status:** CLOSED for the delta itself. OPEN as a lesson, recorded so the ordering rule has a
   written reason behind it.
+
+## ⚑ 15. RECORD CORRECTION: island_state is not dead schema, and has not been for some time (2026-08-08)
+
+- **Opened:** 2026-08-08, verifying persistence before building F4 on top of it.
+- **The claim, which was carried forward in the handover record rather than in this file:**
+  "`0006_island_state.sql` is dead schema, nothing references it, `islandState.ts` doesn't exist for
+  it. Don't assume island persistence works."
+- **It was true once and is now false.** The migration did land ahead of its consumers, so there was a
+  window where the table existed with nothing reading it. That window closed. Recording both halves
+  rather than deleting the claim, because a reader who finds only the correction cannot tell whether
+  the caution was ever warranted.
+- **What is actually there, verified 2026-08-08:**
+  - `packages/shared/src/islandState.ts`, the pure core plus the `IslandStateStore` seam, exported
+    from `index.ts`.
+  - `apps/web/src/lib/island-state.ts`, `SupabaseIslandStateStore` against the 0006 table, with the
+    in-memory store as the zero-key fallback and as the error fallback.
+  - `apps/web/src/app/api/island/state/route.ts`, GET applies decay exactly once and returns the
+    honest "what changed while you were gone" lines, POST persists.
+  - `api/account/delete/route.ts:31`, `island_state` wired into the erasure cascade.
+- **What it already carries that F4 needs:** `tieWarmth: Record<string, number>` (per-counterpart
+  warmth, 0..1, cooling between sessions at `TIE_COOL_PER_DAY` 0.08), `tieDeltas` on `DaySummary`
+  (warmth earned today, folded by `closeDay`), and the tending function. **Note the name: it is
+  `tendTie(state, counterpartId, delta)`, not `warmTie`**, which the handover record also had wrong.
+- **Verified end to end, not inferred from the files existing:**
+  - A cross-session round trip against the **Supabase-backed store** (`persistence: "supabase"` on
+    both load and save): `dayCount` 0 to 1, `cropStage` none to planted, `raft.workMs` 0 to 9000,
+    `tieWarmth` {} to `{partner_a: 0.85, partner_b: 0.40}`, all returned on a fresh session.
+  - The decay tick over HTTP against the same store: a crop backdated three days came back
+    `wilted` with the change line "the grain you saved has wilted, left too long".
+  - The **injected-clock seam** proven directly on the pure core: advancing `now` alone wilts the
+    crop, weathers unfinished lashings (9000 to 8580 ms over two days), and cools ties (0.85 to 0.69,
+    0.20 to 0.04). The same `(state, now)` gives byte-identical output twice, a different `now`
+    changes it, and a launched raft never weathers. `islandState.ts` contains no `Date.now`,
+    `new Date`, `performance.now` or `Math.random`.
+- **One honest limitation:** the HTTP route calls `loadIslandState(userId)` with its default
+  `now = Date.now()`, so the injectable clock is not reachable over HTTP. The crop branch was
+  exercised end to end because decay reads `cropPlantedAt` directly, but the raft-weather and
+  tie-cool branches key off `now - updatedAt`, which POST re-stamps, so those two were proven on the
+  pure core rather than over the wire. If a future test needs compressed decay through the route, the
+  route would have to accept an injected `now`, and that is a change nobody has needed yet.
+- **Status:** CLOSED as a correction. The substrate F4 needs is real, durable and decaying.
