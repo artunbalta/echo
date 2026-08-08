@@ -130,38 +130,38 @@ def health():
 @app.post("/observe")
 def observe(req: ObserveReq, authorization: str = Header(None)):
     _auth(authorization)
-    st = STORE.get(req.userId)
-    ctx = str(req.context)
+    with STORE.updating(req.userId) as st:
+        ctx = str(req.context)
 
-    # 1) update persona posterior from text + telemetry (robust; capture the gating trace)
-    before = st.posterior.copy()
-    update_trace: dict = {}
-    st.posterior = P.observe(st.posterior, req.action, req.telemetry, trace=update_trace)
-    if st.baseline_mu is None:
-        st.baseline_mu = st.posterior.mu.copy()
+        # 1) update persona posterior from text + telemetry (robust; capture the gating trace)
+        before = st.posterior.copy()
+        update_trace: dict = {}
+        st.posterior = P.observe(st.posterior, req.action, req.telemetry, trace=update_trace)
+        if st.baseline_mu is None:
+            st.baseline_mu = st.posterior.mu.copy()
 
-    # 2) behavior index (embed (s,a), store) for retrieval (§9.3) — index side ⇒ "document"
-    emb = embed(f"{ctx} || {req.action}", input_type="document")
-    st.behaviors.append(BehaviorEntry(emb, req.action, ctx))
-    st.behaviors = st.behaviors[-500:]
+        # 2) behavior index (embed (s,a), store) for retrieval (§9.3) — index side ⇒ "document"
+        emb = embed(f"{ctx} || {req.action}", input_type="document")
+        st.behaviors.append(BehaviorEntry(emb, req.action, ctx))
+        st.behaviors = st.behaviors[-500:]
 
-    # 3) drift check (§9.7): recent vs baseline, full-covariance KL
-    drift_kl = persona_drift_kl(st.posterior.mu, st.baseline_mu, st.posterior.Sigma,
-                                np.eye(P.D) * P.HYPER.prior_var)
-    if drift_kl > P.HYPER.drift_kl_threshold:
-        st.posterior = P.inflate(st.posterior, factor=1.5)
-        st.baseline_mu = st.posterior.mu.copy()
+        # 3) drift check (§9.7): recent vs baseline, full-covariance KL
+        drift_kl = persona_drift_kl(st.posterior.mu, st.baseline_mu, st.posterior.Sigma,
+                                    np.eye(P.D) * P.HYPER.prior_var)
+        if drift_kl > P.HYPER.drift_kl_threshold:
+            st.posterior = P.inflate(st.posterior, factor=1.5)
+            st.baseline_mu = st.posterior.mu.copy()
 
-    return {
-        "persona": st.posterior.to_dict(),
-        "traits": P.decode_traits(st.posterior),
-        "var": st.posterior.var.tolist(),
-        "correlation": _top_correlation(st.posterior),
-        "uncertainty": float(np.mean(st.posterior.var)),
-        "behaviors": len(st.behaviors),
-        "drift_kl": round(drift_kl, 3),
-        "update": update_trace or None,   # robust-update trace: d², weight, surprising (WI-4)
-    }
+        return {
+            "persona": st.posterior.to_dict(),
+            "traits": P.decode_traits(st.posterior),
+            "var": st.posterior.var.tolist(),
+            "correlation": _top_correlation(st.posterior),
+            "uncertainty": float(np.mean(st.posterior.var)),
+            "behaviors": len(st.behaviors),
+            "drift_kl": round(drift_kl, 3),
+            "update": update_trace or None,   # robust-update trace: d², weight, surprising (WI-4)
+        }
 
 
 @app.post("/observe/behavioral")
@@ -181,104 +181,104 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    st = STORE.get(obs["userId"])
-    before = st.posterior.mu.copy()
-    st.posterior = P.observe(st.posterior, obs["action"], obs["telemetry"])
+    with STORE.updating(obs["userId"]) as st:
+        before = st.posterior.mu.copy()
+        st.posterior = P.observe(st.posterior, obs["action"], obs["telemetry"])
 
-    # Record the cue in the behavior index too (retrieval + the observable `behaviors` count) so the
-    # behavioral path is consistent with /observe — a social cue ("warm to the server", "waited in
-    # the queue") IS a retrievable behavior. Posterior math is unchanged; this is index/observability
-    # only (fixes the EchoPanel showing behaviors:0 while the posterior moves).
-    ck = obs["cond_key"]
-    emb = embed(f"{ck} || {obs['action']}", input_type="document")
-    st.behaviors.append(BehaviorEntry(emb, obs["action"], ck))
-    st.behaviors = st.behaviors[-500:]
+        # Record the cue in the behavior index too (retrieval + the observable `behaviors` count) so the
+        # behavioral path is consistent with /observe — a social cue ("warm to the server", "waited in
+        # the queue") IS a retrievable behavior. Posterior math is unchanged; this is index/observability
+        # only (fixes the EchoPanel showing behaviors:0 while the posterior moves).
+        ck = obs["cond_key"]
+        emb = embed(f"{ck} || {obs['action']}", input_type="document")
+        st.behaviors.append(BehaviorEntry(emb, obs["action"], ck))
+        st.behaviors = st.behaviors[-500:]
 
-    cond_before = st.cond.get(ck)
-    cp = cond_before.copy() if cond_before is not None else P.prior()
-    cp = P.observe(cp, obs["action"], obs["telemetry"])
-    st.cond[ck] = cp
+        cond_before = st.cond.get(ck)
+        cp = cond_before.copy() if cond_before is not None else P.prior()
+        cp = P.observe(cp, obs["action"], obs["telemetry"])
+        st.cond[ck] = cp
 
-    return {
-        "userId": obs["userId"],
-        "polarity": obs["polarity"],
-        "cond_key": ck,
-        "persona": st.posterior.to_dict(),
-        "delta_mu": float(np.linalg.norm(st.posterior.mu - before)),
-        "cond_persona": cp.to_dict(),
-        "telemetry_used": obs["telemetry"],
-    }
+        return {
+            "userId": obs["userId"],
+            "polarity": obs["polarity"],
+            "cond_key": ck,
+            "persona": st.posterior.to_dict(),
+            "delta_mu": float(np.linalg.norm(st.posterior.mu - before)),
+            "cond_persona": cp.to_dict(),
+            "telemetry_used": obs["telemetry"],
+        }
 
 
 @app.post("/telemetry")
 def telemetry(req: TelemetryReq, authorization: str = Header(None)):
     _auth(authorization)
-    st = STORE.get(req.userId)
-    ev = req.event or {}
-    t = ev.get("type")
-    payload = ev.get("payload", {})
-    # Map implicit signals to persona evidence (approach/avoid → warmth/dominance, etc.).
-    tele = {}
-    if t == "approach":
-        tele["approach"] = True
-    elif t == "avoid":
-        tele["approach"] = False
-    elif t == "dwell":
-        tele["approach"] = True            # lingering near someone is approach-like warmth
-    elif t == "reply_latency":
-        tele["latencyMs"] = payload.get("ms")
-        tele["editsCount"] = payload.get("edits")
-    # ── Phase 0 behavioral spine (§3.1): choices/companionship move the right axes ──
-    elif t == "pet_talk":
-        # Attachment grows with sustained companionship; turnIndex is the volume proxy.
-        turn = float(payload.get("turnIndex", 0) or 0)
-        tele["pet_attach"] = min(1.0, 0.3 + 0.12 * turn)
-    elif t == "leave_intent":
-        # Staying (stage "none") reveals comfort with solitude; moving to leave reveals low tolerance.
-        tele["solitude_tol"] = 0.8 if payload.get("stage") == "none" else 0.2
-    elif t == "allocation":
-        for k in ("earn", "learn", "social", "leisure", "build"):
-            tele["ts_" + k] = payload.get(k, 0.0)
-    elif t == "resource_bet":
-        tele["risk_index"] = payload.get("variance", 0.0)
-    elif t == "structure_progress":
-        tele["persistence"] = 1.0 if payload.get("finished") else (0.5 if payload.get("started") else 0.0)
-    elif t == "choice_made":
-        opt = payload.get("option")
-        if opt in ("save", "spend"):
-            tele["save_rate"] = 1.0 if opt == "save" else 0.0
-        if payload.get("latencyMs") is not None:
-            tele["decision_latency"] = payload.get("latencyMs")
-    elif t == "fork_decision":
-        # P1's richer island fork (supersedes choice_made there): same behavioural reads;
-        # the survival context (scarcityLevel, ...) rides along in the payload for P5.
-        opt = payload.get("option")
-        if payload.get("forkKey") == "plant_or_spend" and opt in ("save", "spend"):
-            tele["save_rate"] = 1.0 if opt == "save" else 0.0
-        if payload.get("forkKey") == "tide_wager" and opt != "refused" and payload.get("variance") is not None:
-            tele["risk_index"] = payload.get("variance")
-        if payload.get("latencyMs") is not None and opt != "refused":
-            tele["decision_latency"] = payload.get("latencyMs")
-    elif t == "passive_locomotion":
-        # P3 recorded this channel; the ★ P5 re-anchor gave W a real telemetry→openness path
-        # (novel_tile_ratio / path_tortuosity are identified directions now), so the least-
-        # fakeable channel finally moves the posterior — AND stays recorded for drift/retrain.
-        scalars = {
-            k: float(payload[k])
-            for k in ("heading_change_rate", "path_tortuosity", "novel_tile_ratio", "backtrack_rate", "dwell_ms", "tiles")
-            if isinstance(payload.get(k), (int, float))
-        }
-        if scalars:
-            st.locomotion.append(scalars)
-            if len(st.locomotion) > 2000:  # bounded ring
-                del st.locomotion[: len(st.locomotion) - 2000]
-            if "novel_tile_ratio" in scalars:
-                tele["novel_tile_ratio"] = scalars["novel_tile_ratio"]
-            if "path_tortuosity" in scalars:
-                tele["path_tortuosity"] = scalars["path_tortuosity"]
-    if tele:
-        st.posterior = P.observe(st.posterior, "", tele)
-    return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}
+    with STORE.updating(req.userId) as st:
+        ev = req.event or {}
+        t = ev.get("type")
+        payload = ev.get("payload", {})
+        # Map implicit signals to persona evidence (approach/avoid → warmth/dominance, etc.).
+        tele = {}
+        if t == "approach":
+            tele["approach"] = True
+        elif t == "avoid":
+            tele["approach"] = False
+        elif t == "dwell":
+            tele["approach"] = True            # lingering near someone is approach-like warmth
+        elif t == "reply_latency":
+            tele["latencyMs"] = payload.get("ms")
+            tele["editsCount"] = payload.get("edits")
+        # ── Phase 0 behavioral spine (§3.1): choices/companionship move the right axes ──
+        elif t == "pet_talk":
+            # Attachment grows with sustained companionship; turnIndex is the volume proxy.
+            turn = float(payload.get("turnIndex", 0) or 0)
+            tele["pet_attach"] = min(1.0, 0.3 + 0.12 * turn)
+        elif t == "leave_intent":
+            # Staying (stage "none") reveals comfort with solitude; moving to leave reveals low tolerance.
+            tele["solitude_tol"] = 0.8 if payload.get("stage") == "none" else 0.2
+        elif t == "allocation":
+            for k in ("earn", "learn", "social", "leisure", "build"):
+                tele["ts_" + k] = payload.get(k, 0.0)
+        elif t == "resource_bet":
+            tele["risk_index"] = payload.get("variance", 0.0)
+        elif t == "structure_progress":
+            tele["persistence"] = 1.0 if payload.get("finished") else (0.5 if payload.get("started") else 0.0)
+        elif t == "choice_made":
+            opt = payload.get("option")
+            if opt in ("save", "spend"):
+                tele["save_rate"] = 1.0 if opt == "save" else 0.0
+            if payload.get("latencyMs") is not None:
+                tele["decision_latency"] = payload.get("latencyMs")
+        elif t == "fork_decision":
+            # P1's richer island fork (supersedes choice_made there): same behavioural reads;
+            # the survival context (scarcityLevel, ...) rides along in the payload for P5.
+            opt = payload.get("option")
+            if payload.get("forkKey") == "plant_or_spend" and opt in ("save", "spend"):
+                tele["save_rate"] = 1.0 if opt == "save" else 0.0
+            if payload.get("forkKey") == "tide_wager" and opt != "refused" and payload.get("variance") is not None:
+                tele["risk_index"] = payload.get("variance")
+            if payload.get("latencyMs") is not None and opt != "refused":
+                tele["decision_latency"] = payload.get("latencyMs")
+        elif t == "passive_locomotion":
+            # P3 recorded this channel; the ★ P5 re-anchor gave W a real telemetry→openness path
+            # (novel_tile_ratio / path_tortuosity are identified directions now), so the least-
+            # fakeable channel finally moves the posterior — AND stays recorded for drift/retrain.
+            scalars = {
+                k: float(payload[k])
+                for k in ("heading_change_rate", "path_tortuosity", "novel_tile_ratio", "backtrack_rate", "dwell_ms", "tiles")
+                if isinstance(payload.get(k), (int, float))
+            }
+            if scalars:
+                st.locomotion.append(scalars)
+                if len(st.locomotion) > 2000:  # bounded ring
+                    del st.locomotion[: len(st.locomotion) - 2000]
+                if "novel_tile_ratio" in scalars:
+                    tele["novel_tile_ratio"] = scalars["novel_tile_ratio"]
+                if "path_tortuosity" in scalars:
+                    tele["path_tortuosity"] = scalars["path_tortuosity"]
+        if tele:
+            st.posterior = P.observe(st.posterior, "", tele)
+        return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}
 
 
 # ── NPC dialogue (called by realtime) ────────────────────────────────────────────
@@ -332,53 +332,53 @@ def agent_turn(req: AgentTurnReq, authorization: str = Header(None)):
 @app.post("/feedback")
 def feedback(req: FeedbackReq, authorization: str = Header(None)):
     _auth(authorization)
-    st = STORE.get(req.userId)
+    with STORE.updating(req.userId) as st:
 
-    # 1) preference pair → reward model (chosen ≻ rejected)
-    if req.chosen and req.rejected:
-        xp = embed(f"{req.context} || {req.chosen}")
-        xn = embed(f"{req.context} || {req.rejected}")
-        st.reward.step_pair(xp, xn)
-    # 1b) the VETO (P6 / blueprint II.6): agreed=false on a rejected utterance with no
-    # correction — "that wasn't me" on a REAL autonomous act, the highest-value signal the
-    # system receives. No winner exists to pair, so it anchors the reward head as a negative
-    # OUTCOME on that action (BCE y=0); the bucket demotion below happens regardless.
-    elif req.rejected and not req.agreed:
-        st.reward.step_outcome(embed(f"{req.context} || {req.rejected}"), 0.0)
+        # 1) preference pair → reward model (chosen ≻ rejected)
+        if req.chosen and req.rejected:
+            xp = embed(f"{req.context} || {req.chosen}")
+            xn = embed(f"{req.context} || {req.rejected}")
+            st.reward.step_pair(xp, xn)
+        # 1b) the VETO (P6 / blueprint II.6): agreed=false on a rejected utterance with no
+        # correction — "that wasn't me" on a REAL autonomous act, the highest-value signal the
+        # system receives. No winner exists to pair, so it anchors the reward head as a negative
+        # OUTCOME on that action (BCE y=0); the bucket demotion below happens regardless.
+        elif req.rejected and not req.agreed:
+            st.reward.step_outcome(embed(f"{req.context} || {req.rejected}"), 0.0)
 
-    # 2) autonomy bucket + calibration data
-    bucket = st.bucket(req.bucket)
-    st.calib.append((req.confidence, 1 if req.agreed else 0))
-    st.calib = st.calib[-500:]
-    # Refit temperature + ECE on a RECENT window: calibration should track the agent's
-    # current behavior, not its cold-start humility, so a stabilized agent can promote.
-    recent = st.calib[-25:]
-    confs = [c for c, _ in recent]
-    corr = [y for _, y in recent]
-    st.temperature = G.fit_temperature(confs, corr)
-    ece = G.expected_calibration_error([G.calibrate(c, st.temperature) for c in confs], corr)
-    bucket.set_ece(ece)
-    before = bucket.level
-    event = bucket.record(req.agreed, req.confidence)
-    METRICS["feedback"] += 1
-    if event["changed"]:
-        METRICS["autonomy_changes"] += 1
-        if _LEVELS.index(bucket.level) > _LEVELS.index(before):
-            METRICS["promotions"] += 1
-    if event["drift"]:
-        METRICS["drift_events"] += 1
-    return {"bucket": event, "temperature": round(st.temperature, 3), "ece": round(ece, 3)}
+        # 2) autonomy bucket + calibration data
+        bucket = st.bucket(req.bucket)
+        st.calib.append((req.confidence, 1 if req.agreed else 0))
+        st.calib = st.calib[-500:]
+        # Refit temperature + ECE on a RECENT window: calibration should track the agent's
+        # current behavior, not its cold-start humility, so a stabilized agent can promote.
+        recent = st.calib[-25:]
+        confs = [c for c, _ in recent]
+        corr = [y for _, y in recent]
+        st.temperature = G.fit_temperature(confs, corr)
+        ece = G.expected_calibration_error([G.calibrate(c, st.temperature) for c in confs], corr)
+        bucket.set_ece(ece)
+        before = bucket.level
+        event = bucket.record(req.agreed, req.confidence)
+        METRICS["feedback"] += 1
+        if event["changed"]:
+            METRICS["autonomy_changes"] += 1
+            if _LEVELS.index(bucket.level) > _LEVELS.index(before):
+                METRICS["promotions"] += 1
+        if event["drift"]:
+            METRICS["drift_events"] += 1
+        return {"bucket": event, "temperature": round(st.temperature, 3), "ece": round(ece, 3)}
 
 
 # ── ground-truth meeting outcome → supervised reward anchor (§9.4) ────────────────
 @app.post("/meeting-outcome")
 def meeting_outcome(req: OutcomeReq, authorization: str = Header(None)):
     _auth(authorization)
-    st = STORE.get(req.userId)
-    y = 1.0 if (req.occurred and (req.rating is None or req.rating >= 3)) else 0.0
-    x = embed(f"{req.context} || {req.action}")
-    loss = st.reward.step_outcome(x, y)
-    return {"ok": True, "y": y, "reward_loss": round(loss, 4), "reward_version": st.reward.version}
+    with STORE.updating(req.userId) as st:
+        y = 1.0 if (req.occurred and (req.rating is None or req.rating >= 3)) else 0.0
+        x = embed(f"{req.context} || {req.action}")
+        loss = st.reward.step_outcome(x, y)
+        return {"ok": True, "y": y, "reward_loss": round(loss, 4), "reward_version": st.reward.version}
 
 
 # ── observability: inspect a user's learned state ─────────────────────────────────
