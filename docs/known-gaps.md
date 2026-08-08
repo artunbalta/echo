@@ -765,3 +765,103 @@ which point the lock has to move to wherever the state then lives.
   time-independent at `||mu_a - mu_b|| = 0.000e+00`.
 - **Status:** CLOSED for the single-process deployment. The multi-worker case is a property of the
   store, tracked here rather than left implicit.
+
+## ⚑ 19. FINDING: the ★P5 corpus is 100% synthetic, so the lost updates cost it nothing (2026-08-08)
+
+- **Opened:** 2026-08-08, asking what ⚑16's lost updates did to the corpus that anchored the
+  committed `measurement.npz`.
+- **The question, and why it was worth asking rather than assuming.** The loss correlates with
+  concurrency, and concurrency correlates with interaction density, so dense social moments lost
+  proportionally more of their observations than sparse ones. That is not random thinning, which
+  costs precision and leaves the direction alone. It is thinning that skews toward the sparse end of
+  exactly the behaviour F2 and F3 exist to capture. If any live social event had reached the corpus,
+  W would carry that skew.
+- **The answer: no live event of any kind has ever entered the corpus.** The ★P5 re-anchor
+  (`22aa568`, 2026-07-12) was fit on a **deterministic synthetic corpus** produced entirely inside
+  `services/ml/scripts/train_measurement.py` by three generators, all seeded from `--seed`
+  (default 0):
+  - `synthetic_corpus()` — text rows drawn from a hardcoded fragment bank, with latency/edits.
+  - `behavioral_corpus()` — telemetry-only rows, axis targets written by hand in the function.
+  - `openness_corpus()` — telemetry-only rows for the four new openness features, drawn
+    independently so openness decorrelates from warmth/dominance.
+- **The only door live data could have come through is `--anchors <file>.jsonl`**, a hand-curated
+  `{text, telemetry, axes}` file. No such file exists in the working tree or anywhere in git history
+  (`git log --all -- '*anchors*.jsonl'` is empty), and `--anchors` defaults to `""`.
+- **Proved by reproduction, not by reading.** Re-running `train_measurement.py` with **no arguments
+  at all** and `--out` pointed at a scratch path reproduces the committed artifact across all seven
+  arrays:
+
+  | array | shape | max abs difference |
+  |---|---|---|
+  | `W` | (8, 66) | 5.995e-15 |
+  | `Psi` | (66,) | 7.494e-16 |
+  | `V` | (66, 4) | 9.048e-15 |
+  | `Sigma_m` | (4,) | 4.441e-16 |
+  | `mu_phi` | (66,) | 2.776e-17 |
+  | `axis_keys`, `feature_names` | — | exactly equal |
+
+  Worst difference anywhere: **9.048e-15**, i.e. floating-point noise. The regenerated openness
+  loadings are `path_tortuosity +0.47, travel_novelty +0.41, curiosity +0.41`, matching the
+  committed values quoted in the ★P5 commit exactly. `train_measurement.py` is also the ONLY writer
+  of the artifact (`individuation_eval.py` builds a `PersonaModel` in memory and never saves).
+- **So: the racing path contributed nothing to W, and the second re-anchor has nothing to undo.**
+  The corpus does not need recollecting on account of ⚑16.
+
+### What the lost updates DID cost, which is a different thing
+
+Not the corpus, but every **live user's runtime posterior** since F2 and F3 shipped. Those were built
+on roughly half their social evidence. Thirteen of the 66 features are writable by a social event's
+telemetry — `approach`, `ts_social`, `ts_leisure`, `ts_build`, `save_rate`, `risk_index`,
+`solitude_tol`, `pet_attach`, `decision_latency`, `persistence`, `consistency`, `travel_novelty`,
+`curiosity` — so the under-feeding was concentrated there. It is not recoverable (the events were
+never stored as a corpus, only folded into posteriors), and it is self-correcting going forward now
+that every observation lands. No action is proposed here; recollection is not required.
+
+### The larger finding, which is not about the race at all
+
+The corpus being entirely synthetic means the ★P5 re-anchor learned **designed** relationships, not
+observed ones: every anchor target `z` in `behavioral_corpus()` and `openness_corpus()` is a line of
+code written by hand (`z[iz["dominance"]] += (ri - 0.5) * 1.2`, and so on). W therefore reproduces
+the design document's priors rather than testing them. That is a defensible bootstrap and the
+script's docstring is honest about it, but it means **no cue's loading has yet been learned from
+behaviour**, which is a far more consequential fact for the second re-anchor than the race would
+have been. See ⚑20.
+
+- **Status:** CLOSED as a question. The corpus is clean with respect to ⚑16.
+
+## ⚑ 20. RISK: the one-time re-anchor rule means three flows are designed blind, with no second try (2026-08-08)
+
+- **Opened:** 2026-08-08. **This is a risk to be decided, not a defect to be fixed.** Recorded so it
+  is decided deliberately rather than inherited.
+- **The rule as it stands:** the second W re-anchor happens ONCE, after all flows exist, on the full
+  cue set. It is written that way for a good reason: a one-time correct calibration beats several
+  partial refits, and re-anchoring per flow would let each flow's designer tune W toward their own
+  cues.
+- **The structural problem, which follows from something the F4 round established:** a flow's
+  signature cue is by definition the one the previous corpus had no reason to contain, so W cannot
+  have a direction for it. That is not bad luck, it is the shape of the thing. And it has now
+  happened twice in a row: F5's `circled01` (the unobserved self) and F4's `response_to_defect01`
+  (the iterated game) are both ⚑ and both unrouted, and in both flows the cue that IS the flow's
+  thesis is the one on the flagged side.
+- **The consequence nobody has decided yet.** F4, F5 and F6 have their signature beats designed
+  **blind**: the beat table, the manner scalars, the mechanics and the acceptance bars are all
+  chosen before anyone can see whether the signature cue carries signal. If, after the one-time
+  re-anchor, a signature cue turns out to load nowhere, three flows will have been built on
+  unmeasured design decisions and the rule allows no second attempt. Thirteen flagged manner scalars
+  are riding on this (⚑13's five, ⚑18's eight).
+- **⚑19 sharpens it.** The first re-anchor's corpus was entirely synthetic, so W currently encodes
+  the design document's priors rather than anything learned from behaviour. The second re-anchor is
+  therefore not a refinement of a measured W; it is the **first** time any loading gets tested
+  against real data. Making that a single non-repeatable event puts every flagged cue in one basket.
+- **Options, none taken:**
+  1. **Keep the rule.** Cheapest, and the tuning-pressure argument for it is real.
+  2. **Two re-anchors:** one after F4/F5 on the cues that exist, one after F6. Halves the blast
+     radius; costs a second calibration and reopens the tuning-pressure question.
+  3. **Keep one re-anchor but add a pre-registered check:** before the re-anchor, write down for
+     each flagged cue what "it carries signal" would look like, so the outcome is falsifiable rather
+     than interpreted afterward. Cheap, and it does not change the rule.
+  4. **Decouple the flows from the rule:** stop treating an acceptance bar as evidence that a flow
+     measures its thesis while its signature cue is unrouted, and say so in each flow's report. This
+     round already does that in prose; it is not yet a rule.
+- **Not acted on.** No re-anchor is scheduled, W is untouched, and nothing here changes any flow.
+- **Status:** OPEN, for a human decision.
