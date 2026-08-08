@@ -681,40 +681,95 @@ change and its own piece of work, and it is forbidden here, so it is named as an
 
 ## ⚑ 16. Concurrent observations for ONE actor silently lost the posterior update (2026-08-08)
 
-- **Opened:** 2026-08-08, building the interaction-path siloing check the F4 harness needed.
-- **What was happening:** a persona update is a read-modify-write on that actor's posterior, and the
-  store has no per-actor lock. `WorldRoom.emitFirstContact` fires **two** events per actor back to
-  back with `void observeBehavioral(...)`, so both were in flight at once and one update was lost.
-  The behavior index recorded both; the posterior advanced once.
+- **Opened:** 2026-08-08, building an interaction-path siloing check for F4's harness.
+- **What was happening:** a persona update is a read-modify-write on that actor's posterior
+  (`app.py`: `st.posterior = P.observe(st.posterior, …)`), and nothing serialized it per actor.
+  `WorldRoom.emitFirstContact` fires **two** events per actor back to back with
+  `void observeBehavioral(...)`, so both were in flight at once and one update was lost. The
+  behavior index recorded both; the posterior advanced once.
 - **The evidence, measured rather than reasoned:**
   - A live four-client run: actor A, **4 events, `behaviors` 4, `persona.version` 2**. Every
     interaction contributed one update instead of two.
   - Direct probe: the same two events posted **sequentially** gave `version 2`; posted
-    **concurrently** gave `version 1`. **Eight** concurrent events for one actor gave `version 2` and
-    `behaviors 8` — six observations recorded and discarded.
+    **concurrently** gave `version 1`. **Eight** concurrent events for one actor gave `version 2`
+    and `behaviors 8` — six observations recorded and discarded.
   - It is strictly **within one actor**: six users' events posted concurrently each landed intact
     (`version 1, behaviors 1` for all six).
   - The update itself is deterministic and time-independent: the same two events posted back to back
     and posted three seconds apart give `||mu_a - mu_b|| = 0.000e+00`. So this was pure lost-update,
     not ordering sensitivity.
+- **What it cost:** F2 and F3 are both shipped and both social, so **roughly half of every live
+  player-to-player interaction's measurement** was being discarded for as long as those flows have
+  existed. It left no trace: no error, no log, and a posterior that looks fine and is built on half
+  its evidence. F0/F1/F5 were never affected — the web forwarder
+  (`api/observe/behavioral/route.ts`) already loops sequentially, with a comment saying why.
 - **Why nothing caught it:** the copresence integration test asserts both events are **emitted**, and
   they were. `behaviors` counted them, and it was right. Nothing compared the number of events an
   actor emitted against the number of updates its posterior took. This is ⚑14's shape again: every
   component was individually correct and only the relation between two of them was wrong.
-- **What it cost:** roughly **half of every live player-to-player interaction's measurement**, on the
-  exact path F4's repeated games run on. F0/F1/F5 were never affected: the web forwarder
-  (`api/observe/behavioral/route.ts`) already loops sequentially, with a comment saying why.
-- **Fixed at the emission site:** `apps/realtime/src/persistence.ts` now chains observations **per
-  actor**, so one is in flight at a time. Keyed per actor because the loss is per actor; a global
-  chain would cost throughput and buy nothing. Callers keep their fire-and-forget `void` semantics.
-  After the fix the same run gives `version 4` for 4 events, and a fresh posterior replayed with
-  exactly that actor's own events lands **byte-identically** on the live one (`0.00e+00`, all four
-  actors).
-- **NOT fixed, and this is the open half:** the underlying defect is that the persona store has no
-  per-actor lock, so **any other concurrent writer for one actor still loses updates** — two browser
-  tabs, a modified client, or any future caller that does not serialize. That fix lives in
-  `services/ml`, which is frozen this round.
-- **Status:** OPEN for the store-level lock. CLOSED for the realtime emission site.
+- **Fixed, in two layers (defence in depth, because this was silent for weeks):**
+  1. **The emission site.** `apps/realtime/src/persistence.ts` chains observations **per actor**, so
+     one is in flight at a time. Keyed per actor because the loss is per actor; a global chain would
+     cost throughput and buy nothing. Callers keep their fire-and-forget `void` semantics. Guarded by
+     `apps/realtime/src/observe-race.test.mts`, which fails against the pre-fix file with a peak
+     in-flight of 8 against an expected 1.
+  2. **The store**, so the guarantee holds for every caller and not just this one. See the entry
+     immediately below.
+- **Status:** CLOSED at the emission site. See ⚑16b for the store-level half and for what it does
+  and does not cover.
+
+## ⚑ 16b. The store-level half of the lost-update fix, and exactly how far it reaches (2026-08-08)
+
+- **Opened:** 2026-08-08, immediately after ⚑16's emission-site fix shipped.
+- **Why a second layer:** serializing in `apps/realtime/src/persistence.ts` closes the realtime path
+  and nothing else. Every other concurrent writer for one actor still lost updates: two browser
+  tabs, a modified client, the web forwarder if it ever stopped looping sequentially, any future
+  caller. The guarantee belongs in the read-modify-write, not in one of its callers.
+- **What was added:** `Store.lock_for(user_id)` and `Store.updating(user_id)` in
+  `services/ml/echo_ml/store.py`, a re-entrant lock **per user**, and `app.py` now holds it across
+  the whole read-modify-write in every endpoint that MUTATES user state: `/observe`,
+  `/observe/behavioral`, `/telemetry`, `/feedback`, `/meeting_outcome`. Read-only endpoints
+  (`/persona`, `/bald`, `/select_npc`, `/metrics`, `/npc/turn`, `/agent/turn`) deliberately do not
+  take it, because taking a write lock to read would serialize reads for nothing. `delete()` takes
+  it too, so §13 erasure cannot land mid-update and leave half an update behind for a user who asked
+  to be forgotten.
+- **Keyed per user, not globally.** The loss is per user: six different users' events posted
+  concurrently each landed intact, before and after. A global lock would serialize unrelated traffic
+  and buy nothing.
+- **Both layers stay.** Defence in depth, because this was silent for weeks and left no trace.
+
+### How far the fix reaches, stated rather than assumed
+
+`threading.RLock` serializes threads inside ONE Python process. How the service is actually run:
+
+| where | command | workers |
+|---|---|---|
+| `services/ml/Dockerfile` (Render) | `uvicorn echo_ml.app:app --host 0.0.0.0 --port ${PORT:-8000}` | 1 (uvicorn's default; no `--workers`) |
+| `services/ml/run.sh` (local) | `uvicorn echo_ml.app:app --host 0.0.0.0 --port $PORT --reload` | 1 |
+| `render.yaml` | `plan: starter`, no `numInstances`, no autoscaling | 1 instance |
+
+FastAPI runs sync `def` endpoints in a **threadpool**, so multiple threads inside that one process is
+exactly the condition that raced. **The lock is therefore complete for the deployment as it stands,
+and would NOT survive `--workers N`, multiple Render instances, or any horizontal scaling.**
+
+**But the lock is not what would break first.** `Store` is a process-local in-memory dict with no
+shared backing (the module docstring's "optionally hydrated/persisted to Supabase" is aspirational;
+nothing implements it). Under two workers a user's posterior would already depend on which worker
+served the request, which is a larger and far more visible problem than a lost update. So this lock
+is **exactly as complete as the store is**, and anyone adding workers has to fix the store first, at
+which point the lock has to move to wherever the state then lives.
+
+### Evidence
+
+- `services/ml/tests/test_observation_race.py`, three tests: the store's guarantee, a negative
+  control that can only ever lose and never gain, and an end-to-end concurrent POST. Against the
+  pre-fix files the end-to-end one fails with **version 1 for 8 events**.
+- `harness/observe_race_probe.py`, the original four probes kept and re-run against a live service:
+  two concurrent now give version 2 (was 1), eight concurrent give version 8 / behaviors 8 (was
+  2 / 8), six different users stay parallel at 11ms, and the update is still exactly
+  time-independent at `||mu_a - mu_b|| = 0.000e+00`.
+- **Status:** CLOSED for the single-process deployment. The multi-worker case is a property of the
+  store, tracked here rather than left implicit.
 
 ## ⚑ 17. F4 is measured against an NPC partner, and that may not generalize to human partners (2026-08-08)
 
