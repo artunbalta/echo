@@ -52,6 +52,12 @@ export const PROP_KINDS = [
   "gull_tangled",  // a gull caught in the trap line — the help-at-cost probe, before
   "gull_free",     // the same gull, loosed — the after state (the silhouette IS the progress)
   "cache_marked",  // a half-buried cache with SOMEONE ELSE'S mark carved into the lid
+  // ── Flow 4 ("Repeated Games & Trust") objects. The partner's own mark reuses `marker_stone` and
+  //    your store reuses `buried_cache`, so only what has no existing form is new. ──
+  "recurring_partner",  // the one partner you meet again and again — a figure, not a station
+  "promise_post",       // their post: a carved stake with a palm-worn hollow. A promise is made by an act
+  "shared_cache",       // the cache you both put into, standing empty
+  "shared_cache_full",  // the same, with what was put in it — the silhouette IS the state
   // ── the stand archetypes (Step 6). These are STRUCTURES (bark frame + parchment awning), so the
   //    assets-absent fallback must be a stall silhouette, NOT a humanoid character sheet. ──
   "travel_stand",
@@ -448,7 +454,69 @@ function drawStand(ctx: CanvasRenderingContext2D, ox: number, oy: number, accent
   p(11, 12, 1, 2, "#fbf4e4");        // a small hanging lantern glow
 }
 
+// ── Flow 4 objects ─────────────────────────────────────────────────────────────────
+/** The recurring partner. A person, standing at their own post — the one figure you meet again.
+ *  Deliberately plain and a little still: they are someone you know, not a station to transact at. */
+function drawRecurringPartner(ctx: CanvasRenderingContext2D, ox: number, oy: number, facing: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 8);
+  const breathe = frame === 1 ? -1 : frame === 3 ? 1 : 0; // they are alive, barely moving
+  p(6, 8 + breathe, 4, 4, "#c9a882");   // head
+  p(6, 8 + breathe, 4, 1, "#dcc09a");
+  p(5, 7 + breathe, 6, 2, "#4a3b52");   // dark hair
+  if (facing !== "up") {
+    rect(ctx, ox + 7, oy + 10 + breathe, 1, 1, "#241a14");
+    rect(ctx, ox + 9, oy + 10 + breathe, 1, 1, "#241a14");
+  }
+  p(5, 12 + breathe, 6, 7, "#6a7f8c");  // a worn tunic, sea-grey
+  p(5, 12 + breathe, 6, 1, "#8398a5");
+  p(4, 13 + breathe, 1, 5, "#5c6f7b");  // arms at their sides
+  p(11, 13 + breathe, 1, 5, "#5c6f7b");
+  p(5, 19, 2, 3, "#4a3b2e");            // legs
+  p(9, 19, 2, 3, "#4a3b2e");
+}
+
+/** Their post: a stake driven into the ground with a hollow worn smooth by palms. This is where a
+ *  promise is made, so the wear IS the affordance — it says "hands go here" without a label. */
+function drawPromisePost(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 8);
+  p(6, 7, 4, 14, "#7a4a2b");   // the stake
+  p(6, 7, 1, 14, "#8a5733");   // lit edge
+  p(6, 7, 4, 1, "#9a6238");    // cut top
+  p(6, 11, 4, 4, "#5d3a22");   // the palm hollow, rubbed dark
+  p(7, 12, 2, 2, "#4a2e1b");
+  p(4, 20, 8, 1, "#6b4a2b");   // earth heaped at its foot
+}
+
+/** The shared cache: a woven basket set into the ground, open. Empty, and legibly so. */
+function drawSharedCache(ctx: CanvasRenderingContext2D, ox: number, oy: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 11);
+  p(3, 15, 10, 6, "#9a7e54");  // basket wall
+  p(3, 15, 10, 1, "#caa873");  // lit rim
+  p(4, 16, 8, 4, "#3a2817");   // the dark, empty inside
+  for (const wx of [5, 8, 11]) p(wx, 17, 1, 4, "#7a6440"); // weave
+}
+
+/** The same cache with something in it. What is inside sits above the rim, so the silhouette is
+ *  the state and no number is needed. */
+function drawSharedCacheFull(ctx: CanvasRenderingContext2D, ox: number, oy: number, _f: Facing, frame: number) {
+  const p = (x: number, y: number, w: number, h: number, c: string) => rect(ctx, ox + x, oy + y, w, h, c);
+  shadow(ctx, ox, oy, 11);
+  p(3, 15, 10, 6, "#9a7e54");
+  p(3, 15, 10, 1, "#caa873");
+  p(4, 13, 8, 3, "#caa64a");   // grain heaped above the rim
+  p(5, 12, 6, 1, "#f0cf5e");
+  if (frame === 1 || frame === 3) p(7, 11, 2, 1, "#fbe88a"); // a glint off the top of the heap
+  for (const wx of [5, 8, 11]) p(wx, 17, 1, 4, "#7a6440");
+}
+
 const DRAW: Record<PropKind, Draw> = {
+  recurring_partner: drawRecurringPartner,
+  promise_post: (c, x, y) => drawPromisePost(c, x, y),
+  shared_cache: (c, x, y) => drawSharedCache(c, x, y),
+  shared_cache_full: drawSharedCacheFull,
   gull_tangled: drawGullTangled,
   gull_free: drawGullFree,
   cache_marked: drawCacheMarked,

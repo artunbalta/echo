@@ -741,3 +741,61 @@ change and its own piece of work, and it is forbidden here, so it is named as an
 - **Not a blocker.** F4 is built and measured against the NPC partner. This is recorded so that no
   later reader treats an F4 pass as evidence about promises to people.
 - **Status:** OPEN, and open in the way that does not resolve by building more.
+
+## ⚑ 18. F4's manner scalars, and the running unrouted list the re-anchor has to cover (2026-08-08)
+
+- **Opened:** 2026-08-08, building F4's four beats.
+- **The rule this is under, unchanged:** cue-to-axis loadings stay LEARNED in W. A manner scalar is
+  routed only where an already-anchored feature's definition genuinely fits. Everything else is
+  emitted, carried in `raw_signals` for the second re-anchor's corpus, and flagged — never attached
+  to the nearest plausible loading.
+
+### F4, eight flagged
+
+| Scalar | Why it has nowhere clean to go |
+|---|---|
+| `response_to_defect01` | **the important one.** What you did in the round after they took more than their share: the tit-for-tat signature, and F4's entire reason to exist. `consistency` is the cooperation LEVEL, not its conditional response to being wronged, and routing it there would collapse a forgiving cooperator and a steadfast one into one number |
+| `settle_distance` | the proxemics of a grievance. `proxemics_close` / `proxemics_far` were anchored at the interaction-OPEN gate, a different quantity from where you stop when you are angry |
+| `return_directness01` | graded path deviation on the way back. `path_tortuosity` was anchored on the P3 sampler's normalized ratio, which this is not — ⚑6's exact mistake |
+| `circled01` | identical to F5's, unrouted for the identical reason |
+| `detoured_first01` | a fraction of a DELAY, not a share of a day, so no `ts_*` fits |
+| `unprompted` | no anchored feature means self-starting; `decision_latency` already carries the timing |
+| `stake_amount01` | a reciprocal stake in an exchange, deliberately kept apart from `gift_amount01`, which the existing F7 give/share anchor does fit |
+| `cost_paid01` | what the act cost you. Same argument as ⚑13 |
+
+### A second, separate problem with `settle_distance`, and how it was found
+
+The first version of the F4 drive aimed at a fixed tile beside the partner. Two personas driven to
+settle at visibly different distances both came back at **1.5**, because the auto-walk controller
+stops at a fixed distance from a solid prop — the cue was reporting the CONTROLLER, not the persona.
+The same fixed-tile approach also failed 7 of 9 conflict drives outright, because the post and the
+partner are both solid and a chosen offset is often not standable.
+
+Fixed by walking toward them and stopping when you are as close as you meant to get, which is also
+what a person does. `settle_distance` now separates (1.5 against 3.0) and the beat completes 6 of 6.
+
+**The lesson is the one worth keeping:** a spatial cue driven by a pathing controller measures the
+controller unless the drive stops the way a player stops. This is the P21 class again, and it means
+any spatial scalar in the re-anchor's corpus needs checking against the controller before it is
+trusted, not just against the persona.
+
+### The running list, which is the re-anchor's actual scope
+
+The second W re-anchor happens ONCE, after all flows exist, on the full cue set. That list now is:
+
+- **⚑13, F5, four:** `cost_paid01`, `approach_detour01`, `circled01`, `dwell_at_marker_ms`. Plus
+  `dwell_ms`, which was routed to `ts_build` and then un-routed on the category argument, making it
+  **five**. Plus `taken01`'s untested interior (routed, but the graded middle between the two
+  anchored endpoints has never been observed).
+- **⚑18, F4, eight:** the table above.
+- **⚑6, embodied:** `decoration`, still carried as extra build time rather than routed to openness.
+- **⚑1 / ⚑3, the openness cues** across F0, F2, F3 and travel.
+
+**Thirteen manner scalars across F4 and F5 alone**, and in both flows the cue that most directly IS
+the flow's thesis is on the flagged side: F5's `circled01` (the unobserved self) and F4's
+`response_to_defect01` (the iterated game). That is a pattern, not a coincidence: a flow's signature
+cue is by definition the one the previous corpus had no reason to contain, so W cannot have a
+direction for it. It also means **no new flow currently measures its own thesis**, and any acceptance
+bar that passes today passes through generic manner cues. Say so whenever one is quoted.
+
+- **Status:** OPEN by design. Do NOT retrain W for these. Do not route them meanwhile.
