@@ -413,7 +413,7 @@ def main() -> int:
     print(f"  SILOING (interaction path): {'PASS' if silo_ok else 'FAIL'}")
 
     print("\n" + "-" * 104)
-    print("BARS 1 AND 2")
+    print("BARS 1, 2a AND 2b")
     print("-" * 104)
     if not f4_surface_present():
         print("  No F4 surface at /flow4 to drive.")

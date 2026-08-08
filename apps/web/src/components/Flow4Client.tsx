@@ -56,6 +56,9 @@ export default function Flow4Client() {
     const beat = (BEATS as string[]).includes(q.get("beat") ?? "")
       ? (q.get("beat") as Flow4Beat) : "exchange";
     const partnerId = q.get("partner") || "f4_partner";
+    // `?wronged=0` runs the same four rounds with the same recurring partner and no
+    // defection. The matched control for the repetition bar.
+    const partnerDefects = q.get("wronged") !== "0";
 
     let disposed = false;
     let world: ThreeWorld | null = null;
@@ -104,7 +107,7 @@ export default function Flow4Client() {
 
       const live = new Map<string, EntitySnapshot>();
       const ctrl = new Flow4Trust({
-        world, beat, partnerId, home, place,
+        world, beat, partnerId, partnerDefects, home, place,
         actorId: () => uidRef.current, sessionId: () => sessionRef.current, send: postEvents,
         addEntity: (snap) => { live.set(snap.id, snap); world!.addEntity(snap); },
         setEntitySprite: (id, url) => {
@@ -164,6 +167,9 @@ export default function Flow4Client() {
         self: () => world!.getSelfTile(),
         beat,
         partnerId,
+        partnerDefects,
+        // what the player can see: the cache is empty and the whisper has said so
+        wronged: () => ctrl.wasWronged(),
         home,
         promised: !!stateRef.current?.promisedTo,
         objects: snaps.map((s) => ({ id: s.id, x: s.x, y: s.y, url: s.spriteUrl })),

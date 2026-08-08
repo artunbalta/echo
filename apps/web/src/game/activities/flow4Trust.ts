@@ -44,6 +44,15 @@ export interface Flow4TrustConfig {
   beat: Flow4Beat;
   /** The recurring partner's counterpart id — the key tieWarmth and promisedTo are stored under. */
   partnerId: string;
+  /**
+   * Whether this partner takes more than their share partway through the exchange.
+   *
+   * A SCENARIO variable, in the shape of F5's `privacy` — a fact about the world the beat is run
+   * in, not a measurement hook. It exists because "have they wronged you" and "have you played
+   * with them before" are two different things, and F4's repetition claim is about the second.
+   * With both held in one condition the two are inseparable. Defaults true (the beat as designed).
+   */
+  partnerDefects?: boolean;
   home: { x: number; y: number };
   place: (dx: number, dy: number) => { x: number; y: number };
   actorId: () => string;
@@ -142,6 +151,13 @@ export class Flow4Trust {
       partner: `${p}partner`, post: `${p}post`, cache: `${p}cache`,
       store: `${p}store`, mark: `${p}mark`, errand0: `${p}errand0`, errand1: `${p}errand1`,
     };
+  }
+
+  /** Has the partner taken more than their share yet? What the player can see: the cache is
+   *  visibly empty and the whisper has said so. Exposed so a drive can react to the world rather
+   *  than to a script, which is what makes the two arms of the repetition bar genuinely matched. */
+  wasWronged(): boolean {
+    return this.defected;
   }
 
   /** The client-local entities this beat puts on the island. Merged into every snapshot by the scene. */
@@ -433,7 +449,8 @@ export class Flow4Trust {
     this.placeHoldMs = 0;
     this.placeLatency = null;
     this.ap = freshApproach();
-    if (this.round === S.exchange.defectRound && !this.defected) {
+    if (this.round === S.exchange.defectRound && !this.defected
+        && this.cfg.partnerDefects !== false) {
       this.defected = true;
       this.defectSeenAtRound = this.amounts.length;
       this.cfg.setEntitySprite(this.ids.cache, S.sprites.cache, S.displayH.cache);
