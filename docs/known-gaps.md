@@ -712,3 +712,56 @@ change and its own piece of work, and it is forbidden here, so it is named as an
      immediately below.
 - **Status:** CLOSED at the emission site. See ⚑16b for the store-level half and for what it does
   and does not cover.
+
+## ⚑ 16b. The store-level half of the lost-update fix, and exactly how far it reaches (2026-08-08)
+
+- **Opened:** 2026-08-08, immediately after ⚑16's emission-site fix shipped.
+- **Why a second layer:** serializing in `apps/realtime/src/persistence.ts` closes the realtime path
+  and nothing else. Every other concurrent writer for one actor still lost updates: two browser
+  tabs, a modified client, the web forwarder if it ever stopped looping sequentially, any future
+  caller. The guarantee belongs in the read-modify-write, not in one of its callers.
+- **What was added:** `Store.lock_for(user_id)` and `Store.updating(user_id)` in
+  `services/ml/echo_ml/store.py`, a re-entrant lock **per user**, and `app.py` now holds it across
+  the whole read-modify-write in every endpoint that MUTATES user state: `/observe`,
+  `/observe/behavioral`, `/telemetry`, `/feedback`, `/meeting_outcome`. Read-only endpoints
+  (`/persona`, `/bald`, `/select_npc`, `/metrics`, `/npc/turn`, `/agent/turn`) deliberately do not
+  take it, because taking a write lock to read would serialize reads for nothing. `delete()` takes
+  it too, so §13 erasure cannot land mid-update and leave half an update behind for a user who asked
+  to be forgotten.
+- **Keyed per user, not globally.** The loss is per user: six different users' events posted
+  concurrently each landed intact, before and after. A global lock would serialize unrelated traffic
+  and buy nothing.
+- **Both layers stay.** Defence in depth, because this was silent for weeks and left no trace.
+
+### How far the fix reaches, stated rather than assumed
+
+`threading.RLock` serializes threads inside ONE Python process. How the service is actually run:
+
+| where | command | workers |
+|---|---|---|
+| `services/ml/Dockerfile` (Render) | `uvicorn echo_ml.app:app --host 0.0.0.0 --port ${PORT:-8000}` | 1 (uvicorn's default; no `--workers`) |
+| `services/ml/run.sh` (local) | `uvicorn echo_ml.app:app --host 0.0.0.0 --port $PORT --reload` | 1 |
+| `render.yaml` | `plan: starter`, no `numInstances`, no autoscaling | 1 instance |
+
+FastAPI runs sync `def` endpoints in a **threadpool**, so multiple threads inside that one process is
+exactly the condition that raced. **The lock is therefore complete for the deployment as it stands,
+and would NOT survive `--workers N`, multiple Render instances, or any horizontal scaling.**
+
+**But the lock is not what would break first.** `Store` is a process-local in-memory dict with no
+shared backing (the module docstring's "optionally hydrated/persisted to Supabase" is aspirational;
+nothing implements it). Under two workers a user's posterior would already depend on which worker
+served the request, which is a larger and far more visible problem than a lost update. So this lock
+is **exactly as complete as the store is**, and anyone adding workers has to fix the store first, at
+which point the lock has to move to wherever the state then lives.
+
+### Evidence
+
+- `services/ml/tests/test_observation_race.py`, three tests: the store's guarantee, a negative
+  control that can only ever lose and never gain, and an end-to-end concurrent POST. Against the
+  pre-fix files the end-to-end one fails with **version 1 for 8 events**.
+- `harness/observe_race_probe.py`, the original four probes kept and re-run against a live service:
+  two concurrent now give version 2 (was 1), eight concurrent give version 8 / behaviors 8 (was
+  2 / 8), six different users stay parallel at 11ms, and the update is still exactly
+  time-independent at `||mu_a - mu_b|| = 0.000e+00`.
+- **Status:** CLOSED for the single-process deployment. The multi-worker case is a property of the
+  store, tracked here rather than left implicit.
