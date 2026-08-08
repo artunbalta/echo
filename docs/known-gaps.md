@@ -673,3 +673,42 @@ change and its own piece of work, and it is forbidden here, so it is named as an
   pure core rather than over the wire. If a future test needs compressed decay through the route, the
   route would have to accept an injected `now`, and that is a change nobody has needed yet.
 - **Status:** CLOSED as a correction. The substrate F4 needs is real, durable and decaying.
+
+## ⚑ 16. Concurrent observations for ONE actor silently lost the posterior update (2026-08-08)
+
+- **Opened:** 2026-08-08, building an interaction-path siloing check for F4's harness.
+- **What was happening:** a persona update is a read-modify-write on that actor's posterior
+  (`app.py`: `st.posterior = P.observe(st.posterior, …)`), and nothing serialized it per actor.
+  `WorldRoom.emitFirstContact` fires **two** events per actor back to back with
+  `void observeBehavioral(...)`, so both were in flight at once and one update was lost. The
+  behavior index recorded both; the posterior advanced once.
+- **The evidence, measured rather than reasoned:**
+  - A live four-client run: actor A, **4 events, `behaviors` 4, `persona.version` 2**. Every
+    interaction contributed one update instead of two.
+  - Direct probe: the same two events posted **sequentially** gave `version 2`; posted
+    **concurrently** gave `version 1`. **Eight** concurrent events for one actor gave `version 2`
+    and `behaviors 8` — six observations recorded and discarded.
+  - It is strictly **within one actor**: six users' events posted concurrently each landed intact
+    (`version 1, behaviors 1` for all six).
+  - The update itself is deterministic and time-independent: the same two events posted back to back
+    and posted three seconds apart give `||mu_a - mu_b|| = 0.000e+00`. So this was pure lost-update,
+    not ordering sensitivity.
+- **What it cost:** F2 and F3 are both shipped and both social, so **roughly half of every live
+  player-to-player interaction's measurement** was being discarded for as long as those flows have
+  existed. It left no trace: no error, no log, and a posterior that looks fine and is built on half
+  its evidence. F0/F1/F5 were never affected — the web forwarder
+  (`api/observe/behavioral/route.ts`) already loops sequentially, with a comment saying why.
+- **Why nothing caught it:** the copresence integration test asserts both events are **emitted**, and
+  they were. `behaviors` counted them, and it was right. Nothing compared the number of events an
+  actor emitted against the number of updates its posterior took. This is ⚑14's shape again: every
+  component was individually correct and only the relation between two of them was wrong.
+- **Fixed, in two layers (defence in depth, because this was silent for weeks):**
+  1. **The emission site.** `apps/realtime/src/persistence.ts` chains observations **per actor**, so
+     one is in flight at a time. Keyed per actor because the loss is per actor; a global chain would
+     cost throughput and buy nothing. Callers keep their fire-and-forget `void` semantics. Guarded by
+     `apps/realtime/src/observe-race.test.mts`, which fails against the pre-fix file with a peak
+     in-flight of 8 against an expected 1.
+  2. **The store**, so the guarantee holds for every caller and not just this one. See the entry
+     immediately below.
+- **Status:** CLOSED at the emission site. See ⚑16b for the store-level half and for what it does
+  and does not cover.
