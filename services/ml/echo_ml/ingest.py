@@ -230,9 +230,13 @@ def _f5_manner(rs: dict, tel: dict) -> None:
     ROUTED, because the definition is identical to what the feature was anchored on:
       • thoroughness01     → persistence   (same quantity as the raft gather's thoroughness)
       • persist_after_fail → persistence   (same quantity as the raft lashing's slips)
-      • dwell_ms           → ts_build      (time-share of the act, same normalization as _EMBODIED_TS)
 
     NOT ROUTED, carried in raw_signals for the next re-anchor's corpus and flagged (⚑13):
+      • dwell_ms           re-examined and dropped. It was mapped to ts_build by analogy with
+                           _EMBODIED_TS, which was wrong by the same category argument that rejects
+                           cost_paid01 below: ts_build is the day-loop economy's BUILD time-share and
+                           neither probe is a build. The gull's own time-share is already carried by
+                           help_at_cost's ts_social; the cache has no time-share that fits.
       • cost_paid01        the vitality actually spent on a costly act. Doc-intended warmth, but
                            ts_social already carries the gull's time-share and cost-paid is a
                            different quantity from time-spent. No anchored feature means "what the
@@ -252,9 +256,13 @@ def _f5_manner(rs: dict, tel: dict) -> None:
         tel["persistence"] = max(tel.get("persistence", 0.0), _clip01(float(rs["thoroughness01"])))
     if rs.get("persist_after_fail") is not None:
         tel["persistence"] = max(tel.get("persistence", 0.0), _clip01(float(rs["persist_after_fail"])))
-    dwell = rs.get("dwell_ms")
-    if dwell is not None:
-        tel["ts_build"] = max(tel.get("ts_build", 0.0), _clip01(float(dwell) / 12000.0))
+    # dwell_ms is deliberately NOT routed. It was briefly mapped to ts_build by analogy with
+    # _EMBODIED_TS, and that was wrong by the same category argument used to reject cost_paid01:
+    # ts_build is the time-share of the day-loop economy's BUILD axis, and neither probe is a build.
+    # Freeing a bird builds nothing, and digging up someone else's food is not construction either.
+    # The gull's own time-share is already carried honestly by help_at_cost's ts_social; the cache has
+    # no existing time-share whose definition fits. Flagged in ⚑13 rather than parked on the nearest
+    # plausible feature.
 
 
 def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
