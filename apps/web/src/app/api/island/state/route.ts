@@ -10,15 +10,56 @@ import type { IslandDayState } from "@echo/shared";
 
 export const runtime = "nodejs";
 
+/**
+ * THE HARNESS CLOCK HOOK, AND WHAT MAKES IT UNREACHABLE IN PRODUCTION.
+ *
+ * Why it exists. Crop wilt decays from `cropPlantedAt`, which the client supplies in the state body,
+ * so it can already be aged over the wire. Tie cooling and raft weathering decay from
+ * `now - state.updatedAt`, and POST re-stamped `updatedAt` to Date.now() on every save, so between
+ * two back-to-back harness sessions a tie could never cool. `tieWarmth` is the exact substrate F4
+ * rides on, so the one cross-session mechanism the harness could demonstrate was the one F4 does not
+ * use. This makes the injected clock the pure core already takes reachable at the seam.
+ *
+ * Why it is gated. A client-injectable clock in production is a cheat surface: lie about the time and
+ * you skip crop wilt and keep every tie warm forever. That would sit beside the `sea` scalar the
+ * server already trusts, and one of those is enough. So the hook opens only when BOTH of these
+ * server-side signals agree, and a request can set, forge or influence neither:
+ *
+ *   ECHO_TEST_CLOCK === "1"      An explicit opt-in read from process.env inside the Node runtime.
+ *                                It is set by harness/f4/run_f4_acceptance.sh and by nothing else:
+ *                                it is absent from .env, .env.example, .env.production, next.config
+ *                                and the Vercel project settings, so on the deployed app it is
+ *                                undefined and this test is false.
+ *   VERCEL_ENV !== "production"  Vercel injects VERCEL_ENV into the server runtime of every
+ *                                production deployment. It is not a header and not a query
+ *                                parameter, so no request can change it. Even if the opt-in above
+ *                                were somehow set on the project, this closes the hook on
+ *                                production specifically.
+ *
+ * What a production client sending `?now=` gets: nothing. The parameter is read ONLY inside this
+ * function, and the function returns before reading it when the gate is shut, so the request is
+ * served with the real Date.now() and no error, byte-identically to before the hook existed.
+ */
+function testClock(raw: string | number | null | undefined): number | undefined {
+  if (process.env.ECHO_TEST_CLOCK !== "1") return undefined;
+  if (process.env.VERCEL_ENV === "production") return undefined;
+  const n = typeof raw === "number" ? raw : raw != null ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 export async function GET(req: Request) {
-  const userId = new URL(req.url).searchParams.get("userId");
+  const url = new URL(req.url);
+  const userId = url.searchParams.get("userId");
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
-  const loaded = await loadIslandState(userId);
-  return NextResponse.json(loaded);
+  const injected = testClock(url.searchParams.get("now"));
+  const loaded = await loadIslandState(userId, injected ?? Date.now());
+  // Echoed back only when the hook actually opened, so a harness asserts that it is live rather
+  // than assuming it, and a production response carries no trace of the field at all.
+  return NextResponse.json(injected === undefined ? loaded : { ...loaded, testClock: injected });
 }
 
 export async function POST(req: Request) {
-  let body: { userId?: string; state?: IslandDayState };
+  let body: { userId?: string; state?: IslandDayState; now?: number };
   try {
     body = await req.json();
   } catch {
@@ -32,6 +73,9 @@ export async function POST(req: Request) {
   if (typeof state.dayCount !== "number" || typeof state.scarcityLevel !== "number") {
     return NextResponse.json({ error: "malformed state" }, { status: 400 });
   }
-  const persistence = await saveIslandState(userId, { ...state, updatedAt: Date.now() });
-  return NextResponse.json({ ok: true, persistence });
+  const injected = testClock(body.now);
+  const persistence = await saveIslandState(userId, { ...state, updatedAt: injected ?? Date.now() });
+  return NextResponse.json(
+    injected === undefined ? { ok: true, persistence } : { ok: true, persistence, testClock: injected },
+  );
 }
