@@ -578,15 +578,57 @@ change and its own piece of work, and it is forbidden here, so it is named as an
   #1). Attaching these to the nearest plausible feature is the silent re-route the rule forbids, and
   `circled01` is the case where the temptation is strongest precisely because it is the most valuable
   signal in the flow.
+- **`dwell_ms`, re-examined and now ALSO unrouted.** It was briefly mapped to `ts_build` by analogy
+  with `_EMBODIED_TS`. That was wrong by exactly the category argument used above to reject
+  `cost_paid01`: `ts_build` is the time-share of the day-loop economy's BUILD axis, and neither probe
+  is a build. Freeing a bird builds nothing, and digging up someone else's food is not construction.
+  The gull's own time-share is already carried honestly by `help_at_cost`'s `ts_social`; the cache has
+  no existing time-share whose definition fits. Dropped rather than kept, which makes the count
+  **5 routed, 5 flagged**.
 - **What IS routed, and why each is safe:** `thoroughness01` and `persist_after_fail` → `persistence`
   (byte-identical definitions to the raft's gather and its slips, which are what the feature was
-  anchored on); `dwell_ms` → `ts_build` (the existing `_EMBODIED_TS` normalization); `taken01` →
-  `consistency`, **interpolating** between the two values P7 already anchored (`return_cache` 0.9 and
-  `keep_cache` 0.1) rather than extending the feature past them, so taking the whole cache reproduces
-  P7's 0.1 exactly; `decision_latency_ms` → `decision_latency` via the generic top block;
-  `abandon_free_gull` / `abandon_take_cache` → `ts_leisure` via the existing abandon branch.
+  anchored on); `taken01` → `consistency`; `decision_latency_ms` → `decision_latency` via the generic
+  top block; `abandon_free_gull` / `abandon_take_cache` → `ts_leisure` via the existing abandon branch.
+- **⚑ `taken01` onto `consistency` has an UNTESTED INTERIOR, the mirror of ⚑7's unseen edge.** The
+  routing **interpolates** between the two values P7 already anchored (`return_cache` 0.9 and
+  `keep_cache` 0.1) rather than extending the feature past either, so taking the whole cache
+  reproduces P7's 0.1 exactly and the endpoints are unchanged. That is more defensible than ⚑7's
+  extrapolation. But W learned this loading from a corpus containing **only** those two point masses,
+  so it has never seen an intermediate value, and the **linearity between them is assumed rather than
+  observed**. A half-emptied cache is a real reading the model has no evidence for the shape of.
+  Keeping the routing, because a graded honest act is genuinely the same construct at finer
+  resolution, and flagging the interior so nobody mistakes it for fitted. The next re-anchor's corpus
+  will contain intermediate values for the first time, which is when the shape becomes checkable.
 - **Resolution:** the second W re-anchor happens ONCE, after all flows exist, on the full cue set.
   These four will be in that corpus with real behavioural data behind them, which is the right time to
   learn whether they load anywhere. Do NOT retrain W for them. Do not route them meanwhile.
 - **Status:** OPEN by design. 6 routed, 4 flagged. The flagged four are emitted and recorded, so the
   corpus accumulates even while the posterior cannot read them.
+
+## ⚑ 14. A structurally non-functional feature was carried as shipped, because nothing measured it (2026-08-07)
+
+- **Opened:** 2026-08-07 (building F5's acceptance harness).
+- **What:** The project's record lists the **public-minus-private delta** as delivered in P7. It was
+  not, and could not have been. P7's probes were **always private**: `audience_size` 0,
+  `public_or_private` "private", no witness, no public arm anywhere in the client. The ingress dutifully
+  built `cond_key = "privacy:private"` and the conditional bucket accumulated correctly. There was
+  simply never a `privacy:public` bucket to subtract it from. **The delta was unmeasurable by
+  construction for as long as it was listed as shipped.**
+- **Why nobody noticed:** every part of it looked done in isolation. The conditioning code was real and
+  correct. The bucket machinery worked. The cue routed. The walkthrough passed. What was missing was
+  the other half of a comparison, and no test computed the comparison, so nothing anywhere failed.
+- **The generalization, which is why this is its own entry and not a line in ⚑13:** a feature whose
+  correctness is a RELATION between two conditions cannot be validated by checking either condition.
+  Everything P7 built was individually right. Only the pair was wrong, and only a test that actually
+  subtracts one from the other could have seen it. This class of defect is invisible to per-component
+  verification by definition, and this project has now produced it twice: the invisible landmass
+  (⚑11), where every gate was green against a world with no land drawn, and this.
+- **The standing rule it argues for:** **measurement before feature.** Had the capture been built
+  against P7's probes first, there would have been a baseline number, the missing public arm would have
+  shown up immediately as an empty bucket, and the embodied version would have been measured as a delta
+  against a real prior value. Building the feature first makes "a feature with no number" a reachable
+  state, which is exactly where this sat for the whole of P7's life.
+- **Fixed:** F5 adds the public arm (a witness in sight, outside the `CLOSE <= 2.0` gate) and the
+  harness measures the delta directly. See the acceptance numbers in the F5 report.
+- **Status:** CLOSED for the delta itself. OPEN as a lesson, recorded so the ordering rule has a
+  written reason behind it.

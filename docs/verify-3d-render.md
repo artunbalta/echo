@@ -211,6 +211,33 @@ day at the campfire and come back to see the other one.
 - [ ] Neither tab can see the other's probe. These are client-local and private by construction, so
       alice's gull must not appear on bob's island and the witness must not be a real player.
 
+**The isolated slice, which is the fastest way to check all of this.** `/flow5` puts one probe on an
+island with nothing else on it, and takes the condition from the URL. Single tab, no day loop.
+
+- <http://localhost:3000/flow5?u=you&probe=gull&privacy=private>
+- <http://localhost:3000/flow5?u=you&probe=gull&privacy=public>
+- <http://localhost:3000/flow5?u=you&probe=cache&privacy=private>
+- <http://localhost:3000/flow5?u=you&probe=cache&privacy=public>
+
+- [ ] **The gull, private.** Hold [space] beside it. The line comes free **in visible stages**, the
+      hold **slips twice** and must be re-taken, and vitality drains as you work. Nothing counts
+      anything on screen.
+- [ ] **The partial ending is real.** Hold for two or three seconds, then walk inland away from it.
+      The gull stays partly free and that is a legitimate ending, not a failure state. Devtools,
+      Network, `observe/behavioral`: one event fires, carrying `thoroughness01` well under 1.
+- [ ] **The gull, public.** Someone stands further up the shore. Walking toward them offers no
+      conversation: they are outside talking range on purpose.
+- [ ] **The cache, private.** Approach it. From more than about a tile away **you cannot tell whose it
+      is**. Close in and the owner's mark becomes legible. That is the beat: learning it belongs to
+      someone happens in the body, not in a sentence.
+- [ ] Holding [space] at the mound **digs progressively** and the mound visibly empties. Stopping
+      early takes less. Confirm `taken01` in the event matches roughly how long you held.
+- [ ] **The honest act costs a walk.** The marker stone sits a couple of tiles away. Holding [space]
+      there instead presses the mark back and covers the mound over, and emits `return_cache`.
+- [ ] Walking past either probe without acting emits **nothing at all**.
+- [ ] Compare the two privacy conditions on the same probe and confirm the event's
+      `public_or_private` and `audience_size` (1 or 0) match what you actually saw.
+
 ---
 
 ## If anything above fails
