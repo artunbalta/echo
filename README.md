@@ -68,7 +68,7 @@ art, in-character mock dialogue, in-memory persistence).
 
 ```bash
 npm install
-npm run build:shared          # build the shared package first
+npm run build:shared          # build the shared packages first (@echo/shared, @echo/planet)
 npm run seed                  # generate db/seed/npcs.generated.json (100-NPC spanning set)
 
 # two terminals (or `npm run dev` to run both):
