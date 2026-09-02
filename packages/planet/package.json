@@ -1,0 +1,35 @@
+{
+  "name": "@echo/planet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The planet: spherical geometry, the parcel registry, and terrain. Shared by the globe renderer, the in world scene builder, and the server.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "simulate:capacity": "node --import tsx scripts/simulate-capacity.ts",
+    "preview:planet": "node --import tsx scripts/preview-planet.ts",
+    "preview:globe": "node --import tsx scripts/preview-globe.ts",
+    "seed:registry": "node --import tsx scripts/seed-registry.ts"
+  },
+  "dependencies": {
+    "h3-js": "^4.5.0",
+    "simplex-noise": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "pg": "^8.23.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
