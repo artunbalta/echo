@@ -81,6 +81,23 @@ export const PLANET_PARAMS: PlanetParams = {
 };
 
 /**
+ * The number of parcels this planet will ever have, and therefore the most owners it can ever have.
+ *
+ * Section 4.3 is emphatic that the published capacity must be the SIMULATED capacity and not
+ * cells(floorResolution), because only unassigned parcels subdivide and the true capacity is far
+ * below the theoretical cell count. This is that number, materialised cell by cell rather than
+ * derived from a formula, by:
+ *
+ *   npm run simulate:capacity -w @echo/planet
+ *
+ * It is a property of the generated world and not of the parameters: capacity is 1 - triggerFraction
+ * of an inventory that is itself decided by how much of each cell is dry. It moves about half a
+ * percent with the terrain seed, so it belongs here as a measured constant tied to
+ * PLANET_PARAMS and the shipped seed, and it must be re-measured if either changes.
+ */
+export const PUBLISHED_CAPACITY = 1_074_942;
+
+/**
  * Section 3 exactly as written, kept so the capacity report can still run the comparison that
  * produced the decision above. Do not build on it.
  */

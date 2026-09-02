@@ -25,6 +25,7 @@ import {
   cellCentre,
   createRegistryIndex,
   DEFAULT_GLOBE_OPTIONS,
+  landFractionOfCell,
   vec3ToLatLng,
   createTerrain,
   paintParcel,
@@ -51,6 +52,17 @@ export interface PickedParcel {
    * be the dishonest version of the same compromise.
    */
   region: string;
+  /** How much of this cell is dry land, 0 to 1, measured on a 49 point grid inside it. */
+  landFraction: number;
+  /**
+   * Whether this cell can ever be given to anyone.
+   *
+   * Section 5.4: a cell holding less than minLandFraction land is never assigned to anybody and
+   * stays on the globe as open water. Assignment is random, so without this rule somebody's only
+   * land would be a rectangle of sea. The registry already filters on it, which is why nobody can
+   * be given open water; this is here so the interface does not CALL open water a parcel.
+   */
+  assignable: boolean;
 }
 
 export interface PlanetGlobeOptions {
@@ -90,6 +102,8 @@ export interface PlanetGlobeOptions {
   picking?: {
     parcelResolution: number;
     commonsResolution: number;
+    /** The section 5.4 threshold. A cell below it is water, not a parcel. */
+    minLandFraction: number;
     /** Cell id to name, for the twelve. */
     commons: Record<string, string>;
     onHover?: (parcel: PickedParcel | null) => void;
@@ -141,6 +155,8 @@ export class PlanetGlobe {
   private readonly pointer = new THREE.Vector2();
   /** An invisible unit sphere. The only thing the raycaster ever has to hit. */
   private readonly pickSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32));
+  /** Land fraction by cell. Forty nine terrain samples each, so worth keeping, cheap to compute. */
+  private readonly landCache = new Map<string, number>();
 
   constructor(
     private readonly host: HTMLElement,
@@ -352,20 +368,37 @@ export class PlanetGlobe {
     const commonsCell = cellToParent(cell, picking.commonsResolution);
     const commonsName = picking.commons[commonsCell] ?? null;
     const region = commonsName ? commonsCell : cellToParent(cell, Math.min(2, picking.parcelResolution));
-    return { cell: commonsName ? commonsCell : cell, lat, lng, commonsName, region };
+    const chosen = commonsName ? commonsCell : cell;
+
+    let landFraction = this.landCache.get(chosen);
+    if (landFraction === undefined) {
+      landFraction = landFractionOfCell(this.field, this.calibration.seaLevel, chosen, 2);
+      this.landCache.set(chosen, landFraction);
+    }
+
+    return {
+      cell: chosen,
+      lat,
+      lng,
+      commonsName,
+      region,
+      landFraction,
+      // A commons is not assignable either. It is public, which is a different reason.
+      assignable: commonsName === null && landFraction >= picking.minLandFraction,
+    };
   }
 
   private onPointerMove = (event: PointerEvent): void => {
     const parcel = this.parcelAt(event.clientX, event.clientY);
     if (parcel?.cell === this.hovered) return;
     this.hovered = parcel?.cell ?? null;
-    this.setHoverOutline(parcel?.cell ?? null, parcel?.commonsName != null);
+    this.setHoverOutline(parcel?.cell ?? null, parcel);
     this.options.picking?.onHover?.(parcel);
   };
 
   private onPointerLeave = (): void => {
     this.hovered = null;
-    this.setHoverOutline(null, false);
+    this.setHoverOutline(null, null);
     this.options.picking?.onHover?.(null);
   };
 
@@ -382,7 +415,7 @@ export class PlanetGlobe {
    * The parcel is filled as well, lifted off the surface so the fill cannot be mistaken for terrain,
    * and the outline is drawn on top of that.
    */
-  private setHoverOutline(cell: string | null, isCommons: boolean): void {
+  private setHoverOutline(cell: string | null, parcel: PickedParcel | null): void {
     if (this.hover) {
       this.planet.remove(this.hover);
       this.hover.traverse((object) => {
@@ -395,7 +428,13 @@ export class PlanetGlobe {
     }
     if (!cell) return;
 
-    const colour: [number, number, number] = isCommons ? [226, 198, 122] : [244, 233, 208];
+    // Gold for a commons, parchment for a parcel somebody can own, and a cold blue for water,
+    // which nobody will ever be given and which must not look like an offer.
+    const colour: [number, number, number] = parcel?.commonsName
+      ? [226, 198, 122]
+      : parcel?.assignable
+        ? [244, 233, 208]
+        : [122, 156, 190];
     const group = new THREE.Group();
 
     const mesh = buildParcelMesh([cell], this.field, this.calibration, { reliefSubdivisions: 2 });
@@ -418,7 +457,12 @@ export class PlanetGlobe {
     const outline = buildParcelOutlines([cell], this.field, this.calibration);
     const line = new THREE.BufferGeometry();
     line.setAttribute("position", new THREE.BufferAttribute(outline.positions, 3));
-    group.add(new THREE.LineSegments(line, new THREE.LineBasicMaterial({ color: 0xa06cd5 })));
+    group.add(
+      new THREE.LineSegments(
+        line,
+        new THREE.LineBasicMaterial({ color: parcel?.assignable === false && !parcel.commonsName ? 0x7a9cbe : 0xa06cd5 }),
+      ),
+    );
 
     this.planet.add(group);
     this.hover = group;

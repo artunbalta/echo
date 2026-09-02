@@ -21,6 +21,7 @@ export async function GET() {
     startResolution: world.startResolution,
     floorResolution: world.floorResolution,
     triggerFraction: world.triggerFraction,
+    minLandFraction: world.minLandFraction,
     commonsResolution: world.commonsResolution ?? world.startResolution,
     seaLevel: calibration.seaLevel,
     peakElevation: calibration.peakElevation,

@@ -33,6 +33,8 @@ export interface ParcelInsetProps {
   peakElevation: number;
   radiusKm: number;
   commonsName: string | null;
+  /** False when this cell holds too little land to ever be assigned. Section 5.4. */
+  assignable: boolean;
   /** Rendered pixels per side. Kept small on purpose: it is scaled up crisp, not smoothed. */
   resolution?: number;
 }
@@ -44,6 +46,7 @@ export default function ParcelInset({
   peakElevation,
   radiusKm,
   commonsName,
+  assignable,
   resolution = 112,
 }: ParcelInsetProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -175,6 +178,18 @@ export default function ParcelInset({
       {summary ? (
         <p className="mt-0.5 font-pixel text-[10px] leading-relaxed text-parchment/50">
           {summary.areaKm2.toFixed(2)} km², about {Math.round(summary.widthM)} m across
+        </p>
+      ) : null}
+      {/* Said before the click, not after it. The whole complaint was not knowing what you were
+          pointing at, and "you cannot have this one" is the most useful thing to know early. */}
+      {!assignable && !commonsName ? (
+        <p className="mt-1 font-pixel text-[10px] leading-relaxed text-[#7a9cbe]">
+          Never assigned. Too little land.
+        </p>
+      ) : null}
+      {commonsName ? (
+        <p className="mt-1 font-pixel text-[10px] leading-relaxed text-[#e2c67a]">
+          Public commons. Nobody owns it.
         </p>
       ) : null}
     </div>
