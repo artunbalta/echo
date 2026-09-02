@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { registry, world, calibration, commons } = planet();
-  const status = await registry.status();
+  const store = registry();
+  const status = await store.status();
   return NextResponse.json({
     status,
     world: {
@@ -21,6 +22,6 @@ export async function GET() {
       commonsResolution: world.commonsResolution ?? world.startResolution,
       commons: Object.fromEntries(commons.choices.map((c) => [c.cell, c.name])),
     },
-    claimed: await registry.recentlyClaimed(1500),
+    claimed: await store.recentlyClaimed(1500),
   });
 }

@@ -32,6 +32,7 @@ interface World {
   seed: string;
   seaLevel: number;
   peakElevation: number;
+  startResolution: number;
   commons: Record<string, string>;
   commonsResolution: number;
 }
@@ -47,17 +48,29 @@ export default function HeroPlanet() {
   const [hover, setHover] = useState<PickedParcel | null>(null);
   const [selected, setSelected] = useState<PickedParcel | null>(null);
 
+  // Two fetches, deliberately. The planet needs terrain, a sea level and the twelve commons, which
+  // is two hundred milliseconds, and it draws as soon as it has them. The counts and the parcels
+  // that have owners need the registry, which on a cold serverless instance is thirty three seconds
+  // of measuring land in 284,004 cells. Waiting for the second before showing the first is why the
+  // hero was an empty rectangle in production.
   useEffect(() => {
     let cancelled = false;
+    fetch("/api/planet/world")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setWorld(data);
+      })
+      .catch(() => undefined);
+
     fetch("/api/planet/status")
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        setWorld(data.world);
         setStatus(data.status);
         setClaimed((data.claimed as Array<{ h3Index: string }>).map((c) => c.h3Index));
       })
       .catch(() => undefined);
+
     return () => {
       cancelled = true;
     };
@@ -76,8 +89,13 @@ export default function HeroPlanet() {
     });
   }, []);
 
+  // Picking happens at the resolution the registry is currently issuing at. Until the status
+  // arrives that is the start resolution, which is the same number until the first subdivision
+  // round, and a change remounts rather than picking at a stale resolution.
+  const pickResolution = status?.resolution ?? world?.startResolution ?? null;
+
   useEffect(() => {
-    if (!host.current || !world || !status) return;
+    if (!host.current || !world || pickResolution === null) return;
     let live = true;
     let instance: import("@/game/planet/PlanetGlobe").PlanetGlobe | null = null;
 
@@ -92,14 +110,14 @@ export default function HeroPlanet() {
         // the copy stacks over the planet anyway and an offset would only push it off the edge.
         offsetX: window.innerWidth >= 1024 ? 0.78 : 0,
         picking: {
-          parcelResolution: status.resolution,
+          parcelResolution: pickResolution,
           commonsResolution: world.commonsResolution,
           commons: world.commons,
           onHover: setHover,
           onSelect: select,
         },
       });
-      instance.setClaimed([...Object.keys(world.commons), ...claimed], 1400);
+      instance.setClaimed(Object.keys(world.commons), 1400);
       globe.current = instance;
     });
 
@@ -108,7 +126,13 @@ export default function HeroPlanet() {
       instance?.dispose();
       globe.current = null;
     };
-  }, [world, status, claimed, reducedMotion, select]);
+  }, [world, pickResolution, reducedMotion, select]);
+
+  // Owned parcels arrive later than the planet and must not rebuild it when they do.
+  useEffect(() => {
+    if (!world) return;
+    globe.current?.setClaimed([...Object.keys(world.commons), ...claimed], 1400);
+  }, [claimed, world]);
 
   const dismiss = useCallback(() => {
     setSelected(null);
