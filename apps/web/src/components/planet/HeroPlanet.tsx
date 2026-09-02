@@ -15,10 +15,15 @@
  * the registry is telling anyway.
  */
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useReducedMotion } from "@/components/planet/motion";
 import type { PickedParcel } from "@/game/planet/PlanetGlobe";
+
+// Sampling terrain for the inset pulls in the whole planet package, which the hero already loads,
+// but it is only ever needed once somebody points at something.
+const ParcelInset = dynamic(() => import("@/components/planet/ParcelInset"), { ssr: false });
 
 interface Status {
   remaining: number;
@@ -30,6 +35,7 @@ interface Status {
 
 interface World {
   seed: string;
+  radiusKm: number;
   seaLevel: number;
   peakElevation: number;
   startResolution: number;
@@ -47,6 +53,8 @@ export default function HeroPlanet() {
   const [claimed, setClaimed] = useState<string[]>([]);
   const [hover, setHover] = useState<PickedParcel | null>(null);
   const [selected, setSelected] = useState<PickedParcel | null>(null);
+  const inset = useRef<HTMLDivElement>(null);
+  const [arrow, setArrow] = useState<{ fromX: number; fromY: number; toX: number; toY: number } | null>(null);
 
   // Two fetches, deliberately. The planet needs terrain, a sea level and the twelve commons, which
   // is two hundred milliseconds, and it draws as soon as it has them. The counts and the parcels
@@ -134,6 +142,34 @@ export default function HeroPlanet() {
     globe.current?.setClaimed([...Object.keys(world.commons), ...claimed], 1400);
   }, [claimed, world]);
 
+  // The planet keeps turning under a still cursor, so the far end of the line has to be asked for
+  // every frame rather than pushed once. Cheap: one matrix multiply and a projection.
+  useEffect(() => {
+    if (!hover || selected) {
+      setArrow(null);
+      return;
+    }
+    let raf = 0;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const at = globe.current?.screenPositionOf(hover.cell);
+      const box = inset.current?.getBoundingClientRect();
+      const hostBox = host.current?.getBoundingClientRect();
+      if (!at || !box || !hostBox) {
+        setArrow(null);
+        return;
+      }
+      setArrow({
+        fromX: box.left - hostBox.left,
+        fromY: box.top - hostBox.top + box.height / 2,
+        toX: at.x,
+        toY: at.y,
+      });
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [hover, selected]);
+
   const dismiss = useCallback(() => {
     setSelected(null);
     globe.current?.release();
@@ -143,21 +179,41 @@ export default function HeroPlanet() {
     <>
       <div ref={host} className="absolute inset-0 h-full w-full" aria-hidden />
 
-      {/* What the pointer is over. Quiet, because it is a hint and not a claim. */}
+      {/* What the pointer is over, drawn close up, with a line back to where it is. A parcel is
+          three percent of the frame at hero distance, so naming it is not enough: the eye needs
+          somewhere to look and something to compare. */}
       {hover && !selected ? (
-        <div className="pointer-events-none absolute right-6 top-24 z-20 rounded border border-parchment/15 bg-ink/80 px-3 py-2 font-pixel text-xs text-parchment/80 backdrop-blur-sm sm:right-10">
-          {hover.commonsName ? (
-            <>
-              <span className="text-[#e2c67a]">{hover.commonsName}</span>
-              <span className="text-parchment/45"> · public commons</span>
-            </>
-          ) : (
-            <>
-              <span>{hover.lat.toFixed(2)}, {hover.lng.toFixed(2)}</span>
-              <span className="text-parchment/45"> · one parcel of 173,569</span>
-            </>
-          )}
-        </div>
+        <>
+          <svg className="pointer-events-none absolute inset-0 z-20 h-full w-full" aria-hidden>
+            {arrow ? (
+              <>
+                <line
+                  x1={arrow.fromX}
+                  y1={arrow.fromY}
+                  x2={arrow.toX}
+                  y2={arrow.toY}
+                  stroke="#a06cd5"
+                  strokeWidth={1.5}
+                  strokeOpacity={0.75}
+                  strokeDasharray="5 4"
+                />
+                <circle cx={arrow.toX} cy={arrow.toY} r={7} fill="none" stroke="#a06cd5" strokeWidth={1.5} />
+                <circle cx={arrow.toX} cy={arrow.toY} r={2} fill="#a06cd5" />
+              </>
+            ) : null}
+          </svg>
+
+          <div ref={inset} className="pointer-events-none absolute right-6 top-24 z-30 sm:right-10">
+            <ParcelInset
+              cell={hover.cell}
+              seed={world!.seed}
+              seaLevel={world!.seaLevel}
+              peakElevation={world!.peakElevation}
+              radiusKm={world!.radiusKm}
+              commonsName={hover.commonsName}
+            />
+          </div>
+        </>
       ) : null}
 
       {selected ? <DemoPrompt parcel={selected} status={status} onDismiss={dismiss} /> : null}

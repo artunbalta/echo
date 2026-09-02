@@ -135,7 +135,7 @@ export class PlanetGlobe {
   private observer: ResizeObserver | null = null;
   private disposed = false;
   private lastFrameAt = 0;
-  private hover: THREE.LineSegments | null = null;
+  private hover: THREE.Group | null = null;
   private hovered: string | null = null;
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -374,23 +374,79 @@ export class PlanetGlobe {
     if (parcel) this.options.picking?.onSelect?.(parcel);
   };
 
-  /** Outline whatever the pointer is over, so a parcel exists before you commit to it. */
+  /**
+   * Mark whatever the pointer is over.
+   *
+   * An outline alone does not do it. A parcel is 1.4 km on a planet 1,257 km around, so at hero
+   * size its border is one pixel of pale line on a lit sphere and the eye slides straight past it.
+   * The parcel is filled as well, lifted off the surface so the fill cannot be mistaken for terrain,
+   * and the outline is drawn on top of that.
+   */
   private setHoverOutline(cell: string | null, isCommons: boolean): void {
     if (this.hover) {
       this.planet.remove(this.hover);
-      this.hover.geometry.dispose();
-      (this.hover.material as THREE.Material).dispose();
+      this.hover.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+          object.geometry.dispose();
+          (object.material as THREE.Material).dispose();
+        }
+      });
       this.hover = null;
     }
     if (!cell) return;
-    const outline = buildParcelOutlines([cell], this.field, this.calibration);
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(outline.positions, 3));
-    this.hover = new THREE.LineSegments(
-      geometry,
-      new THREE.LineBasicMaterial({ color: isCommons ? 0xe2c67a : 0xf4e9d0 }),
+
+    const colour: [number, number, number] = isCommons ? [226, 198, 122] : [244, 233, 208];
+    const group = new THREE.Group();
+
+    const mesh = buildParcelMesh([cell], this.field, this.calibration, { reliefSubdivisions: 2 });
+    paintParcel(mesh, cell, colour);
+    setParcelExtrusion(mesh, cell, true);
+    const fill = new THREE.BufferGeometry();
+    fill.setAttribute("position", new THREE.BufferAttribute(mesh.positions, 3));
+    fill.setAttribute("normal", new THREE.BufferAttribute(mesh.normals, 3));
+    group.add(
+      new THREE.Mesh(
+        fill,
+        new THREE.MeshBasicMaterial({
+          color: new THREE.Color(colour[0] / 255, colour[1] / 255, colour[2] / 255),
+          transparent: true,
+          opacity: 0.55,
+        }),
+      ),
     );
-    this.planet.add(this.hover);
+
+    const outline = buildParcelOutlines([cell], this.field, this.calibration);
+    const line = new THREE.BufferGeometry();
+    line.setAttribute("position", new THREE.BufferAttribute(outline.positions, 3));
+    group.add(new THREE.LineSegments(line, new THREE.LineBasicMaterial({ color: 0xa06cd5 })));
+
+    this.planet.add(group);
+    this.hover = group;
+  }
+
+  /**
+   * Where a parcel is on screen right now, in CSS pixels relative to the host, or null if it has
+   * turned to the far side. Polled by the caller rather than pushed, because the planet keeps
+   * turning under a still cursor and an arrow drawn to a stale position points at nothing.
+   */
+  screenPositionOf(cell: string): { x: number; y: number } | null {
+    const { direction } = cellCentre(cell);
+    this.planet.updateMatrixWorld(true);
+    const world = new THREE.Vector3(direction[0], direction[1], direction[2])
+      .multiplyScalar(1 + DEFAULT_GLOBE_OPTIONS.reliefScale)
+      .applyMatrix4(this.planet.matrixWorld);
+
+    // Behind the planet's own limb, from where the camera is.
+    const toCamera = this.camera.position.clone().sub(this.planet.position);
+    const toPoint = world.clone().sub(this.planet.position);
+    if (toPoint.dot(toCamera) < 0) return null;
+
+    const ndc = world.project(this.camera);
+    if (ndc.z > 1) return null;
+    return {
+      x: ((ndc.x + 1) / 2) * (this.host.clientWidth || 1),
+      y: ((1 - ndc.y) / 2) * (this.host.clientHeight || 1),
+    };
   }
 
   /** Let go and go back to turning. */
