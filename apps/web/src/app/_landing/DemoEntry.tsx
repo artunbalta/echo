@@ -1,10 +1,13 @@
 "use client";
 
-import Link from "next/link";
-
 /**
- * The demo entry (landing §1c). The trailer, and a quiet door to the live build. Stays last: it is
- * below the waitlist and deliberately does not compete with it.
+ * The demo entry (landing §1c). The trailer. Stays last: it is below the waitlist and deliberately
+ * does not compete with it.
+ *
+ * The "Walk the demo" link into /play was removed. The way into the world is now the planet at the
+ * top of the page: point at a parcel, and the card that comes up offers to put you on the ground
+ * there. A second door at the bottom, into a different and older demo, competed with that one and
+ * was the worse of the two.
  *
  * THE VIDEO IS NOT ALLOWED TO COST ANYTHING ON LOAD.
  *  - `preload="none"`     the mp4 is not fetched until someone presses play. Without this the
@@ -66,8 +69,8 @@ export default function DemoEntry() {
           >
             <source src="/echo-trailer.av1.mp4" type='video/mp4; codecs="av01.0.08M.08, mp4a.40.2"' />
             <source src="/echo-trailer.mp4" type='video/mp4; codecs="avc1.64001F, mp4a.40.2"' />
-            {/* Real fallback text, not a shrug: if the element cannot play, the door below still works. */}
-            Your browser cannot play this video. The demo itself is still open below.
+            {/* Real fallback text, not a shrug: the planet at the top of the page is the way in. */}
+            Your browser cannot play this video. The planet at the top of the page is walkable.
           </video>
         </div>
 
@@ -75,16 +78,6 @@ export default function DemoEntry() {
           Part of the world is already walkable. It is rough, and it is not the whole thing, but the
           shore is real and your echo is already watching.
         </p>
-
-        <div className="mt-6 text-center">
-          <Link
-            href="/play"
-            className="inline-flex items-center gap-2 font-pixel text-sm text-parchment/80 underline-offset-4 outline-none transition-colors hover:text-parchment hover:underline focus-visible:text-parchment focus-visible:underline"
-          >
-            Walk the demo
-            <span aria-hidden>›</span>
-          </Link>
-        </div>
       </div>
     </section>
   );
