@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabaseAdmin";
 import { hasFal, submitPortrait } from "@/lib/fal-portrait";
 import { photoPathReady } from "@/lib/photo-path-ready";
+import { PUBLISHED_CAPACITY } from "@echo/planet";
 
 export const runtime = "nodejs";
 /** The selfie upload to fal.storage happens inside the request (see below), so this needs more than
@@ -43,17 +44,28 @@ const MIN_SELFIE_PX = 384; // FAL rejects references under 384x384 outright
 const MAX_SELFIE_PX = 5000;
 
 /**
- * THE CAP. The landing says spots are limited and shows the real remaining count, so this number
+ * THE CAP. The landing says places are limited and shows the real remaining count, so this number
  * has to mean something: past it, the endpoint REFUSES rather than the form quietly disappearing.
  * Enforced atomically in Postgres by waitlist_join() under an advisory lock, because a
- * count-then-insert from here would let two simultaneous requests both take the last seat.
+ * count-then-insert from here would let two simultaneous requests both take the last place.
  *
- * 500 is a real first-cohort size for a world where every arrival is meant to be met, not a number
- * chosen to look scarce. Raising it later is a one-line change and an honest one — the count on
- * screen is always `taken` out of this, straight from the row count. Nothing here is theatre:
- * no countdown, no invented signups, no decay.
+ * It is now the number of parcels the planet will ever have. A place on this list is a claim on
+ * land, every parcel has exactly one owner and no parcel is ever resold, so the list cannot
+ * honestly be longer than the land: the 500th person and the 1,074,942nd both get a deed, and the
+ * next one would be promised something that does not exist.
+ *
+ * PUBLISHED_CAPACITY is measured rather than assumed. It is the capacity simulation's output for
+ * the shipped parameters and the shipped seed, counted cell by cell, and section 4.3 requires
+ * exactly that: the real number, not cells(floorResolution), which is 92 times larger and would be
+ * a lie. Re-measure it if the seed or the parameters move.
+ *
+ * WAITLIST_CAP still overrides, for a smaller invited cohort. It cannot honestly be raised above
+ * the capacity, so it is clamped.
  */
-const CAP = Number(process.env.WAITLIST_CAP ?? 500);
+const CAP = Math.min(
+  Number(process.env.WAITLIST_CAP ?? PUBLISHED_CAPACITY),
+  PUBLISHED_CAPACITY,
+);
 
 /**
  * Deliberately stricter than the RFC and deliberately not a clever regex. The full grammar allows

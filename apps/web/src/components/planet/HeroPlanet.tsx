@@ -39,6 +39,7 @@ interface World {
   seaLevel: number;
   peakElevation: number;
   startResolution: number;
+  minLandFraction: number;
   commons: Record<string, string>;
   commonsResolution: number;
 }
@@ -120,6 +121,7 @@ export default function HeroPlanet() {
         picking: {
           parcelResolution: pickResolution,
           commonsResolution: world.commonsResolution,
+          minLandFraction: world.minLandFraction,
           commons: world.commons,
           onHover: setHover,
           onSelect: select,
@@ -182,7 +184,7 @@ export default function HeroPlanet() {
       {/* What the pointer is over, drawn close up, with a line back to where it is. A parcel is
           three percent of the frame at hero distance, so naming it is not enough: the eye needs
           somewhere to look and something to compare. */}
-      {hover && !selected ? (
+      {hover && !selected && world ? (
         <>
           <svg className="pointer-events-none absolute inset-0 z-20 h-full w-full" aria-hidden>
             {arrow ? (
@@ -206,17 +208,18 @@ export default function HeroPlanet() {
           <div ref={inset} className="pointer-events-none absolute right-6 top-24 z-30 sm:right-10">
             <ParcelInset
               cell={hover.cell}
-              seed={world!.seed}
-              seaLevel={world!.seaLevel}
-              peakElevation={world!.peakElevation}
-              radiusKm={world!.radiusKm}
+              seed={world.seed}
+              seaLevel={world.seaLevel}
+              peakElevation={world.peakElevation}
+              radiusKm={world.radiusKm}
               commonsName={hover.commonsName}
+              assignable={hover.assignable}
             />
           </div>
         </>
       ) : null}
 
-      {selected ? <DemoPrompt parcel={selected} status={status} onDismiss={dismiss} /> : null}
+      {selected && world ? <DemoPrompt parcel={selected} status={status} minLand={world.minLandFraction} onDismiss={dismiss} /> : null}
     </>
   );
 }
@@ -225,10 +228,12 @@ export default function HeroPlanet() {
 function DemoPrompt({
   parcel,
   status,
+  minLand,
   onDismiss,
 }: {
   parcel: PickedParcel;
   status: Status | null;
+  minLand: number;
   onDismiss: () => void;
 }) {
   return (
@@ -241,7 +246,7 @@ function DemoPrompt({
             there can never be a thirteenth, and no one will ever own this one.
           </p>
         </>
-      ) : (
+      ) : parcel.assignable ? (
         <>
           <p className="font-pixel text-sm text-echo">
             A parcel, at {parcel.lat.toFixed(2)}, {parcel.lng.toFixed(2)}
@@ -251,27 +256,46 @@ function DemoPrompt({
             1.4 km, which is too small to see and the right size to stand in.
           </p>
           <p className="mt-2 text-sm leading-relaxed text-parchment/70">
+            {Math.round(parcel.landFraction * 100)}% of it is dry land.{" "}
             {status
-              ? `${status.remaining.toLocaleString()} parcels are still unclaimed. Each one has exactly one owner, permanently.`
+              ? `${status.remaining.toLocaleString()} parcels are still unclaimed, and each one has exactly one owner, permanently.`
               : "Each parcel has exactly one owner, permanently."}
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="font-pixel text-sm text-[#7a9cbe]">
+            Open water, at {parcel.lat.toFixed(2)}, {parcel.lng.toFixed(2)}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
+            This is not a parcel and never will be. Land is assigned at random, so anything under{" "}
+            {Math.round(minLand * 100)}% dry ground is held out of the pool entirely: nobody is ever
+            given a rectangle of sea and told it is theirs.
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
+            This one is {Math.round(parcel.landFraction * 100)}% land. Point at somewhere greener.
           </p>
         </>
       )}
 
-      <p className="mt-4 font-pixel text-sm text-parchment">Want to see it from the ground?</p>
+      {parcel.assignable || parcel.commonsName ? (
+        <p className="mt-4 font-pixel text-sm text-parchment">Want to see it from the ground?</p>
+      ) : null}
       <div className="mt-3 flex flex-wrap gap-3">
-        <a
-          href={`/parcel/${parcel.cell}`}
-          className="rounded bg-echo px-4 py-2 font-pixel text-xs text-ink transition-opacity hover:opacity-90"
-        >
-          Show me the demo
-        </a>
+        {parcel.assignable || parcel.commonsName ? (
+          <a
+            href={`/parcel/${parcel.cell}`}
+            className="rounded bg-echo px-4 py-2 font-pixel text-xs text-ink transition-opacity hover:opacity-90"
+          >
+            Show me the demo
+          </a>
+        ) : null}
         <button
           type="button"
           onClick={onDismiss}
           className="rounded border border-parchment/20 px-4 py-2 font-pixel text-xs text-parchment/75 transition-colors hover:border-parchment/40"
         >
-          Keep looking
+          {parcel.assignable || parcel.commonsName ? "Keep looking" : "Point somewhere else"}
         </button>
       </div>
     </div>
