@@ -34,9 +34,18 @@ export interface Planet {
   field: TerrainField;
   calibration: Calibration;
   world: WorldRow;
-  registry: ParcelRegistry;
   landFraction: (cell: string) => number;
   backend: "memory" | "postgres";
+  /**
+   * The registry, built on first use.
+   *
+   * This is lazy for a reason that only showed up in production. Building it measures the land in
+   * 284,004 cells, which is 33 seconds on a cold serverless instance, and the landing page does not
+   * need any of it: the planet is drawn from terrain, and terrain plus calibration plus the twelve
+   * commons costs about two hundred milliseconds. Making every caller of planet() pay for the
+   * registry meant the hero waited half a minute for a number it does not show.
+   */
+  registry(): ParcelRegistry;
 }
 
 const SEED = process.env.PLANET_SEED ?? "echo-capacity-1";
@@ -49,7 +58,7 @@ const SEED = process.env.PLANET_SEED ?? "echo-capacity-1";
  * change, which presents as a route reading a property that the running code adds and the cached
  * object does not have. Versioning the key is cheaper than remembering to restart.
  */
-const PLANET_CACHE_VERSION = 2;
+const PLANET_CACHE_VERSION = 3;
 
 const g = globalThis as unknown as { __echoPlanet?: { version: number; seed: string; planet: Planet } };
 
@@ -79,13 +88,28 @@ export function planet(): Planet {
   // Postgres is step 6 and works; wiring the pool in here is a deployment concern rather than a
   // rendering one, so the page runs on the in memory registry until DATABASE_URL is configured and
   // the seed script has been run against it.
-  const registry: ParcelRegistry = new MemoryRegistry(world, landFraction);
+  let registry: ParcelRegistry | null = null;
 
-  const built: Planet = { commons, field, calibration, world, registry, landFraction, backend: "memory" };
+  const built: Planet = {
+    commons,
+    field,
+    calibration,
+    world,
+    landFraction,
+    backend: "memory",
+    registry: () => {
+      if (!registry) {
+        const t = Date.now();
+        registry = new MemoryRegistry(world, landFraction);
+        console.log(`[planet] seeded the registry in ${((Date.now() - t) / 1000).toFixed(1)}s`);
+      }
+      return registry;
+    },
+  };
   g.__echoPlanet = { version: PLANET_CACHE_VERSION, seed: SEED, planet: built };
   console.log(
     `[planet] built ${SEED} in ${((Date.now() - began) / 1000).toFixed(1)}s, ` +
-      `resolution ${world.startResolution}, ${commons.relocated} commons relocated`,
+      `resolution ${world.startResolution}, ${commons.relocated} commons relocated, registry not yet seeded`,
   );
   return built;
 }

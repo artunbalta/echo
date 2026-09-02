@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   }
 
   const { registry, field, calibration } = planet();
-  const result = await registry.claim(name, body.referrer?.trim() || undefined);
+  const store = registry();
+  const result = await store.claim(name, body.referrer?.trim() || undefined);
 
   if (result.status === "waitlisted" || !result.parcel) {
     return NextResponse.json({
@@ -43,6 +44,6 @@ export async function POST(request: Request) {
       body.referrer && !result.placedAdjacent
         ? "No land was free near the person who invited you, so your parcel was drawn at random."
         : null,
-    statusAfter: await registry.status(),
+    statusAfter: await store.status(),
   });
 }

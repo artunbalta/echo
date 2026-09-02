@@ -80,15 +80,23 @@ export function ClaimClient() {
 
   useEffect(() => {
     let cancelled = false;
+    // The planet first, because it is cheap and it is what the screen is. The registry second,
+    // because seeding it is slow and the sentence about what is left can arrive a moment later.
+    fetch("/api/planet/world")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setWorld(data);
+      })
+      .catch(() => setError("The planet did not answer. Reload the page to try again."));
+
     fetch("/api/planet/status")
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        setWorld(data.world);
         setStatus(data.status);
         setClaimed((data.claimed as Array<{ h3Index: string }>).map((c) => c.h3Index));
       })
-      .catch(() => setError("The planet did not answer. Reload the page to try again."));
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
