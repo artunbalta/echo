@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build:shared": "npm run build -w @echo/shared",
+    "build:shared": "npm run build -w @echo/shared && npm run build -w @echo/planet",
     "dev:web": "npm run dev -w @echo/web",
     "dev:realtime": "npm run dev -w @echo/realtime",
     "dev:ml": "bash services/ml/run.sh",
