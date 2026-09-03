@@ -9,9 +9,9 @@
   ],
   "scripts": {
     "build:shared": "npm run build -w @echo/shared && npm run build -w @echo/planet",
-    "dev:web": "npm run dev -w @echo/web",
+    "dev:web": "node scripts/check-env.mjs && npm run dev -w @echo/web",
     "dev:realtime": "npm run dev -w @echo/realtime",
-    "dev:ml": "bash services/ml/run.sh",
+    "dev:ml": "node scripts/check-env.mjs && bash services/ml/run.sh",
     "dev": "npm run build:shared && concurrently -n web,realtime -c cyan,magenta \"npm:dev:web\" \"npm:dev:realtime\"",
     "build": "npm run build:shared && npm run build -w @echo/realtime && npm run build -w @echo/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
@@ -25,11 +25,12 @@
     "gen:vacancy": "node pipeline/derive-vacancy.mjs",
     "gen:palette": "node pipeline/derive-palette.mjs",
     "verify:pipeline": "node pipeline/verify-pipeline-parity.mjs",
-    "demo": "npm run build:shared && concurrently -n planet,web -c green,cyan \"npm run dev -w @echo/planet\" \"npm:dev:web\"",
+    "demo": "node scripts/check-env.mjs && npm run build:shared && concurrently -n planet,web -c green,cyan \"npm run dev -w @echo/planet\" \"npm run dev -w @echo/web\"",
     "test:e2e": "npm run test:e2e -w @echo/web",
     "test:planet": "npm test -w @echo/planet",
     "test:web": "npm run build:shared && npm test -w @echo/web",
-    "test:shared": "npm test -w @echo/shared"
+    "test:shared": "npm test -w @echo/shared",
+    "check:env": "node scripts/check-env.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

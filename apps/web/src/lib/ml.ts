@@ -54,6 +54,17 @@ async function call<T>(path: string, init: RequestInit, fallback: T): Promise<T>
       },
       signal: AbortSignal.timeout(20000),
     });
+    if (res.status === 401 || res.status === 403) {
+      // A mock on a MISSING key is right. A mock on a WRONG key looks identical and is not: the
+      // service is up, the world measures, every forward is refused, and the demo quietly says
+      // "offline". Name it, because the two processes both report healthy and nothing else will.
+      console.error(
+        `[ml] ${path} was REFUSED (${res.status}). ML_SERVICE_TOKEN does not match between the web app ` +
+          `and echo-ml. The service reads the repo-root .env (services/ml/run.sh sources it); Next reads ` +
+          `apps/web/.env.local and prefers it. Run 'node scripts/check-env.mjs' — this is the failure it exists for.`,
+      );
+      return withReason(fallback, "ml_auth_mismatch");
+    }
     if (!res.ok) throw new Error(`ml ${path} ${res.status}`);
     return (await res.json()) as T;
   } catch (err) {
