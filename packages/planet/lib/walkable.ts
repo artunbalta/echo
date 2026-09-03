@@ -20,6 +20,16 @@
  *
  *   4. "Reachable" means a flood fill over walkable ground joins two points, not that both are
  *      dry. Two banks of a channel are dry.
+ *
+ * DEPARTURE FROM THE FROZEN CONTRACT, recorded here so the two do not silently disagree, which is
+ * the failure mode the plan's D1 to D34 list is entirely made of. Section 4 specified that
+ * walkability would quantise the normalised height to 1e-6 before comparing it to the threshold,
+ * as a cross-engine guard. It does not, and should not: rounding does not remove the straddle
+ * risk, it moves it from "within one ulp of sea level" to "within one ulp of a rounding boundary",
+ * which is no rarer and is arbitrary as well. The land test is a plain sign test in terrain.ts
+ * (isLandHeight), shared by the registry, the biome table and the globe, and the cross-engine
+ * guarantee is the goldens spec that runs the planet in Chromium, WebKit and Firefox
+ * (apps/web/tests/e2e/goldens.spec.ts).
  */
 
 import {

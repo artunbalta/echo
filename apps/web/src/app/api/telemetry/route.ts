@@ -1,13 +1,22 @@
 /**
- * Island telemetry forwarder (BUILD-PLAN §0.D, §13.A). The single-player island has no
- * Colyseus room, so the client POSTs its behavioral batch here and we forward each event to
- * the ML service — the spine that turns *choices* into persona signal (§3).
+ * The room-less telemetry transport (BUILD-PLAN §0.D, §13.A; plan W5-0). A session with no
+ * Colyseus room, the single-player island and now the landing world, POSTs its TelemetryEvent
+ * batch here and we forward each event to the ML service, the spine that turns *choices* into
+ * persona signal (§3). Moved verbatim from /api/island/observe: the path was island-specific and
+ * the transport never was.
  *
  * Routing:
  *   - "choice" events (a fork resolved, a budget allocated, a bet taken, building progressed)
  *     carry revealed preference → POST ML /observe with a grounded action string + a telemetry
  *     dict. The posterior updates on both the action embedding and the telemetry features.
- *   - implicit events (pet_talk, leave_intent, approach, dwell…) → POST ML /telemetry.
+ *   - implicit events (pet_talk, leave_intent, approach, dwell, passive_locomotion…) → POST ML
+ *     /telemetry verbatim. That is what closes known-gaps ⚑12 (option 2): passive_locomotion
+ *     arrives at the /telemetry branch app.py already has, from the same sampler with the same
+ *     scalars and caps, over this transport instead of a room. services/ml is unchanged.
+ *
+ * Persistence: every event is recorded in behavioral_events (db/migrations/0011) through
+ * lib/behavioral-store.ts BEFORE the forward and awaited, and the response says `durable` for
+ * what actually happened, with `durable_reason` when it did not.
  *
  * Forward-compatible: we already emit the behavioral feature keys (save_rate, risk_index, …)
  * that persona._telemetry_features will read once §0.D grows F and re-anchors W. Until then
@@ -16,6 +25,7 @@
  */
 import { NextResponse } from "next/server";
 import { observeEvent, telemetryEvent } from "@/lib/ml";
+import { recordEvents, rowFromTelemetry } from "@/lib/behavioral-store";
 import type { TelemetryEvent } from "@echo/shared";
 
 export const runtime = "nodejs";
@@ -35,7 +45,11 @@ export async function POST(req: Request) {
   }
   const userId = typeof body.userId === "string" && body.userId ? body.userId : null;
   const events = Array.isArray(body.events) ? body.events : [];
-  if (!userId || !events.length) return NextResponse.json({ ok: true, forwarded: 0, mocked: !process.env.ML_SERVICE_URL });
+  if (!userId || !events.length) return NextResponse.json({ ok: true, forwarded: 0, mocked: !process.env.ML_SERVICE_URL, durable: false });
+
+  // Record first, forward second, both awaited: the row is the primary artifact (what the posterior
+  // was shown) and the forward is the derived update. `durable` below is what actually happened.
+  const record = await recordEvents(events.map((ev) => rowFromTelemetry(userId, body.sessionId, ev)));
 
   let mocked = false;
   let forwarded = 0;
@@ -60,7 +74,13 @@ export async function POST(req: Request) {
       // best-effort; never block the player on a telemetry hiccup
     }
   }
-  return NextResponse.json({ ok: true, forwarded, mocked });
+  return NextResponse.json({
+    ok: true,
+    forwarded,
+    mocked,
+    durable: record.durable,
+    ...(record.reason ? { durable_reason: record.reason } : {}),
+  });
 }
 
 /**

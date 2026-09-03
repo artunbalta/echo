@@ -352,7 +352,7 @@ export default function WorldClient() {
   const forwardDayEvents = useCallback(async (events: TelemetryEvent[]) => {
     if (!uidRef.current || !events.length || !telemetryConsented()) return;
     try {
-      await fetch("/api/island/observe", {
+      await fetch("/api/telemetry", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId: uidRef.current, sessionId: sessionIdRef.current, events }),

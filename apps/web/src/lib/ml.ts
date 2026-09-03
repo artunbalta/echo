@@ -202,6 +202,14 @@ export interface PersonaSnapshot {
   ece: number | null;
   buckets: Record<string, { level: string; agreement_ewma: number; volume: number; ece: number }>;
   reward_version: number;
+  /** The live posterior when the service answered: mu over PERSONA_AXIS_KEYS, full Sigma, version. Absent on the mock. */
+  persona?: { mu: number[]; Sigma?: number[][]; version?: number };
+  /** diag(Sigma), the per-axis variance. Absent on the mock. */
+  var?: number[];
+  /** Per-context conditional posterior means, keyed by cond_key. Empty until BehavioralEvents with context flow. */
+  conditional?: Record<string, number[]>;
+  /** Recorded passive-locomotion windows (P3; the re-anchor's corpus volume). */
+  locomotion?: number;
   mocked?: boolean;
 }
 

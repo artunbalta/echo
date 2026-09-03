@@ -4,13 +4,13 @@
  * WebKit and Firefox as well as Chromium, which is the point.
  */
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const golden = JSON.parse(readFileSync(resolve(here, "../../../../packages/planet/tests/fixtures/goldens.echo-capacity-1.json"), "utf8")) as {
+// Playwright compiles specs to CJS, so import.meta is unavailable; the config's rootDir is
+// apps/web, which is what process.cwd() is when the runner starts.
+const golden = JSON.parse(readFileSync(resolve(process.cwd(), "../../packages/planet/tests/fixtures/goldens.echo-capacity-1.json"), "utf8")) as {
   calibration: { seaLevel: number; peakElevation: number };
   demoSpawn: { childCell: string; x: number; y: number } | null;
   sphere: Array<{ elevation: number; moisture: number; temperature: number; height: number }>;
