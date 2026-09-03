@@ -46,7 +46,25 @@ export interface TelemetryEvent {
   sessionId: string;
   ts: number; // client epoch ms
   payload: Record<string, unknown>;
+  /** Where the session ran (contract, plan §4). Absent on rows written before the landing world. */
+  session_mode?: SessionMode;
 }
+
+/**
+ * Where a session ran, stamped on every row so the second W re-anchor can tell them apart
+ * (docs/known-gaps.md ⚑10/⚑12/⚑20: rows are unlabelled once ingested, and the re-anchor is
+ * one-time). "room" = a Colyseus room stamped the context; "solo" = /play with no room reachable;
+ * "landing" = the landing-page world, anonymous, consent-gated at the source.
+ */
+export type SessionMode = "solo" | "room" | "landing";
+
+/**
+ * Whether cues produced with no authoritative room feed the posterior. The human's open decision
+ * (known-gaps ⚑10, P3.6); the default is unchanged from the day the question was recorded. This is
+ * the one place the value lives: apps/web/src/components/WorldClient.tsx keeps a local copy until
+ * W1-7 swaps it for this import, and the landing world reads this one.
+ */
+export const SOLO_CUES_FEED_POSTERIOR = true;
 
 /** Stakes tier for an agent action context (drives the autonomy gate, §9.5). */
 export type Stakes = "low" | "medium" | "high" | "irreversible";
@@ -172,6 +190,8 @@ export interface BehavioralEvent {
   // provenance — "legacy" events lifted from TelemetryEvent are down-weighted by the
   // engine's reliability_noise_scale until emitters supply real context.
   provenance?: "live" | "legacy";
+  /** Where the session ran (contract, plan §4). Absent on rows written before the landing world. */
+  session_mode?: SessionMode;
 }
 
 /**

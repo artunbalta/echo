@@ -31,6 +31,15 @@ export const WORLD = {
 export const TICK_MS = 1000 / WORLD.TICK_HZ;
 
 /**
+ * The tile quantum (contract, plan §4 / F7). Gameplay is (x, y) in TILES; the planet is in metres.
+ * One tile is this many metres, everywhere the two meet: the mover, the terrain sampler, the
+ * locomotion sampler's inputs. The value is not aesthetic: the avatar is 1.05 units tall, a
+ * person is about 1.7 m, and every locomotion scalar W was anchored on (speedVar over MOVE_SPEED,
+ * novel_tile_ratio over rounded tiles) keeps its meaning only if a tile stays a tile.
+ */
+export const TILE_M = 1.6;
+
+/**
  * Survival-clock constants (ECHO_PLAYABLE_BLUEPRINT.md Part I / VII.1) — the island day's
  * three clocks share one source of truth, mirroring the WORLD pattern: client (useDay),
  * server persistence (wall-clock decay on load), and tests all read these.

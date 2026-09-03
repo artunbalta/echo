@@ -13,7 +13,7 @@
 import { cellToChildren, cellToLatLng, getResolution } from "h3-js";
 
 import { latLngToVec3 } from "./geo.js";
-import type { TerrainField } from "./terrain.js";
+import { isLand, type TerrainField } from "./terrain.js";
 
 /** The fraction of a cell's interior above `seaLevel`, in 0..1. */
 export function landFractionOfCell(
@@ -26,7 +26,7 @@ export function landFractionOfCell(
   let land = 0;
   for (const child of grid) {
     const [lat, lng] = cellToLatLng(child);
-    if (field.elevation(latLngToVec3(lat, lng)) > seaLevel) land++;
+    if (isLand(field, seaLevel, latLngToVec3(lat, lng))) land++;
   }
   return land / grid.length;
 }

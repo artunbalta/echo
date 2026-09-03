@@ -2,7 +2,7 @@
   "name": "echo",
   "version": "0.1.0",
   "private": true,
-  "description": "ECHO — a persistent virtual world where your agent learns who you are.",
+  "description": "ECHO \u2014 a persistent virtual world where your agent learns who you are.",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -24,7 +24,12 @@
     "gen:plates": "node pipeline/generate-legend-plates.mjs",
     "gen:vacancy": "node pipeline/derive-vacancy.mjs",
     "gen:palette": "node pipeline/derive-palette.mjs",
-    "verify:pipeline": "node pipeline/verify-pipeline-parity.mjs"
+    "verify:pipeline": "node pipeline/verify-pipeline-parity.mjs",
+    "demo": "npm run build:shared && concurrently -n planet,web -c green,cyan \"npm run dev -w @echo/planet\" \"npm:dev:web\"",
+    "test:e2e": "npm run test:e2e -w @echo/web",
+    "test:planet": "npm test -w @echo/planet",
+    "test:web": "npm run build:shared && npm test -w @echo/web",
+    "test:shared": "npm test -w @echo/shared"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

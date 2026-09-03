@@ -5,7 +5,7 @@
  * produces decision paralysis and nothing worth sharing.
  */
 import { NextResponse } from "next/server";
-import { biome, cellCentre, normalisedHeight } from "@echo/planet";
+import { biomeAt, cellCentre } from "@echo/planet";
 
 import { planet } from "@/lib/planet";
 
@@ -31,8 +31,7 @@ export async function POST(request: Request) {
 
   const parcel = result.parcel;
   const { lat, lng, direction } = cellCentre(parcel.h3Index);
-  const height = normalisedHeight(field.elevation(direction), calibration);
-  const dominant = biome(height, field.moisture(direction), field.temperature(direction));
+  const dominant = biomeAt(field, calibration, direction);
 
   return NextResponse.json({
     status: "assigned",

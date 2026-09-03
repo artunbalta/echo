@@ -16,8 +16,10 @@
  * parcel and 4 parts per million across a resolution 4 one. {@link tangentDistortion} measures it
  * for a given parcel rather than leaving you with this paragraph.
  *
- * Boundary clipping and deterministic vegetation are build order step 10 and deliberately absent.
- * What is here is exactly what step 5's agreement test needs: the projection, and the heightmap.
+ * Boundary clipping and deterministic vegetation (build order step 10) live in the second half of
+ * this file; the first half is exactly what step 5's agreement test needs: the projection, and the
+ * heightmap. Local x is metres EAST of the cell centre and local y metres NORTH; the agreement
+ * test pins both.
  */
 
 import { cellToBoundary, cellToLatLng } from "h3-js";
@@ -53,17 +55,21 @@ export function createTangentPatch(cell: string, radiusKm: number): TangentPatch
   // An orthonormal frame at the centre. The pole is used as the up reference, except at a pole
   // itself, where any perpendicular will do because every direction there is south.
   const up: Vec3 = Math.abs(centre[1]) > 0.999 ? [1, 0, 0] : [0, 1, 0];
+  // east = centre x up. (The first version had up x centre, which points WEST under geo.ts's
+  // convention; the frame was mirrored and every "east" in the contracts was a lie. Fixed before
+  // anything was built on it; the agreement test pins the orientation now.)
   let ex: Vec3 = [
-    up[1] * centre[2] - up[2] * centre[1],
-    up[2] * centre[0] - up[0] * centre[2],
-    up[0] * centre[1] - up[1] * centre[0],
+    centre[1] * up[2] - centre[2] * up[1],
+    centre[2] * up[0] - centre[0] * up[2],
+    centre[0] * up[1] - centre[1] * up[0],
   ];
   let n = Math.hypot(ex[0], ex[1], ex[2]);
   ex = [ex[0] / n, ex[1] / n, ex[2] / n];
+  // north = east x centre, so (east, north, up) is right handed.
   let no: Vec3 = [
-    centre[1] * ex[2] - centre[2] * ex[1],
-    centre[2] * ex[0] - centre[0] * ex[2],
-    centre[0] * ex[1] - centre[1] * ex[0],
+    ex[1] * centre[2] - ex[2] * centre[1],
+    ex[2] * centre[0] - ex[0] * centre[2],
+    ex[0] * centre[1] - ex[1] * centre[0],
   ];
   n = Math.hypot(no[0], no[1], no[2]);
   no = [no[0] / n, no[1] / n, no[2] / n];
@@ -202,6 +208,7 @@ export function tangentDistortion(patch: TangentPatch): number {
  */
 
 import { biome, BIOME_COLOUR, type Biome, type Rgb } from "./terrain.js";
+import { biomeAtLocal, VEGETATION_DENSITY } from "./biome-mask.js";
 
 export interface ParcelSceneOptions {
   /** Grid points per side over the parcel's bounding box before clipping. */
@@ -360,11 +367,9 @@ export function buildParcelScene(
   const step = (patch.extentM * 2) / (opts.resolution - 1);
   const heightAt = (x: number, y: number) =>
     sceneHeightAt(patch, field, calibration, x, y) * opts.heightScaleM;
-  const biomeAtLocal = (x: number, y: number): Biome => {
-    const direction = patch.toDirection(x, y);
-    const height = sceneHeightAt(patch, field, calibration, x, y);
-    return biome(height, field.moisture(direction), field.temperature(direction));
-  };
+  // The biome at a local coordinate is the contract's biomeAtLocal (biome-mask.ts), so the mask
+  // the asset placer reads and the colours this mesh carries come from the same function.
+  const biomeHere = (x: number, y: number): Biome => biomeAtLocal(patch, field, calibration, x, y);
 
   const positions: number[] = [];
   const normals: number[] = [];
@@ -399,7 +404,7 @@ export function buildParcelScene(
       const cy = (tri[0]![1] + tri[1]![1] + tri[2]![1]) / 3;
       const flat = Math.abs(ux * vy - uy * vx) / 2;
       totalArea += flat;
-      const kind = biomeAtLocal(cx, cy);
+      const kind = biomeHere(cx, cy);
       if (kind === "ocean") hasWater = true;
       else landArea += flat;
       biomeArea.set(kind, (biomeArea.get(kind) ?? 0) + flat);
@@ -453,7 +458,7 @@ export function buildParcelScene(
       const y = baseY + (jy - 0.5) * spacing;
       if (!insidePolygon(polygon, x, y)) continue;
 
-      const kind = biomeAtLocal(x, y);
+      const kind = biomeHere(x, y);
       const density = VEGETATION_DENSITY[kind];
       if (density <= 0) continue;
       if (hashPosition(x, y, 3) > density) continue;
@@ -503,20 +508,5 @@ export function buildParcelScene(
     dominantBiome,
   };
 }
-
-/** How thickly each biome plants itself, 0 to 1. Rock, ice, sand and water grow nothing. */
-const VEGETATION_DENSITY: Record<Biome, number> = {
-  ocean: 0,
-  beach: 0.04,
-  grassland: 0.35,
-  forest: 0.85,
-  rainforest: 1,
-  savanna: 0.22,
-  desert: 0.03,
-  tundra: 0.08,
-  taiga: 0.6,
-  "bare-rock": 0,
-  snow: 0,
-};
 
 export { BIOME_COLOUR, type Biome, type Rgb };
