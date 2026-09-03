@@ -16,7 +16,7 @@
 
 import {
   BIOME_COLOUR,
-  biome,
+  biomeAtLocal,
   cellAreaKm2,
   createTangentPatch,
   hexagonWidthM,
@@ -110,8 +110,7 @@ export default function ParcelInset({
         const x = -half + i * step;
         const y = half - j * step;
         const height = heights[k]!;
-        const direction = patch.toDirection(x, y);
-        const kind = biome(height, field.moisture(direction), field.temperature(direction));
+        const kind = biomeAtLocal(patch, field, calibration, x, y);
 
         const inside = insidePolygon(patch.boundary, x, y);
         if (inside) counts.set(kind, (counts.get(kind) ?? 0) + 1);

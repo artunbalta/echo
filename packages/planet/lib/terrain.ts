@@ -228,6 +228,55 @@ export function createTerrain(seed: string, tuning: TerrainTuning = DEFAULT_TUNI
   return { seed, tuning, elevation, moisture, temperature };
 }
 
+// ── the seed, and the one land predicate ────────────────────────────────────────
+
+/**
+ * The seed. A plain string, hashed by FNV-1a into the generators above. It is named as a type so
+ * that a function taking a Seed says what it wants, and so that the day a seed becomes anything
+ * more than a string there is one place to change.
+ */
+export type Seed = string;
+
+/**
+ * FNV-1a of a string, as a number in [0, 1). The spawn search and asset placement use it to put
+ * candidates in a fixed order that does not depend on the order H3 happens to list them in.
+ * `salt` mixes in a second value so one string can order several independent draws.
+ */
+export function hashString(s: string, salt = 0): number {
+  let h = hashSeed(s);
+  let v = salt | 0;
+  for (let byte = 0; byte < 4; byte++) {
+    h ^= (v & 0xff) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+    v >>= 8;
+  }
+  return (h >>> 0) / 4294967296;
+}
+
+/**
+ * THE land predicate. Every "is this water" question on the planet goes through here: the registry
+ * (land.ts), the walkable scene and the biome table (elevation above sea level is what `ocean`
+ * means in `biome`), the globe, walkability and the spawn search. One function, so assignability
+ * and walkability can never disagree about a point.
+ *
+ * It is deliberately NOT quantised. A 1-ulp difference between engines would flip this predicate
+ * only for a point whose elevation sits within 1e-16 of sea level; rounding to a coarser grid first
+ * would flip it for any point within 1e-16 of a rounding boundary instead, which is no rarer. The
+ * cross-engine guarantee is a golden test (plan I-4), not arithmetic here.
+ */
+export function isLand(field: TerrainField, seaLevel: number, direction: Vec3): boolean {
+  return isLandHeight(field.elevation(direction) - seaLevel);
+}
+
+/**
+ * The sign test itself, on a height above sea level (raw or normalised: normalisation is a
+ * positive scale, so the sign survives it exactly). `biome` decides "ocean" with this, so the
+ * biome table, the registry and walkability cannot be split by a future epsilon in one of them.
+ */
+export function isLandHeight(heightAboveSea: number): boolean {
+  return heightAboveSea > 0;
+}
+
 // ── the contract from section 5.1, function for function ────────────────────────
 
 const fields = new Map<string, TerrainField>();
@@ -268,7 +317,7 @@ export function temperature(seed: string, p: Vec3): number {
  * override climate entirely, cold and altitude, then temperature bands split by moisture.
  */
 export function biome(elev: number, moist: number, temp: number): Biome {
-  if (elev <= 0) return "ocean";
+  if (!isLandHeight(elev)) return "ocean";
 
   // A shoreline, not every plain. Redistribution deliberately piles land up near sea level, so a
   // generous band here would paint a third of the planet as beach: at 0.022 it was 11% of the

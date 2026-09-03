@@ -17,3 +17,8 @@ export * from "./rounds.js";
 export * from "./tiling.js";
 export * from "./registry.js";
 export * from "./registry-store.js";
+// The landing-world contracts (plan §4). Pre-seeded here so no later agent edits the barrel.
+export * from "./biome-mask.js";
+export * from "./walkable.js";
+export * from "./assets.js";
+export * from "./demo-cell.js";

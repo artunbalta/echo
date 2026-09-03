@@ -1,0 +1,215 @@
+/**
+ * The placer obeys the registry, and the demo registry dresses the demo disk within the ceiling.
+ *
+ * Two kinds of test, because one is not enough. The rules are unit-tested with hand-built inputs,
+ * so a rule the placer quietly dropped would fail even though the placer and the property test
+ * would still agree with each other. Then the property test runs the real demo disk: every
+ * instance stands on exact land, every exclusion removed something, every land biome received at
+ * least three classes, the whole thing is a pure function of its inputs, and the ceiling holds.
+ *
+ * Run:  node --import tsx --test packages/planet/tests/assets.test.ts
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  allowed,
+  ColliderIndex,
+  DEMO_ASSET_CLASSES,
+  excluded,
+  INSTANCE_CEILING,
+  NO_EXCLUSIONS,
+  placeAssets,
+  type AssetClass,
+  type Exclusions,
+  type PlacedAsset,
+} from "../lib/assets.js";
+import { sampleBiomeMask, type BiomeMask } from "../lib/biome-mask.js";
+import { DEMO_CELL, DEMO_LAND_BIOMES, DEMO_REGION_K } from "../lib/demo-cell.js";
+import { PLANET_PARAMS } from "../lib/manifest.js";
+import { createTangentPatch, DEFAULT_SCENE_OPTIONS } from "../lib/scene.js";
+import { calibratePlanet, createTerrain, isLand, type Biome } from "../lib/terrain.js";
+import { regionBound } from "../lib/walkable.js";
+import { SEED, shippedCalibration } from "./helpers/shipped.js";
+
+const field = createTerrain(SEED);
+const calibration = shippedCalibration(SEED, () => calibratePlanet(field, PLANET_PARAMS.landFractionTarget));
+const patch = createTangentPatch(DEMO_CELL, PLANET_PARAMS.radiusKm);
+const bound = regionBound(DEMO_CELL, DEMO_REGION_K, PLANET_PARAMS.radiusKm);
+// 10 m, as biome-mask.ts asks of any caller with a water band.
+const mask = sampleBiomeMask(patch, field, calibration, bound.radiusM, 10);
+const options = { heightScaleM: DEFAULT_SCENE_OPTIONS.heightScaleM, bound };
+const byId = new Map(DEMO_ASSET_CLASSES.map((c) => [c.id, c] as const));
+
+// ── the rules, with hand-built inputs ───────────────────────────────────────────
+
+const probe: AssetClass = {
+  id: "probe",
+  biomes: { desert: 0.5, beach: 0 },
+  densityPerKm2: 100,
+  altitude: { min: 0.01, max: 0.05 },
+  waterDistanceM: { min: 30, max: 200 },
+  excludes: ["water", "path", "footprint", "sightline"],
+  lod: { nearM: 50, farM: 200 },
+  collider: { radiusM: 1, heightM: 1 },
+  scale: [1, 1],
+  castsShadow: false,
+};
+
+test("allowed: biome weight, altitude band and water band each refuse on their own", () => {
+  assert.ok(allowed(probe, "desert", 0.02, 100));
+  assert.ok(!allowed(probe, "beach", 0.02, 100), "weight 0 must refuse");
+  assert.ok(!allowed(probe, "tundra", 0.02, 100), "an absent biome must refuse");
+  assert.ok(!allowed(probe, "desert", 0.005, 100), "below the altitude band");
+  assert.ok(!allowed(probe, "desert", 0.06, 100), "above the altitude band");
+  assert.ok(!allowed(probe, "desert", 0.02, 29.9), "too close to water");
+  assert.ok(!allowed(probe, "desert", 0.02, 200.1), "too far from water");
+  assert.ok(allowed(probe, "desert", 0.02, 30) && allowed(probe, "desert", 0.02, 200), "the band edges are inclusive");
+  const inland: AssetClass = { ...probe, waterDistanceM: { min: 60, max: Infinity } };
+  assert.ok(allowed(inland, "desert", 0.02, Infinity), "Infinity max means anywhere inland");
+  assert.ok(!allowed(inland, "desert", 0.02, 59));
+});
+
+test("excluded: each exclusion kind fires for a class that lists it and not for one that does not", () => {
+  // A synthetic mask: everything is land except x < 0.
+  const fake = {
+    ...mask,
+    isLandAt: (x: number) => x >= 0,
+    isLandExactAt: (x: number) => x >= 0,
+  } as BiomeMask;
+  const ex: Exclusions = {
+    paths: [{ a: [0, 100], b: [100, 100], widthM: 10 }],
+    footprints: [[[200, 200], [240, 200], [240, 240], [200, 240]]],
+    sightlines: [{ a: [300, 0], b: [300, 100], widthM: 8 }],
+  };
+  const none: AssetClass = { ...probe, excludes: [] };
+  assert.ok(excluded(probe, fake, ex, -5, 50), "water");
+  assert.ok(!excluded(none, fake, ex, -5, 50));
+  assert.ok(excluded(probe, fake, ex, 50, 104), "inside the path's half width");
+  assert.ok(!excluded(probe, fake, ex, 50, 106), "outside the path's half width");
+  assert.ok(!excluded(none, fake, ex, 50, 104));
+  assert.ok(excluded(probe, fake, ex, 220, 220), "inside the footprint");
+  assert.ok(!excluded(probe, fake, ex, 250, 220), "outside the footprint");
+  assert.ok(!excluded(none, fake, ex, 220, 220));
+  assert.ok(excluded(probe, fake, ex, 303, 50), "inside the sightline's half width");
+  assert.ok(!excluded(probe, fake, ex, 305, 50));
+});
+
+// ── the demo disk ───────────────────────────────────────────────────────────────
+
+/** Exclusions large enough to bite on a 4 km disk, all placed around the anchor centre. */
+const exclusions: Exclusions = {
+  paths: [{ a: [-800, -800], b: [800, 800], widthM: 30 }],
+  footprints: [[[-200, -200], [200, -200], [260, 0], [200, 200], [-200, 200], [-260, 0]]],
+  sightlines: [{ a: [0, 0], b: [900, -400], widthM: 40 }],
+};
+
+function place(ex: Exclusions, registry = DEMO_ASSET_CLASSES) {
+  return placeAssets(mask, registry, SEED, ex, options);
+}
+
+test("every placed instance is allowed where it stands, inside the region, and on exact land", () => {
+  const { placed, truncated, byClass } = place(exclusions);
+  assert.ok(placed.length > 500, `only ${placed.length} instances on a 4 km disk`);
+  assert.ok(!truncated, `the densities exceed the ceiling of ${INSTANCE_CEILING}`);
+  let total = 0;
+  for (const p of placed) {
+    const cls = byId.get(p.classId)!;
+    assert.ok(cls, p.classId);
+    assert.ok(allowed(cls, p.biome, mask.heightAt(p.x, p.y), mask.waterDistanceAt(p.x, p.y)), `${p.classId} at (${p.x}, ${p.y}) in ${p.biome}`);
+    assert.ok(!excluded(cls, mask, exclusions, p.x, p.y), `${p.classId} at (${p.x}, ${p.y}) is inside an exclusion`);
+    assert.ok(bound.contains(p.x, p.y), "placed outside the region");
+    if (cls.excludes.includes("water")) {
+      // The exact predicate, not the grid: a shell in the sea is a fake.
+      assert.ok(isLand(field, calibration.seaLevel, patch.toDirection(p.x, p.y)), `${p.classId} at (${p.x}, ${p.y}) stands in the water`);
+    }
+    assert.ok(p.z >= 0);
+    assert.ok(p.scale >= cls.scale[0] && p.scale <= cls.scale[1]);
+    total++;
+  }
+  assert.equal(Object.values(byClass).reduce((a, b) => a + b, 0), total);
+  console.log(`demo disk: ${placed.length} instances`, byClass);
+});
+
+test("the exclusions removed something, and only from the classes that list them", () => {
+  const withEx = place(exclusions).placed;
+  const without = place(NO_EXCLUSIONS).placed;
+  assert.ok(withEx.length < without.length, `exclusions removed nothing (${withEx.length} vs ${without.length})`);
+  const inZone = (p: PlacedAsset) => excluded(byId.get(p.classId)!, mask, exclusions, p.x, p.y);
+  const removed = without.filter(inZone);
+  assert.ok(removed.length > 50, `the zones should catch many instances of the unexcluded layout; caught ${removed.length}`);
+  assert.equal(withEx.filter(inZone).length, 0);
+  // A class that lists no footprint exclusion keeps its instances inside the footprint.
+  const dune = withEx.filter((p) => p.classId === "dune-ripple");
+  const duneCls = byId.get("dune-ripple")!;
+  assert.ok(!duneCls.excludes.includes("footprint"));
+  const duneInside = dune.filter((p) => excluded({ ...duneCls, excludes: ["footprint"] }, mask, exclusions, p.x, p.y));
+  assert.ok(duneInside.length > 0, "a class without the footprint exclusion should still be placed inside it");
+});
+
+test("a water band provably removes candidates", () => {
+  const banded: AssetClass = { ...byId.get("dead-shrub")!, id: "banded", waterDistanceM: { min: 300, max: Infinity } };
+  const free: AssetClass = { ...byId.get("dead-shrub")!, id: "free" };
+  const a = place(NO_EXCLUSIONS, [banded]).placed;
+  const b = place(NO_EXCLUSIONS, [free]).placed;
+  assert.ok(a.length < b.length, `the band removed nothing (${a.length} vs ${b.length})`);
+  for (const p of a) assert.ok(mask.waterDistanceAt(p.x, p.y) >= 300);
+});
+
+test("the layout is a pure function of mask, registry, seed and exclusions", () => {
+  const a = place(exclusions);
+  const b = place(exclusions);
+  assert.deepEqual(a, b);
+  const other = placeAssets(mask, DEMO_ASSET_CLASSES, SEED + "-2", exclusions, options);
+  assert.notDeepEqual(a.placed.slice(0, 20), other.placed.slice(0, 20));
+});
+
+test("every land biome of the demo disk receives at least three classes", () => {
+  const { placed } = place(exclusions);
+  const classesByBiome = new Map<Biome, Set<string>>();
+  for (const p of placed) {
+    const set = classesByBiome.get(p.biome) ?? new Set<string>();
+    set.add(p.classId);
+    classesByBiome.set(p.biome, set);
+  }
+  for (const b of DEMO_LAND_BIOMES) {
+    const classes = classesByBiome.get(b) ?? new Set();
+    assert.ok(classes.size >= 3, `${b} has only ${[...classes].join(", ") || "nothing"}`);
+  }
+  console.log("classes per biome:", Object.fromEntries([...classesByBiome].map(([b, s]) => [b, [...s].sort()])));
+});
+
+test("cluster members carry the cluster index and centres do not", () => {
+  const { placed } = place(NO_EXCLUSIONS, [byId.get("cactus")!]);
+  const members = placed.filter((p) => p.cluster !== undefined);
+  const centres = placed.filter((p) => p.cluster === undefined);
+  assert.ok(members.length > 0 && centres.length > 0);
+  assert.ok(members.length <= centres.length * byId.get("cactus")!.cluster!.count);
+});
+
+test("the ceiling stops placement and says so", () => {
+  const { placed, truncated } = placeAssets(mask, DEMO_ASSET_CLASSES, SEED, exclusions, { ...options, maxInstances: 300 });
+  assert.equal(placed.length, 300);
+  assert.ok(truncated);
+});
+
+test("the collider index finds what stands near a point, along a segment, and across a cell boundary", () => {
+  const { placed } = place(exclusions);
+  const index = new ColliderIndex(placed, DEMO_ASSET_CLASSES, 8);
+  const withCollider = placed.filter((p) => byId.get(p.classId)!.collider);
+  assert.equal(index.count, withCollider.length);
+  const boulder = withCollider.find((p) => p.classId === "boulder")!;
+  assert.ok(boulder, "no boulder placed");
+  assert.ok(index.queryCircle(boulder.x, boulder.y, 0.5).some((c) => c.x === boulder.x && c.y === boulder.y));
+  assert.ok(!index.queryCircle(boulder.x + 500, boulder.y + 500, 0.1).some((c) => c.x === boulder.x && c.y === boulder.y));
+  assert.ok(index.querySegment([boulder.x - 30, boulder.y], [boulder.x + 30, boulder.y], 0.5).some((c) => c.x === boulder.x && c.y === boulder.y));
+
+  // A big collider just inside a cell, queried from just across the cell boundary: the disc
+  // overlaps the query although the centres sit in different cells.
+  const big: PlacedAsset = { classId: "boulder", x: 7.9, y: 0, z: 0, biome: "desert", scale: 2.2, rotation: 0 };
+  const small = new ColliderIndex([big], DEMO_ASSET_CLASSES, 8);
+  assert.ok(small.maxRadiusM > 3);
+  assert.equal(small.queryCircle(8.5, 0, 0.2).length, 1, "a query across the cell boundary must still see the disc");
+  assert.equal(small.querySegment([8.5, 0], [20, 0], 0.2).length, 1);
+  assert.equal(small.queryCircle(8.5 + small.maxRadiusM + 1, 0, 0.2).length, 0);
+});

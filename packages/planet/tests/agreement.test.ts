@@ -21,14 +21,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { cellToChildren, cellToLatLng, getResolution } from "h3-js";
 
-import { latLngToVec3, type Vec3 } from "../lib/geo.js";
+import { latLngToVec3, vec3ToLatLng, type Vec3 } from "../lib/geo.js";
 import { globeHeightAt } from "../lib/globe.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
 import { seedInventory } from "../lib/rounds.js";
 import { createTangentPatch, sceneHeightAt, tangentDistortion } from "../lib/scene.js";
 import { calibratePlanet, createTerrain, normalisedHeight } from "../lib/terrain.js";
+import { spawnPointFor } from "../lib/walkable.js";
+import { loadGoldens, SEED } from "./helpers/shipped.js";
 
-const SEED = "echo-planet-1";
+// The seed the users own, unless a test run names another (helpers/shipped.ts). The plan (B2)
+// moved this from a private test seed to the shipped one so the promise is proven on the planet
+// people stand on.
 const RADIUS_KM = PLANET_PARAMS.radiusKm;
 const TOLERANCE = 1e-6;
 
@@ -118,7 +122,10 @@ test("the agreement holds for raw elevation too, not only for the normalised hei
       const x = (random() * 2 - 1) * patch.extentM;
       const y = (random() * 2 - 1) * patch.extentM;
       const direction = patch.toDirection(x, y);
-      worst = Math.max(worst, Math.abs(field.elevation(direction) - field.elevation(patch.toDirection(x, y))));
+      // The same point reached a second way: through lat/lng and back. A projection bug that
+      // cancelled inside toDirection would not cancel here.
+      const [dlat, dlng] = vec3ToLatLng(direction[0], direction[1], direction[2]);
+      worst = Math.max(worst, Math.abs(field.elevation(direction) - field.elevation(latLngToVec3(dlat, dlng))));
       // And the local coordinate must survive the trip to the sphere and back.
       const back = patch.toLocal(direction);
       assert.ok(back !== null, "a point inside the parcel projected to the far hemisphere");
@@ -126,7 +133,7 @@ test("the agreement holds for raw elevation too, not only for the normalised hei
       assert.ok(Math.abs(back[1] - y) < 1e-6 * Math.max(1, Math.abs(y)), `y drifted from ${y} to ${back[1]}`);
     }
   }
-  assert.equal(worst, 0);
+  assert.ok(worst < 1e-9, `raw elevation drifted by ${worst} between two derivations of the same point`);
 });
 
 test("the tangent plane approximation is measured, and is small at every parcel size", () => {
@@ -215,4 +222,44 @@ test("the test has teeth: two plausible wrong scene implementations fail it", ()
   // Both wrong implementations look completely plausible and both are caught by orders of magnitude.
   assert.ok(worstFlat > TOLERANCE * 100, `the unprojected plane only differed by ${worstFlat}`);
   assert.ok(worstLatLng > TOLERANCE * 100, `the lat/lng offset only differed by ${worstLatLng}`);
+});
+
+// ── the shipped planet, pinned ──────────────────────────────────────────────────
+
+test("the shipped planet's calibration, field samples and demo spawn match their goldens", (t) => {
+  const golden = loadGoldens(SEED);
+  if (!golden) {
+    // Only a deliberately different seed may skip; the shipped seed throws in loadGoldens.
+    t.skip(`no goldens for ${SEED}; run scripts/write-goldens.ts ${SEED}`);
+    return;
+  }
+  // Full calibration, as lib/planet.ts does it, not the 60k sample the tests above use for speed.
+  const full = calibratePlanet(field, PLANET_PARAMS.landFractionTarget);
+  // 1e-9 on a sea level of order 1e-2: the same engine gives the same bits today, but V8 has
+  // changed Math.pow before. A drift larger than this is a different planet.
+  assert.ok(Math.abs(full.seaLevel - golden.calibration.seaLevel) < 1e-9, `seaLevel ${full.seaLevel} vs ${golden.calibration.seaLevel}`);
+  assert.ok(Math.abs(full.peakElevation - golden.calibration.peakElevation) < 1e-9, `peak ${full.peakElevation} vs ${golden.calibration.peakElevation}`);
+  for (const g of golden.sphere) {
+    assert.ok(Math.abs(field.elevation(g.direction) - g.elevation) < 1e-12);
+    assert.ok(Math.abs(field.moisture(g.direction) - g.moisture) < 1e-12);
+    assert.ok(Math.abs(field.temperature(g.direction) - g.temperature) < 1e-12);
+    assert.ok(Math.abs(normalisedHeight(field.elevation(g.direction), full) - g.height) < 1e-9);
+  }
+  const patch = createTangentPatch(golden.demoCell, RADIUS_KM);
+  for (const g of golden.local) {
+    assert.ok(Math.abs(sceneHeightAt(patch, field, full, g.x, g.y) - g.height) < 1e-9);
+  }
+  assert.deepEqual(spawnPointFor(golden.demoCell, field, full, RADIUS_KM), golden.demoSpawn, "the demo spawn moved");
+});
+
+test("the tangent frame's x points east and its y points north", () => {
+  for (const cell of chooseParcels(12, mulberry32(0xea57))) {
+    const patch = createTangentPatch(cell, RADIUS_KM);
+    const [lat, lng] = cellToLatLng(cell);
+    if (Math.abs(lat) > 85) continue; // at the pole "east" is not defined
+    const east = patch.toLocal(latLngToVec3(lat, lng + 0.01));
+    const north = patch.toLocal(latLngToVec3(lat + 0.01, lng));
+    assert.ok(east && east[0] > 0 && Math.abs(east[1]) < Math.abs(east[0]) * 0.02, `${cell}: +lng went to ${east}`);
+    assert.ok(north && north[1] > 0 && Math.abs(north[0]) < Math.abs(north[1]) * 0.02, `${cell}: +lat went to ${north}`);
+  }
 });
