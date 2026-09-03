@@ -19,6 +19,7 @@ import type { BiomeMask } from "./biome-mask.js";
 import { hashPosition } from "./scene.js";
 import type { RegionBound } from "./walkable.js";
 import { hashString, type Biome, type Seed } from "./terrain.js";
+import { DEMO_LAND_BIOMES } from "./demo-cell.js";
 
 export type AssetClassId = string;
 
@@ -78,8 +79,15 @@ export interface Exclusions {
 
 export const NO_EXCLUSIONS: Exclusions = { paths: [], footprints: [], sightlines: [] };
 
-/** The most instances the demo disk may hold. An acceptance number (plan §0), not a suggestion. */
-export const INSTANCE_CEILING = 25_000;
+/**
+ * The most instances a built region may hold. An acceptance number (plan §0), not a suggestion.
+ *
+ * Raised from 25,000 on B4d's evidence: at 25,000 over a 15 km2 disk the ground within 120 m of
+ * the player held about fifty things, which is what "the world reads as empty" means numerically.
+ * The near field is now dressed at its biome's real density and thinned outward by spawnFalloff;
+ * the cost is instances, which one InstancedMesh per class and chunk absorbs, not draw calls.
+ */
+export const INSTANCE_CEILING = 120_000;
 
 export interface PlaceOptions {
   /** Metres of height per unit of normalised elevation; must match the scene builder's. */
@@ -88,6 +96,38 @@ export interface PlaceOptions {
   maxInstances?: number;
   /** Place only inside the region the scene actually builds (walkable.ts regionBound). */
   bound?: RegionBound;
+  /**
+   * A multiplier on every class's acceptance, by position. `densityPerKm2` is the NEAR FIELD
+   * density; this thins it with distance so the ground around the player is dressed without the
+   * whole disk paying for it. Rejection can only thin, never thicken, so the lattice is always at
+   * the full density and this decides how much of it survives.
+   */
+  densityScale?: (x: number, y: number) => number;
+}
+
+/**
+ * The falloff the demo uses: full density out to `fullM`, then a smooth decay to `farFactor` by
+ * `farM`. A pure function of position, so the layout stays deterministic.
+ */
+export function spawnFalloff(
+  cx: number,
+  cy: number,
+  fullM: number,
+  farM: number,
+  farFactor: number,
+  /** Nothing is dressed past here. Set it beyond the fog: what is never seen is never placed. */
+  cutoffM = Infinity,
+): (x: number, y: number) => number {
+  return (x, y) => {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d >= cutoffM) return 0;
+    if (d <= fullM) return 1;
+    if (d >= farM) return farFactor;
+    const t = (d - fullM) / (farM - fullM);
+    // Smoothstep, so there is no visible ring where the density steps down.
+    const e = t * t * (3 - 2 * t);
+    return 1 + (farFactor - 1) * e;
+  };
 }
 
 export interface Placement {
@@ -173,7 +213,8 @@ export function placeAssets(
     const biomeHere = mask.biomeAt(x, y);
     const height = mask.heightAt(x, y);
     if (!allowed(cls, biomeHere, height, mask.waterDistanceAt(x, y))) return false;
-    if (hashPosition(x, y, salt + 3) > (cls.biomes[biomeHere] ?? 0)) return false;
+    const scale = options.densityScale ? options.densityScale(x, y) : 1;
+    if (hashPosition(x, y, salt + 3) > (cls.biomes[biomeHere] ?? 0) * scale) return false;
     if (excluded(cls, mask, exclusions, x, y)) return false;
     if (placed.length >= ceiling) {
       truncated = true;
@@ -320,23 +361,60 @@ export class ColliderIndex {
   }
 }
 
-// ── content: the demo registry (plan B4) ────────────────────────────────────────
+// ── content: the asset classes (plan W2-2, cut per B4 to what a cell needs) ─────
 
 /**
- * Only what the demo cell's biomes call for: beach, desert and tundra, with a trace of grassland.
- * Ten classes, down from the twenty-two the full planet would need; the rest are deferred with
- * the biomes that need them. Densities are provisional (A2 tunes to the instance ceiling); the
- * affinities, bands and exclusions are the rules.
+ * Every class the planet has words for, across all ten land biomes.
+ *
+ * `densityPerKm2` is the NEAR FIELD density, the ground within sight of the player, and it is set
+ * from what the biome looks like rather than from a budget: woodland is one stem every six or
+ * seven metres, a desert is one thing every fifteen. The budget is met by `spawnFalloff` thinning
+ * the distance, not by making the near field bare. B4d measures the result.
+ *
+ * A cell needs only the classes its own biomes call for; `classesForBiomes` selects them, so
+ * changing the demo cell changes which classes ship without touching this table.
  */
-export const DEMO_ASSET_CLASSES: readonly AssetClass[] = [
-  { id: "driftwood", biomes: { beach: 0.6 }, densityPerKm2: 400, waterDistanceM: { min: 0, max: 160 }, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 400 }, collider: { radiusM: 0.9, heightM: 0.5 }, scale: [0.7, 1.3], castsShadow: true },
-  { id: "shell", biomes: { beach: 0.9 }, densityPerKm2: 900, waterDistanceM: { min: 0, max: 120 }, excludes: ["water", "path"], lod: { nearM: 40, farM: 120 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
-  { id: "reeds", biomes: { beach: 0.8, grassland: 0.3 }, densityPerKm2: 200, waterDistanceM: { min: 0, max: 80 }, altitude: { min: 0, max: 0.02 }, cluster: { radiusM: 6, count: 6 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 500 }, collider: null, scale: [0.8, 1.4], castsShadow: false },
-  { id: "tidepool", biomes: { beach: 0.4 }, densityPerKm2: 60, waterDistanceM: { min: 0, max: 60 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 400 }, collider: null, scale: [1, 1.6], castsShadow: false },
-  { id: "cactus", biomes: { desert: 0.7 }, densityPerKm2: 220, waterDistanceM: { min: 60, max: Infinity }, cluster: { radiusM: 12, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 150, farM: 700 }, collider: { radiusM: 0.5, heightM: 2.2 }, scale: [0.7, 1.4], castsShadow: true },
-  { id: "dead-shrub", biomes: { desert: 0.8, tundra: 0.3, grassland: 0.2 }, densityPerKm2: 600, excludes: ["water", "path", "footprint"], lod: { nearM: 100, farM: 400 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
-  { id: "dune-ripple", biomes: { desert: 0.9, beach: 0.3 }, densityPerKm2: 350, excludes: ["water", "path"], lod: { nearM: 60, farM: 250 }, collider: null, scale: [1, 2], castsShadow: false },
-  { id: "boulder", biomes: { desert: 0.4, tundra: 0.7, grassland: 0.2 }, densityPerKm2: 140, waterDistanceM: { min: 20, max: Infinity }, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.4, heightM: 1.6 }, scale: [0.6, 2.2], castsShadow: true },
-  { id: "lichen-rock", biomes: { tundra: 0.9 }, densityPerKm2: 500, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 300 }, collider: { radiusM: 0.6, heightM: 0.5 }, scale: [0.5, 1.2], castsShadow: false },
-  { id: "grass-tuft", biomes: { grassland: 0.9, tundra: 0.5, beach: 0.2 }, densityPerKm2: 700, excludes: ["water", "path"], lod: { nearM: 60, farM: 200 }, collider: null, scale: [0.7, 1.3], castsShadow: false },
+export const ASSET_CLASSES: readonly AssetClass[] = [
+  // ── canopy: the thing that makes a place read as somewhere ──
+  { id: "conifer", biomes: { taiga: 0.9, forest: 0.5, tundra: 0.15 }, densityPerKm2: 7000, waterDistanceM: { min: 8, max: Infinity }, cluster: { radiusM: 9, count: 3 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 900 }, collider: { radiusM: 0.7, heightM: 9 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "broadleaf", biomes: { forest: 0.9, grassland: 0.2, taiga: 0.2 }, densityPerKm2: 6500, waterDistanceM: { min: 8, max: Infinity }, cluster: { radiusM: 11, count: 3 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 900 }, collider: { radiusM: 0.9, heightM: 8 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "buttress-tree", biomes: { rainforest: 0.85 }, densityPerKm2: 4500, cluster: { radiusM: 14, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.6, heightM: 14 }, scale: [0.8, 1.6], castsShadow: true },
+  { id: "vine-tangle", biomes: { rainforest: 0.6, forest: 0.2 }, densityPerKm2: 5000, cluster: { radiusM: 8, count: 3 }, excludes: ["water", "path", "footprint"], lod: { nearM: 110, farM: 380 }, collider: null, scale: [0.7, 1.6], castsShadow: false },
+  { id: "fallen-log", biomes: { rainforest: 0.45, forest: 0.4, taiga: 0.35 }, densityPerKm2: 1100, excludes: ["water", "path", "footprint"], lod: { nearM: 140, farM: 500 }, collider: { radiusM: 1.1, heightM: 0.9 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "bromeliad", biomes: { rainforest: 0.55 }, densityPerKm2: 6000, excludes: ["water", "path"], lod: { nearM: 60, farM: 200 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
+  { id: "canopy-palm", biomes: { rainforest: 0.9, beach: 0.25 }, densityPerKm2: 6000, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 900 }, collider: { radiusM: 0.6, heightM: 11 }, scale: [0.8, 1.4], castsShadow: true },
+  { id: "acacia", biomes: { savanna: 0.7, grassland: 0.15 }, densityPerKm2: 900, waterDistanceM: { min: 15, max: Infinity }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.1, heightM: 6 }, scale: [0.8, 1.6], castsShadow: true },
+  { id: "dead-tree", biomes: { tundra: 0.3, taiga: 0.2, desert: 0.1 }, densityPerKm2: 700, excludes: ["water", "path", "footprint"], lod: { nearM: 160, farM: 700 }, collider: { radiusM: 0.5, heightM: 5 }, scale: [0.6, 1.2], castsShadow: true },
+  // ── understorey ──
+  { id: "thicket", biomes: { forest: 0.8, rainforest: 0.8, taiga: 0.6, grassland: 0.3 }, densityPerKm2: 9000, cluster: { radiusM: 7, count: 4 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 450 }, collider: { radiusM: 1.2, heightM: 1.6 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "fern", biomes: { rainforest: 0.9, forest: 0.7, taiga: 0.4 }, densityPerKm2: 14000, cluster: { radiusM: 5, count: 5 }, excludes: ["water", "path"], lod: { nearM: 70, farM: 220 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
+  { id: "berry-bush", biomes: { forest: 0.5, taiga: 0.5, grassland: 0.4, tundra: 0.2 }, densityPerKm2: 2200, excludes: ["water", "path", "footprint"], lod: { nearM: 110, farM: 380 }, collider: { radiusM: 0.8, heightM: 1.1 }, scale: [0.7, 1.3], castsShadow: true },
+  { id: "grass-tuft", biomes: { grassland: 0.95, savanna: 0.8, tundra: 0.5, beach: 0.25, forest: 0.4, taiga: 0.35 }, densityPerKm2: 18000, excludes: ["water", "path"], lod: { nearM: 70, farM: 220 }, collider: null, scale: [0.7, 1.4], castsShadow: false },
+  { id: "dead-shrub", biomes: { desert: 0.8, tundra: 0.45, savanna: 0.3, grassland: 0.15 }, densityPerKm2: 3200, excludes: ["water", "path", "footprint"], lod: { nearM: 100, farM: 400 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
+  { id: "cactus", biomes: { desert: 0.7 }, densityPerKm2: 900, waterDistanceM: { min: 40, max: Infinity }, cluster: { radiusM: 12, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 150, farM: 700 }, collider: { radiusM: 0.5, heightM: 2.4 }, scale: [0.7, 1.4], castsShadow: true },
+  { id: "reeds", biomes: { beach: 0.8, grassland: 0.35, rainforest: 0.3 }, densityPerKm2: 3000, waterDistanceM: { min: 0, max: 90 }, cluster: { radiusM: 6, count: 7 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 500 }, collider: null, scale: [0.8, 1.4], castsShadow: false },
+  { id: "moss-patch", biomes: { tundra: 0.8, taiga: 0.6, snow: 0.15 }, densityPerKm2: 9000, excludes: ["water", "path"], lod: { nearM: 60, farM: 200 }, collider: null, scale: [0.7, 1.6], castsShadow: false },
+  // ── stone and ground ──
+  { id: "boulder", biomes: { tundra: 0.7, "bare-rock": 0.9, desert: 0.35, grassland: 0.25, taiga: 0.4, forest: 0.25, rainforest: 0.2 }, densityPerKm2: 1600, waterDistanceM: { min: 6, max: Infinity }, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.4, heightM: 1.8 }, scale: [0.6, 2.4], castsShadow: true },
+  { id: "scree", biomes: { "bare-rock": 0.9, snow: 0.4, tundra: 0.3 }, densityPerKm2: 12000, altitude: { min: 0.03, max: 1 }, cluster: { radiusM: 8, count: 6 }, excludes: ["water", "path"], lod: { nearM: 80, farM: 300 }, collider: null, scale: [0.5, 1.2], castsShadow: false },
+  { id: "lichen-rock", biomes: { tundra: 0.9, taiga: 0.5, "bare-rock": 0.6 }, densityPerKm2: 5000, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 300 }, collider: { radiusM: 0.6, heightM: 0.6 }, scale: [0.5, 1.3], castsShadow: false },
+  { id: "snow-drift", biomes: { snow: 0.9, tundra: 0.2 }, densityPerKm2: 5000, excludes: ["water", "path"], lod: { nearM: 100, farM: 400 }, collider: null, scale: [0.9, 2.2], castsShadow: false },
+  { id: "dune-ripple", biomes: { desert: 0.9, beach: 0.35 }, densityPerKm2: 4000, excludes: ["water", "path"], lod: { nearM: 60, farM: 250 }, collider: null, scale: [1, 2.2], castsShadow: false },
+  // ── the shoreline ──
+  { id: "driftwood", biomes: { beach: 0.6 }, densityPerKm2: 1400, waterDistanceM: { min: 0, max: 160 }, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 400 }, collider: { radiusM: 0.9, heightM: 0.5 }, scale: [0.7, 1.3], castsShadow: true },
+  { id: "shell", biomes: { beach: 0.9 }, densityPerKm2: 4500, waterDistanceM: { min: 0, max: 120 }, excludes: ["water", "path"], lod: { nearM: 40, farM: 120 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
+  { id: "tidepool", biomes: { beach: 0.4 }, densityPerKm2: 250, waterDistanceM: { min: 0, max: 60 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 400 }, collider: null, scale: [1, 1.6], castsShadow: false },
+  { id: "shore-rock", biomes: { beach: 0.5 }, densityPerKm2: 1800, waterDistanceM: { min: 0, max: 70 }, cluster: { radiusM: 7, count: 3 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 450 }, collider: { radiusM: 0.7, heightM: 0.8 }, scale: [0.5, 1.4], castsShadow: true },
 ];
+
+/** The classes a set of biomes calls for: everything with a non-zero weight in any of them. */
+export function classesForBiomes(biomes: readonly Biome[], registry: readonly AssetClass[] = ASSET_CLASSES): AssetClass[] {
+  const want = new Set(biomes);
+  return registry.filter((c) => (Object.keys(c.biomes) as Biome[]).some((b) => want.has(b) && (c.biomes[b] ?? 0) > 0));
+}
+
+/**
+ * The classes the demo cell ships with. A selection, not a second table: change DEMO_LAND_BIOMES
+ * and this follows, which is the one-line cell swap the plan promised.
+ */
+export const DEMO_ASSET_CLASSES: readonly AssetClass[] = classesForBiomes(DEMO_LAND_BIOMES);

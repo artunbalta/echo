@@ -22,9 +22,9 @@
  * test pins both.
  */
 
-import { cellToBoundary, cellToLatLng } from "h3-js";
+import { cellToBoundary, cellToLatLng, getResolution, gridDisk, latLngToCell } from "h3-js";
 
-import { latLngToVec3, type Vec3 } from "./geo.js";
+import { latLngToVec3, vec3ToLatLng, type Vec3 } from "./geo.js";
 import { normalisedHeight, type Calibration, type TerrainField } from "./terrain.js";
 
 export interface TangentPatch {
@@ -207,7 +207,7 @@ export function tangentDistortion(patch: TangentPatch): number {
  * parcel gives the same trees in the same places on the server, in the browser, and next year.
  */
 
-import { biome, BIOME_COLOUR, type Biome, type Rgb } from "./terrain.js";
+import { biome, BIOME_COLOUR, BIOMES, type Biome, type Rgb } from "./terrain.js";
 import { biomeAtLocal, VEGETATION_DENSITY } from "./biome-mask.js";
 
 export interface ParcelSceneOptions {
@@ -506,6 +506,364 @@ export function buildParcelScene(
     landFraction: totalArea > 0 ? landArea / totalArea : 0,
     plants,
     dominantBiome,
+  };
+}
+
+// ── the built region (contract W2-1) ────────────────────────────────────────────
+
+/**
+ * The anchor cell and its k rings as ONE ground mesh, chunked per cell for the renderer.
+ *
+ * The seam problem, and why there is one grid and not seven. A mesh built per cell samples each
+ * cell on its own grid, and two grids never agree along the shared edge: one cell's edge vertex
+ * lands between two of its neighbour's, the surfaces cross, and the join shows as a hairline of
+ * sky or a T-junction crack at every cell boundary. So the region is sampled on a single lattice in
+ * the anchor cell's tangent frame, at integer multiples of the step, and every triangle reads its
+ * corners from that lattice. Two chunks meeting at a cell boundary write the very same doubles into
+ * their buffers, and the test asserts equality with ===, not a tolerance.
+ *
+ * Nothing is clipped inside the region. A cell boundary is a matter of which chunk a triangle is
+ * filed under, never a cut through it, so a chunk's edge is jagged at the step and its neighbour's
+ * is the exact complement. Only the outer ring ends the world, and that too is whole quads: a quad
+ * is emitted when any corner is inside the region, which leaves a rim at most one step wide past
+ * the exact hexagonal bound for the fog to take.
+ *
+ * Height is `sceneHeightAt` times the height scale, the I1 function, so the ground here is the
+ * ground the globe showed. Colour is per VERTEX from `biomeAtLocal`, so two biomes blend across
+ * the one triangle that straddles them instead of meeting at a hard edge.
+ *
+ * Coordinates: OUT of here is three's frame, x east, y up, z SOUTH. Local metres run y NORTH, so
+ * z is emitted as -y and the renderer does no conversion. The `heightAt` the scene carries takes
+ * LOCAL metres, the way every other function in this package does.
+ *
+ * walkable.ts imports createTangentPatch from this file and this file imports regionBound from
+ * it. Both modules only call across that cycle from inside functions, never while evaluating, so
+ * the order the loader takes them in does not matter.
+ */
+
+import { regionBound } from "./walkable.js";
+
+export interface RegionSceneOptions {
+  /**
+   * Grid spacing in metres, in the sense a DEM means it: "12 m resolution". Twelve gives the
+   * demo disk (k=1 at the founder resolution, 4.2 km across) about 139k triangles in 7 chunks,
+   * built in about 150 ms in node; the tests time it against a 400 ms budget.
+   */
+  resolution: number;
+  /** Vertical exaggeration, metres of height per unit of normalised elevation. */
+  heightScaleM: number;
+}
+
+export const DEFAULT_REGION_OPTIONS: RegionSceneOptions = {
+  resolution: 12,
+  heightScaleM: DEFAULT_SCENE_OPTIONS.heightScaleM,
+};
+
+export interface RegionChunk {
+  /** The H3 cell every triangle here belongs to, by its centroid. */
+  cell: string;
+  /** Triangle soup, three vertices each: x east, y up, z south, in metres. */
+  positions: Float32Array;
+  normals: Float32Array;
+  /** 0..1 per channel, from BIOME_COLOUR of the biome at each vertex. */
+  colours: Float32Array;
+  triangleCount: number;
+  /** A sphere containing every vertex, in the same frame, for frustum culling. */
+  bounds: { centre: readonly [number, number, number]; radius: number };
+}
+
+export interface RegionScene {
+  cell: string;
+  k: number;
+  /** The disk's cells in gridDisk order, the anchor first; one chunk each, in the same order. */
+  cells: string[];
+  /** The anchor cell's tangent frame: the one frame every chunk is expressed in. */
+  patch: TangentPatch;
+  resolution: number;
+  heightScaleM: number;
+  /** Radius of the circle containing the region, from regionBound. */
+  extentM: number;
+  chunks: RegionChunk[];
+  triangleCount: number;
+  /** Height of the sea surface in three's y. Zero, because height is metres above sea level. */
+  waterLevelY: 0;
+  /** True when any vertex inside the region is below sea level. */
+  hasWater: boolean;
+  /** Flat area of the emitted mesh, square metres, rim included. */
+  areaM2: number;
+  /** Fraction of that area per biome, each triangle giving a third to each corner's biome. */
+  composition: Partial<Record<Biome, number>>;
+  /** The exact height the mesh was sampled from, at any local coordinate: metres above sea level. */
+  heightAt(x: number, y: number): number;
+}
+
+export function buildRegionScene(
+  cell: string,
+  k: number,
+  field: TerrainField,
+  calibration: Calibration,
+  radiusKm: number,
+  options: Partial<RegionSceneOptions> = {},
+): RegionScene {
+  // An option a caller left undefined is the default, not undefined: a layer with optional
+  // settings passes { resolution: undefined } all the time, and a spread would let that win.
+  const opts: RegionSceneOptions = {
+    resolution: options.resolution ?? DEFAULT_REGION_OPTIONS.resolution,
+    heightScaleM: options.heightScaleM ?? DEFAULT_REGION_OPTIONS.heightScaleM,
+  };
+  const step = opts.resolution;
+  if (!(step > 0)) throw new RangeError(`resolution must be a positive step in metres, got ${step}`);
+  if (!Number.isInteger(k) || k < 0) throw new RangeError(`k must be a non-negative integer, got ${k}`);
+
+  const patch = createTangentPatch(cell, radiusKm);
+  const bound = regionBound(cell, k, radiusKm);
+  const cells = gridDisk(cell, k);
+  const res = getResolution(cell);
+  const cellIndex = new Map<string, number>();
+  cells.forEach((c, i) => cellIndex.set(c, i));
+  // Where each disk cell's centre sits in the anchor frame, for the rim triangles that fall
+  // outside every disk cell and have to be filed under the nearest one.
+  const centres = cells.map((c): readonly [number, number] => {
+    const [lat, lng] = cellToLatLng(c);
+    return patch.toLocal(latLngToVec3(lat, lng)) ?? [0, 0];
+  });
+  const heightAt = (x: number, y: number) => sceneHeightAt(patch, field, calibration, x, y) * opts.heightScaleM;
+
+  // The lattice: grid line i is at (i - half) * step, so the anchor centre is a vertex and every
+  // vertex is an integer multiple of the step. One extra line past the bound each side, so the
+  // emitted rim never runs out of corners.
+  const half = Math.ceil(bound.radiusM / step) + 1;
+  const n = 2 * half + 1;
+  if (n * n > 16_000_000) {
+    throw new RangeError(`a ${n}x${n} grid is too large; raise the resolution or lower k`);
+  }
+  const at = (i: number) => (i - half) * step;
+
+  // 1. Membership, then the vertices any emitted quad will need: everything within one grid
+  //    step of an inside point. Everything else is never sampled, which is what keeps the corners
+  //    of the square from costing 40% of the build.
+  const inside = new Uint8Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) if (bound.contains(at(i), at(j))) inside[j * n + i] = 1;
+  }
+  const needed = new Uint8Array(n * n);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      if (!inside[j * n + i]) continue;
+      for (let dj = -1; dj <= 1; dj++) {
+        const jj = j + dj;
+        if (jj < 0 || jj >= n) continue;
+        for (let di = -1; di <= 1; di++) {
+          const ii = i + di;
+          if (ii >= 0 && ii < n) needed[jj * n + ii] = 1;
+        }
+      }
+    }
+  }
+
+  // 2. Sample every needed vertex once. Height, biome and cell are each a function of the vertex
+  //    and nothing else, so a vertex shared by two chunks is sampled once and copied twice.
+  const heights = new Float64Array(n * n);
+  const biomes = new Uint8Array(n * n);
+  const cellOf = new Int16Array(n * n).fill(-1);
+  const biomeIndex = new Map<Biome, number>();
+  BIOMES.forEach((b, i) => biomeIndex.set(b, i));
+  const cellAtLocal = (x: number, y: number): number => {
+    const d = patch.toDirection(x, y);
+    const [lat, lng] = vec3ToLatLng(d[0], d[1], d[2]);
+    return cellIndex.get(latLngToCell(lat, lng, res)) ?? -1;
+  };
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const idx = j * n + i;
+      if (!needed[idx]) continue;
+      const x = at(i);
+      const y = at(j);
+      heights[idx] = heightAt(x, y);
+      biomes[idx] = biomeIndex.get(biomeAtLocal(patch, field, calibration, x, y))!;
+      cellOf[idx] = cellAtLocal(x, y);
+    }
+  }
+
+  // 3. Vertex normals by central difference over the lattice, in three's frame. A local normal is
+  //    (-dh/dx, -dh/dy, 1) with z up; mapping (x, y, z) to (x, z, -y) makes it (-dh/dx, 1, dh/dy).
+  //    An unsampled neighbour contributes nothing, so the rim is one sided rather than wrong.
+  const normals = new Float32Array(n * n * 3);
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const idx = j * n + i;
+      if (!needed[idx]) continue;
+      const h = heights[idx]!;
+      const hasL = i > 0 && needed[idx - 1] === 1;
+      const hasR = i < n - 1 && needed[idx + 1] === 1;
+      const hasD = j > 0 && needed[idx - n] === 1;
+      const hasU = j < n - 1 && needed[idx + n] === 1;
+      const spanX = ((hasL ? 1 : 0) + (hasR ? 1 : 0)) * step;
+      const spanY = ((hasD ? 1 : 0) + (hasU ? 1 : 0)) * step;
+      const dhx = spanX > 0 ? ((hasR ? heights[idx + 1]! : h) - (hasL ? heights[idx - 1]! : h)) / spanX : 0;
+      const dhy = spanY > 0 ? ((hasU ? heights[idx + n]! : h) - (hasD ? heights[idx - n]! : h)) / spanY : 0;
+      const len = Math.hypot(dhx, 1, dhy);
+      normals[idx * 3] = -dhx / len;
+      normals[idx * 3 + 1] = 1 / len;
+      normals[idx * 3 + 2] = dhy / len;
+    }
+  }
+
+  // 4. Which chunk each triangle belongs to. The rule is the H3 cell of the centroid. An H3 cell
+  //    is convex in the anchor's gnomonic frame (its edges are great circles, which the projection
+  //    keeps straight), so a triangle whose three corners resolve to one cell has its centroid in
+  //    that cell as well, and the lookup is skipped for all but the thin band of triangles that
+  //    straddle a boundary. latLngToCell costs about a microsecond; per vertex instead of per
+  //    triangle, and only per vertex that is needed, is what keeps this pass under 100 ms.
+  //    A centroid past the disk, in the one-step rim, goes to the nearest disk cell so the chunk
+  //    count is the disk size and nothing is filed under a cell the region does not build.
+  const quads = (n - 1) * (n - 1);
+  const triCell = new Int16Array(quads * 2).fill(-1);
+  const perCell = new Int32Array(cells.length);
+  const OCEAN = biomeIndex.get("ocean")!;
+  const triArea = (step * step) / 2;
+  const biomeArea = new Float64Array(BIOMES.length);
+  let hasWater = false;
+  let triangleCount = 0;
+
+  const classify = (ka: number, kb: number, kc: number, xa: number, ya: number, xb: number, yb: number, xc: number, yc: number): number => {
+    const ca = cellOf[ka]!;
+    if (ca >= 0 && ca === cellOf[kb] && ca === cellOf[kc]) return ca;
+    const cx = (xa + xb + xc) / 3;
+    const cy = (ya + yb + yc) / 3;
+    const c = cellAtLocal(cx, cy);
+    if (c >= 0) return c;
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < centres.length; i++) {
+      const d = (centres[i]![0] - cx) ** 2 + (centres[i]![1] - cy) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  for (let j = 0; j + 1 < n; j++) {
+    for (let i = 0; i + 1 < n; i++) {
+      const k00 = j * n + i;
+      const k10 = k00 + 1;
+      const k01 = k00 + n;
+      const k11 = k01 + 1;
+      if (!(inside[k00] || inside[k10] || inside[k01] || inside[k11])) continue;
+      const x0 = at(i);
+      const y0 = at(j);
+      const x1 = at(i + 1);
+      const y1 = at(j + 1);
+      const q = (j * (n - 1) + i) * 2;
+      // Two triangles, wound counter-clockwise seen from above once z = -y, so they face the sky.
+      const c0 = classify(k00, k10, k11, x0, y0, x1, y0, x1, y1);
+      const c1 = classify(k00, k11, k01, x0, y0, x1, y1, x0, y1);
+      triCell[q] = c0;
+      triCell[q + 1] = c1;
+      perCell[c0]!++;
+      perCell[c1]!++;
+      triangleCount += 2;
+      for (const kv of [k00, k10, k11, k00, k11, k01]) {
+        biomeArea[biomes[kv]!]! += triArea / 3;
+        if (biomes[kv] === OCEAN && inside[kv]) hasWater = true;
+      }
+    }
+  }
+
+  // 5. Fill the chunks, each sized exactly, reading every corner from the lattice arrays.
+  const colourOf = BIOMES.map((b) => BIOME_COLOUR[b].map((v) => v / 255) as [number, number, number]);
+  const chunks: RegionChunk[] = cells.map((c, i) => ({
+    cell: c,
+    positions: new Float32Array(perCell[i]! * 9),
+    normals: new Float32Array(perCell[i]! * 9),
+    colours: new Float32Array(perCell[i]! * 9),
+    triangleCount: perCell[i]!,
+    bounds: { centre: [0, 0, 0], radius: 0 },
+  }));
+  const written = new Int32Array(cells.length);
+  const put = (chunk: RegionChunk, o: number, kv: number, x: number, y: number) => {
+    chunk.positions[o] = x;
+    chunk.positions[o + 1] = heights[kv]!;
+    chunk.positions[o + 2] = -y;
+    chunk.normals[o] = normals[kv * 3]!;
+    chunk.normals[o + 1] = normals[kv * 3 + 1]!;
+    chunk.normals[o + 2] = normals[kv * 3 + 2]!;
+    const col = colourOf[biomes[kv]!]!;
+    chunk.colours[o] = col[0];
+    chunk.colours[o + 1] = col[1];
+    chunk.colours[o + 2] = col[2];
+  };
+  for (let j = 0; j + 1 < n; j++) {
+    for (let i = 0; i + 1 < n; i++) {
+      const q = (j * (n - 1) + i) * 2;
+      if (triCell[q]! < 0) continue;
+      const k00 = j * n + i;
+      const k10 = k00 + 1;
+      const k01 = k00 + n;
+      const k11 = k01 + 1;
+      const x0 = at(i);
+      const y0 = at(j);
+      const x1 = at(i + 1);
+      const y1 = at(j + 1);
+      const a = chunks[triCell[q]!]!;
+      let o = written[triCell[q]!]! * 9;
+      put(a, o, k00, x0, y0);
+      put(a, o + 3, k10, x1, y0);
+      put(a, o + 6, k11, x1, y1);
+      written[triCell[q]!]!++;
+      const b = chunks[triCell[q + 1]!]!;
+      o = written[triCell[q + 1]!]! * 9;
+      put(b, o, k00, x0, y0);
+      put(b, o + 3, k11, x1, y1);
+      put(b, o + 6, k01, x0, y1);
+      written[triCell[q + 1]!]!++;
+    }
+  }
+
+  // 6. A bounding sphere per chunk: the box centre, and the farthest vertex from it.
+  for (const chunk of chunks) {
+    const p = chunk.positions;
+    if (p.length === 0) continue;
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let v = 0; v < p.length; v += 3) {
+      const x = p[v]!, y = p[v + 1]!, z = p[v + 2]!;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+    let r2 = 0;
+    for (let v = 0; v < p.length; v += 3) {
+      const d = (p[v]! - cx) ** 2 + (p[v + 1]! - cy) ** 2 + (p[v + 2]! - cz) ** 2;
+      if (d > r2) r2 = d;
+    }
+    chunk.bounds = { centre: [cx, cy, cz], radius: Math.sqrt(r2) };
+  }
+
+  const areaM2 = triangleCount * triArea;
+  const composition: Partial<Record<Biome, number>> = {};
+  BIOMES.forEach((b, i) => {
+    if (biomeArea[i]! > 0) composition[b] = biomeArea[i]! / areaM2;
+  });
+
+  return {
+    cell,
+    k,
+    cells,
+    patch,
+    resolution: step,
+    heightScaleM: opts.heightScaleM,
+    extentM: bound.radiusM,
+    chunks,
+    triangleCount,
+    waterLevelY: 0,
+    hasWater,
+    areaM2,
+    composition,
+    heightAt,
   };
 }
 

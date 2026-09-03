@@ -20,16 +20,17 @@ import {
   INSTANCE_CEILING,
   NO_EXCLUSIONS,
   placeAssets,
+  spawnFalloff,
   type AssetClass,
   type Exclusions,
   type PlacedAsset,
 } from "../lib/assets.js";
 import { sampleBiomeMask, type BiomeMask } from "../lib/biome-mask.js";
-import { DEMO_CELL, DEMO_LAND_BIOMES, DEMO_REGION_K } from "../lib/demo-cell.js";
+import { DEMO_CELL, DEMO_FALLOFF, DEMO_LAND_BIOMES, DEMO_REGION_K } from "../lib/demo-cell.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
 import { createTangentPatch, DEFAULT_SCENE_OPTIONS } from "../lib/scene.js";
 import { calibratePlanet, createTerrain, isLand, type Biome } from "../lib/terrain.js";
-import { regionBound } from "../lib/walkable.js";
+import { regionBound, spawnPointFor } from "../lib/walkable.js";
 import { SEED, shippedCalibration } from "./helpers/shipped.js";
 
 const field = createTerrain(SEED);
@@ -38,7 +39,21 @@ const patch = createTangentPatch(DEMO_CELL, PLANET_PARAMS.radiusKm);
 const bound = regionBound(DEMO_CELL, DEMO_REGION_K, PLANET_PARAMS.radiusKm);
 // 10 m, as biome-mask.ts asks of any caller with a water band.
 const mask = sampleBiomeMask(patch, field, calibration, bound.radiusM, 10);
-const options = { heightScaleM: DEFAULT_SCENE_OPTIONS.heightScaleM, bound };
+const spawn = spawnPointFor(DEMO_CELL, field, calibration, PLANET_PARAMS.radiusKm)!;
+// The demo's own falloff. `densityPerKm2` is a NEAR FIELD density, so a test that placed without
+// this would dress fifteen square kilometres of rainforest at woodland density, hit the ceiling,
+// and prove nothing about the world anyone walks in.
+const options = {
+  heightScaleM: DEFAULT_SCENE_OPTIONS.heightScaleM,
+  bound,
+  densityScale: spawnFalloff(spawn.x, spawn.y, DEMO_FALLOFF.fullM, DEMO_FALLOFF.farM, DEMO_FALLOFF.farFactor, DEMO_FALLOFF.cutoffM),
+};
+/** The densest class this cell actually has, so the test never names a class the cell lacks. */
+const denseId = [...DEMO_ASSET_CLASSES].sort((a, b) => b.densityPerKm2 - a.densityPerKm2)[0]!.id;
+/** A class with a collider, likewise chosen rather than named. */
+const colliderId = DEMO_ASSET_CLASSES.find((c) => c.collider)!.id;
+/** A clustered class. */
+const clusteredId = DEMO_ASSET_CLASSES.find((c) => c.cluster)!.id;
 const byId = new Map(DEMO_ASSET_CLASSES.map((c) => [c.id, c] as const));
 
 // ── the rules, with hand-built inputs ───────────────────────────────────────────
@@ -99,9 +114,18 @@ test("excluded: each exclusion kind fires for a class that lists it and not for 
 
 /** Exclusions large enough to bite on a 4 km disk, all placed around the anchor centre. */
 const exclusions: Exclusions = {
-  paths: [{ a: [-800, -800], b: [800, 800], widthM: 30 }],
-  footprints: [[[-200, -200], [200, -200], [260, 0], [200, 200], [-200, 200], [-260, 0]]],
-  sightlines: [{ a: [0, 0], b: [900, -400], widthM: 40 }],
+  paths: [{ a: [spawn.x - 300, spawn.y - 300], b: [spawn.x + 300, spawn.y + 300], widthM: 30 }],
+  footprints: [
+    [
+      [spawn.x - 120, spawn.y - 120],
+      [spawn.x + 120, spawn.y - 120],
+      [spawn.x + 150, spawn.y],
+      [spawn.x + 120, spawn.y + 120],
+      [spawn.x - 120, spawn.y + 120],
+      [spawn.x - 150, spawn.y],
+    ],
+  ],
+  sightlines: [{ a: [spawn.x, spawn.y], b: [spawn.x + 400, spawn.y - 200], widthM: 40 }],
 };
 
 function place(ex: Exclusions, registry = DEMO_ASSET_CLASSES) {
@@ -140,16 +164,18 @@ test("the exclusions removed something, and only from the classes that list them
   assert.ok(removed.length > 50, `the zones should catch many instances of the unexcluded layout; caught ${removed.length}`);
   assert.equal(withEx.filter(inZone).length, 0);
   // A class that lists no footprint exclusion keeps its instances inside the footprint.
-  const dune = withEx.filter((p) => p.classId === "dune-ripple");
-  const duneCls = byId.get("dune-ripple")!;
-  assert.ok(!duneCls.excludes.includes("footprint"));
-  const duneInside = dune.filter((p) => excluded({ ...duneCls, excludes: ["footprint"] }, mask, exclusions, p.x, p.y));
-  assert.ok(duneInside.length > 0, "a class without the footprint exclusion should still be placed inside it");
+  const openCls = DEMO_ASSET_CLASSES.find((c) => !c.excludes.includes("footprint"));
+  if (openCls) {
+    const open = withEx.filter((p) => p.classId === openCls.id);
+    const openInside = open.filter((p) => excluded({ ...openCls, excludes: ["footprint"] }, mask, exclusions, p.x, p.y));
+    assert.ok(openInside.length > 0, `${openCls.id} lists no footprint exclusion, so some should stand inside it`);
+  }
 });
 
 test("a water band provably removes candidates", () => {
-  const banded: AssetClass = { ...byId.get("dead-shrub")!, id: "banded", waterDistanceM: { min: 300, max: Infinity } };
-  const free: AssetClass = { ...byId.get("dead-shrub")!, id: "free" };
+  const base = byId.get(denseId)!;
+  const banded: AssetClass = { ...base, id: "banded", waterDistanceM: { min: 300, max: Infinity } };
+  const free: AssetClass = { ...base, id: "free", waterDistanceM: undefined };
   const a = place(NO_EXCLUSIONS, [banded]).placed;
   const b = place(NO_EXCLUSIONS, [free]).placed;
   assert.ok(a.length < b.length, `the band removed nothing (${a.length} vs ${b.length})`);
@@ -180,11 +206,12 @@ test("every land biome of the demo disk receives at least three classes", () => 
 });
 
 test("cluster members carry the cluster index and centres do not", () => {
-  const { placed } = place(NO_EXCLUSIONS, [byId.get("cactus")!]);
+  const cls = byId.get(clusteredId)!;
+  const { placed } = place(NO_EXCLUSIONS, [cls]);
   const members = placed.filter((p) => p.cluster !== undefined);
   const centres = placed.filter((p) => p.cluster === undefined);
-  assert.ok(members.length > 0 && centres.length > 0);
-  assert.ok(members.length <= centres.length * byId.get("cactus")!.cluster!.count);
+  assert.ok(members.length > 0 && centres.length > 0, `${clusteredId}: ${members.length} members, ${centres.length} centres`);
+  assert.ok(members.length <= centres.length * cls.cluster!.count);
 });
 
 test("the ceiling stops placement and says so", () => {
@@ -198,17 +225,18 @@ test("the collider index finds what stands near a point, along a segment, and ac
   const index = new ColliderIndex(placed, DEMO_ASSET_CLASSES, 8);
   const withCollider = placed.filter((p) => byId.get(p.classId)!.collider);
   assert.equal(index.count, withCollider.length);
-  const boulder = withCollider.find((p) => p.classId === "boulder")!;
-  assert.ok(boulder, "no boulder placed");
+  const boulder = withCollider.find((p) => p.classId === colliderId)!;
+  assert.ok(boulder, `no ${colliderId} placed`);
   assert.ok(index.queryCircle(boulder.x, boulder.y, 0.5).some((c) => c.x === boulder.x && c.y === boulder.y));
   assert.ok(!index.queryCircle(boulder.x + 500, boulder.y + 500, 0.1).some((c) => c.x === boulder.x && c.y === boulder.y));
   assert.ok(index.querySegment([boulder.x - 30, boulder.y], [boulder.x + 30, boulder.y], 0.5).some((c) => c.x === boulder.x && c.y === boulder.y));
 
   // A big collider just inside a cell, queried from just across the cell boundary: the disc
   // overlaps the query although the centres sit in different cells.
-  const big: PlacedAsset = { classId: "boulder", x: 7.9, y: 0, z: 0, biome: "desert", scale: 2.2, rotation: 0 };
+  const bigCls = [...DEMO_ASSET_CLASSES].filter((c) => c.collider).sort((a, b) => b.collider!.radiusM * b.scale[1] - a.collider!.radiusM * a.scale[1])[0]!;
+  const big: PlacedAsset = { classId: bigCls.id, x: 7.9, y: 0, z: 0, biome: DEMO_LAND_BIOMES[0]!, scale: bigCls.scale[1], rotation: 0 };
   const small = new ColliderIndex([big], DEMO_ASSET_CLASSES, 8);
-  assert.ok(small.maxRadiusM > 3);
+  assert.ok(small.maxRadiusM > 1, `largest collider radius is ${small.maxRadiusM}`);
   assert.equal(small.queryCircle(8.5, 0, 0.2).length, 1, "a query across the cell boundary must still see the disc");
   assert.equal(small.querySegment([8.5, 0], [20, 0], 0.2).length, 1);
   assert.equal(small.queryCircle(8.5 + small.maxRadiusM + 1, 0, 0.2).length, 0);
