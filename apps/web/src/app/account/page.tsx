@@ -19,6 +19,8 @@ export default function Account() {
   const [snap, setSnap] = useState<PersonaSnapshot | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  // What the server said went wrong, when erasure was only partial. Null means it was clean.
+  const [eraseError, setEraseError] = useState<string | null>(null);
 
   useEffect(() => {
     const id = localStorage.getItem("echo.userId") ?? "";
@@ -38,11 +40,26 @@ export default function Account() {
   }
 
   async function eraseEverything() {
-    await fetch("/api/account/delete", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ userId: uid }),
-    });
+    // The response was being discarded, so a refused table still ended at "Erased." A page that
+    // claims someone's data is gone has to have been told that it is. On a partial wipe say which
+    // tables held, and do NOT clear the local id: it is the only handle left to retry with.
+    let failed: string[] = [];
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: uid }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { supabaseTablesFailed?: string[] };
+      if (!res.ok) failed = body.supabaseTablesFailed?.length ? body.supabaseTablesFailed : [`server ${res.status}`];
+    } catch (err) {
+      failed = [(err as Error).message];
+    }
+    if (failed.length) {
+      setEraseError(failed.join(", "));
+      setConfirming(false);
+      return;
+    }
     ["echo.userId", "echo.name", "echo.consent", "echo.character"].forEach((k) => localStorage.removeItem(k));
     setDeleted(true);
     setTimeout(() => router.push("/"), 1800);
@@ -95,6 +112,17 @@ export default function Account() {
             <div className="text-parchment/40">nothing yet</div>
           )}
         </div>
+
+        {eraseError ? (
+          <div className="mb-3 rounded border-2 border-red-400/60 bg-red-900/20 p-3 text-xs text-red-200">
+            <p className="font-bold">Not erased.</p>
+            <p className="mt-1 text-red-200/80">
+              Some of your data is still on the server and the erasure stopped rather than pretend
+              otherwise. Nothing was cleared locally, so you can try again. If it keeps failing,
+              this needs a person: {eraseError}
+            </p>
+          </div>
+        ) : null}
 
         {!confirming ? (
           <button onClick={() => setConfirming(true)} className="w-full rounded border-2 border-red-400/40 px-4 py-2 text-sm text-red-200 hover:bg-red-900/20">
