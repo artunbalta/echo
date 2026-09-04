@@ -18,6 +18,7 @@ import { createMeasureChain, landingConsent, type MeasureChain } from "@/game/wo
 import { playerLayer } from "@/game/world/playerLayer";
 import { scatterLayer } from "@/game/world/scatterLayer";
 import { skyLayer } from "@/game/world/skyLayer";
+import { DEMO_SCATTER } from "@/game/world/demoStations";
 import { sliceLayer } from "@/game/world/sliceLayer";
 import { terrainLayer } from "@/game/world/terrainChunks";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
@@ -63,7 +64,10 @@ export default function DemoClient(props: DemoClientProps) {
       }
       // Sky first: it owns the air, and the terrain layer stands its fallback down when it
       // finds the air already claimed.
-      return [skyLayer(), terrainLayer(), scatterLayer(), p, slice];
+      // DEMO_SCATTER, not a bare call: the stations have to be excluded or the scatter puts a
+      // tree in front of the cave the whole slice is about. It is a shared value so this line
+      // and the test cannot drift apart again.
+      return [skyLayer(), terrainLayer(), scatterLayer(DEMO_SCATTER), p, slice];
     },
     [chain, onReaction],
   );

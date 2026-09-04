@@ -42,6 +42,7 @@ import {
 import { TILE_M } from "@echo/shared";
 
 import { initialMover, localMToTile, stepMover, tileToLocalM, type MoveInput, type MoverState } from "../src/game/world/controller";
+import { DEMO_SCATTER, demoStationExclusions } from "../src/game/world/demoStations";
 import { SCATTER_GEOMETRY } from "../src/game/world/scatterGeometry";
 import { scatterLayer } from "../src/game/world/scatterLayer";
 import type { LayerContext, WorldFrame } from "../src/game/world/PlanetWorld";
@@ -101,7 +102,11 @@ const ctx: LayerContext = {
   layer: () => undefined,
 };
 
-const layer = scatterLayer();
+// The demo's stations are passed IN, which is the whole point of the layer being cell-agnostic:
+// with no options at all it dresses a bare parcel from that cell's own biomes and clears only the
+// buildable footprint and the spawn. This call is what DemoClient makes, so the numbers below are
+// the demo's numbers and a regression here is a regression on screen.
+const layer = scatterLayer(DEMO_SCATTER);
 await layer.build(ctx, new AbortController().signal);
 const placement = layer.placement()!;
 const colliders = layer.colliders()!;
@@ -378,4 +383,84 @@ test("the scene holds exactly the meshes the layer built, and dispose gives them
   assert.equal(layer.colliders(), null);
   // With nothing built, the world is the world it was before W2-3: open ground.
   assert.equal(layer.blockedTile(spawnTile[0], spawnTile[1], 0.35), false);
+});
+
+// ── (f) every class on the planet, not just the demo cell's ────────────────────
+
+/**
+ * The imports for this block live with it rather than in the header, because the block is an
+ * append: everything above was written for DEMO_ASSET_CLASSES and none of it needs to move for
+ * this. ESM hoists the declaration, so it binds before the first test runs.
+ */
+import { ASSET_CLASSES } from "@echo/planet";
+import { hasScatterGeometry, SCATTER_MATERIAL } from "../src/game/world/scatterGeometry";
+
+/**
+ * The demo cell is rainforest and beach, and for a while the renderer only had forms for those, so
+ * `/parcel/<some taiga cell>` placed thousands of conifers, warned once to a console nobody was
+ * reading, and drew bare ground under the sky. Everything above this line is measured against
+ * DEMO_ASSET_CLASSES and would have gone on passing. This block is measured against the whole
+ * registry, which is the only version of the question that catches it.
+ */
+test("every asset class in the registry has a form, within budget and agreeing with its collider", () => {
+  const missing = ASSET_CLASSES.filter((c) => !hasScatterGeometry(c.id)).map((c) => c.id);
+  assert.deepEqual(missing, [], `no geometry for ${missing.join(", ")}: any cell with these biomes draws bare ground`);
+
+  let worst = { id: "", ratio: 1 };
+  const budget: string[] = [];
+
+  for (const cls of ASSET_CLASSES) {
+    const geometry = SCATTER_GEOMETRY[cls.id]!();
+    const position = geometry.getAttribute("position");
+    const triangles = position.count / 3;
+
+    // Four is a pair of crossed cards, the cheapest thing that is still a form; forty is a third of
+    // the way past the file's median and well under its own sixty ceiling. A class that wants more
+    // than forty wants a silhouette it is not going to get at these distances.
+    assert.ok(triangles >= 4 && triangles <= 40, `${cls.id} is ${triangles} triangles, outside 4..40`);
+    if (triangles > 32) budget.push(`${cls.id} ${triangles}t`);
+
+    assert.ok(geometry.getAttribute("color"), `${cls.id} has no vertex colours, so its parts are one colour`);
+    assert.equal(geometry.index, null, "a form must be non-indexed, the way the merge leaves it");
+    assert.equal(typeof SCATTER_MATERIAL[cls.id], "function", `${cls.id} has a form and no material`);
+
+    // Height in the class frame, origin on the ground: this is what the collider has to agree with,
+    // because a 9 m collider around a 3 m tree is a wall in front of nothing.
+    const a = position.array as Float32Array;
+    let top = -Infinity;
+    for (let i = 1; i < a.length; i += 3) if (a[i]! > top) top = a[i]!;
+    assert.ok(top > 0, `${cls.id} has no height at all`);
+
+    if (!cls.collider) {
+      // Null collider means you walk over it or through it. Over: the ground furniture, all under a
+      // knee. Through: the two curtains, vine-tangle and reeds, which are cards and have no solid
+      // in them to stop a body. Anything else tall with no collider is a thing you walk inside.
+      const walkThrough = cls.id === "vine-tangle" || cls.id === "reeds";
+      assert.ok(top < (walkThrough ? 4 : 1.2), `${cls.id} stands ${top.toFixed(2)} m tall with no collider`);
+      geometry.dispose();
+      continue;
+    }
+
+    /**
+     * The band, and why it is a band. A form is allowed to overtop its collider, because the
+     * collider is the trunk a body bumps into and the form is the whole plant: buttress-tree's
+     * canopy sits at 1.09 of its collider and driftwood's one branch at 1.30, both correct. What it
+     * may not do is fall short, because a collider taller than its mesh is an invisible wall. The
+     * measured spread over all 26 is 0.89 to 1.30, so 0.6 to 1.6 is loose enough to leave art
+     * decisions alone and tight enough that a form built to the wrong scale trips it.
+     */
+    const ratio = top / cls.collider.heightM;
+    assert.ok(
+      ratio >= 0.6 && ratio <= 1.6,
+      `${cls.id} is ${top.toFixed(2)} m against a ${cls.collider.heightM} m collider (${ratio.toFixed(2)}x)`,
+    );
+    if (Math.abs(Math.log(ratio)) > Math.abs(Math.log(worst.ratio))) worst = { id: cls.id, ratio };
+    geometry.dispose();
+  }
+
+  console.log(
+    `forms: ${ASSET_CLASSES.length}/${ASSET_CLASSES.length} classes dressed, ` +
+      `worst collider agreement ${worst.id} ${worst.ratio.toFixed(2)}x` +
+      (budget.length ? `, heaviest ${budget.join(", ")}` : ""),
+  );
 });

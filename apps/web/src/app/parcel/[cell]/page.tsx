@@ -18,7 +18,11 @@ export default async function ParcelPage({ params }: { params: Promise<{ cell: s
   const { world, calibration } = planet();
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#8fa4c4]">
+    // Not a dead colour, which is why it changed rather than went. The GL canvas is opaque and
+    // covers the viewport, so this is only ever seen in the moments without a world: the paint
+    // before the renderer exists, and, for a cell with no dry ground to spawn on, permanently
+    // behind the failure message. The blue that was here said noon under a sky that opens at dusk.
+    <main className="relative h-screen w-screen overflow-hidden bg-[#1c1326]">
       <ParcelCanvas
         cell={cell}
         seed={world.seed}

@@ -9,7 +9,11 @@
  *
  * The helpers at the bottom are the ONLY way to turn these tile offsets into the planet's local
  * metres (east, north): the y axis flips between the two frames, and a consumer that forgot would
- * exclude the mirror image of the footprint with every test still green.
+ * exclude the mirror image of the footprint with every test still green. The flip itself lives
+ * once, in controller.ts (tileToLocalM for a point, footprintToLocalM for a polygon), because the
+ * scatter layer needs the same conversion and cannot import this file without a cycle: the
+ * exclusion type flows from the layer to here. It wrote its own copy for exactly that reason and
+ * that copy is gone.
  *
  * The vertical slice (Section A) builds only SLICE_STATIONS: the cave mouth and the campfire.
  *
@@ -22,7 +26,8 @@
 import type { Biome, SpawnPoint } from "@echo/planet";
 import { TILE_M } from "@echo/shared";
 
-import { tileToLocalM } from "./controller";
+import { footprintToLocalM, tileToLocalM } from "./controller";
+import { BUILDABLE_FOOTPRINT_TILES, type ScatterLayerOptions, type StationExclusions } from "./scatterLayer";
 
 export interface Station {
   id: string;
@@ -76,15 +81,15 @@ export const SPAWN_FACES = "cave_mouth";
 /** Section A: the vertical slice builds these and nothing else. */
 export const SLICE_STATIONS: readonly string[] = ["cave_mouth", "campfire"];
 
-/** The parcel's buildable footprint the scatter leaves clear, tiles from spawn, convex. */
-export const DEMO_FOOTPRINT: ReadonlyArray<readonly [number, number]> = [
-  [-6, 0],
-  [6, 0],
-  [8, 6],
-  [6, 12],
-  [-6, 12],
-  [-8, 6],
-];
+/**
+ * The parcel's buildable footprint the scatter leaves clear, tiles from spawn, convex.
+ *
+ * The six points now live in scatterLayer.ts, which is their only consumer and the one place that
+ * has to have a footprint for a cell nobody authored. They never were demo data: they name no cell,
+ * no biome and no station. The name stays here so the loop's marker and the test that proves the
+ * polygon convex keep reading it from the file that owns the demo's layout.
+ */
+export const DEMO_FOOTPRINT: ReadonlyArray<readonly [number, number]> = BUILDABLE_FOOTPRINT_TILES;
 
 export function stationById(id: string): Station {
   const s = DEMO_STATIONS.find((x) => x.id === id);
@@ -106,13 +111,70 @@ export function stationLocalM(spawn: SpawnPoint, id: string, tileM = TILE_M): [n
 
 /** The footprint polygon in planet-local metres, ready for assets.ts Exclusions.footprints. */
 export function footprintLocalM(spawn: SpawnPoint, tileM = TILE_M): Array<[number, number]> {
-  return DEMO_FOOTPRINT.map(([dx, dy]) => offsetLocalM(spawn, dx, dy, tileM));
+  return footprintToLocalM(spawn, DEMO_FOOTPRINT, tileM);
 }
 
 /** Every path as a metre-space segment, for assets.ts Exclusions.paths. */
 export function pathsLocalM(spawn: SpawnPoint, widthM: number, tileM = TILE_M): Array<{ a: [number, number]; b: [number, number]; widthM: number }> {
   const at = (id: string): [number, number] => (id === "spawn" ? [spawn.x, spawn.y] : stationLocalM(spawn, id, tileM));
   return DEMO_PATHS.map(([from, to]) => ({ a: at(from), b: at(to), widthM }));
+}
+
+/** What the demo's own furniture takes out of the scatter, metres. */
+const STATION_CLEAR_M = 3;
+const PATH_WIDTH_M = 3.2;
+const SIGHT_WIDTH_M = 5;
+
+/**
+ * What the scatter has to dress around on the demo cell, and the reason scatterLayer.ts no longer
+ * imports this file.
+ *
+ * A parcel has none of this. The layer's own floor, the buildable footprint and the spawn clearing,
+ * is everything a bare cell needs; the two slice stations, the five paths and the two sightlines
+ * are furniture that exists only because the demo builds it, and defaulting to them elsewhere would
+ * carve corridors toward a campfire that is not there. The widths live here for the same reason:
+ * 3 m of bare ground per station, a 3.2 m path, a 5 m sightline are decisions about THIS world.
+ *
+ * Positions are the AUTHORED intentions, not the snapped ones. The snap is the loop's business and
+ * it runs later in the frame order; on the demo cell it moves neither slice station at all, and the
+ * paths already sweep a cleared band from the spawn to each of them, so the intention is what the
+ * ground is dressed around.
+ */
+/**
+ * The demo's scatter, as one value.
+ *
+ * This exists because of a regression that a green suite hid. The layer was made cell-agnostic and
+ * its exclusions stopped defaulting to these stations, which is right: a parcel has no campfire.
+ * But DemoClient kept calling `scatterLayer()` bare while the test called it with the stations
+ * passed in, above a comment claiming the two were the same call. They were not. The demo lost both
+ * station clearings, all five path sweeps and both sightlines, and put a fourteen metre buttress
+ * tree 2.69 m from the cave mouth, which is the station the player spawns facing and the slice's
+ * only action. Every test stayed green, because the test was measuring a configuration that
+ * shipped nowhere.
+ *
+ * So the demo's layer arguments are a value now, not a shape repeated at two call sites. The app
+ * passes THIS and the test asserts against THIS, which is what makes a passing test a statement
+ * about what is on screen.
+ */
+export const DEMO_SCATTER: ScatterLayerOptions = {
+  stations: (ctx) => demoStationExclusions(ctx.region.spawn, ctx.frame.tileM),
+};
+
+export function demoStationExclusions(spawn: SpawnPoint, tileM = TILE_M): StationExclusions {
+  const [presenceX, presenceY] = offsetLocalM(spawn, DEMO_PRESENCE_HOME.dx, DEMO_PRESENCE_HOME.dy, tileM);
+  return {
+    clearings: SLICE_STATIONS.map((id) => {
+      const [x, y] = stationLocalM(spawn, id, tileM);
+      return { x, y, radiusM: STATION_CLEAR_M };
+    }),
+    paths: pathsLocalM(spawn, PATH_WIDTH_M, tileM),
+    // Two lines the player must be able to SEE along, which is not the same as walk along: the
+    // station they spawn facing, and the other presence's home.
+    sightlines: [
+      { a: [spawn.x, spawn.y], b: stationLocalM(spawn, SPAWN_FACES, tileM), widthM: SIGHT_WIDTH_M },
+      { a: [spawn.x, spawn.y], b: [presenceX, presenceY], widthM: SIGHT_WIDTH_M },
+    ],
+  };
 }
 
 // ── the snap (the one thing that makes a cell swap a one-line edit) ─────────────

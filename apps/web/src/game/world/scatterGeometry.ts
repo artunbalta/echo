@@ -22,7 +22,9 @@
  * campfire agree. (The terrain's vertex colours are written raw by @echo/planet's scene builder and
  * so sit a shade brighter; that is its file's business, not this one's.)
  *
- * Colours come from PALETTE and nowhere else.
+ * Colours come from PALETTE and nowhere else. Three of the eleven cold and stony forms need a
+ * colour the palette has no entry for; they blend two entries rather than add a twelfth, which
+ * `mix` below explains.
  */
 
 import * as THREE from "three";
@@ -165,6 +167,25 @@ function fan(n: number, w: number, h: number, tilt: number, y: number, colour: n
   return parts;
 }
 
+/**
+ * Two palette entries blended, in the sRGB byte space the entries were chosen in.
+ *
+ * Three reads on this planet have no entry of their own: snow, a lichen crust, and a taiga green
+ * colder than the rainforest's. The palette is a closed set and stays one, so rather than invent
+ * three hexes each of those is a point BETWEEN two entries the bible already argued for, which is a
+ * colour this world already contains. The blend is in sRGB and not in linear because that is the
+ * space the paint chips were picked on the page in; `merge` converts the result exactly as it
+ * converts a raw entry, so a blend and an entry still light identically.
+ */
+const mix = (a: number, b: number, t: number): number => {
+  const channel = (shift: number) => {
+    const from = (a >> shift) & 0xff;
+    const to = (b >> shift) & 0xff;
+    return Math.round(from + (to - from) * t) & 0xff;
+  };
+  return (channel(16) << 16) | (channel(8) << 8) | channel(0);
+};
+
 // ── the fifteen forms the demo cell calls for ───────────────────────────────────
 //
 // Heights are metres at scale 1; the placer multiplies each instance by its own scale, so these are
@@ -188,7 +209,7 @@ const buttressTree = () =>
  */
 const vineTangle = () => merge(fan(4, 0.9, 3.4, 0.06, 0.2, P.leafDark));
 
-/** A trunk on its side, going back to soil, with moss along the top. 34 triangles. */
+/** A trunk on its side, going back to soil, with moss along the top. 36 triangles. */
 const fallenLog = () =>
   merge([
     { geometry: new THREE.CylinderGeometry(0.3, 0.36, 3.4, 6), colour: P.trunk, at: [0, 0.34, 0], turn: [0, 0, Math.PI / 2] },
@@ -249,7 +270,7 @@ const duneRipple = () =>
     { geometry: blob(), colour: P.sandWet, at: [0.3, 0.05, 0.7], stretch: [1.6, 0.1, 0.35], turn: [0, 0.4, 0] },
   ]);
 
-/** Bleached wood above the tideline, half buried, with one branch still on it. 28 triangles. */
+/** Bleached wood above the tideline, half buried, with one branch still on it. 24 triangles. */
 const driftwood = () =>
   merge([
     { geometry: new THREE.CylinderGeometry(0.17, 0.22, 2.1, 5), colour: P.rope, at: [0, 0.2, 0], turn: [0, 0.3, Math.PI / 2 - 0.08] },
@@ -280,6 +301,187 @@ const shoreRock = () =>
     { geometry: blob(), colour: P.sandWet, at: [-0.5, 0.12, -0.35], stretch: [0.4, 0.18, 0.38] },
   ]);
 
+// ── the eleven the rest of the planet calls for ─────────────────────────────────
+//
+// The fifteen above are the classes the demo cell's rainforest and beach call for, and they were
+// all that existed. Every other land biome placed instances and drew none: a taiga full of conifers
+// with no conifer form is bare ground under the same sky, and snow was the worst of it, because all
+// three of its classes were missing and it had nothing at all. These are those forms, so a cell is
+// dressed by what grows there rather than by whether it happens to be the cell the demo picked.
+//
+// The four woody ones exist to be told apart at a hundred metres and nowhere nearer: conifer is a
+// spire, broadleaf a wide low dome, acacia a flat plate on a bare stem, dead-tree a hole. That is
+// the whole design; the triangles are spent on the outline and on nothing else.
+
+/** The taiga's spire: a tapered trunk under two stacked cones closing to a point. 20 triangles. */
+const conifer = () =>
+  merge([
+    { geometry: stem(0.14, 0.32, 3.4), colour: P.trunk, at: [0, 1.7, 0] },
+    // Cones rather than blobs because the point at the top is the read: a stand of these is a
+    // saw-tooth line against the dusk, where a stand of octahedra is a row of green balls.
+    // The lower mass is `conifer`, a palette entry added for exactly this: a taiga painted in the
+    // rainforest's own `leafDark` under the same western key reads as the same wood; the cold is
+    // what says north. A cold green is not a palette entry and does not become one for this.
+    { geometry: flare(1.35, 4.5, 5), colour: P.conifer, at: [0, 3.85, 0] },
+    { geometry: flare(0.92, 4.1, 5), colour: P.leaf, at: [0, 6.95, 0] },
+  ]);
+
+/**
+ * The deciduous wood: a short trunk swallowed by one dome broader than it is tall. 22 triangles.
+ *
+ * Deliberately the conifer's opposite, because forest gives both a weight and a mixed wood that is
+ * one silhouette twice over is a texture, not a wood.
+ */
+const broadleaf = () =>
+  merge([
+    { geometry: stem(0.28, 0.46, 4.3), colour: P.trunk, at: [0, 2.15, 0] },
+    { geometry: blob(), colour: P.leafDark, at: [0, 5.75, 0], stretch: [3.3, 2.05, 3.1] },
+    { geometry: nub(), colour: P.leaf, at: [1.0, 6.7, -0.6], stretch: [1.7, 1.5, 1.6], turn: [0, 0.6, 0] },
+  ]);
+
+/**
+ * The savanna's one landmark: a bare trunk that forks, then a single flat plate held above nothing.
+ * 30 triangles, the most of the eleven, and worth it because at 900 per square kilometre this is
+ * the only thing drawn on an otherwise empty horizon and there is nothing else for the eye to
+ * measure the distance by.
+ *
+ * `rope` for the wood: the precedent is driftwood, and sun-bleached is sun-bleached.
+ */
+const acacia = () =>
+  merge([
+    { geometry: stem(0.22, 0.42, 3.5), colour: P.rope, at: [0, 1.75, 0] },
+    { geometry: flare(0.13, 1.5, 4), colour: P.rope, at: [-0.45, 4.0, 0.15], turn: [0, 0, 0.5] },
+    { geometry: flare(0.12, 1.4, 4), colour: P.rope, at: [0.5, 4.1, -0.2], turn: [0, 0, -0.55] },
+    { geometry: blob(), colour: P.leafDark, at: [0, 5.5, 0], stretch: [3.2, 0.45, 2.8] },
+    { geometry: nub(), colour: P.bushDry, at: [1.6, 5.35, 0.5], stretch: [1.3, 0.28, 1.1] },
+  ]);
+
+/**
+ * A snag: two lengths of trunk and two broken limbs, no canopy anywhere. 22 triangles.
+ *
+ * The only form here with no mass on top, which is the point of it. Tundra and taiga get their
+ * skyline from conifers, and a dead tree has to read as a gap in that line rather than as one more
+ * shape on it, so nothing is allowed to close over the top. Four sides on both trunks instead of
+ * five: with no canopy to hide behind it is the taper and the fork that carry it, not the round.
+ */
+const deadTree = () =>
+  merge([
+    { geometry: stem(0.24, 0.36, 2.2, 4), colour: P.trunk, at: [0, 1.1, 0] },
+    { geometry: stem(0.08, 0.23, 2.9, 4), colour: P.rope, at: [0.06, 3.55, 0], turn: [0, 0, -0.04] },
+    { geometry: flare(0.07, 0.95, 3), colour: P.rope, at: [0.42, 3.0, 0.1], turn: [0, 0, -0.95] },
+    { geometry: flare(0.06, 0.75, 3), colour: P.rope, at: [-0.3, 4.05, -0.15], turn: [0.2, 0, 1.05] },
+  ]);
+
+/**
+ * A knee-high clump with a few warm heads on it. 16 triangles.
+ *
+ * The cold biomes' answer to the bromeliad, and it earns its top-of-budget size the same way: the
+ * heads are `flower`, the palette's single warm accent, and they are the only warm thing in a
+ * forest or a tundra understorey. PALETTE has no red and does not get one for berries, because a
+ * red would compete with `echo` for the eye and `echo` is sacred.
+ */
+const berryBush = () =>
+  merge([
+    { geometry: blob(), colour: P.bush, at: [0, 0.5, 0], stretch: [0.78, 0.5, 0.72] },
+    { geometry: nub(), colour: P.leafLight, at: [0.3, 0.5, -0.22], stretch: [0.42, 0.34, 0.4] },
+    { geometry: nub(), colour: P.flower, at: [-0.1, 1.02, 0.08], stretch: [0.16, 0.13, 0.15] },
+  ]);
+
+/**
+ * Bare twig, more gap than substance. Three cards, six triangles.
+ *
+ * The one class defined by seeing THROUGH it, so it is cards and not a solid: a desert read through
+ * a shrub is still a desert, and an opaque ball at three thousand two hundred per square kilometre
+ * would close the ground off. One card in `rope` so the outer twigs catch the key and the clump
+ * does not read as a single flat smudge.
+ */
+const deadShrub = () =>
+  merge([
+    { geometry: card(0.95, 0.72), colour: P.bushDry, turn: [0.1, 0, 0] },
+    { geometry: card(0.86, 0.62), colour: P.bushDry, turn: [0.08, 1.05, 0] },
+    { geometry: card(0.74, 0.55), colour: P.rope, turn: [0.1, 2.1, 0] },
+  ]);
+
+/**
+ * One thick column and two arms turned up at the elbow. 28 triangles.
+ *
+ * The most recognisable outline in the table and the only class that has to survive on shape alone,
+ * which is why the elbow is two pieces per arm rather than one leaning stick: the bend is what says
+ * cactus. Five sides on the column because it is the one thing in a desert a player walks up to,
+ * and a four-sided one is a box from close range. The tips take `bushDry` because that is where the
+ * low western key lands first.
+ */
+const cactus = () =>
+  merge([
+    { geometry: stem(0.26, 0.32, 2.35), colour: P.leafDark, at: [0, 1.175, 0] },
+    { geometry: stem(0.1, 0.12, 0.62, 3), colour: P.leafDark, at: [-0.3, 1.15, 0], turn: [0, 0, 1.15] },
+    { geometry: flare(0.1, 0.62, 3), colour: P.bushDry, at: [-0.54, 1.7, 0], turn: [0, 0, 0.06] },
+    { geometry: stem(0.09, 0.11, 0.5, 3), colour: P.leafDark, at: [0.28, 0.85, 0.05], turn: [0, 0, -1.2] },
+    { geometry: flare(0.09, 0.5, 3), colour: P.bushDry, at: [0.48, 1.3, 0.05], turn: [0, 0, -0.05] },
+  ]);
+
+/**
+ * Ground cover with no edge you could point at: two flattened tetrahedra, eight triangles.
+ *
+ * Nearer to ground colour than to an object, and the shortest near-LOD in the registry at sixty
+ * metres, so there is nothing to spend triangles on. Tetrahedra rather than an octahedron because
+ * the flat facets read as a skin over the soil where a stretched octahedron reads as a pillow.
+ */
+const mossPatch = () =>
+  merge([
+    { geometry: nub(), colour: P.bush, at: [0, 0.05, 0], stretch: [0.95, 0.1, 0.85] },
+    { geometry: nub(), colour: P.leafLight, at: [0.14, 0.08, -0.1], stretch: [0.5, 0.09, 0.44], turn: [0, 0.9, 0] },
+  ]);
+
+/**
+ * Two angular chips lying where they fell, no two the same size. Eight triangles.
+ *
+ * Two, not the three or four a slope of scree looks like, because the registry already clusters
+ * this class six deep inside eight metres: what a player sees is twelve chips, and paying for them
+ * twice would make the second densest class on the planet also one of the more expensive. The two
+ * colours are what stop a cluster reading as one grey lump.
+ */
+const scree = () =>
+  merge([
+    { geometry: nub(), colour: P.rock, at: [0, 0.14, 0], stretch: [0.3, 0.16, 0.26], turn: [0.3, 0.5, 0.15] },
+    { geometry: nub(), colour: P.rockLight, at: [0.34, 0.09, -0.2], stretch: [0.19, 0.1, 0.17], turn: [0.5, 1.7, 0.2] },
+  ]);
+
+/**
+ * A low stone half sunk in the ground, read by the crust across its top rather than by its body.
+ * The boulder's small cousin, twelve triangles against the boulder's twenty-eight.
+ *
+ * The crust is `rockLight` walked most of the way to `grassDry`. Lichen is the pale green-grey
+ * between stone and dry grass and the palette has no entry for it, and it does not get one: two
+ * entries blended is a colour this world already contains, a new hex is not.
+ */
+const lichenRock = () =>
+  merge([
+    { geometry: blob(), colour: P.rock, at: [0, 0.22, 0], stretch: [0.6, 0.33, 0.54], turn: [0.1, 0.6, 0.06] },
+    { geometry: nub(), colour: P.lichen, at: [0.02, 0.44, 0.03], stretch: [0.34, 0.11, 0.3], turn: [0, 0.8, 0] },
+  ]);
+
+/**
+ * A long wedge, steep on one flank and drawn out on the other. Sixteen triangles, dune-ripple's
+ * exact sibling and built the same way, because the two do the same job in two biomes.
+ *
+ * SNOW IS TWO COLOURS, never one. A drift read in one value is a white blob with no form at all,
+ * because the whole shape of a drift is the crest catching the key and the lee turning cold. This
+ * first blended its own two values out of `cloth`, which is a built-things colour being used to
+ * paint nature against the law at the top of palette.ts. `snowLit` and `snowShade` are now palette
+ * entries, added because the palette simply had no word for snow: the island world never went
+ * anywhere cold, and a form that needs a colour the palette lacks is a gap to fill, not a licence.
+ *
+ * What this form does NOT do is record a wind. The placer yaws every instance by a hash of its own
+ * position, so a field of drifts faces every direction and no shared lee is available to build; the
+ * asymmetry here is the drift's own, seen from whichever side the hash turned it to.
+ */
+const snowDrift = () =>
+  merge([
+    { geometry: blob(), colour: P.snowLit, at: [0, 0.17, 0], stretch: [1.9, 0.3, 0.72] },
+    { geometry: blob(), colour: P.snowShade, at: [0.85, 0.09, 0.38], stretch: [1.35, 0.17, 0.5], turn: [0, 0.22, 0] },
+  ]);
+
 // ── the tables the renderer reads ───────────────────────────────────────────────
 
 /**
@@ -302,6 +504,17 @@ export const SCATTER_GEOMETRY: Record<AssetClassId, () => THREE.BufferGeometry> 
   shell,
   tidepool,
   "shore-rock": shoreRock,
+  conifer,
+  broadleaf,
+  acacia,
+  "dead-tree": deadTree,
+  "berry-bush": berryBush,
+  "dead-shrub": deadShrub,
+  cactus,
+  "moss-patch": mossPatch,
+  scree,
+  "lichen-rock": lichenRock,
+  "snow-drift": snowDrift,
 };
 
 /**
@@ -309,7 +522,7 @@ export const SCATTER_GEOMETRY: Record<AssetClassId, () => THREE.BufferGeometry> 
  * walked around it; these are drawn double-sided. Everything else is a closed solid and keeps
  * back-face culling, which is half the fragments for free.
  */
-const CARDED = new Set<AssetClassId>(["vine-tangle", "bromeliad", "canopy-palm", "fern", "grass-tuft", "reeds", "tidepool"]);
+const CARDED = new Set<AssetClassId>(["vine-tangle", "bromeliad", "canopy-palm", "fern", "grass-tuft", "reeds", "tidepool", "dead-shrub"]);
 
 /**
  * A material per class. Flat shading and no textures, per the bible: carved clay, not plastic.
@@ -324,5 +537,10 @@ for (const id of Object.keys(SCATTER_GEOMETRY)) {
 
 /** Does this class have a form? A registry class with no builder is drawn by nobody, loudly. */
 export function hasScatterGeometry(id: AssetClassId): boolean {
-  return typeof SCATTER_GEOMETRY[id] === "function";
+  // Object.hasOwn, not a typeof on the index. SCATTER_GEOMETRY is a plain object literal, so it
+  // inherits Object.prototype, and `typeof SCATTER_GEOMETRY["toString"] === "function"` is true.
+  // No shipped class is called toString, but ScatterLayerOptions.classes takes ids from a caller,
+  // and the layer's stated guarantee that a class with no form is dropped loudly has to hold for
+  // every id, not only for the ones the table happens to contain today.
+  return Object.hasOwn(SCATTER_GEOMETRY, id);
 }
