@@ -283,11 +283,17 @@ function DemoPrompt({
       ) : null}
       <div className="mt-3 flex flex-wrap gap-3">
         {parcel.assignable || parcel.commonsName ? (
+          // It said "Show me the demo", and it does not go to the demo: it goes to the parcel under
+          // the pointer, which has terrain, weather, a body and a measurement and no cave and no
+          // campfire, because those stand on one cell and nowhere else (DECISIONS.md C15). A button
+          // promising a demo and delivering ground is the landing telling a small lie about the
+          // world every time somebody presses it, so it now says the thing it actually does. The
+          // door to the demo is the one place on this page that is called Demo, in DemoEntry.
           <a
             href={`/parcel/${parcel.cell}`}
             className="rounded bg-echo px-4 py-2 font-pixel text-xs text-ink transition-opacity hover:opacity-90"
           >
-            Show me the demo
+            Stand on it
           </a>
         ) : null}
         <button

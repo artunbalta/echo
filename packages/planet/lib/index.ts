@@ -21,4 +21,5 @@ export * from "./registry-store.js";
 export * from "./biome-mask.js";
 export * from "./walkable.js";
 export * from "./assets.js";
+export * from "./parcel.js";
 export * from "./demo-cell.js";

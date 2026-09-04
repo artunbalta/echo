@@ -12,6 +12,22 @@
  * live posterior already accumulates under, so a read can never miss the writer's row (the earlier
  * "wrote ff96e0fc-…, read u_ff96e0fc-…" split). Keep this the single source of the id everywhere.
  */
+/**
+ * The id if one already exists, and NOTHING if it does not. Never mints, never writes.
+ *
+ * `resolveUserId` stamps a durable cross-session identifier into localStorage the first time it is
+ * called. On the landing that used to happen during the same render that draws the consent card,
+ * which is before the question is asked, under a card that promises "say no and the world plays
+ * exactly the same". A key that survives the no is not the same. Anything that runs before an
+ * answer reads through this; only the accept path is allowed to mint.
+ */
+export function peekUserId(): string {
+  if (typeof window === "undefined") return "";
+  const override = (new URLSearchParams(window.location.search).get("u") || "").trim();
+  if (override) return override;
+  return localStorage.getItem("echo.userId") ?? "";
+}
+
 export function resolveUserId(): string {
   if (typeof window === "undefined") return ""; // SSR guard; callers run client-side
   const override = (new URLSearchParams(window.location.search).get("u") || "").trim();

@@ -20,7 +20,8 @@
  *   actions    emitAction() builds the envelope with all eight mandatory context fields and
  *              session_mode "landing", POSTs it, and RETURNS the parsed result, so the caller can
  *              read persona.mu, delta_mu, mocked and durable off the same object.
- *   posterior  seeded ONCE from GET /api/agent/persona when the chain arms, then updated from each
+ *   posterior  read from GET /api/agent/persona when the chain arms, re-read after every
+ *              locomotion window that lands (walking moves it), and updated from each
  *              /observe/behavioral response. No polling: the posterior moves when an event moves
  *              it, and the inspector shows the same move the world reacts to.
  *   log        the last LOG_SIZE events, each with what was routed and what came back.
@@ -46,7 +47,7 @@ import {
   type TelemetryType,
 } from "@echo/shared";
 
-import { resolveUserId } from "../../lib/identity";
+import { peekUserId, resolveUserId } from "../../lib/identity";
 import { LocomotionSampler, TelemetryCollector } from "../telemetry";
 import { ACTION_AXIS_MAP, type ActionRow } from "./actionMap";
 
@@ -235,7 +236,12 @@ export interface MeasureChain {
 }
 
 export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain {
-  const userId = opts.userId ?? resolveUserId();
+  // The id is READ here and MINTED only on accept. resolveUserId writes a durable localStorage
+  // key the first time it is called, and the chain is constructed during the same render that
+  // draws the consent card, so calling it here stamped a cross-session identifier before the
+  // question was asked, under a card promising that a no leaves the world exactly as it was.
+  // Neither decline() nor revoke() removed it. peekUserId reads without writing; arm() mints.
+  let userId = opts.userId ?? peekUserId();
   const sessionId = opts.sessionId ?? newSessionId();
   const doFetch: typeof fetch = opts.fetchImpl ?? ((input, init) => fetch(input, init));
   const clock = opts.now ?? Date.now;
@@ -243,6 +249,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
   let collector: TelemetryCollector | null = null;
   let sampler: LocomotionSampler | null = null;
   let posterior: Posterior | null = null;
+  let inFlight = false;
   let seeded = false;
   let disposed = false;
   let seq = 0;
@@ -287,6 +294,10 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
       reason = `network_failed: ${(err as Error).message}`;
     }
     const mocked = reason !== undefined || res.mocked !== false;
+    // A locomotion window that reached the service has already moved the stored posterior, and the
+    // response says only how uncertain it now is. Read it back, or the panel keeps showing a mean
+    // the world has left behind and grows staler with every step.
+    if (!mocked && events.some((e) => e.type === "passive_locomotion")) void seed(true);
     events.forEach((ev, i) =>
       pushLog({
         id: ids[i],
@@ -304,10 +315,27 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     );
   }
 
-  /** ONE seed read of the posterior, when the chain first arms. Never repeated; never before consent. */
-  async function seed(): Promise<void> {
-    if (seeded) return;
+  /**
+   * Read the posterior. Never before consent.
+   *
+   * This used to be a single seed read for the life of the page, on the reasoning that only a
+   * bounded act moves the posterior and only the slice has one. That reasoning was wrong, and the
+   * inspector printed a falsehood on top of it. `passive_locomotion` is not merely recorded: the
+   * ML route lifts `novel_tile_ratio` and `path_tortuosity` into the telemetry features and runs a
+   * Kalman update (services/ml/echo_ml/app.py:262-281), and both are identified directions in W,
+   * the two largest loadings in the action map at openness 0.47 and affect 0.34. So walking a bare
+   * parcel moves the stored posterior about once every 1.5 seconds, on the least fakeable channel
+   * there is, and a single seed read could never see it.
+   *
+   * The route answers a locomotion window with `uncertainty` and no mean, so the movement cannot
+   * be reported from the response. Re-reading is the only honest way to show it, and `force` is
+   * how the locomotion path asks for one.
+   */
+  async function seed(force = false): Promise<void> {
+    if (seeded && !force) return;
+    if (inFlight) return;
     seeded = true;
+    inFlight = true;
     const at = clock();
     let next: Posterior;
     try {
@@ -316,7 +344,8 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     } catch (err) {
       next = { mu: zeros(), var: null, version: null, mocked: true, reason: `network_failed: ${(err as Error).message}`, source: "seed", at };
     }
-    // An event may have answered while the seed was in flight; the event is newer and wins.
+    inFlight = false;
+    // An event may have answered while the read was in flight; the event is newer and wins.
     if (disposed || posterior?.source === "event") return;
     posterior = next;
     notify();
@@ -324,6 +353,9 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
 
   function arm(): void {
     if (collector || disposed) return;
+    // Consent has been given, so the id may now be written down. Before this line the chain has
+    // only ever READ it, which is what lets a decline leave nothing behind.
+    if (!userId) userId = resolveUserId();
     collector = new TelemetryCollector(sessionId, send, opts.flushMs ?? 2000, true);
     collector.start();
     // The same sampler /play uses, unmodified; its scalars ride the ordinary collector so the
@@ -343,7 +375,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
   if (consentOn()) arm();
 
   return {
-    userId,
+    get userId() { return userId; },
     sessionId,
     consent: landingConsent,
 

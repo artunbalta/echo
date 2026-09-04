@@ -85,8 +85,8 @@ import * as THREE from "three";
 import {
   BIOMES,
   ColliderIndex,
-  DEMO_FALLOFF,
   LAND_BIOMES,
+  SCATTER_FALLOFF,
   classesForBiomes,
   placeAssets,
   sampleBiomeMask,
@@ -158,12 +158,12 @@ export interface ScatterLayerOptions {
   /**
    * How the density thins with distance from the spawn.
    *
-   * The default carries the name DEMO_FALLOFF and none of the meaning: the four numbers mention no
-   * biome, no composition and no cell, and `spawnFalloff` is a pure function of distance from a
-   * spawn, which every route has. What they are actually tuned against is the fog. Full density to
-   * 150 m covers the near field a world is judged on; `cutoffM` 500 truncates the curve while the
-   * fog has already closed at 420 m, where density is still 0.543, so the step to zero is never
-   * seen. Change the fog and change this; changing the cell does not.
+   * The default's four numbers mention no biome, no composition and no cell, and `spawnFalloff`
+   * is a pure function of distance from a spawn, which every route has. What they are tuned
+   * against is the fog. Full density to 150 m covers the near field a world is judged on;
+   * `cutoffM` 500 truncates the curve while the fog has already closed at 420 m, where density is
+   * still 0.543, so the step to zero is never seen. Change the fog and change this; changing the
+   * cell does not.
    */
   falloff?: { fullM: number; farM: number; farFactor: number; cutoffM: number };
   /** The buildable plot to leave empty, tiles from the spawn, convex. */
@@ -304,7 +304,7 @@ function drawableClasses(classes: readonly AssetClass[], present: readonly Biome
 
 export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   const maskStepM = options.maskStepM ?? 10;
-  const falloff = options.falloff ?? DEMO_FALLOFF;
+  const falloff = options.falloff ?? SCATTER_FALLOFF;
   const footprintTiles = options.footprintTiles ?? BUILDABLE_FOOTPRINT_TILES;
   const clearingM = options.clearingM ?? 3.5;
   const colliderCellM = options.colliderCellM ?? 8;

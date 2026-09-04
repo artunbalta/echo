@@ -18,8 +18,9 @@ import {
   spawnFalloff,
 } from "../lib/assets.js";
 import { sampleBiomeMask } from "../lib/biome-mask.js";
-import { DEMO_CELL, DEMO_LAND_BIOMES, DEMO_NEAR_FIELD_M, DEMO_REGION_K } from "../lib/demo-cell.js";
+import { DEMO_CELL, DEMO_LAND_BIOMES, DEMO_NEAR_FIELD_M } from "../lib/demo-cell.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
+import { PARCEL_REGION_K } from "../lib/parcel.js";
 import { createTangentPatch, DEFAULT_SCENE_OPTIONS } from "../lib/scene.js";
 import { calibratePlanet, createTerrain } from "../lib/terrain.js";
 import { regionBound, spawnPointFor } from "../lib/walkable.js";
@@ -31,7 +32,7 @@ const seed = process.env.PLANET_SEED ?? "echo-capacity-1";
 const field = createTerrain(seed);
 const calibration = calibratePlanet(field, PLANET_PARAMS.landFractionTarget);
 const patch = createTangentPatch(DEMO_CELL, PLANET_PARAMS.radiusKm);
-const bound = regionBound(DEMO_CELL, DEMO_REGION_K, PLANET_PARAMS.radiusKm);
+const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, PLANET_PARAMS.radiusKm);
 const spawn = spawnPointFor(DEMO_CELL, field, calibration, PLANET_PARAMS.radiusKm)!;
 const registry = classesForBiomes(DEMO_LAND_BIOMES);
 
