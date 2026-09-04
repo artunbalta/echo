@@ -200,23 +200,61 @@ export interface DetailOptions {
  * about 1.56 km, so a person crossing a parcel walks over one shape; 192 m puts two or three
  * swells inside the 420 m the fog leaves visible, which is the band the field has nothing in.
  *
- * The AMPLITUDE was swept over the SAME 400 parcels DEFAULT_SCENE_OPTIONS above is measured on,
- * and read off the slope it buys at the 12 m step, which is the tilt under a foot. Median slope
- * against amplitude: 2.44 undisplaced, 2.51 at 2 m, 2.61 at 3 m, 2.75 at 4 m, 3.12 at 6 m, 3.52 at
- * 8 m; the share of land over 5 degrees goes 18.8, 19.3, 20.0, 20.9, 24.0, 28.9%.
+ * THE AMPLITUDE HAS BEEN SWEPT TWICE, and the second time is DECISIONS C19. One method both times,
+ * which is the only reason the two can be compared: 400 assignable land parcels drawn from one
+ * seeded stream, sampled on this very lattice, cut to the deed line and to `isLand`, one slope
+ * reading per emitted triangle from its own normal, 9.41 M triangles in all. C19 ordered the re-run
+ * because the first sweep was believed to have been taken at heightScaleM 900, before C1 tripled
+ * it. It had not been. Re-run at the shipped 2,700, the same method reproduces every figure the
+ * first sweep recorded, to the last digit it printed, and the three rows under them are what the
+ * re-run added.
  *
- * Four is where the ground stops being flat without the macro landscape being overwritten. The
- * octave amplitudes are 2.13, 1.07, 0.53 and 0.27 m against a mean dry span inside a parcel of
- * 80.5 m, so the biggest swell is a fortieth of the hill it sits on, and the shipped ground keeps
- * the macro field's own p95 slope almost exactly: 8.12 degrees undisplaced, 8.34 displaced.
+ *   amplitude, m           0     1     2     3     4     5     6     8    10    12
+ *   median slope, deg   2.44  2.46  2.51  2.61  2.75  2.93  3.12  3.52  3.95  4.38
+ *   land over 5 deg, %  18.8  18.9  19.3  20.0  20.9  22.2  24.0  28.9  35.1  41.6
+ *   land under 1 deg, % 20.1  19.4  17.0  14.2  11.8  10.0   8.5   6.5   5.3   4.4
+ *   own slope, deg      0.00  0.30  0.60  0.91  1.21  1.51  1.80  2.39  2.97  3.53
+ *   walks that turn, %   0.5   2.5   9.4  17.1  25.0  30.5  36.0  44.1  51.3  56.2
  *
- * WHAT IT IS WORTH TO A PERSON, which is the only reason any of this is here. Measured alone, with
- * the macro subtracted, over 2.08 M dry lattice points on 120 parcels: the displacement runs
- * 0.94 m in mean magnitude and 2.06 m at p95, and its OWN slope is 1.18 degrees mean and 2.38 at
- * p95. That last number is the point of the whole change: at heightScaleM 900 the entire landscape
- * had a mean slope of 1.03 degrees, so what is added here at walking scale is more tilt underfoot
- * than the old world had in total. Over a 96 m walk, about twenty seconds, the ground rises and
- * falls through 0.73 m at the median and 1.54 m at p95: a meadow that is never level, not a hill.
+ * THE BOTTOM THREE ROWS ARE WHAT DECIDE IT, because the top two on their own cannot. Slopes compose
+ * in QUADRATURE, so a walking-scale tilt laid on ground that is already tilted barely moves any
+ * slope percentile of it: on the ordinary parcel's own region, median 4.26 degrees, four metres
+ * moves that median by 0.001 and the mean by 0.13, and it takes six to move the median 2.8%, eight
+ * to move it 7.4% and twelve to move it 20.6%, by which point the planet's land over 5 degrees has
+ * gone from 18.8% to 41.6%. That is arithmetic and no amplitude buys its way out of it.
+ *
+ * So the rows that measure what the displacement is FOR. Land under 1 degree is ground that is
+ * level underfoot, and it is what the field leaves too much of: a fifth of all land, because none
+ * of its variance lives under 100 m. Four metres takes 41% of that away. Walks that turn is the
+ * share of 96 m walks, about twenty seconds, on which the ground changes between rising and falling
+ * by at least 10 cm somewhere; the macro field turns on one walk in two hundred, since 96 m of a
+ * 1.56 km feature is a straight grade. Four metres turns one walk in four.
+ *
+ * FOUR IS WHERE THAT CROSSES THE COST, and the cost is the top two rows: the landscape's own median
+ * and its own steep share must not become the displacement's. At four the median moves 12.8%, the
+ * over-5 share 2.15 points of its 18.8, the p95 slope 2.7% (8.12 to 8.34 degrees) and the mean dry
+ * span inside a parcel 1.1% (80.5 to 81.4 m), and the biggest octave is 2.13 m against that span, a
+ * fortieth of the hill it sits on. Per extra metre of dial, the level ground removed per point of
+ * steep ground added runs 6.3, 6.3, 4.1, 2.5, 1.4, 0.8, so it passes one between five and six; read
+ * "level" at half a degree instead of one and it passes between three and four. The knee is
+ * somewhere in three to six whichever way it is read, and four is the middle of that. Six buys 58%
+ * of the level ground for 28% more steep ground and a 27% heavier median; eight buys 68% for 54%
+ * and 44%.
+ *
+ * WHAT IT IS WORTH TO A PERSON, which is the only reason any of this is here, and the paragraph C19
+ * corrected. Measured alone, with the macro subtracted: the displacement runs 0.98 m in mean
+ * magnitude and 2.08 m at p95, and its own slope is 1.21 degrees mean and 2.43 at p95. The first
+ * version of this paragraph set that 1.21 against the 1.03 degrees the WHOLE landscape had at
+ * heightScaleM 900 and called it more tilt underfoot than the old world had in total. The
+ * arithmetic was right and the comparison was to a world that no longer exists: the number it is
+ * actually added to is 3.09, and against that it is 39%. Over a 96 m walk the displacement alone
+ * rises and falls through 0.92 m at the median, where the macro field over the same walks gives
+ * 2.23 m of pure grade; the shipped ground's median walk ranges 2.43 m, so the walk gains 9% of
+ * range and a quarter of walks gain a turn in the ground. A meadow that is never level, not a hill.
+ *
+ * scene.test.ts pins both halves of that trade at the shipped dial, so an amplitude, an octave
+ * ladder, a taper or a lattice that quietly flattened the world, or one that quietly took the
+ * landscape over, fails there rather than in a screenshot nobody takes.
  */
 export const DEFAULT_DETAIL: DetailOptions = {
   amplitudeM: 4,

@@ -12,6 +12,15 @@
  * it; groundColour.ts rewrites that attribute in place, out of the palette, before the first
  * BufferAttribute is made. Positions, normals and triangles are the builder's untouched.
  *
+ * AND THE GROUND HAS ONE MORE ATTRIBUTE AND ONE SHADER PATCH (task A28). The vertex lattice is 12 m
+ * and 43% of the ground rays in a shipped frame land inside ten metres, so the floor a person is
+ * standing on is one triangle with a Gouraud gradient across it and nothing groundColour.ts can
+ * write reaches it. groundGrain.ts draws that band per fragment, off a three-byte per-vertex axis
+ * saying which two palette materials this ground swings between, and it goes on the same
+ * MeshLambertMaterial rather than a material of its own: everything else about the ground, the
+ * shadow map, the fog, the two lights, the vertex colours, is three's and none of it is worth
+ * reimplementing to add twelve hashes. Measured at 16 microseconds a frame on the ordinary parcel.
+ *
  * Height is visual only. Nothing here is read back into movement: the mover asks
  * `frame.walkableTile`, which is land or not, and this mesh could be flat without a single step
  * changing. What the mesh promises instead is that it is the SAME ground the globe showed, which is
@@ -41,6 +50,7 @@ import { buildRegionScene, type RegionScene } from "@echo/planet";
 
 import { PALETTE } from "../three/palette";
 import { paintRegionGround } from "./groundColour";
+import { patchGroundGrain } from "./groundGrain";
 import { ALBEDO_FIX, KEY_DISTANCE_M } from "./skyLayer";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 
@@ -219,12 +229,23 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
     // Flat shading, per the bible: carved clay. Vertex colours still interpolate, so the biome
     // blend along a boundary survives it; only the lighting is per facet.
     ground = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    // The metre-scale grain (task A28). It is a patch on this material rather than a material of
+    // its own because everything else about the ground - the shadow map, the fog, the two lights,
+    // the vertex colours - is three's and none of it is worth reimplementing to add twelve hashes.
+    // groundGrain.ts carries the derivation and the reason it multiplies rather than adds.
+    patchGroundGrain(ground);
+    let chunkIndex = -1;
     for (const chunk of built.chunks) {
+      chunkIndex++;
       if (chunk.triangleCount === 0) continue;
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(chunk.positions, 3));
       geometry.setAttribute("normal", new THREE.BufferAttribute(chunk.normals, 3));
       geometry.setAttribute("color", new THREE.BufferAttribute(chunk.colours, 3));
+      // Three normalised bytes a vertex: which two materials this ground swings between, and how
+      // far apart they are. Zero on the sea floor, which is how the grain is masked without a
+      // branch in the shader. 1.2 MB over the whole disk against the colour attribute's 4.8.
+      geometry.setAttribute("grainAxis", new THREE.BufferAttribute(paint.grain[chunkIndex]!, 3, true));
       // The builder's sphere, so three never walks 40k vertices to find one it already knows.
       const [cx, cy, cz] = chunk.bounds.centre;
       geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), chunk.bounds.radius);

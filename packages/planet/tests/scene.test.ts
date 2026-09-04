@@ -21,7 +21,7 @@ import { landFractionOfCell } from "../lib/land.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
 import { seedInventory } from "../lib/rounds.js";
 import { buildParcelScene, buildRegionScene, createSceneHeight, createTangentPatch, DEFAULT_DETAIL, hashPosition, sceneHeightAt, type RegionScene } from "../lib/scene.js";
-import { BIOME_COLOUR, BIOME_COLOUR_LINEAR, BIOMES, calibratePlanet, createTerrain, srgbToLinear, type Biome } from "../lib/terrain.js";
+import { BIOME_COLOUR, BIOME_COLOUR_LINEAR, BIOMES, calibratePlanet, createTerrain, isLand, srgbToLinear, type Biome } from "../lib/terrain.js";
 import { biomeAtLocal } from "../lib/biome-mask.js";
 import { DEMO_CELL } from "../lib/demo-cell.js";
 import { PARCEL_REGION_K } from "../lib/parcel.js";
@@ -411,9 +411,25 @@ test("C2: the displacement adds NOTHING to the gap between heightAt and the draw
     }
     return gaps;
   };
+  // A THIRD GROUND, ten times louder than anything that ships, because the assertion below is
+  // about the CONSTRUCTION and not about the dial. Lattice-linearity is what makes the gap
+  // independent of the amplitude; a displacement read off the exact position instead of off the
+  // two triangles the builder emits would be carried approximately, and the error would scale with
+  // the amplitude, so a guard that only ever saw 4 m would report a small number either way and
+  // prove nothing. DECISIONS C19 asks for this property to hold at whatever amplitude is chosen,
+  // and this is the form of the proof that survives a future choice: measured at 4 m and at 40 m,
+  // the gap is the same gap. The taper widens in step because createSceneHeight refuses one under
+  // 1.5 times the amplitude, on pain of a shore that runs backwards into the sea.
+  const loud = buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS, {
+    resolution: 12,
+    detail: { ...DEFAULT_DETAIL, amplitudeM: DETAIL_CEILING_M * 10, taperM: DEFAULT_DETAIL.taperM * 10 },
+  });
+
   const withDetail = sample(scene);
   const without = sample(bare);
+  const shouted = sample(loud);
   assert.equal(withDetail.length, without.length);
+  assert.equal(shouted.length, without.length);
   assert.ok(withDetail.length > 20_000, `only ${withDetail.length} points were checked`);
   let worstDelta = 0;
   let worst = 0;
@@ -431,6 +447,23 @@ test("C2: the displacement adds NOTHING to the gap between heightAt and the draw
   // hundred metres of height is 7.6 micrometres, and three of those are interpolated per point.
   // Measured at 14 micrometres, which is four orders below the gap itself.
   assert.ok(worstDelta < 1e-4, `the displacement moved the gap by ${worstDelta} m; it must be carried exactly`);
+
+  // And the same at ten times the dial, which is the assertion that says the property belongs to
+  // the construction rather than to the number. Measured 14.2 micrometres against 14.0 at four
+  // metres: a displacement reaching 40 m leaves the gap between the height function and the drawn
+  // triangle exactly where 4 m and 0 m leave it, to within the float step of the stored vertex.
+  let worstLoud = 0;
+  for (let i = 0; i < shouted.length; i++) worstLoud = Math.max(worstLoud, Math.abs(shouted[i]! - without[i]!));
+  console.log(
+    `C2: ${DEFAULT_DETAIL.amplitudeM} m moves the gap ${(worstDelta * 1e6).toFixed(1)} um, ` +
+      `${DETAIL_CEILING_M * 10} m moves it ${(worstLoud * 1e6).toFixed(1)} um`,
+  );
+  assert.ok(
+    worstLoud < 1e-4,
+    `a ${DETAIL_CEILING_M * 10} m displacement moved the gap by ${worstLoud} m, so the displacement is ` +
+      `NOT lattice-linear: prop seating now scales with the amplitude and DECISIONS C19's first ` +
+      `constraint is broken`,
+  );
 });
 
 test("C2: no triangle that holds the waterline is displaced, so the drawn coast is the macro coast", () => {
@@ -453,6 +486,216 @@ test("C2: no triangle that holds the waterline is displaced, so the drawn coast 
     }
   }
   assert.ok(coastal > 200, `only ${coastal} shoreline triangles were found on a 45% ocean cell`);
+});
+
+test("C19: the displacement takes the flat out of the ground without taking the landscape over", () => {
+  // THE TRADE THE AMPLITUDE WAS CHOSEN ON, both halves of it, measured on the shipped dial.
+  //
+  // This is not the sweep. The sweep is 400 parcels and four minutes and lives in DEFAULT_DETAIL's
+  // comment; this is twelve parcels and a second, and it holds the two properties that comment
+  // chose four metres for. It is here because neither half is guarded anywhere else: nothing
+  // failed when the relief was worth almost nothing at 900, and nothing would fail if someone
+  // raised the dial until the walking-scale noise WAS the landscape.
+  //
+  // What is measured: land triangles on the 12 m lattice, cut to isLand, with the displacement off
+  // and on. Level ground is a triangle under 1 degree, which is ground a walker cannot feel; steep
+  // ground is over 5 degrees, which is the share DECISIONS C1 sized the height scale by, and it
+  // stands here for the landscape's own shape. The numbers differ from the sweep's because the
+  // parcel set and the calibration differ; the trade does not.
+  //
+  // Measured over 454,582 triangles on twelve parcels: level ground 24.94% of land undisplaced and
+  // 12.78% displaced, so 48.7% of it is gone; steep ground 26.98% to 28.54%, so 1.55 points added
+  // to a landscape that has 26.98 of its own. The displacement's own slope, macro subtracted, is
+  // 1.196 degrees. At 3 m the trade is 36.5% and 1.05 points, at 5 m it is 58.5% and 2.33, at 6 m
+  // 65.4% and 3.51, at 8 m 75.1% and 7.45. The bounds below accept four and five, which is the
+  // band the sweep put the knee in, and reject three and six. The exact dial is pinned separately
+  // and deliberately, by DETAIL_CEILING_M at the top of this file.
+  const LEVEL_DEG = 1;
+  const STEEP_DEG = 5;
+  const cells: string[] = [];
+  for (const cell of sampleParcels(40)) {
+    if (landFractionOfCell(field, calibration.seaLevel, cell, 2) < 0.9) continue;
+    cells.push(cell);
+    if (cells.length === 12) break;
+  }
+  assert.equal(cells.length, 12, "the planet ran out of dry parcels to measure on");
+
+  const step = 12;
+  const scaleM = 2700;
+  /** Level share, steep share and the displacement's own mean slope, over the same triangles. */
+  const measure = (detailed: boolean) => {
+    let level = 0;
+    let steep = 0;
+    let total = 0;
+    let ownSum = 0;
+    for (const cell of cells) {
+      const patch = createTangentPatch(cell, RADIUS);
+      const half = Math.ceil(patch.extentM / step) + 1;
+      const n = 2 * half + 1;
+      const at = (i: number) => (i - half) * step;
+      const macroAt = (x: number, y: number) => sceneHeightAt(patch, field, calibration, x, y) * scaleM;
+      const heightAt = detailed
+        ? createSceneHeight(patch, field, calibration, { heightScaleM: scaleM, resolution: step })
+        : macroAt;
+      const h = new Float64Array(n * n);
+      const own = new Float64Array(n * n);
+      const dry = new Uint8Array(n * n);
+      for (let j = 0; j < n; j++) {
+        for (let i = 0; i < n; i++) {
+          const k = j * n + i;
+          const x = at(i);
+          const y = at(j);
+          dry[k] = isLand(field, calibration.seaLevel, patch.toDirection(x, y)) ? 1 : 0;
+          h[k] = heightAt(x, y);
+          own[k] = h[k]! - macroAt(x, y);
+        }
+      }
+      // The slope of one emitted triangle, from its own normal, exactly as the sweep reads it.
+      const slopeDeg = (g: Float64Array, a: number, b: number, c: number): number | null => {
+        const ax = (a % n) * step;
+        const ay = Math.floor(a / n) * step;
+        const ux = (b % n) * step - ax;
+        const uy = Math.floor(b / n) * step - ay;
+        const uz = g[b]! - g[a]!;
+        const vx = (c % n) * step - ax;
+        const vy = Math.floor(c / n) * step - ay;
+        const vz = g[c]! - g[a]!;
+        const nx = uy * vz - uz * vy;
+        const ny = uz * vx - ux * vz;
+        const nz = ux * vy - uy * vx;
+        const len = Math.hypot(nx, ny, nz);
+        return len === 0 ? null : (Math.acos(Math.min(1, Math.abs(nz) / len)) * 180) / Math.PI;
+      };
+      for (let j = 0; j + 1 < n; j++) {
+        for (let i = 0; i + 1 < n; i++) {
+          const k00 = j * n + i;
+          const k11 = k00 + n + 1;
+          for (const t of [[k00, k00 + 1, k11], [k00, k11, k00 + n]]) {
+            const [a, b, c] = t as [number, number, number];
+            if (!dry[a] || !dry[b] || !dry[c]) continue;
+            const deg = slopeDeg(h, a, b, c);
+            if (deg === null) continue;
+            total++;
+            if (deg < LEVEL_DEG) level++;
+            if (deg > STEEP_DEG) steep++;
+            ownSum += slopeDeg(own, a, b, c) ?? 0;
+          }
+        }
+      }
+    }
+    return { level: level / total, steep: steep / total, own: ownSum / total, total };
+  };
+
+  const bare = measure(false);
+  const shipped = measure(true);
+  assert.equal(shipped.total, bare.total, "the two grounds were measured over different triangles");
+  assert.ok(bare.total > 400_000, `only ${bare.total} triangles were measured`);
+  assert.equal(bare.own, 0, `the undisplaced ground has ${bare.own} degrees of displacement in it`);
+
+  const levelRemoved = (bare.level - shipped.level) / bare.level;
+  const steepAdded = (shipped.steep - bare.steep) * 100;
+  console.log(
+    `C19: over ${bare.total.toLocaleString()} land triangles, level ground ${(bare.level * 100).toFixed(2)}% -> ` +
+      `${(shipped.level * 100).toFixed(2)}% (${(levelRemoved * 100).toFixed(1)}% of it removed), steep ground ` +
+      `${(bare.steep * 100).toFixed(2)}% -> ${(shipped.steep * 100).toFixed(2)}% (+${steepAdded.toFixed(2)} points); ` +
+      `the displacement's own slope is ${shipped.own.toFixed(3)} degrees`,
+  );
+
+  // HALF ONE: the ground is not flat underfoot. A world that lost its relief, dropped its octaves
+  // to something the lattice cannot draw, or tapered it away, fails here.
+  assert.ok(
+    levelRemoved > 0.4,
+    `the displacement removed only ${(levelRemoved * 100).toFixed(1)}% of the level ground; at the shipped ` +
+      `dial it removes 48.7%, and under 40% is a world a walker cannot feel`,
+  );
+  // HALF TWO: the landscape is still the landscape. A dial raised until the walking-scale noise is
+  // the terrain fails here instead, which is the failure C19 was opened to prevent.
+  assert.ok(
+    steepAdded < 3,
+    `the displacement added ${steepAdded.toFixed(2)} points of steep ground to the landscape's own ` +
+      `${(bare.steep * 100).toFixed(2)}; at the shipped dial it adds 1.55, and past 3 the relief underfoot ` +
+      `has become the landscape`,
+  );
+});
+
+test("C2: the waterline does not move OFF the lattice either, over the whole coastal band", () => {
+  // The test above proves that no triangle holding the waterline is displaced, which is the promise
+  // at the mesh's own VERTICES. This is the same promise stated where a person actually stands.
+  //
+  // Between two lattice points the ground is the EXACT macro field plus the lattice-linear
+  // interpolation of the corner offsets. The macro field is curved and the interpolation is flat,
+  // so a hollow narrower than one 12 m step can dip below sea level while all four corners of its
+  // quad are dry: the corners say "land, displace me" and the water between them is lifted out of
+  // its own pond, with no vertex anywhere able to see it. What stops that is that the taper reads
+  // the LOWEST macro ground within one lattice step and that fade() leaves the ramp quadratic near
+  // the shore, so the offset dies faster than the ground rises.
+  //
+  // WHAT WAS WATCHED FAILING, and what that is worth. Taking the one-step erosion out of the taper
+  // turns this into 21 flips of 297,528, the first at (1858.4, -361.6) where the macro says
+  // -0.0051 m of sea and the drawn ground says +0.0116 m of land. Giving the scene a sea level a
+  // tenth of a percent off the registry's turns the isLand half below into 26 disagreements of
+  // 274,908. Neither break is caught HERE ALONE: the vertex test above catches the first and the
+  // goldens catch the second, and this file says so rather than claiming a uniqueness it does not
+  // have. What is only here is the shape of the statement, which is the one the product makes: the
+  // ground a body stands on is on the same side of the water as the ground the registry sold, at
+  // every point of the region and not only at the corners of its triangles.
+  //
+  // Measured on the demo cell, which is 45% ocean and has 3.85 km of coast inside its region: over
+  // the whole disk at a 3 m spacing, every point within 40 m of sea level is on the same side of
+  // the waterline as the macro field puts it. Zero, not "few": a single flip is a metre of shore
+  // the registry sold as one thing and the ground draws as the other.
+  const patch = createTangentPatch(DEMO_CELL, RADIUS);
+  const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, RADIUS);
+  const drawn = createSceneHeight(patch, field, calibration, { heightScaleM: 2700, resolution: 12 });
+  const macro = createSceneHeight(patch, field, calibration, { heightScaleM: 2700, resolution: 12, detail: null });
+
+  let band = 0;
+  let flips = 0;
+  let worst = "";
+  let lowestLand = Infinity;
+  let highestSea = -Infinity;
+  for (let y = -bound.radiusM; y <= bound.radiusM; y += 3) {
+    for (let x = -bound.radiusM; x <= bound.radiusM; x += 3) {
+      if (!bound.contains(x, y)) continue;
+      const m = macro(x, y);
+      if (Math.abs(m) > 40) continue;
+      band++;
+      const d = drawn(x, y);
+      if (m > 0 !== d > 0) {
+        flips++;
+        if (!worst) worst = `(${x}, ${y}): macro ${m} m, drawn ${d} m`;
+      }
+      if (m > 0) lowestLand = Math.min(lowestLand, d);
+      else highestSea = Math.max(highestSea, d);
+    }
+  }
+  // The band has to be a band. A guard that measured nothing would report zero flips too.
+  assert.ok(band > 250_000, `only ${band} points of the coastal band were sampled`);
+  assert.equal(flips, 0, `${flips} of ${band} coastal points changed side of the waterline; first at ${worst}`);
+  // The same statement from the other direction, which is what a reader can check by eye: the
+  // shallowest displaced land is still above the sea and the highest displaced sea still below it.
+  assert.ok(lowestLand > 0, `land was pushed to ${lowestLand} m, under the water sheet`);
+  assert.ok(highestSea <= 0, `sea was lifted to ${highestSea} m, above the water sheet`);
+  console.log(
+    `C2: ${band.toLocaleString()} coastal points at 3 m, ${flips} waterline flips; shallowest drawn ` +
+      `land ${lowestLand.toExponential(3)} m, highest drawn sea ${highestSea.toExponential(3)} m`,
+  );
+
+  // And the registry's own predicate, which is the reason any of this matters. `isLand` reads raw
+  // elevation and knows nothing about the scene; every parcel boundary, land fraction and deed is
+  // drawn from it. Over the whole region at 6 m, it agrees with the sign of the ground a body
+  // stands on at every point.
+  let checked = 0;
+  let disagreements = 0;
+  for (let y = -bound.radiusM; y <= bound.radiusM; y += 6) {
+    for (let x = -bound.radiusM; x <= bound.radiusM; x += 6) {
+      if (!bound.contains(x, y)) continue;
+      checked++;
+      if (isLand(field, calibration.seaLevel, patch.toDirection(x, y)) !== drawn(x, y) > 0) disagreements++;
+    }
+  }
+  assert.ok(checked > 100_000, `only ${checked} points were checked against isLand`);
+  assert.equal(disagreements, 0, `${disagreements} of ${checked} points: the registry and the drawn ground disagree about land`);
 });
 
 test("C2: the displacement is a pure function of the ground, and never Math.random", () => {
