@@ -101,9 +101,22 @@ export function createTangentPatch(cell: string, radiusKm: number): TangentPatch
 }
 
 /**
- * The height the walkable scene renders at a local coordinate. THE scene path, in one function.
+ * The MACRO height at a local coordinate: the shared field, read on the tangent patch.
  *
- * The whole content of section 6.2 step 3 is the first line: convert the grid point back to a
+ * ONE OF TWO HEIGHT FUNCTIONS, and the one that is not what a person stands on. This is the field
+ * the globe draws, the field the registry assigns parcels from, and the field `isLand`, `biome`,
+ * `walkableAt` and every deed are computed over, so it agrees with `globeHeightAt` to the bit and
+ * `agreement.test.ts` holds it there at 1e-6. {@link createSceneHeight} is this plus the
+ * walking-scale displacement, and THAT is the ground the mesh is built from and the body, the
+ * camera and the props are seated on (DECISIONS C2).
+ *
+ * Both exist because C2 split them deliberately. A caller that needs the terrain the planet agrees
+ * about wants this one; a caller that needs the terrain underfoot wants the other, and the two
+ * differ by up to the displacement's amplitude, measured at 3.3631 m of the 4 m budget. Anything
+ * that must line up with the globe, the registry or a parcel boundary reads this function. Anything
+ * that must line up with the drawn surface reads the scene's own `heightAt`.
+ *
+ * The whole content of section 6.2 step 3 is the one line of body: convert the grid point back to a
  * position on the sphere BEFORE sampling. A scene that sampled a flat plane instead would look
  * plausible and would be a different planet from the one on the globe, which is the failure the
  * agreement test exists to catch.
@@ -253,9 +266,17 @@ export interface SceneHeightOptions {
 /**
  * THE height the walkable world is drawn at and stood on, in metres above sea level.
  *
- * One function, built once per world, so `buildRegionScene` and the host's `heightAtTile` cannot
- * be two implementations of the same idea. Off the lattice it is the exact macro height plus the
- * lattice-linear displacement, which is what the mesh's own triangles carry.
+ * THE OTHER OF THE TWO HEIGHT FUNCTIONS, and the one that ships underfoot: {@link sceneHeightAt}
+ * times the height scale, plus the walking-scale displacement. One function, built once per world,
+ * so `buildRegionScene` and the host's `heightAtTile` cannot be two implementations of the same
+ * idea. Off the lattice it is the exact macro height plus the lattice-linear displacement, which is
+ * what the mesh's own triangles carry.
+ *
+ * WHAT THIS COSTS, since it is the divergence C2 bought and not a detail. This ground is not the
+ * globe's ground: it stands away from it by up to `detail.amplitudeM`, measured at 3.3631 m worst
+ * over agreement.test.ts's 25,000 samples, and 0.80 m in the mean. That is a promise softened from
+ * exact to bounded, and the bound is asserted on both sides there. The macro field itself is
+ * untouched, so the waterline, the parcel boundaries and the registry do not move by anything.
  *
  * The memo is a cache over lattice points and cannot change an answer; it is what keeps a region
  * build at one terrain evaluation per vertex rather than two.
@@ -704,7 +725,12 @@ export function buildParcelScene(
       else landArea += flat;
       biomeArea.set(kind, (biomeArea.get(kind) ?? 0) + flat);
       // Linear, because a colour attribute is read as linear and converted nowhere: see
-      // BIOME_COLOUR_LINEAR. The bytes themselves stay in BIOME_COLOUR for the 2D preview plate.
+      // BIOME_COLOUR_LINEAR. BIOME_COLOUR keeps the bytes, and bytes are what the 2D preview plate
+      // (scripts/preview-planet.ts) wants, because it paints into a canvas and not into an
+      // attribute. What this line does NOT say, and what an earlier version of it was read as
+      // saying, is that every preview is safe: anything holding a LINEAR buffer and writing image
+      // bytes out of it owes the display transfer on the way, `linearToSrgb`. The globe preview
+      // rasteriser was not given it when this seam moved, and rendered a black sea.
       const colour = BIOME_COLOUR_LINEAR[kind];
 
       for (let v = 0; v < 3; v++) {

@@ -489,7 +489,14 @@ export interface ParcelMesh {
   /** Nine floats per triangle. Mutated in place by {@link setParcelExtrusion}. */
   positions: Float32Array;
   normals: Float32Array;
+  /**
+   * Nine floats per triangle, LINEAR and 0..1, which is what a three colour attribute reads and
+   * what `linearRgb` produces (DECISIONS C3). NOT bytes, and not a picture: a caller that turns
+   * this buffer into image bytes owes it `linearToSrgb` on the way out. The type cannot say this,
+   * because what crosses here is a Float32Array of anonymous numbers, so the sentence has to.
+   */
   colours: Float32Array;
+  /** The same, in the same space, before any {@link paintParcel}: a parcel's terrain colour. */
   terrainColours: Float32Array;
   triangleCount: number;
   cells: string[];

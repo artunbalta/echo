@@ -457,10 +457,16 @@ test("A10: a beach darkens toward its own water, and has no gradient where there
   // black, and the wet end would be a beach nowhere near water.
   const dry = build(DRY_BEACH_CELL);
   assert.equal(dry.hasWater, false, "the dry-beach cell grew a sea; pick another");
-  const dryStats = measure(dry, labelLattice(dry));
+  // The paint FIRST, then the measurement. This block used to run `measure` on line one and the
+  // paint on line two, so `dryStats` was the builder's flat table and the assertion below could
+  // not see the paint at all. Proven, not suspected: firing the wet ramp with no water, which is
+  // the one case this test names, darkened the dry beach by 46 levels on the red channel and the
+  // test stayed green. This file's own header records the same bug being fixed once already and
+  // says `paintAndMeasure` is the only way in; this block had hand-rolled the order backwards.
+  const labels = labelLattice(dry);
   paintRegionGround(dry, SEED);
-  const afterDry = measure(dry, labelLattice(dry));
-  assert.equal(afterDry.size, 0, "the labels still resolved after the paint; the inversion is not what it says");
+  const dryStats = measure(dry, labels);
+  assert.ok(dryStats.size > 0, "the labels did not resolve after the paint, so nothing was measured");
   const stats = dryStats.get("beach")!;
   assert.ok(stats.n > 5000, `only ${stats.n} inland beach vertices`);
   assert.ok(

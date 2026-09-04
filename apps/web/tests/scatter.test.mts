@@ -9,6 +9,14 @@
  * LayerContext with a real THREE.Scene and no renderer at all: instancing, matrices and bounding
  * spheres are pure arithmetic, and every assertion below is about numbers, not pixels.
  *
+ * THE GROUND IS BUILT HERE TOO, and it is not scenery. Whether a prop stands on the ground can only
+ * be answered against the surface that was UPLOADED, so the terrain layer is taken out of the same
+ * list and built into its own scene, and (e) reads the triangles back out of its chunk geometry.
+ * It gets a context of its own because it legitimately touches the renderer, to switch shadow maps
+ * on, and the scatter's context has to keep its null renderer to go on proving the scatter does
+ * not. The two contexts share ONE frame, which is the only thing that has to agree between them,
+ * and (e) is the assertion that it did.
+ *
  * The frame is reconstructed the way PlanetWorld's constructor builds it. That constructor cannot
  * be reused because it allocates a GL context in its second half; its first half is arithmetic over
  * @echo/planet and is copied, not approximated, so a change to the frame breaks this file loudly.
@@ -47,6 +55,7 @@ import type { MeasureChain } from "../src/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "../src/game/world/parcelWorld";
 import { SCATTER_GEOMETRY } from "../src/game/world/scatterGeometry";
 import type { ScatterLayer } from "../src/game/world/scatterLayer";
+import type { TerrainLayer } from "../src/game/world/terrainChunks";
 import type { LayerContext, WorldFrame } from "../src/game/world/PlanetWorld";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -121,7 +130,26 @@ const ctx: LayerContext = {
 // Now there is one way to get this layer and the test uses it, so a mount that stops passing the
 // slice fails here instead of passing.
 const chain = { armed: () => false, feedPosition: () => {} } as unknown as MeasureChain;
-const layer = parcelLayers({ chain, slice: sliceOptionsFor("slice", {}) }).find((l) => l.name === "scatter") as ScatterLayer;
+const layers = parcelLayers({ chain, slice: sliceOptionsFor("slice", {}) });
+const layer = layers.find((l) => l.name === "scatter") as ScatterLayer;
+
+// The ground, from the same list, in the order parcelWorld.ts says the list has to be built in:
+// terrain before scatter, because the scatter seats each prop on the ground the terrain drew.
+//
+// Its own scene and its own context. The scene, so `scene.children` below stays a statement about
+// the scatter alone; the context, because `renderer` above is deliberately null and the terrain
+// layer is entitled to reach for it. It sets exactly two fields on `shadowMap` and reads nothing
+// back, so the stub is those two fields and no more: anything else the layer starts asking the
+// renderer for fails here as a TypeError, which is the same alarm the null gives the scatter.
+const groundScene = new THREE.Scene();
+const groundCtx: LayerContext = {
+  ...ctx,
+  scene: groundScene,
+  renderer: { shadowMap: { enabled: false, type: THREE.PCFShadowMap } } as unknown as THREE.WebGLRenderer,
+};
+const terrain = layers.find((l) => l.name === "terrain") as TerrainLayer;
+await terrain.build(groundCtx, new AbortController().signal);
+
 await layer.build(ctx, new AbortController().signal);
 const placement = layer.placement()!;
 const colliders = layer.colliders()!;
@@ -321,6 +349,118 @@ test("the mover with no obstacle predicate is byte for byte the mover the realti
   assert.deepEqual(a, c);
 });
 
+// ── the surface the renderer draws ──────────────────────────────────────────────
+
+/**
+ * The height of the DRAWN ground under a scene point, or null where no triangle covers it.
+ *
+ * This reads the terrain layer's own chunk geometry, which is the Float32Array `buildRegionScene`
+ * emitted and `terrainChunks` uploaded untouched (it rewrites the colour attribute and nothing
+ * else). Every triangle is filed under the grid squares its footprint overlaps and the answer is
+ * the barycentric interpolation over whichever one contains the point, which is exactly what a
+ * rasteriser does with the same three vertices. So "the ground" here means the surface a player
+ * would see, not any function that claims to describe it.
+ *
+ * `bucketM` is an acceleration parameter and cannot change an answer: a triangle goes into every
+ * bucket its bounding box touches, so a bucket larger or smaller than the mesh's own step only
+ * changes how many candidates are tested. The key packs two signed bucket indices into one double
+ * and is exact while both stay under 4,096, which is a 49 km radius at the shipped 12 m step.
+ */
+function drawnGroundUnder(meshes: readonly THREE.Mesh[], bucketM: number): (x: number, z: number) => number | null {
+  let total = 0;
+  for (const mesh of meshes) total += mesh.geometry.getAttribute("position").count / 3;
+  // One flat copy in doubles rather than a walk back into three's attributes per query: 139k
+  // triangles on the demo disk is 10 MB, paid once, against 43,018 lookups.
+  const verts = new Float64Array(total * 9);
+  const buckets = new Map<number, number[]>();
+  const key = (bi: number, bj: number) => (bi + 4096) * 8192 + (bj + 4096);
+  let t = 0;
+  for (const mesh of meshes) {
+    const a = mesh.geometry.getAttribute("position").array as Float32Array;
+    for (let o = 0; o + 8 < a.length; o += 9, t++) {
+      const at = t * 9;
+      for (let k = 0; k < 9; k++) verts[at + k] = a[o + k]!;
+      const i0 = Math.floor(Math.min(a[o]!, a[o + 3]!, a[o + 6]!) / bucketM);
+      const i1 = Math.floor(Math.max(a[o]!, a[o + 3]!, a[o + 6]!) / bucketM);
+      const j0 = Math.floor(Math.min(a[o + 2]!, a[o + 5]!, a[o + 8]!) / bucketM);
+      const j1 = Math.floor(Math.max(a[o + 2]!, a[o + 5]!, a[o + 8]!) / bucketM);
+      for (let bi = i0; bi <= i1; bi++) {
+        for (let bj = j0; bj <= j1; bj++) {
+          const k = key(bi, bj);
+          let list = buckets.get(k);
+          if (!list) buckets.set(k, (list = []));
+          list.push(t);
+        }
+      }
+    }
+  }
+
+  return (x: number, z: number): number | null => {
+    const list = buckets.get(key(Math.floor(x / bucketM), Math.floor(z / bucketM)));
+    if (!list) return null;
+    for (const id of list) {
+      const o = id * 9;
+      const ax = verts[o]!;
+      const ay = verts[o + 1]!;
+      const az = verts[o + 2]!;
+      const bx = verts[o + 3]!;
+      const by = verts[o + 4]!;
+      const bz = verts[o + 5]!;
+      const cx = verts[o + 6]!;
+      const cy = verts[o + 7]!;
+      const cz = verts[o + 8]!;
+      const det = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+      if (det === 0) continue;
+      const wa = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / det;
+      const wb = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / det;
+      const wc = 1 - wa - wb;
+      // Slack on the shared edges, in barycentric units. A vertex is a Float32 and two triangles
+      // meeting along an edge do not agree about it to the last bit, so a point on the seam has to
+      // land in one of them rather than in neither.
+      if (wa < -1e-6 || wb < -1e-6 || wc < -1e-6) continue;
+      return wa * ay + wb * by + wc * cy;
+    }
+    return null;
+  };
+}
+
+const heightOfDrawnGround = drawnGroundUnder(terrain.chunks, frame.resolutionM);
+
+/**
+ * How far a prop may sit off the drawn triangles before it is standing on a different surface.
+ *
+ * THE TWO THINGS THIS NUMBER SEPARATES, because for six revisions the assertion here separated
+ * neither. What is ALLOWED is curvature: the mesh is a triangle lattice at `frame.resolutionM`, an
+ * instance is seated by `frame.toScene`, which evaluates the height function at the exact point,
+ * and between two lattice points the curved macro field and the flat triangle across it are not
+ * the same surface. That gap is geometry and no tolerance can remove it. What must FAIL is a prop
+ * seated off a DIFFERENT LATTICE from the one the mesh was built on, which is the bug the old
+ * assertion here was blind to because it compared `frame.heightAtTile` with itself.
+ *
+ * MEASURED, over every instance rather than a sample, against the triangles the terrain layer
+ * uploaded. On the demo the classes run 3.6 to 5.0 mm in mean magnitude and the worst instance
+ * anywhere is 28.0 mm; on the ordinary parcel 8482589ffffffff, 1.1 to 1.2 mm mean, 2.5 mm at p95
+ * and 40.7 mm worst, with 26 buttress-trees, 36 canopy-palms, 89 thickets and 131 ferns past a
+ * centimetre. The worst any point of walkable ground in either region can be is 45.0 mm on the
+ * demo and 96.6 mm on the parcel, so a prop is allowed to land there too.
+ *
+ * DECOMPOSED, because the split says who owns it. C2's displacement contributes EXACTLY ZERO: it
+ * is built lattice-linear, so `createSceneHeight` interpolates it with the very weights the
+ * triangle carries and the two cancel to the bit, and rebuilding both sides with `detail: null`
+ * moves the worst by 0.01 mm. The whole gap is the macro field's curvature, scaled linearly by
+ * heightScaleM, so C1's 900 to 2,700 tripled it: 0.43 mm mean and 22.65 mm worst before, 1.28 and
+ * 67.94 after, on the parcel. That regression is owned and is not what this guards.
+ *
+ * SO THE NUMBER. Honest worst from curvature, 96.6 mm. Smallest cost of a second lattice, measured
+ * by giving the frame a 24 m height function under a 12 m mesh: 231.9 mm, the least displaced
+ * class of the eight on the parcel; the demo's least is 252.9 mm and its worst 803.0 mm. Fifteen
+ * centimetres is the geometric mean of those two, 1.55x above every curvature reading and 1.55x
+ * below the cheapest break, and the four lattices a reviewer tried, 24, 48, 96 and 192 m, cost 232
+ * to 3,367 mm and all fail it. A prop 7 cm proud on a 12 m lattice is geometry; a prop 30 cm proud
+ * is a second lattice.
+ */
+const SEATED_TOLERANCE_M = 0.15;
+
 // ── (e) the meshes are the placement ────────────────────────────────────────────
 
 test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding sphere that fits", () => {
@@ -340,6 +480,9 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
   const scale = new THREE.Vector3();
   const matrix = new THREE.Matrix4();
   let triangles = 0;
+  let seated = 0;
+  let liftTotal = 0;
+  let worstSeating = { id: "", i: -1, lift: 0 };
 
   for (const [id, mesh] of layer.meshes) {
     const perInstance = mesh.geometry.getAttribute("position").count / 3;
@@ -366,25 +509,64 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
     }
     assert.ok(worst.d <= 1e-6, `${id} instance ${worst.i} pokes ${worst.d.toFixed(2)} m out of the mesh's bounding sphere`);
 
-    // Instances stand on the ground the terrain draws, not on the placer's mask-quantised `z`,
-    // which is sampled off a 10 m grid and would float things by whole metres on a slope. The
-    // tolerance is 10 cm rather than nothing because an instance matrix is a Float32Array: a
-    // position 500 m out of the anchor keeps about 3e-5 m, and the height field is re-evaluated at
-    // that slightly different place. Ten centimetres is far below the metres a wrong source of
-    // height would cost, which is what this is for.
+    // Instances stand on the ground the terrain layer DREW, and this is the measurement, not a
+    // restatement of it. `heightOfDrawnGround` finds the uploaded triangle under the instance
+    // origin and interpolates its three corners; the only thing from the seating side is the
+    // instance matrix. Nothing here evaluates a height function, which is the entire point: for six
+    // revisions this compared `frame.heightAtTile` against `frame.toScene`, which IS
+    // `max(0, heightAtTile)`, so it compared one call with another call to the same function at the
+    // same point and reported the 3.7e-5 m an instance matrix loses to Float32. A reviewer put the
+    // frame's height function on a 24, 48, 96 and 192 m lattice under a 12 m mesh, floating every
+    // prop, and it reported 3.7e-5 all four times and passed all four. Measured against the drawn
+    // triangles instead, those same four lattices lift the FIRST class this loop reaches, which is
+    // also the least displaced of them, by 314, 795, 2,104 and 3,324 mm.
+    //
+    // EVERY INSTANCE, not one in two hundred. The old stride sampled 100 of 20,039 ferns, and the
+    // instances that matter are the rare ones: on the parcel only 131 of those ferns clear a
+    // centimetre at all, so a 0.5% sample would miss the tail this is looking at.
     let worstLift = 0;
-    for (let i = 0; i < mesh.count; i += Math.max(1, Math.floor(mesh.count / 200))) {
+    let worstAt = -1;
+    let liftSum = 0;
+    let offMesh = 0;
+    for (let i = 0; i < mesh.count; i++) {
       mesh.getMatrixAt(i, matrix);
       matrix.decompose(position, quaternion, scale);
-      const [tx, ty] = frame.fromScene(position);
-      worstLift = Math.max(worstLift, Math.abs(position.y - Math.max(0, frame.heightAtTile(tx, ty))));
+      const groundY = heightOfDrawnGround(position.x, position.z);
+      // Not a skip. An instance with no triangle under it is a prop standing off the end of the
+      // world, and a lift measured over the ones that happen to be covered would hide it.
+      if (groundY === null) {
+        offMesh++;
+        continue;
+      }
+      const lift = Math.abs(position.y - groundY);
+      liftSum += lift;
+      if (lift > worstLift) {
+        worstLift = lift;
+        worstAt = i;
+      }
     }
-    assert.ok(worstLift < 0.1, `${id} sits ${worstLift.toFixed(2)} m off the ground the terrain layer drew`);
+    seated += mesh.count;
+    liftTotal += liftSum;
+    if (worstLift > worstSeating.lift) worstSeating = { id, i: worstAt, lift: worstLift };
+    assert.equal(offMesh, 0, `${id}: ${offMesh} of ${mesh.count} instances stand where the terrain layer drew no triangle`);
+    assert.ok(
+      worstLift < SEATED_TOLERANCE_M,
+      `${id} instance ${worstAt} sits ${(worstLift * 1000).toFixed(0)} mm off the triangles the terrain ` +
+        `layer drew (mean ${((liftSum / mesh.count) * 1000).toFixed(1)} mm over ${mesh.count}). Curvature ` +
+        `between ${frame.resolutionM} m lattice points is worth at most 97 mm anywhere measured; past ` +
+        `${SEATED_TOLERANCE_M * 1000} mm the prop is seated by a different surface from the one uploaded.`,
+    );
   }
 
   console.log(
     `meshes: ${layer.meshes.size} draw calls, ${triangles.toLocaleString()} triangles for the whole disk ` +
       `(${[...layer.meshes].map(([id]) => `${id} ${SCATTER_GEOMETRY[id]!().getAttribute("position").count / 3}t`).join(", ")})`,
+  );
+  console.log(
+    `seating: ${seated.toLocaleString()} instances measured against ${terrain.chunks.length} drawn chunks, ` +
+      `mean ${((liftTotal / seated) * 1000).toFixed(2)} mm off the triangles, worst ${worstSeating.id} ` +
+      `instance ${worstSeating.i} at ${(worstSeating.lift * 1000).toFixed(1)} mm of the ` +
+      `${SEATED_TOLERANCE_M * 1000} mm allowance`,
   );
 });
 

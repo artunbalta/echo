@@ -9,6 +9,15 @@
  * It is a verification tool, not the product. The real globe is React and three.js at step 9. But
  * if this image is wrong, that one will be wrong too, and this one can be checked in a terminal.
  *
+ * THE ONE THING THIS FILE OWES THE SEAM (DECISIONS C3). `buildParcelMesh` fills `colours` with
+ * LINEAR values, because that is what a three colour attribute takes; a shader encodes them for the
+ * display and nothing in the mesh does. This script has no shader, so it does that last step
+ * itself: the framebuffer below is linear, lambert and the box filter both belong in linear, and
+ * `linearToSrgb` runs once per channel where the bytes are written. It was NOT doing that between
+ * cb9d62c and this repair, which is how the promise above inverted: the shipped globe was right and
+ * its preview rendered a black sea. `checkTheColours` at the bottom is the guard that now measures
+ * EVERY biome in the frame, because an ocean-only version was walked straight through.
+ *
  * Run:  npm run preview:globe -w @echo/planet
  *   or  node --import tsx packages/planet/scripts/preview-globe.ts [--lat 20] [--lng -40] [--claimed 0.3]
  */
@@ -29,7 +38,16 @@ import { PLANET_PARAMS } from "../lib/manifest.js";
 import { chooseCommons } from "../lib/commons.js";
 import { landFractionSampler } from "../lib/land.js";
 import { seedInventory } from "../lib/rounds.js";
-import { calibratePlanet, createTerrain, type Rgb } from "../lib/terrain.js";
+import {
+  BIOME_COLOUR,
+  BIOME_COLOUR_LINEAR,
+  calibratePlanet,
+  createTerrain,
+  linearRgb,
+  linearToSrgb,
+  srgbToLinear,
+  type Rgb,
+} from "../lib/terrain.js";
 import { encodePng } from "./png.js";
 
 const args = new Map<string, string>();
@@ -121,9 +139,44 @@ console.log(`  ${n(outlines.segmentCount)} outline segments`);
 
 const W = WIDTH * SUPERSAMPLE;
 const H = HEIGHT * SUPERSAMPLE;
+// LINEAR, throughout. Both operations run on this buffer are ones that only mean anything in
+// linear: multiplying by lambert is what light does to a surface, and averaging the supersamples is
+// what a sensor does to the light landing on one pixel. The sRGB encode happens once, at the byte.
 const colour = new Float32Array(W * H * 3);
 const alpha = new Float32Array(W * H);
 const depth = new Float32Array(W * H).fill(Infinity);
+// The shade of the ocean face that won the depth test at each subsample, 0 for everything else, so
+// the guard at the bottom can find pixels whose colour is known exactly. See checkTheSea.
+// The shade of the face that won the depth test at each subsample, and which biome painted it, so
+// the guard at the bottom can find pixels whose colour is known exactly. Biome -1 is anything the
+// table does not name: a parcel a claim has painted over, or the background.
+const faceShade = new Float32Array(W * H);
+const faceBiome = new Int8Array(W * H).fill(-1);
+const OCEAN_LINEAR = BIOME_COLOUR_LINEAR.ocean;
+
+/**
+ * Every biome's linear colour, rounded the way the mesh fill already rounded it, so a face can be
+ * identified by exact Float32 equality against the table it was filled from.
+ *
+ * This started as one entry, ocean, and that was not enough. A reviewer sent the ten LAND biomes
+ * back to the pre-C3 bytes while leaving ocean linear: the sea stayed blue, the guard printed
+ * "1.1% off" and PASSED, on a chalky washed-out planet where the pixels matching rainforest fell
+ * from 11,826 to 20 and grassland from 54,202 to 28. C3's seam is about every consumer of the
+ * buffer, so the guard has to be too.
+ */
+const BIOME_KEYS: Array<{ biome: Biome; key: [number, number, number]; want: [number, number, number] }> =
+  (Object.keys(BIOME_COLOUR_LINEAR) as Biome[]).map((biome) => ({
+    biome,
+    // What IDENTIFIES a face in the buffer: the table the buffer was filled from, rounded the way
+    // the fill rounded it. This has to be the table under test, or no face would be recognised.
+    key: BIOME_COLOUR_LINEAR[biome].map((c) => Math.fround(c)) as [number, number, number],
+    // What the face SHOULD be, derived here from the sRGB byte table through the transfer function
+    // this file names, and NEVER from BIOME_COLOUR_LINEAR. Deriving both from the same table is
+    // the same bug this guard exists to catch, one level up: the first version of the widened
+    // guard compared the table against itself, and sending the ten land biomes back to pre-C3
+    // bytes printed eleven reassuring percentages under a chalky white planet.
+    want: BIOME_COLOUR[biome].map((c) => srgbToLinear(c / 255)) as [number, number, number],
+  }));
 
 const camDir = latLngToVec3(CAM_LAT, CAM_LNG);
 const DISTANCE = 3.4;
@@ -187,6 +240,16 @@ for (let f = 0; f < surface.triangleCount; f++) {
   if (area >= 0) continue;
   drawn++;
 
+  // Float32 equality is exact here rather than lucky: the buffer was filled from this same table,
+  // and Math.fround is the rounding the fill already did. An ocean parcel a claim has painted over
+  // fails this and is simply not measured, which is correct.
+  const faceBiomeIndex = BIOME_KEYS.findIndex(
+    ({ key }) =>
+      surface.colours[f * 9]! === key[0] &&
+      surface.colours[f * 9 + 1]! === key[1] &&
+      surface.colours[f * 9 + 2]! === key[2],
+  );
+
   const minX = Math.max(0, Math.floor(Math.min(ax, bx, cx)));
   const maxX = Math.min(W - 1, Math.ceil(Math.max(ax, bx, cx)));
   const minY = Math.max(0, Math.floor(Math.min(ay, by, cy)));
@@ -220,12 +283,18 @@ for (let f = 0; f < surface.triangleCount; f++) {
         colour[o * 3 + k] = Math.min(1, surface.colours[f * 9 + k]! * shade);
       }
       alpha[o] = 1;
+      faceShade[o] = faceBiomeIndex < 0 ? 0 : shade;
+      faceBiome[o] = faceBiomeIndex;
     }
   }
 }
 
 // Outlines last, depth tested with a bias so they sit on the surface rather than in it.
 const OUTLINE: Rgb = [22, 24, 28];
+// Chosen as bytes, like every other colour in this file, and therefore converted before it touches
+// the framebuffer. Blending it in the buffer's own space is also the only way the 0.25/0.75 mix
+// means what it says: an sRGB number lerped into a linear one is neither colour.
+const OUTLINE_LINEAR = linearRgb(OUTLINE);
 let outlineHits = 0;
 for (let s = 0; s < outlines.segmentCount; s++) {
   const a = project(outlines.positions[s * 6]!, outlines.positions[s * 6 + 1]!, outlines.positions[s * 6 + 2]!);
@@ -242,14 +311,27 @@ for (let s = 0; s < outlines.segmentCount; s++) {
     const o = py * W + px;
     if (alpha[o] === 0 || z > depth[o]! + 0.004) continue;
     outlineHits++;
-    colour[o * 3] = colour[o * 3]! * 0.25 + (OUTLINE[0] / 255) * 0.75;
-    colour[o * 3 + 1] = colour[o * 3 + 1]! * 0.25 + (OUTLINE[1] / 255) * 0.75;
-    colour[o * 3 + 2] = colour[o * 3 + 2]! * 0.25 + (OUTLINE[2] / 255) * 0.75;
+    colour[o * 3] = colour[o * 3]! * 0.25 + OUTLINE_LINEAR[0] * 0.75;
+    colour[o * 3 + 1] = colour[o * 3 + 1]! * 0.25 + OUTLINE_LINEAR[1] * 0.75;
+    colour[o * 3 + 2] = colour[o * 3 + 2]! * 0.25 + OUTLINE_LINEAR[2] * 0.75;
+    // This pixel is no longer the sea, whatever it was a moment ago.
+    faceShade[o] = 0;
+    faceBiome[o] = -1;
   }
 }
 
-// Box filter the supersampled buffer down, which is the whole of the antialiasing.
+/**
+ * A linear framebuffer value as the byte a PNG carries: the return trip across DECISIONS C3's seam,
+ * and the one line whose absence rendered a black sea.
+ */
+const byte = (linear: number): number =>
+  Math.round(linearToSrgb(linear < 0 ? 0 : linear > 1 ? 1 : linear) * 255);
+
+// Box filter the supersampled buffer down, which is the whole of the antialiasing, and encode.
 const pixels = new Uint8Array(WIDTH * HEIGHT * 4);
+const nS = SUPERSAMPLE * SUPERSAMPLE;
+// One brightest pure pixel PER BIOME, not one for the sea.
+const brightest = BIOME_KEYS.map(() => ({ shade: 0, px: [0, 0, 0] as [number, number, number] }));
 for (let y = 0; y < HEIGHT; y++) {
   for (let x = 0; x < WIDTH; x++) {
     let r = 0, g = 0, b = 0, aSum = 0;
@@ -259,14 +341,107 @@ for (let y = 0; y < HEIGHT; y++) {
         r += colour[o * 3]!; g += colour[o * 3 + 1]!; b += colour[o * 3 + 2]!; aSum += alpha[o]!;
       }
     }
-    const nS = SUPERSAMPLE * SUPERSAMPLE;
     const o = (y * WIDTH + x) * 4;
     const cover = aSum / nS;
-    pixels[o] = Math.round((cover > 0 ? r / aSum : 0) * 255);
-    pixels[o + 1] = Math.round((cover > 0 ? g / aSum : 0) * 255);
-    pixels[o + 2] = Math.round((cover > 0 ? b / aSum : 0) * 255);
+    pixels[o] = byte(cover > 0 ? r / aSum : 0);
+    pixels[o + 1] = byte(cover > 0 ? g / aSum : 0);
+    pixels[o + 2] = byte(cover > 0 ? b / aSum : 0);
     pixels[o + 3] = Math.round(cover * 255);
+    // The brightest pixel that is nothing but ONE biome: every subsample covered by a face of the
+    // same biome and none of them touched by an outline. A pixel like that has a colour that can be
+    // predicted exactly rather than eyeballed, which is what makes the guard below a measurement.
+    if (aSum === nS) {
+      const first = faceBiome[(y * SUPERSAMPLE) * W + x * SUPERSAMPLE]!;
+      if (first >= 0) {
+        let pure = true;
+        let shadeSum = 0;
+        for (let sy = 0; sy < SUPERSAMPLE && pure; sy++) {
+          for (let sx = 0; sx < SUPERSAMPLE; sx++) {
+            const so = (y * SUPERSAMPLE + sy) * W + (x * SUPERSAMPLE + sx);
+            if (faceBiome[so] !== first || faceShade[so] === 0) { pure = false; break; }
+            shadeSum += faceShade[so]!;
+          }
+        }
+        const perSub = shadeSum / nS;
+        if (pure && perSub > brightest[first]!.shade) {
+          brightest[first] = { shade: perSub, px: [pixels[o]!, pixels[o + 1]!, pixels[o + 2]!] };
+        }
+      }
+    }
   }
+}
+
+/**
+ * THE GUARD. This script exists to be looked at, and the last thing that broke it was invisible to
+ * every test in the package: `buildParcelMesh`'s colours went linear in cb9d62c, this rasteriser
+ * kept writing them out as bytes, and the ocean fell from (43, 78, 109) to (6, 17, 34). Nobody
+ * noticed until someone rendered it. So the render now checks itself.
+ *
+ * It measures the BYTES THAT WERE JUST WRITTEN, and it measures them the way a viewer will: take
+ * the brightest pure-sea pixel out of the PNG, decode it with `srgbToLinear`, and it must be the
+ * mesh's own ocean colour times the light that fell on it. One flat colour, one lambert term, and
+ * averaging a constant over four subsamples returns the constant, so the expectation is exact.
+ *
+ * `byte` DOES NOT APPEAR IN THIS FUNCTION, and that is the whole design. The first version of this
+ * guard predicted through `byte` and compared against pixels `byte` had written, so it passed
+ * happily when the transfer was applied twice: it was measuring one call to a function against
+ * another call to the same function, which is the exact family of dud guard this repair exists to
+ * clear out. `srgbToLinear` is the independent side: it is the forward half of the seam, is used
+ * nowhere in this file's output path, and terrain.test.ts pins it to the IEC curve.
+ *
+ * The tolerance is proportional because a byte is not a constant amount of light. Ocean is dark
+ * enough that one byte at its red channel is 2.7% of it, so 4% is one byte of quantisation and no
+ * more. The three breaks this guard has been watched catching land at 19% (a 1/2.2 gamma put in
+ * place of the piecewise curve), 92% (the original, no transfer at all) and 620% (applied twice).
+ *
+ * A type could not have done this job; see the note in DECISIONS C3.
+ */
+const SEA_TOLERANCE = 0.04;
+
+function checkTheColours(): void {
+  // Every biome the frame actually shows, not just the sea. The previous version measured ocean
+  // alone and a reviewer walked straight through it: land back on pre-C3 bytes, sea left linear,
+  // guard green, planet chalk.
+  const seen = BIOME_KEYS.map((b, i) => ({ ...b, ...brightest[i]! })).filter((b) => b.shade > 0);
+  if (seen.length < 3) {
+    throw new Error(
+      `only ${seen.length} biome(s) in this frame have a pixel of pure unoutlined colour, so almost ` +
+      "nothing was checked. Either the camera is pointed somewhere empty, and the fix is --width up " +
+      "or --res down, or buildParcelMesh has stopped filling BIOME_COLOUR_LINEAR, which is what a " +
+      "break on the far side of the seam looks like from here.",
+    );
+  }
+  const bad: string[] = [];
+  const lines: string[] = [];
+  for (const b of seen) {
+    // What the PNG says, in light: the viewer's own decode of the bytes on disk. Against what the
+    // mesh said, in light: this biome's colour under this pixel's own lambert term.
+    const got = b.px.map((v) => srgbToLinear(v / 255));
+    const want = b.want.map((c) => Math.min(1, c * b.shade));
+    let worst = 0;
+    let ratio = 1;
+    for (let k = 0; k < 3; k++) {
+      const r = got[k]! / (want[k]! || 1e-9);
+      if (Math.abs(r - 1) > worst) { worst = Math.abs(r - 1); ratio = r; }
+    }
+    lines.push(`    ${b.biome.padEnd(11)} (${b.px.join(", ")}) at shade ${b.shade.toFixed(2)}, ${(worst * 100).toFixed(1)}% off`);
+    if (worst > SEA_TOLERANCE) {
+      bad.push(
+        `${b.biome}: the brightest pure pixel came out (${b.px.join(", ")}), which decodes to ` +
+        `${got.map((v) => v.toFixed(4)).join(", ")} of light where ${BIOME_COLOUR[b.biome].join(", ")} under ` +
+        `this pixel's own shade ${b.shade.toFixed(3)} is ${want.map((v) => v.toFixed(4)).join(", ")}: ${ratio.toFixed(2)}x`,
+      );
+    }
+  }
+  if (bad.length) {
+    throw new Error(
+      `${bad.length} of ${seen.length} biomes are the wrong colour:\n  ` + bad.join("\n  ") +
+      "\nThe mesh's colours are LINEAR (DECISIONS C3), and a PNG byte is sRGB, so the display " +
+      "transfer is owed exactly once in between.",
+    );
+  }
+  console.log(`  ${seen.length} biomes measured against the light the mesh asked for, one byte is 2.7%:`);
+  console.log(lines.join("\n"));
 }
 
 mkdirSync(OUT_DIR, { recursive: true });
@@ -274,6 +449,8 @@ const path = resolve(OUT_DIR, `${SEED}-globe.png`);
 writeFileSync(path, encodePng(WIDTH, HEIGHT, pixels));
 console.log(`  ${n(drawn)} faces drawn, ${n(outlineHits)} outline pixels`);
 console.log(`\n  ${path}`);
+// After the write, deliberately: an image that fails the guard is an image somebody wants to look at.
+checkTheColours();
 console.log(`\nDone in ${((Date.now() - started) / 1000).toFixed(1)}s.`);
 
 function n(x: number): string {

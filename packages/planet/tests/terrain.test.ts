@@ -24,6 +24,7 @@ import {
   createTerrain,
   fibonacciSphere,
   linearRgb,
+  linearToSrgb,
   measureLandFraction,
   normalisedHeight,
   srgbToLinear,
@@ -296,6 +297,49 @@ test("srgbToLinear is the exact IEC 61966-2-1 curve, not a gamma 2.2 approximati
   for (let b = 0; b <= 255; b++) worst = Math.max(worst, Math.abs(srgbToLinear(b / 255) - (b / 255) ** 2.2));
   assert.ok(worst > 0.008, `a gamma 2.2 is only ${worst} away, so this test proves nothing`);
   assert.ok(worst < 0.009, `the curve moved: the gap to gamma 2.2 is now ${worst}`);
+});
+
+test("linearToSrgb is the return trip, and a linear buffer written out as bytes is a black sea", () => {
+  // Every byte has to survive the round trip, because the round trip is what a preview does: the
+  // mesh is filled from BIOME_COLOUR through linearRgb, and preview-globe.ts writes a PNG out of it.
+  let worstByte = 0;
+  for (let b = 0; b <= 255; b++) {
+    worstByte = Math.max(worstByte, Math.abs(linearToSrgb(srgbToLinear(b / 255)) * 255 - b));
+  }
+  assert.ok(worstByte < 1e-9, `the pair is not an inverse: a byte comes back ${worstByte} away`);
+  assert.equal(linearToSrgb(0), 0);
+  // 1.055 * 1 - 0.055 is 0.9999999999999999 in binary floating point, not 1. One ulp, and it
+  // rounds to byte 255 either way, but the assertion says what is true rather than what is tidy.
+  assert.ok(Math.abs(linearToSrgb(1) - 1) < 1e-15, `white came back as ${linearToSrgb(1)}`);
+  assert.equal(Math.round(linearToSrgb(1) * 255), 255);
+  // Monotone, for the same reason the forward curve has to be.
+  for (let b = 1; b <= 255; b++) assert.ok(linearToSrgb(b / 255) > linearToSrgb((b - 1) / 255));
+
+  // NOT the 1/2.2 gamma, measured the same way the forward curve is: over the 256 bytes the two
+  // disagree by up to 8.548 bytes, at byte 7, and the disagreement is worst in the DARK, which is
+  // where the ocean and the rainforest live. A 1/2.2 return trip sends ocean's 38 back as 42.5 and
+  // rainforest's 50 as 53.3 while snow's 238 comes back within half a byte. That is why the sea
+  // check in preview-globe.ts is a tolerance on the light and not on the byte.
+  let worstGamma = 0;
+  for (let b = 0; b <= 255; b++) {
+    const linear = srgbToLinear(b / 255);
+    worstGamma = Math.max(worstGamma, Math.abs(linearToSrgb(linear) - linear ** (1 / 2.2)) * 255);
+  }
+  assert.ok(worstGamma > 8.5, `a 1/2.2 gamma is only ${worstGamma} bytes away, so this test proves nothing`);
+  assert.ok(worstGamma < 8.6, `the curve moved: the gap to a 1/2.2 gamma is now ${worstGamma} bytes`);
+
+  // THE SIZE OF THE MISTAKE, so nobody has to guess whether the return trip matters. Writing the
+  // linear table straight out as bytes, which is exactly what preview-globe.ts did between cb9d62c
+  // and this repair, is not a slightly darker planet. It is a different one.
+  const asBytes = (c: readonly number[]) => c.map((v) => Math.round(v * 255));
+  assert.deepEqual(asBytes(BIOME_COLOUR_LINEAR.ocean), [5, 15, 30]);
+  assert.deepEqual([...BIOME_COLOUR.ocean], [38, 68, 96]);
+  assert.deepEqual(asBytes(BIOME_COLOUR_LINEAR.rainforest), [8, 29, 14]);
+  assert.deepEqual([...BIOME_COLOUR.rainforest], [50, 94, 66]);
+  // And the return trip puts every biome back exactly where it was chosen.
+  for (const b of BIOMES) {
+    assert.deepEqual(asBytes(BIOME_COLOUR_LINEAR[b].map(linearToSrgb)), [...BIOME_COLOUR[b]]);
+  }
 });
 
 test("BIOME_COLOUR stays in sRGB bytes and BIOME_COLOUR_LINEAR is that table through the transfer", () => {

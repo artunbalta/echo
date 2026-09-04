@@ -27,6 +27,29 @@ import { DEMO_CELL } from "../lib/demo-cell.js";
 import { PARCEL_REGION_K } from "../lib/parcel.js";
 import { regionBound } from "../lib/walkable.js";
 
+/**
+ * The displacement's ceiling, as a LITERAL and not as `DEFAULT_DETAIL.amplitudeM`.
+ *
+ * Bounding a measurement by the dial that produces it passes at every dial setting, which is not a
+ * bound at all. Proven rather than argued: with the two assertions below reading the dial, setting
+ * the amplitude from 4 to 40 left this file passing 14 of 14 on a world ten times louder, and only
+ * agreement.test.ts noticed. `moved > 250` catches relief going to zero and nothing caught it
+ * growing.
+ *
+ * So the number is written here and the dial is asserted against it separately. A change to the
+ * amplitude now has to come here and be read, which is the point.
+ */
+const DETAIL_CEILING_M = 4;
+
+test("the displacement's ceiling is a number this file states, not the dial it measures", () => {
+  assert.equal(
+    DEFAULT_DETAIL.amplitudeM,
+    DETAIL_CEILING_M,
+    "the shipped amplitude moved without this file's ceiling moving with it: decide which is right",
+  );
+});
+
+
 const field = createTerrain("echo-capacity-1");
 const calibration = calibratePlanet(field, PLANET_PARAMS.landFractionTarget, 60_000);
 const RADIUS = PLANET_PARAMS.radiusKm;
