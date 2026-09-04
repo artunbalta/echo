@@ -4,7 +4,10 @@
  *
  * It decides nothing about movement. stepMover is the mover, walkableTile is the gate, and this
  * layer's job is to feed the one with the keys and the other with the frame, then put the body
- * where the mover says and the camera where the follow camera says. The body is the same rig
+ * where the mover says and the camera where the follow camera says. Since W2-3 there is a SECOND
+ * gate, and it is optional for a reason spelled out in controller.ts: the ground is a fact both
+ * sides of the wire agree on, and a tree is not, so props are an extra predicate the client passes
+ * in when it has a scatter layer and the server never sees. The body is the same rig
  * ThreeWorld draws, so a returning player is the same person here; it is authored in TILE units
  * (BODY_H is a shade over one tile) and this world is in metres, so the root is scaled by the
  * frame's metres per tile and the person comes out about 1.7 m tall, as TILE_M promises.
@@ -36,6 +39,21 @@ export interface PlayerLayerOptions {
   inputEnabled?: boolean;
   /** Overrides for the follow camera's numbers. tileM and nearM come from the world. */
   camera?: Partial<FollowCameraOptions>;
+  /**
+   * Half the width of the body, metres, for bumping into props. A shoulder is about 0.35 m from
+   * the spine; the rig is authored to TILE_M so this is in the same metres the colliders are.
+   */
+  bodyRadiusM?: number;
+}
+
+/**
+ * What the player needs from whatever knows where the props stand: the scatter layer satisfies it
+ * and is found by name, the way the reactions layer finds the campfire. It is structural rather
+ * than imported so a world with no scatter is not a world with a missing dependency, it is a world
+ * where nothing is in your way, which is what the demo was before W2-3.
+ */
+interface ObstacleSource extends WorldLayer {
+  blockedTile(x: number, y: number, radiusM: number): boolean;
 }
 
 export interface PlayerLayer extends WorldLayer {
@@ -67,9 +85,12 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
   let state = initialMover(0, 0);
   let cam = initialFollowCamera(options.camera);
   let camOpts: Partial<FollowCameraOptions> = { ...options.camera };
+  const bodyRadiusM = options.bodyRadiusM ?? 0.35;
   let parts: CharacterParts | null = null;
   let input: WorldInput | null = null;
   let animTime = 0;
+  /** The prop gate, or null in a world with no scatter layer. Resolved once, at build. */
+  let blocked: ((x: number, y: number) => boolean) | null = null;
   const tmp = new THREE.Vector3();
   const look = new THREE.Vector3();
 
@@ -81,6 +102,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       cam = initialFollowCamera(options.camera);
       camOpts = { ...options.camera, tileM: ctx.frame.tileM, nearM: ctx.camera.near };
       animTime = 0;
+
+      // The scatter layer builds before this one, so its colliders are ready. A world without it
+      // keeps the old gate exactly: walkable ground, and nothing else.
+      const obstacles = ctx.layer<ObstacleSource>("scatter");
+      blocked =
+        obstacles && typeof obstacles.blockedTile === "function"
+          ? (x, y) => obstacles.blockedTile(x, y, bodyRadiusM)
+          : null;
 
       const built = buildCharacter(id, true);
       built.root.name = "player";
@@ -105,7 +134,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       if (!parts) return;
       const frame = input?.read(cam.yaw);
       const move = inputEnabled && frame ? frame.move : NEUTRAL;
-      state = stepMover(state, move, dt, ctx.frame.walkableTile);
+      state = stepMover(state, move, dt, ctx.frame.walkableTile, blocked ?? undefined);
 
       // The pose. A run must look like a run, not a walk played over more ground: the cycle
       // accumulates at the speed ratio, so legs at MOVER.RUN swing 1.6 times as fast.
@@ -136,6 +165,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     dispose() {
       input?.dispose();
       input = null;
+      blocked = null;
       if (parts) {
         disposeParts(parts);
         parts = null;

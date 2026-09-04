@@ -262,9 +262,11 @@ export class PlanetWorld {
     this.acquire();
 
     // Provisional light: one low western key and a cool fill, per the art bible's one rule. The
-    // day-cycle layer takes these over; until it exists the world is lit at a fixed dusk.
-    this.scene.background = new THREE.Color(0x8a6a9e);
-    this.scene.fog = new THREE.Fog(0x8a6a9e, 300, 2200);
+    // sky layer takes both over by name, "key" and "fill", and drives them with the hour.
+    //
+    // The host deliberately leaves `background` and `fog` NULL. They are the air, the air belongs
+    // to one layer, and a null background is how the terrain layer's fallback recognises that
+    // nobody has claimed it yet. A provisional colour here would silence that fallback forever.
     this.scene.add(new THREE.HemisphereLight(0xc98a8f, 0x2a2340, 0.75));
     const key = new THREE.DirectionalLight(0xffb877, 1.4);
     key.name = "key";

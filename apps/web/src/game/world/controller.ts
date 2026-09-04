@@ -111,12 +111,22 @@ function wrapAngle(a: number): number {
 /**
  * One step. Pure. `walkable` is asked in tiles and answers for the whole tile position, so it is
  * the caller's job to convert to the planet's metres (see tileToLocalM) and apply the region bound.
+ *
+ * `blocked` is the OPTIONAL second gate, and it is optional on purpose. Walkability is a property
+ * of the GROUND and both sides of the wire agree about it: `WorldRoom.integrate` runs the same
+ * separate-axis slide against the same land test, and this mover has to match it to the tile.
+ * Props are not ground. They exist only where a client has built a scatter layer, the server has
+ * never heard of them, and a mover that consulted them unconditionally would drift from the
+ * authority the first time a player walked into a tree. So the default is no obstacles, which is
+ * byte for byte the behaviour this function had before props existed, and a client that has a
+ * scatter layer passes its collider query in. Same slide, one more predicate.
  */
 export function stepMover(
   s: MoverState,
   input: MoveInput,
   dt: number,
   walkable: (x: number, y: number) => boolean,
+  blocked?: (x: number, y: number) => boolean,
 ): MoverState {
   const step = Math.max(0, Math.min(0.1, dt));
   const len = Math.hypot(input.dx, input.dy);
@@ -143,14 +153,16 @@ export function stepMover(
   }
 
   // Separate-axis slide: X against the old Y, then Y against the new X. The order WorldCore and
-  // WorldRoom use, so a future server integrator agrees to the tile.
+  // WorldRoom use, so a future server integrator agrees to the tile. A prop refuses an axis the
+  // same way a shoreline does, which is what makes you slide along a tree rather than stick to it.
+  const free = blocked ? (x: number, y: number) => walkable(x, y) && !blocked(x, y) : walkable;
   let x = s.x;
   let y = s.y;
   const nx = x + vx * step;
-  if (walkable(nx, y)) x = nx;
+  if (free(nx, y)) x = nx;
   else vx = 0;
   const ny = y + vy * step;
-  if (walkable(x, ny)) y = ny;
+  if (free(x, ny)) y = ny;
   else vy = 0;
 
   const speed = Math.hypot(vx, vy);
