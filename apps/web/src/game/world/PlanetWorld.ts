@@ -20,12 +20,13 @@
 
 import * as THREE from "three";
 import {
+  createSceneHeight,
   createTangentPatch,
   createTerrain,
   regionBound,
-  sceneHeightAt,
   spawnPointFor,
   walkableAt,
+  DEFAULT_REGION_OPTIONS,
   DEFAULT_SCENE_OPTIONS,
   type Calibration,
   type RegionBound,
@@ -101,7 +102,18 @@ export interface WorldFrame {
   readonly patch: TangentPatch;
   readonly tileM: number;
   readonly heightScaleM: number;
-  /** Metres above sea level at a tile position; negative under water. The I1 function. */
+  /**
+   * The lattice the ground is drawn on, metres. The terrain layer builds its mesh on exactly this
+   * grid and the walking-scale displacement is defined on it, so a layer that wanted a different
+   * one would be drawing a surface `heightAtTile` does not describe: it is read here, never passed.
+   */
+  readonly resolutionM: number;
+  /**
+   * Metres above sea level at a tile position; negative under water. The I1 function, plus the
+   * displacement of DECISIONS C2, which the terrain mesh carries exactly because it is defined on
+   * the mesh's own lattice. Everything that stands on the ground is seated by this and nothing
+   * else.
+   */
   heightAtTile(x: number, y: number): number;
   /** Land and inside the region: the mover's only gate. */
   walkableTile(x: number, y: number): boolean;
@@ -162,6 +174,12 @@ export interface PlanetWorldOptions {
   cell: string;
   /** Ring count of the built disk. 1 = the cell and its six neighbours. */
   k?: number;
+  /**
+   * Grid spacing of the ground mesh, metres. It lives here rather than on the terrain layer because
+   * the height function is built here and the displacement is defined on this lattice; two owners
+   * would be two lattices, and every prop would float by the difference.
+   */
+  resolution?: number;
   /** A renderer to share. Absent: the host makes and owns one. */
   handle?: RendererHandle;
   heightScaleM?: number;
@@ -226,6 +244,7 @@ export class PlanetWorld {
     const patch = createTangentPatch(options.cell, options.radiusKm);
     const tileM = options.tileM ?? TILE_M;
     const heightScaleM = options.heightScaleM ?? DEFAULT_SCENE_OPTIONS.heightScaleM;
+    const resolutionM = options.resolution ?? DEFAULT_REGION_OPTIONS.resolution;
     const k = options.k ?? 1;
     const bound = regionBound(options.cell, k, options.radiusKm);
     const spawn = spawnPointFor(options.cell, this.field, this.calibration, options.radiusKm);
@@ -235,9 +254,11 @@ export class PlanetWorld {
     const calibration = this.calibration;
     const toLocalM = (x: number, y: number) => tileToLocalM(x, y, tileM);
     const fromLocalM = (xm: number, ym: number) => localMToTile(xm, ym, tileM);
+    // One height function for the world, the same one buildRegionScene builds its mesh from.
+    const sceneHeight = createSceneHeight(patch, field, calibration, { heightScaleM, resolution: resolutionM });
     const heightAtTile = (x: number, y: number) => {
       const [xm, ym] = toLocalM(x, y);
-      return sceneHeightAt(patch, field, calibration, xm, ym) * heightScaleM;
+      return sceneHeight(xm, ym);
     };
     const walkableTile = (x: number, y: number) => {
       const [xm, ym] = toLocalM(x, y);
@@ -247,6 +268,7 @@ export class PlanetWorld {
       patch,
       tileM,
       heightScaleM,
+      resolutionM,
       heightAtTile,
       walkableTile,
       toScene: (x, y, liftM = 0, out = new THREE.Vector3()) =>
@@ -384,6 +406,13 @@ export class PlanetWorld {
     if (this.options.devInfo) this.sampleInfo(now);
   };
 
+  /**
+   * The provisional boom. NOT RE-DERIVED UNDER DECISIONS C1, because it ships nowhere: parcelWorld
+   * forbids `follow` outright, so on both routes that exist the player layer drives the camera from
+   * followCamera.ts and this method never runs. Re-tuning the 9 and the 5.5 against a taller
+   * landscape would have been tuning a configuration nobody can reach, which is the failure this
+   * phase is being watched for. It stays as the scaffold for a mount that has no player layer.
+   */
   private stepCamera(dt: number) {
     if (!this.follow) return;
     const t = this.follow();

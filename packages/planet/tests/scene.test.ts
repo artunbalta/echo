@@ -20,8 +20,8 @@ import { cellAreaKm2 } from "../lib/geo.js";
 import { landFractionOfCell } from "../lib/land.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
 import { seedInventory } from "../lib/rounds.js";
-import { buildParcelScene, buildRegionScene, createTangentPatch, hashPosition, sceneHeightAt, type RegionScene } from "../lib/scene.js";
-import { BIOME_COLOUR, BIOMES, calibratePlanet, createTerrain, type Biome } from "../lib/terrain.js";
+import { buildParcelScene, buildRegionScene, createSceneHeight, createTangentPatch, DEFAULT_DETAIL, hashPosition, sceneHeightAt, type RegionScene } from "../lib/scene.js";
+import { BIOME_COLOUR, BIOME_COLOUR_LINEAR, BIOMES, calibratePlanet, createTerrain, srgbToLinear, type Biome } from "../lib/terrain.js";
 import { biomeAtLocal } from "../lib/biome-mask.js";
 import { DEMO_CELL } from "../lib/demo-cell.js";
 import { PARCEL_REGION_K } from "../lib/parcel.js";
@@ -240,25 +240,47 @@ test("the region is one lattice: adjacent chunks share their edge vertices exact
 
 test("I1: the mesh height is sceneHeightAt times the height scale, at the vertices and between them", () => {
   const scene = demoScene();
-  // At 500 points inside the anchor cell, the function the scene carries is the I1 function.
+  // At 500 points inside the anchor cell, the function the scene carries is the I1 function plus
+  // the C2 displacement and nothing else. The macro half is asserted exactly, by rebuilding the
+  // same scene with the detail off; the displaced half is asserted against its own bound. A test
+  // that only checked "close to sceneHeightAt" would pass with the displacement silently missing,
+  // which is the whole thing this phase adds.
+  const bare = buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS, { resolution: 12, detail: null });
+  let moved = 0;
   for (const [x, y] of pointsInsideAnchor(scene, 500)) {
-    const expected = sceneHeightAt(scene.patch, field, calibration, x, y) * scene.heightScaleM;
-    assert.ok(Math.abs(scene.heightAt(x, y) - expected) < 1e-6, `heightAt(${x}, ${y}) = ${scene.heightAt(x, y)}, I1 says ${expected}`);
+    const macro = sceneHeightAt(scene.patch, field, calibration, x, y) * scene.heightScaleM;
+    assert.ok(Math.abs(bare.heightAt(x, y) - macro) < 1e-6, `detail off: heightAt(${x}, ${y}) is not I1`);
+    const d = scene.heightAt(x, y) - macro;
+    assert.ok(Math.abs(d) <= DEFAULT_DETAIL.amplitudeM + 1e-9, `displacement of ${d} m at ${x}, ${y}`);
+    // Land stays land: the taper is what makes that true, and it is the promise C2 is built on.
+    if (macro > 0) assert.ok(scene.heightAt(x, y) > 0, `land at ${x}, ${y} was pushed under the sea`);
+    if (Math.abs(d) > 0.01) moved++;
   }
+  assert.ok(moved > 250, `only ${moved} of 500 points moved by more than a centimetre`);
   // And at 500 emitted vertices the stored height is that number rounded to a float, which is
   // the most a Float32Array can carry: at 900 m a float's step is 6e-5, so the check is exact
   // rather than a tolerance that would pass anything. Colour is the contract's biome at the
   // vertex, not at the triangle: that is what lets two biomes blend across one triangle.
+  //
+  // This used to assert `colour[c] / 255`, which pinned the C3 bug rather than the contract: the
+  // attribute is read as linear and nothing converts on the way in, so the raw byte ratio was the
+  // wrong number and this test was the reason nobody noticed. It now pins the transfer.
   const anchor = scene.chunks[0]!;
   const stride = Math.max(1, Math.floor(anchor.triangleCount * 3 / 500));
   let checked = 0;
   for (let v = 0; v < anchor.positions.length && checked < 500; v += stride * 3, checked++) {
     const x = anchor.positions[v]!;
     const y = -anchor.positions[v + 2]!; // three's z is south; local y is north
-    const expected = Math.fround(sceneHeightAt(scene.patch, field, calibration, x, y) * scene.heightScaleM);
-    assert.equal(anchor.positions[v + 1], expected, `vertex at ${x}, ${y}`);
-    const colour = BIOME_COLOUR[biomeAtLocal(scene.patch, field, calibration, x, y)];
-    for (let c = 0; c < 3; c++) assert.equal(anchor.colours[v + c], Math.fround(colour[c]! / 255));
+    // The vertex carries the SCENE height, which is heightAt itself: a lattice point is where the
+    // mesh and the height function have to be equal to the last bit, because the mover, the camera
+    // and every prop are seated by one and standing on the other.
+    assert.equal(anchor.positions[v + 1], Math.fround(scene.heightAt(x, y)), `vertex at ${x}, ${y}`);
+    const kind = biomeAtLocal(scene.patch, field, calibration, x, y);
+    const colour = BIOME_COLOUR_LINEAR[kind];
+    for (let c = 0; c < 3; c++) {
+      assert.equal(anchor.colours[v + c], Math.fround(colour[c]!), `vertex at ${x}, ${y}, channel ${c}`);
+      assert.equal(colour[c], srgbToLinear(BIOME_COLOUR[kind][c]! / 255));
+    }
   }
   assert.equal(checked, 500);
 });
@@ -322,6 +344,152 @@ test("the region reports its water and its make-up, and is the same region every
   // Coarser is fewer triangles of the same ground, not a different ground.
   assert.ok(a.triangleCount * 9 < scene.triangleCount * 1.1 && a.triangleCount * 9 > scene.triangleCount * 0.8, `${a.triangleCount} at 36 m against ${scene.triangleCount} at 12 m`);
   assert.ok(Math.abs((a.composition.ocean ?? 0) - (scene.composition.ocean ?? 0)) < 0.02);
+});
+
+// ── the walking-scale displacement (DECISIONS C2) ───────────────────────────────
+
+test("C2: the displacement adds NOTHING to the gap between heightAt and the drawn triangle", () => {
+  const scene = demoScene();
+  const bare = buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS, { resolution: 12, detail: null });
+  // This is the whole design in one assertion, and it is why the displacement lives on the mesh's
+  // own lattice rather than one octave finer. The mover, the camera and every scattered prop are
+  // seated by heightAt; the eye sees the triangles. Between two vertices those two already differ,
+  // by the macro field's curvature across 12 m, which the lattice has always approximated: measured
+  // here at 2,700 it is 2.1 mm at the median and 131 mm at the worst curvature on the demo disk,
+  // exactly three times what the same measurement gives at 900, because it is a height and C1
+  // tripled every height. What must not happen is the displacement ADDING to it. It adds nothing:
+  // being piecewise linear on the very lattice the triangles are drawn from, it is carried exactly,
+  // and the two surfaces below agree to the last bit a float can hold.
+  const sample = (region: RegionScene): number[] => {
+    const gaps: number[] = [];
+    for (const chunk of region.chunks) {
+      const p = chunk.positions;
+      const stride = Math.max(1, Math.floor(chunk.triangleCount / 3000)) * 9;
+      for (let t = 0; t + 8 < p.length; t += stride) {
+        // three's frame is (x east, y up, z south); local y is north, so it is -z.
+        const px = [p[t]!, p[t + 3]!, p[t + 6]!];
+        const py = [-p[t + 2]!, -p[t + 5]!, -p[t + 8]!];
+        const pz = [p[t + 1]!, p[t + 4]!, p[t + 7]!];
+        for (let k = 0; k < 4; k++) {
+          // Barycentric weights from a hash, so a failure names a point that can be rerun.
+          let a = hashPosition(t, k, 21);
+          let b = hashPosition(t, k, 22);
+          if (a + b > 1) {
+            a = 1 - a;
+            b = 1 - b;
+          }
+          const c = 1 - a - b;
+          const x = px[0]! * c + px[1]! * a + px[2]! * b;
+          const y = py[0]! * c + py[1]! * a + py[2]! * b;
+          const drawn = pz[0]! * c + pz[1]! * a + pz[2]! * b;
+          gaps.push(Math.abs(region.heightAt(x, y) - drawn));
+        }
+      }
+    }
+    return gaps;
+  };
+  const withDetail = sample(scene);
+  const without = sample(bare);
+  assert.equal(withDetail.length, without.length);
+  assert.ok(withDetail.length > 20_000, `only ${withDetail.length} points were checked`);
+  let worstDelta = 0;
+  let worst = 0;
+  for (let i = 0; i < withDetail.length; i++) {
+    worstDelta = Math.max(worstDelta, Math.abs(withDetail[i]! - without[i]!));
+    worst = Math.max(worst, withDetail[i]!);
+  }
+  const mean = withDetail.reduce((s2, v) => s2 + v, 0) / withDetail.length;
+  console.log(
+    `C2: heightAt against the drawn triangle over ${withDetail.length} interior points: ` +
+      `mean ${(mean * 1000).toFixed(3)} mm, worst ${(worst * 1000).toFixed(1)} mm; ` +
+      `the displacement changes it by ${(worstDelta * 1e6).toFixed(3)} micrometres`,
+  );
+  // Not zero, and it should not be: the drawn positions are a Float32Array, whose step at a
+  // hundred metres of height is 7.6 micrometres, and three of those are interpolated per point.
+  // Measured at 14 micrometres, which is four orders below the gap itself.
+  assert.ok(worstDelta < 1e-4, `the displacement moved the gap by ${worstDelta} m; it must be carried exactly`);
+});
+
+test("C2: no triangle that holds the waterline is displaced, so the drawn coast is the macro coast", () => {
+  const scene = demoScene();
+  const macro = (x: number, y: number) => sceneHeightAt(scene.patch, field, calibration, x, y) * scene.heightScaleM;
+  let coastal = 0;
+  for (const chunk of scene.chunks) {
+    const p = chunk.positions;
+    for (let t = 0; t + 8 < p.length; t += 9) {
+      const xs = [p[t]!, p[t + 3]!, p[t + 6]!];
+      const ys = [-p[t + 2]!, -p[t + 5]!, -p[t + 8]!];
+      const hs = [p[t + 1]!, p[t + 4]!, p[t + 7]!];
+      const wet = hs.some((h) => h <= 0);
+      const dry = hs.some((h) => h > 0);
+      if (!(wet && dry)) continue;
+      coastal++;
+      for (let v = 0; v < 3; v++) {
+        assert.equal(hs[v], Math.fround(macro(xs[v]!, ys[v]!)), `a shoreline vertex at ${xs[v]}, ${ys[v]} was displaced`);
+      }
+    }
+  }
+  assert.ok(coastal > 200, `only ${coastal} shoreline triangles were found on a 45% ocean cell`);
+});
+
+test("C2: the displacement is a pure function of the ground, and never Math.random", () => {
+  const patch = createTangentPatch(DEMO_CELL, RADIUS);
+  const make = () => createSceneHeight(patch, field, calibration, { heightScaleM: 2700, resolution: 12 });
+  const a = make();
+  const original = Math.random;
+  let b: (x: number, y: number) => number;
+  try {
+    Math.random = () => 0.123456789;
+    b = make();
+  } finally {
+    Math.random = original;
+  }
+  const bare = createSceneHeight(patch, field, calibration, { heightScaleM: 2700, resolution: 12, detail: null });
+  let moved = 0;
+  for (let i = 0; i < 400; i++) {
+    const x = (hashPosition(i, 0, 31) - 0.5) * 3000;
+    const y = (hashPosition(i, 0, 32) - 0.5) * 3000;
+    assert.equal(a(x, y), b(x, y), `two builds disagree at ${x}, ${y}`);
+    const d = a(x, y) - bare(x, y);
+    assert.ok(Math.abs(d) <= DEFAULT_DETAIL.amplitudeM, `${d} m of displacement at ${x}, ${y}`);
+    if (Math.abs(d) > 0.01) moved++;
+  }
+  assert.ok(moved > 150, `only ${moved} of 400 points carry any displacement`);
+});
+
+test("C2: an octave the lattice cannot draw is dropped, and a taper that would invert a shore is refused", () => {
+  const patch = createTangentPatch(DEMO_CELL, RADIUS);
+  const at = (resolution: number) =>
+    createSceneHeight(patch, field, calibration, { heightScaleM: 2700, resolution });
+  const bare = createSceneHeight(patch, field, calibration, { heightScaleM: 2700, resolution: 12, detail: null });
+  // 12 m draws all four octaves; 96 m can only carry the 192 m one; 192 m carries none at all and
+  // the ground is the macro field exactly, which is what a coarse preview should be.
+  const fine = at(12);
+  const coarse = at(96);
+  const bald = at(192);
+  let fineMoved = 0;
+  let coarseMoved = 0;
+  for (let i = 0; i < 200; i++) {
+    const x = Math.round((hashPosition(i, 0, 41) - 0.5) * 2000);
+    const y = Math.round((hashPosition(i, 0, 42) - 0.5) * 2000);
+    if (Math.abs(fine(x, y) - bare(x, y)) > 0.01) fineMoved++;
+    if (Math.abs(coarse(x, y) - bare(x, y)) > 0.01) coarseMoved++;
+    assert.equal(bald(x, y), bare(x, y), `a 192 m lattice drew an octave it cannot carry at ${x}, ${y}`);
+  }
+  assert.ok(fineMoved > coarseMoved, `12 m moved ${fineMoved} points and 96 m moved ${coarseMoved}`);
+  assert.throws(
+    () =>
+      createSceneHeight(patch, field, calibration, {
+        heightScaleM: 2700,
+        resolution: 12,
+        detail: { ...DEFAULT_DETAIL, taperM: DEFAULT_DETAIL.amplitudeM },
+      }),
+    RangeError,
+  );
+  assert.ok(
+    DEFAULT_DETAIL.taperM >= DEFAULT_DETAIL.amplitudeM * 1.5,
+    "the shipped taper would let a shore run backwards into the sea",
+  );
 });
 
 test("a bad step or ring count is refused before any work is done", () => {

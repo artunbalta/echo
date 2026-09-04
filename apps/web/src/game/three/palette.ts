@@ -72,6 +72,28 @@ export const PALETTE = {
   snowLit: 0xcfc9b2,     // a drift's crest under the warm western key
   snowShade: 0xb9c9c5,   // its lee, cooled toward the sky rather than darkened toward ink
 
+  // ── the ground underfoot ──
+  // Added when the floor stopped being one flat biome colour (task A10). The audit's complaint was
+  // that 74% of a rainforest parcel's floor and 99% of a savanna's were a single value, on the
+  // largest surface in every frame, and the answer is to paint that floor out of the materials a
+  // floor is actually MADE of. The palette had words for growing things and for built things and
+  // none at all for the dead and the mineral underfoot, so ten recipes would each have blended
+  // their own browns at their own call sites, which is the habit the cold-country block above was
+  // written to stop. Every entry below is a material, not a mood: it is what that ground is.
+  //
+  // Values are read as ALBEDO and go through `srgbToLinear` before they reach a vertex, so these
+  // are what the surface would be under white light, not what it looks like at dusk. That matters
+  // most at the dark end: `char` and `humus` are the darkest entries this palette has ever had, and
+  // both are deliberately clear of `shadow`, the 0x0b0e14 ink a shadow is drawn in, by factors of
+  // 2.2 and 2.7 in value. A material painted in the shadow colour is not dark, it is a hole.
+  litter: 0x6b5238,      // dry fallen leaves, the top of any forest floor: warmer and lighter than `soil`
+  humus: 0x2e2416,       // wet decomposed leaf mould in a hollow, and the peat in a frost trough
+  clay: 0x77452c,        // the red mineral subsoil a slope shows once the litter slides off it, and the varnish on a desert stone
+  char: 0x221e1b,        // ground weeks after a grass fire: charcoal and burnt stubble, neutral where `humus` is brown
+  ash: 0x8d867c,         // the pale grey the same fire leaves in its own hollows, between `lichen` and `rockLight` but warmer than both
+  thatch: 0xb9a463,      // standing dead grass, cured and bleached; `grassDry` is the olive of a sward going over and this is the straw it ends as. It lands within (1, 4, 6) of the biome table's own savanna, which is not a coincidence: that table's savanna IS cured grass seen from orbit
+  sandDry: 0xe8d3a0,     // the bible's §3 dry rung, for the crest of a dune where nothing has been damp for a season
+
   // ── built things (geometric) ──
   wood: 0x8a5733,
   woodLight: 0xb88a5a,

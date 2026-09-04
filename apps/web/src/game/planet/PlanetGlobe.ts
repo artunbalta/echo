@@ -28,6 +28,7 @@ import {
   landFractionOfCell,
   vec3ToLatLng,
   createTerrain,
+  linearRgb,
   paintParcel,
   setParcelExtrusion,
   type Calibration,
@@ -172,11 +173,32 @@ export class PlanetGlobe {
     this.scene.add(this.planet);
     this.camera.position.set(0, 0.22, this.idleDistance);
 
+    // WHAT MOVED WHEN THE SEAM WAS FIXED, AND WHAT DELIBERATELY DID NOT (A11, DECISIONS C3).
+    //
+    // The globe reads the same colour buffer the walked world does, so its terrain albedo fell by
+    // the same transfer. Measured over the planet's own pixels on the landing at 1280x800: mean
+    // luma 96.16 -> 63.93, p50 100 -> 56, p95 153 -> 122.
+    //
+    // The key is NOT raised to put that back. 96.16 is the picture the audit called pale, high-key
+    // and washed, and the correct albedo IS the improvement here: ocean darkens 4.63x while snow
+    // darkens 1.08x, which is the sea-against-icecap separation the wrong buffer was flattening.
+    // The walked world's exposure was re-derived to land back where it was because a place has to
+    // read at a fixed hour; a hero image has no such anchor, so it keeps the contrast it gained.
+    //
+    // What is NOT acceptable is the bottom of the range: pixels under 8/255 went 0.02% -> 2.23% of
+    // the planet, which is the unlit limb reaching black, and the bible bans black outright. The
+    // rim is the one light aimed at that limb, so the rim is the one number that moves, 0.3 -> 1.2.
+    // Swept in a live page rather than guessed: the rim buys the dark end almost for free (under-8
+    // 2.23% -> 0.22% while the mean moves 63.93 -> 65.32), where reaching the same dark end on the
+    // hemisphere costs 0.6 -> 1.6 and drags the whole planet to 73.48, back toward washed.
+    //
+    // The residual 0.22% is not lightable: at rim 2.6 it is still 0.15%, because those are the
+    // antialiased silhouette pixels blending into the page's own #120c19 ground.
     this.scene.add(new THREE.HemisphereLight(0xcfc0e8, 0x241733, 0.6));
     const key = new THREE.DirectionalLight(0xfff4e0, 1.6);
     key.position.set(3, 2.4, 4);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0xa06cd5, 0.3);
+    const rim = new THREE.DirectionalLight(0xa06cd5, 1.2);
     rim.position.set(-4, -1, -2);
     this.scene.add(rim);
 
@@ -279,8 +301,12 @@ export class PlanetGlobe {
     // top surface and no side walls, so from directly overhead a lifted parcel is invisible. Seen
     // from orbit the owner colour does the separating; at the end of a descent, this does.
     if (!options.fill) {
+      // MINE is parchment in sRGB bytes; mesh.colours is linear (DECISIONS C3). Mixing the bytes
+      // straight in would drag the terrain toward a value 2.3x too bright and undo the seam fix on
+      // exactly the parcel a person is arriving at.
+      const mine = linearRgb(MINE);
       for (let i = 0; i < mesh.colours.length; i++) {
-        mesh.colours[i] = mesh.colours[i]! + (MINE[i % 3]! / 255 - mesh.colours[i]!) * 0.3;
+        mesh.colours[i] = mesh.colours[i]! + (mine[i % 3]! - mesh.colours[i]!) * 0.3;
       }
     }
     const geometry = new THREE.BufferGeometry();
@@ -447,7 +473,10 @@ export class PlanetGlobe {
       new THREE.Mesh(
         fill,
         new THREE.MeshBasicMaterial({
-          color: new THREE.Color(colour[0] / 255, colour[1] / 255, colour[2] / 255),
+          // setRGB with the space named, not the numeric constructor: three's Color(r, g, b) takes
+          // WORKING space, which is linear here, so the bytes went in unconverted and the hover
+          // fill rendered (250, 229, 183) where the parchment it names is (244, 233, 208).
+          color: new THREE.Color().setRGB(colour[0] / 255, colour[1] / 255, colour[2] / 255, THREE.SRGBColorSpace),
           transparent: true,
           opacity: 0.55,
         }),

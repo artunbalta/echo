@@ -65,6 +65,24 @@ export interface FollowCameraOptions {
   sampleSpacingM: number;
 }
 
+/**
+ * NOTHING HERE MOVED UNDER DECISIONS C1, which was measured before it was decided.
+ *
+ * Every length below is in metres and describes the camera's relationship to the PLAYER, not to the
+ * landscape, so tripling the height scale can only reach them through one door: the boom's terrain
+ * collision. Ten thousand deterministic steps per configuration were walked over 40 parcels on both
+ * the old ground and the shipped one, with the pitch held rather than left to drift, because a
+ * collision rate averaged over a random walk hides the case that breaks.
+ *
+ *   pitch 0.42 (where the camera starts) and 0.15   the boom NEVER collides, at either height
+ *   pitch -0.2 (the lowest a drag can reach)        it collides on every frame at either height,
+ *                                                   which is structural: a boom below the chest
+ *                                                   line enters the ground whatever the relief
+ *
+ * At that bottom pitch the taller ground shortens the boom from 2.50 m to 2.39 m and starts using
+ * the pitch lift, which peaks at 0.15 rad where the old ground never needed any. That is the
+ * collision mechanism doing its job on steeper ground, not a number that wants changing.
+ */
 export const FOLLOW_CAMERA: FollowCameraOptions = {
   tileM: TILE_M,
   nearM: 0.1,
