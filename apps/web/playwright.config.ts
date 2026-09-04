@@ -21,6 +21,16 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
+    // Real GPU, not SwiftShader. Headless chromium falls back to software rendering, and this app
+    // draws 43,018 instanced props: measured, a frame costs 568 ms that way against 8.3 ms on the
+    // GPU. That is not merely slow, it breaks correctness in the harness, because Playwright's
+    // actionability check needs an element's box to be unchanged across two consecutive animation
+    // frames before it will click. At half a second a frame the consent card never settles inside
+    // a click timeout, so every click times out on a button that is visible, unobstructed and the
+    // top element at its own centre. The suite was testing a machine nobody has.
+    launchOptions: {
+      args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-swiftshader"],
+    },
   },
   webServer: {
     command: "npm run dev",
