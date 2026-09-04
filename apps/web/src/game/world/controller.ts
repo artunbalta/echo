@@ -56,7 +56,18 @@ export interface MoverState {
 }
 
 export const MOVER = {
-  /** Tiles per second. The anchoring quantum: MOVE_SPEED is what the locomotion sampler expects. */
+  /**
+   * Tiles per second. The anchoring quantum: MOVE_SPEED is what the locomotion sampler expects.
+   *
+   * IT DOES NOT MOVE WITH THE HEIGHT SCALE (DECISIONS C1), for two reasons that are both harder
+   * than a preference. This mover integrates in the horizontal plane and nowhere else: walkable.ts
+   * rule 1 is that height is visual and slope is never a gate, so a landscape three times taller is
+   * crossed in exactly the same time and there is no "slower uphill" for a number here to express.
+   * And MOVE_SPEED is not this file's to spend: WorldRoom.integrate runs the same constant on the
+   * authority, so a client walking at a different one drifts from the server on the first step, and
+   * the locomotion sampler normalises speedVar by it, so changing it silently rescales a feature the
+   * frozen model was fitted on.
+   */
   WALK: WORLD.MOVE_SPEED,
   /**
    * Tiles per second when running. Above MOVE_SPEED on purpose, and flagged ⚑: the sampler's

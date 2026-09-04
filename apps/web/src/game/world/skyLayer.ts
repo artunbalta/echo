@@ -41,6 +41,13 @@
  * ground rendered #323628; the model above predicts #343729, so the gap is fully accounted for and
  * nothing else is wrong. The intensities below are stated in the modern convention, which is why
  * they look about three times larger than a pre-r155 tutorial would write.
+ *
+ * AND WHY THEY MOVED AGAIN (A11, DECISIONS C3). That was one half of `albedo * E / pi`. This is the
+ * other. packages/planet was writing sRGB bytes over 255 straight into a colour attribute three
+ * reads as LINEAR, so the terrain's albedo was too bright by exactly what the transfer function
+ * undoes: 3.57x on rainforest, 4.63x on ocean, 1.08x on snow. Fixing the seam is A11; re-deriving
+ * `E` against the corrected albedo is this file's share of the same change, and the reasoning above
+ * about the missing pi is untouched by it. See ALBEDO_FIX for the measurement.
  */
 
 import * as THREE from "three";
@@ -131,6 +138,21 @@ const GROUND_BOUNCE_MIX = 0.3;
 // ── how strong, hour by hour ────────────────────────────────────────────────────
 
 /**
+ * How much of the world's light the colour-space bug was standing in for.
+ *
+ * NOT a guess at "about 4x" and not a per-biome table. Measured end to end on the two shipped
+ * routes with the seam fixed and every light in this file left exactly as F14 set it: rendered
+ * ground fell from luma 48.52 to 22.23 on the rainforest parcel and from 75.56 to 37.64 on the
+ * coastal demo, which is 3.70x and 3.75x once both are taken back into linear. Two routes with
+ * different biome mixes agreeing to 1.5% is what says one exposure serves both, so the anchors
+ * below are the F14 numbers times this and nothing else was touched.
+ *
+ * The key-to-fill RATIO is the art direction, which is to say how deep a shadow is, and it does not
+ * appear here at all: only the albedo moved, so only the exposure moves.
+ */
+export const ALBEDO_FIX = 3.7;
+
+/**
  * Intensities in three's post-r165 convention: raw, unscaled by pi. The pi that used to be applied
  * for you is the whole reason the shipped world rendered as a silhouette, so these numbers are
  * about three times the ones a pre-r155 tutorial would tell you to write. See the file header.
@@ -140,17 +162,17 @@ const GROUND_BOUNCE_MIX = 0.3;
  * it from the elevation the sun happens to be at, so a sun sixteen degrees up burns bright and a
  * sun overhead does not have to. That is what stops midday from becoming a different, happier game.
  */
-const KEY_ANCHOR = 1.7;
-const MOON_ANCHOR = 0.35;
+const KEY_ANCHOR = 1.7 * ALBEDO_FIX;
+const MOON_ANCHOR = 0.35 * ALBEDO_FIX;
 
 /**
  * The fill's intensity by hour. Night's number is the LARGEST because night's colour is the
  * DARKEST: what lights the ground is the product, and the product at night is about a fifth of the
  * product at dusk. Reading the number alone will mislead you; read it against FILL_NIGHT.
  */
-const FILL_NIGHT_I = 4.3;
-const FILL_TWILIGHT_I = 0.9 * Math.PI; // the terrain layer's old 0.9, corrected for the missing pi
-const FILL_DAY_I = 2.0;
+const FILL_NIGHT_I = 4.3 * ALBEDO_FIX;
+const FILL_TWILIGHT_I = 0.9 * Math.PI * ALBEDO_FIX; // the terrain layer's old 0.9, through both fixes
+const FILL_DAY_I = 2.0 * ALBEDO_FIX;
 
 /** Rec. 709 relative luminance, on linear components. The one scalar "how bright is this". */
 const luminance = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
@@ -160,8 +182,12 @@ const luminance = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
  * 0x000000 is banned outright, so the fill is never allowed to deliver less irradiance than
  * `shadow`'s own luminance. At midnight the ramp is already well clear of it; the floor is here so
  * that a later tuning pass cannot quietly turn the night off and call it atmosphere.
+ *
+ * It carries ALBEDO_FIX for the same reason the ramp does. This is an IRRADIANCE, and the albedo it
+ * lands on is now about 3.7x darker, so leaving the number alone would have quietly made the one
+ * guard the night has 3.7x weaker while looking untouched.
  */
-const SHADOW_LUMA = luminance(new THREE.Color(PALETTE.shadow));
+const SHADOW_LUMA = luminance(new THREE.Color(PALETTE.shadow)) * ALBEDO_FIX;
 
 /** Below this the key delivers nothing worth a shadow pass, so the pass is skipped. */
 const SHADOW_CUTOFF = 0.02;
@@ -384,6 +410,16 @@ export interface SkyLayerOptions {
    * fallback keeps the same two numbers for the same reason: the disk is about 4 km across and the
    * scatter dresses only the first 500 m, so 420 m is far enough for a headland and near enough
    * that the rim and the undressed middle distance never show.
+   *
+   * NEITHER MOVED UNDER DECISIONS C1, and the reason is worth writing down so the next re-derivation
+   * does not start from scratch. A taller landscape would push ground into the fog only if the eye
+   * could reach it, and it cannot: over 2,560 rays cast through the frozen frame on each shipped
+   * route, the FARTHEST ground pixel is 66 m away on the ordinary parcel and 70 m on the demo, at a
+   * median of 11 m and a 95th percentile of 30 m. Not one ray of the four thousand reaches even the
+   * near at 150 m, before OR after the height scale tripled. What closes the view is the canopy and
+   * an 8 m camera boom, not the air, so the fog band is doing nothing to the ground a person sees
+   * and there is nothing in it to re-derive. It is still earning its keep on the sky dome and on
+   * the rim of the disk, which is what it was put there for.
    */
   fogNearM?: number;
   fogFarM?: number;

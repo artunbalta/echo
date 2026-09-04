@@ -463,6 +463,47 @@ export const BIOME_COLOUR: Record<Biome, Rgb> = {
   snow: [238, 240, 242],
 };
 
+/**
+ * One sRGB component, 0 to 1, as the linear number a renderer works in.
+ *
+ * This is the exact IEC 61966-2-1 piecewise transfer function, not `pow(c, 2.2)`, because it is
+ * the same curve `THREE.Color` runs on every colour that does NOT come through this file. The two
+ * disagree by up to 0.0085 in linear terms (at byte 191), and the disagreement is worst where this
+ * planet lives: read back out through the display transfer, gamma 2.2 lands 5.0 of 255 away on
+ * `ocean`'s 38 and 3.6 away on `rainforest`'s 50, against 0.5 on `snow`'s 238. Since the whole
+ * point of this function is that the ground and the tree standing on it are in ONE space, an
+ * approximation here would shrink the seam rather than close it, which DECISIONS C3 rejected.
+ */
+export const srgbToLinear = (c: number): number =>
+  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+
+/**
+ * An {@link Rgb} as a vertex-colour attribute must carry it: linear, 0 to 1.
+ *
+ * THE SEAM (DECISIONS C3). `BIOME_COLOUR` is stated in sRGB bytes because that is how a colour is
+ * chosen, and because the preview plate draws it into a 2D canvas where bytes are exactly right.
+ * A `color` attribute is different: three reads it as LINEAR and converts nothing on the way in.
+ * Dividing by 255 and stopping there therefore handed the shader an sRGB number where a linear one
+ * belongs, while every prop in the same frame reached the shader through `THREE.Color`, which does
+ * convert. Measured on the shipped frame, that made rainforest ground 3.57x too bright in
+ * luminance and ocean 4.63x, which is why the trees on it read as silhouettes.
+ *
+ * Every writer into a colour attribute goes through here, on both sides of the shared contract, so
+ * the globe and the walked world cannot end up telling different stories about the same colour.
+ */
+export const linearRgb = (colour: Rgb): [number, number, number] => [
+  srgbToLinear(colour[0] / 255),
+  srgbToLinear(colour[1] / 255),
+  srgbToLinear(colour[2] / 255),
+];
+
+/** {@link BIOME_COLOUR}, converted once, for the inner loops that fill a mesh. */
+export const BIOME_COLOUR_LINEAR: Record<Biome, Rgb> = (() => {
+  const table = {} as Record<Biome, Rgb>;
+  for (const b of BIOMES) table[b] = linearRgb(BIOME_COLOUR[b]);
+  return table;
+})();
+
 /** Convenience for callers holding a lat/lng rather than a position. */
 export function biomeAtLatLng(
   field: TerrainField,

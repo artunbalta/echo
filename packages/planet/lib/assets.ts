@@ -40,7 +40,15 @@ export interface AssetClass {
   excludes: readonly ExclusionKind[];
   /** Full mesh within `nearM`, impostor to `farM`, culled beyond. */
   lod: { nearM: number; farM: number };
-  /** Null for things you walk over (a dune ripple, a shell). */
+  /**
+   * Null for things you walk over (a dune ripple, a shell).
+   *
+   * These two are TRUE METRES and are not touched by DECISIONS C1's height scale. A collider is a
+   * property of the thing standing on the ground, not of the ground: `heightScaleM` scales the
+   * terrain, every instance is then seated on it by `frame.toScene`, and the trunk stays the same
+   * trunk. The one number downstream that reads `heightM` against a threshold is the scatter
+   * layer's `blockingHeightM`, which is the same true metres, so it is unmoved for the same reason.
+   */
   collider: { radiusM: number; heightM: number } | null;
   /** Uniform scale range; the value for a position is a hash of the position. */
   scale: [number, number];

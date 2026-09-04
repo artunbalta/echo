@@ -23,8 +23,10 @@ import { fileURLToPath } from "node:url";
 
 import * as THREE from "three";
 import {
+  createSceneHeight,
   createTangentPatch,
   createTerrain,
+  DEFAULT_REGION_OPTIONS,
   DEFAULT_SCENE_OPTIONS,
   DEMO_ASSET_CLASSES,
   DEMO_CELL,
@@ -34,7 +36,6 @@ import {
   PARCEL_REGION_K,
   PLANET_PARAMS,
   regionBound,
-  sceneHeightAt,
   spawnPointFor,
   walkableAt,
   type Calibration,
@@ -64,17 +65,22 @@ const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, PLANET_PARAMS.radiusKm);
 const spawn = spawnPointFor(DEMO_CELL, field, calibration, PLANET_PARAMS.radiusKm)!;
 const tileM = TILE_M;
 const heightScaleM = DEFAULT_SCENE_OPTIONS.heightScaleM;
+const resolutionM = DEFAULT_REGION_OPTIONS.resolution;
 
 const toLocalM = (x: number, y: number) => tileToLocalM(x, y, tileM);
 const fromLocalM = (xm: number, ym: number) => localMToTile(xm, ym, tileM);
+// createSceneHeight, not a second copy of it: this frame stands in for PlanetWorld's, and the
+// whole reason props sit on the ground is that the mesh and the seating come from one function.
+const sceneHeight = createSceneHeight(patch, field, calibration, { heightScaleM, resolution: resolutionM });
 const heightAtTile = (x: number, y: number) => {
   const [xm, ym] = toLocalM(x, y);
-  return sceneHeightAt(patch, field, calibration, xm, ym) * heightScaleM;
+  return sceneHeight(xm, ym);
 };
 const frame: WorldFrame = {
   patch,
   tileM,
   heightScaleM,
+  resolutionM,
   heightAtTile,
   walkableTile: (x, y) => {
     const [xm, ym] = toLocalM(x, y);

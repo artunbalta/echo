@@ -25,7 +25,7 @@
 import { cellToBoundary, cellToLatLng, getResolution, gridDisk, latLngToCell } from "h3-js";
 
 import { latLngToVec3, vec3ToLatLng, type Vec3 } from "./geo.js";
-import { normalisedHeight, type Calibration, type TerrainField } from "./terrain.js";
+import { hashString, normalisedHeight, type Calibration, type TerrainField } from "./terrain.js";
 
 export interface TangentPatch {
   cell: string;
@@ -118,6 +118,285 @@ export function sceneHeightAt(
   return normalisedHeight(field.elevation(patch.toDirection(x, y)), calibration);
 }
 
+// ── detail displacement (DECISIONS C2) ──────────────────────────────────────────
+
+/**
+ * Relief at walking scale, added to the SCENE height and to nothing else.
+ *
+ * WHY IT IS NOT IN THE FIELD. The height field is fBm whose finest octave is `detailFrequency` 4.0
+ * over six octaves, so the smallest feature it can express is about 1.56 km wide and none of its
+ * variance lives under 100 m. Standing in it, the ground is a plane. Putting the fix in
+ * `elevation()` would be a different planet: every parcel's land fraction, the sea level
+ * calibration, the twelve commons and every deed move with it. So this is added where the mesh is
+ * BUILT and nowhere else, and `isLand`, `biome`, `walkableAt`, the registry and the globe's
+ * assignment maths all still read the field alone and are all still right.
+ *
+ * WHY IT LIVES ON THE MESH'S OWN LATTICE. The region is drawn as triangles on a lattice of
+ * `resolution` metres, and the mover, the camera and every scattered prop are seated by the height
+ * function rather than by the mesh. A displacement finer than one triangle is a displacement the
+ * mesh cannot draw: the surface would carry the lattice's linear interpolation of it while the
+ * height function carried the real thing, and everything standing on it would float or sink by the
+ * difference. That error is about 0.75 * A * h^2 / L^2 for amplitude A and wavelength L over a
+ * lattice of step h, so a one metre bump 48 m across leaves a fern 4.7 cm above its own shadow,
+ * and pushing that under a millimetre needs L past 400 m, which is not walking scale at all.
+ *
+ * So the displacement is DEFINED at lattice points and read back off the same two triangles per
+ * quad the builder emits. It is exactly piecewise linear on the drawn surface, which means the
+ * height function and the mesh return the same number at every position, not merely close ones,
+ * and prop seating is left where it was.
+ *
+ * A consequence worth stating rather than discovering: the lattice belongs to the ANCHOR patch, so
+ * the displacement is a property of the built region. The same region gives the same ground on
+ * every machine, every reload and on a server, which is what determinism is needed for here; the
+ * same ground reached from a different anchor cell would crease differently, and nothing in the
+ * product reaches it that way, because a region is always built from its own cell.
+ */
+export interface DetailOptions {
+  /** Metres the displacement reaches at full strength: the sum of the octave amplitudes. */
+  amplitudeM: number;
+  /** Wavelength of the coarsest octave, metres. */
+  coarsestM: number;
+  /** Halvings of the wavelength. An octave finer than two lattice steps is dropped, not drawn. */
+  octaves: number;
+  /**
+   * Ground below this many metres above sea level is displaced less than fully, reaching zero at
+   * the waterline itself.
+   *
+   * The width is 2.5 times the amplitude, and that ratio is the whole reason there is a number
+   * here. A smoothstep ramp over a width W has a peak gradient of 1.5 A / W with respect to the
+   * ground's own height, so at W below 1.5 A the ramp can fall faster than the shore rises and the
+   * displaced coast runs backwards into the sea: a beach with the water on the wrong side of it.
+   * At 2.5 A the worst case is 60% of the ground's own rise, so the shore stays monotone, no land
+   * is pushed under the water sheet, and the h = 0 contour, which is what `isLand` and every parcel
+   * boundary are drawn from, does not move by a millimetre.
+   */
+  taperM: number;
+}
+
+/**
+ * Four metres of relief over four octaves, from 192 m down to 24 m.
+ *
+ * The ladder is the house's own fBm: the amplitude halves as the wavelength halves, normalised so
+ * the octaves sum to `amplitudeM`, which is exactly what `fbm` in terrain.ts does. That fixes
+ * everything except the two ends, and both ends are measured rather than chosen.
+ *
+ * The FINE end is the 12 m lattice. Nothing under two steps can be drawn, so the last octave is
+ * 24 m and there is no argument about it.
+ *
+ * The COARSE end is where the field runs out. The macro field's finest expressible feature is
+ * about 1.56 km, so a person crossing a parcel walks over one shape; 192 m puts two or three
+ * swells inside the 420 m the fog leaves visible, which is the band the field has nothing in.
+ *
+ * The AMPLITUDE was swept over the SAME 400 parcels DEFAULT_SCENE_OPTIONS above is measured on,
+ * and read off the slope it buys at the 12 m step, which is the tilt under a foot. Median slope
+ * against amplitude: 2.44 undisplaced, 2.51 at 2 m, 2.61 at 3 m, 2.75 at 4 m, 3.12 at 6 m, 3.52 at
+ * 8 m; the share of land over 5 degrees goes 18.8, 19.3, 20.0, 20.9, 24.0, 28.9%.
+ *
+ * Four is where the ground stops being flat without the macro landscape being overwritten. The
+ * octave amplitudes are 2.13, 1.07, 0.53 and 0.27 m against a mean dry span inside a parcel of
+ * 80.5 m, so the biggest swell is a fortieth of the hill it sits on, and the shipped ground keeps
+ * the macro field's own p95 slope almost exactly: 8.12 degrees undisplaced, 8.34 displaced.
+ *
+ * WHAT IT IS WORTH TO A PERSON, which is the only reason any of this is here. Measured alone, with
+ * the macro subtracted, over 2.08 M dry lattice points on 120 parcels: the displacement runs
+ * 0.94 m in mean magnitude and 2.06 m at p95, and its OWN slope is 1.18 degrees mean and 2.38 at
+ * p95. That last number is the point of the whole change: at heightScaleM 900 the entire landscape
+ * had a mean slope of 1.03 degrees, so what is added here at walking scale is more tilt underfoot
+ * than the old world had in total. Over a 96 m walk, about twenty seconds, the ground rises and
+ * falls through 0.73 m at the median and 1.54 m at p95: a meadow that is never level, not a hill.
+ */
+export const DEFAULT_DETAIL: DetailOptions = {
+  amplitudeM: 4,
+  coarsestM: 192,
+  octaves: 4,
+  taperM: 10,
+};
+
+/** Hermite ease, the cheapest interpolant with a zero derivative at both ends. */
+const fade = (t: number): number => t * t * (3 - 2 * t);
+
+/**
+ * Value noise in -1..1 on a grid of `cellM`, from `hashPosition` and nothing else.
+ *
+ * Value rather than gradient noise because the corner values are what `hashPosition` already gives,
+ * and the artefact value noise is criticised for, axis-aligned ridges, is invisible once four
+ * octaves are summed and the whole thing is quantised onto a triangle lattice anyway.
+ *
+ * `corner` is memoised by the caller. Each corner of the coarsest octave serves 256 lattice points
+ * on a 12 m grid, so caching turns two million hashes per region into forty thousand, which is the
+ * difference between the region build fitting in its 400 ms budget and not.
+ */
+function valueNoise(
+  x: number,
+  y: number,
+  cellM: number,
+  corner: (i: number, j: number) => number,
+): number {
+  const gx = Math.floor(x / cellM);
+  const gy = Math.floor(y / cellM);
+  const u = fade(x / cellM - gx);
+  const v = fade(y / cellM - gy);
+  const lo = corner(gx, gy) + (corner(gx + 1, gy) - corner(gx, gy)) * u;
+  const hi = corner(gx, gy + 1) + (corner(gx + 1, gy + 1) - corner(gx, gy + 1)) * u;
+  return lo + (hi - lo) * v;
+}
+
+export interface SceneHeightOptions {
+  /** Metres of height per unit of normalised elevation. */
+  heightScaleM: number;
+  /** The lattice the mesh is drawn on, metres. The displacement is defined on exactly this grid. */
+  resolution: number;
+  /** Off, or a set of dials. Absent means {@link DEFAULT_DETAIL}. */
+  detail?: DetailOptions | null;
+}
+
+/**
+ * THE height the walkable world is drawn at and stood on, in metres above sea level.
+ *
+ * One function, built once per world, so `buildRegionScene` and the host's `heightAtTile` cannot
+ * be two implementations of the same idea. Off the lattice it is the exact macro height plus the
+ * lattice-linear displacement, which is what the mesh's own triangles carry.
+ *
+ * The memo is a cache over lattice points and cannot change an answer; it is what keeps a region
+ * build at one terrain evaluation per vertex rather than two.
+ */
+export function createSceneHeight(
+  patch: TangentPatch,
+  field: TerrainField,
+  calibration: Calibration,
+  options: SceneHeightOptions,
+): (x: number, y: number) => number {
+  const heightScaleM = options.heightScaleM;
+  const step = options.resolution;
+  if (!(step > 0)) throw new RangeError(`resolution must be a positive step in metres, got ${step}`);
+  const detail = options.detail === undefined ? DEFAULT_DETAIL : options.detail;
+  const macroAt = (x: number, y: number) =>
+    normalisedHeight(field.elevation(patch.toDirection(x, y)), calibration) * heightScaleM;
+  if (!detail || detail.amplitudeM <= 0) return macroAt;
+
+  if (detail.taperM < detail.amplitudeM * 1.5) {
+    throw new RangeError(`a ${detail.taperM} m taper inverts a shore under ${detail.amplitudeM} m of displacement`);
+  }
+  // Octaves the lattice cannot draw are DROPPED, and what is left is not renormalised. Two steps is
+  // the shortest wavelength a triangle mesh can carry at all, so a coarser build gets a low-passed
+  // version of the same ground rather than an aliased different one, which is what a lower level of
+  // detail should be. At the shipped 12 m nothing is dropped.
+  let drawable = detail.octaves;
+  while (drawable > 0 && detail.coarsestM / Math.pow(2, drawable - 1) < step * 2) drawable--;
+  if (drawable === 0) return macroAt;
+
+  // The seed salts every octave, so two planets never share a crease pattern, exactly as the asset
+  // placer salts its lattice.
+  const salt = Math.floor(hashString(field.seed) * 0x7fffffff) | 0;
+  // Geometric amplitudes summing to amplitudeM, so the dial means what it says.
+  const first = (detail.amplitudeM * (1 - 0.5)) / (1 - Math.pow(0.5, detail.octaves));
+
+  const ground = new Map<number, number>();
+  const offset = new Map<number, number>();
+  const key = (i: number, j: number) => (i + 0x8000) * 0x10000 + (j + 0x8000);
+
+  // One corner cache per octave, and the octave's own wavelength beside it, so the ladder is
+  // walked without re-deriving either.
+  const octaves: Array<{ cellM: number; amplitude: number; corner: (i: number, j: number) => number }> = [];
+  {
+    let amplitude = first;
+    let wavelength = detail.coarsestM;
+    for (let o = 0; o < drawable; o++) {
+      const cellM = wavelength;
+      const octaveSalt = salt + o;
+      const cache = new Map<number, number>();
+      octaves.push({
+        cellM,
+        amplitude,
+        corner: (i, j) => {
+          const k = key(i, j);
+          let value = cache.get(k);
+          if (value === undefined) {
+            value = hashPosition(i * cellM, j * cellM, octaveSalt) * 2 - 1;
+            cache.set(k, value);
+          }
+          return value;
+        },
+      });
+      amplitude *= 0.5;
+      wavelength *= 0.5;
+    }
+  }
+
+  const groundAt = (i: number, j: number): number => {
+    const k = key(i, j);
+    let value = ground.get(k);
+    if (value === undefined) {
+      value = macroAt(i * step, j * step);
+      ground.set(k, value);
+    }
+    return value;
+  };
+
+  /** The lowest macro ground in the 3x3 lattice neighbourhood: a one-step morphological erosion. */
+  const erodedGroundAt = (i: number, j: number): number => {
+    let lowest = Infinity;
+    for (let dj = -1; dj <= 1; dj++) {
+      for (let di = -1; di <= 1; di++) {
+        const h = groundAt(i + di, j + dj);
+        if (h < lowest) lowest = h;
+      }
+    }
+    return lowest;
+  };
+
+  const offsetAt = (i: number, j: number): number => {
+    const k = key(i, j);
+    let value = offset.get(k);
+    if (value === undefined) {
+      const x = i * step;
+      const y = j * step;
+      let sum = 0;
+      for (const octave of octaves) sum += octave.amplitude * valueNoise(x, y, octave.cellM, octave.corner);
+      // The taper reads the LOWEST macro ground within one lattice step, not the ground underfoot.
+      //
+      // That one word is what makes "no coastline moves" exact rather than nearly true. Every
+      // triangle the builder emits spans a single quad, so its three corners are all within one
+      // step of each other; a triangle that contains the waterline has a corner at or below sea
+      // level, and every corner of it therefore reads that corner's height and tapers to zero. The
+      // whole triangle is undisplaced, and the drawn coast is the macro coast to the last bit. The
+      // same rule taken from the point's own height would leave a metre or so of wobble in the
+      // shoreline on a steep shore, which is a coastline moving, however small.
+      //
+      // It is also why the taper is a smoothstep of the eroded height rather than a hard test: the
+      // ramp is shifted one step seaward, not broken, so nothing steps at the edge of the band.
+      const h = erodedGroundAt(i, j);
+      const t = h <= 0 ? 0 : h >= detail.taperM ? 1 : fade(h / detail.taperM);
+      value = sum * t;
+      offset.set(k, value);
+    }
+    return value;
+  };
+
+  return (x: number, y: number): number => {
+    const fx = x / step;
+    const fy = y / step;
+    const i = Math.floor(fx);
+    const j = Math.floor(fy);
+    const u = fx - i;
+    const v = fy - j;
+    if (u === 0 && v === 0) return groundAt(i, j) + offsetAt(i, j);
+    // The builder splits every quad into (0,0)(1,0)(1,1) and (0,0)(1,1)(0,1). Barycentric weights
+    // on whichever of the two holds the point, with the zero-weight corners never asked for.
+    let d: number;
+    if (u >= v) {
+      d = offsetAt(i, j) * (1 - u);
+      if (u > v) d += offsetAt(i + 1, j) * (u - v);
+      if (v > 0) d += offsetAt(i + 1, j + 1) * v;
+    } else {
+      d = offsetAt(i, j) * (1 - v);
+      if (u > 0) d += offsetAt(i + 1, j + 1) * u;
+      d += offsetAt(i, j + 1) * (v - u);
+    }
+    return macroAt(x, y) + d;
+  };
+}
+
 export interface HeightPatch {
   patch: TangentPatch;
   /** Grid points per side. The grid is square and covers the parcel's bounding box. */
@@ -198,6 +477,10 @@ export function tangentDistortion(patch: TangentPatch): number {
  * Two rules from section 6.2 that are easy to get subtly wrong, and are the whole point of this
  * code being here rather than in a renderer.
  *
+ * This builder is the PREVIEW one: nothing in the app draws it, and it carries no walking-scale
+ * displacement, because its grid is a fraction of a bounding box rather than a step in metres and
+ * a displacement has no lattice to live on until there is one. `buildRegionScene` is what ships.
+ *
  * The mesh is CUT to the parcel polygon, not merely faded at the edge. Where the boundary crosses
  * water the parcel edge IS water, and a player standing there has to see that: it is the difference
  * between owning a coastline and owning a square that happens to contain one.
@@ -207,7 +490,7 @@ export function tangentDistortion(patch: TangentPatch): number {
  * parcel gives the same trees in the same places on the server, in the browser, and next year.
  */
 
-import { biome, BIOME_COLOUR, BIOMES, type Biome, type Rgb } from "./terrain.js";
+import { biome, BIOME_COLOUR, BIOME_COLOUR_LINEAR, BIOMES, type Biome, type Rgb } from "./terrain.js";
 import { biomeAtLocal, VEGETATION_DENSITY } from "./biome-mask.js";
 
 export interface ParcelSceneOptions {
@@ -221,9 +504,21 @@ export interface ParcelSceneOptions {
   maxSlope: number;
 }
 
+/**
+ * heightScaleM is 2,700 under DECISIONS C1, up from 900.
+ *
+ * Measured over 400 assignable land parcels sampled on the 12 m mesh lattice and cut to the deed
+ * line: at 900 the median slope of an emitted triangle is 0.81 degrees, the mean 1.03, and 0.17% of
+ * land is steeper than 5 degrees, which is a painted floor. At 2,700 those become 2.44, 3.09 and
+ * 18.8%, and the mean dry span inside a parcel goes from 26.8 m to 80.5 m. Earth is about 6 degrees
+ * and 46%, so this is still half of Earth on purpose: the peak becomes 2.7 km on a 200 km body.
+ *
+ * `isLand` tests raw elevation and `biome()` takes normalised height, so this changes how tall the
+ * same shape is drawn and nothing else. No terrainVersion, no re-seed, no deed moves.
+ */
 export const DEFAULT_SCENE_OPTIONS: ParcelSceneOptions = {
   resolution: 96,
-  heightScaleM: 900,
+  heightScaleM: 2700,
   vegetationPerKm2: 3200,
   maxSlope: 0.8,
 };
@@ -408,12 +703,14 @@ export function buildParcelScene(
       if (kind === "ocean") hasWater = true;
       else landArea += flat;
       biomeArea.set(kind, (biomeArea.get(kind) ?? 0) + flat);
-      const colour = BIOME_COLOUR[kind];
+      // Linear, because a colour attribute is read as linear and converted nowhere: see
+      // BIOME_COLOUR_LINEAR. The bytes themselves stay in BIOME_COLOUR for the 2D preview plate.
+      const colour = BIOME_COLOUR_LINEAR[kind];
 
       for (let v = 0; v < 3; v++) {
         positions.push(tri[v]![0], tri[v]![1], z[v]!);
         normals.push(nx, ny, nz);
-        colours.push(colour[0] / 255, colour[1] / 255, colour[2] / 255);
+        colours.push(colour[0], colour[1], colour[2]);
       }
     }
   };
@@ -528,9 +825,13 @@ export function buildParcelScene(
  * is emitted when any corner is inside the region, which leaves a rim at most one step wide past
  * the exact hexagonal bound for the fog to take.
  *
- * Height is `sceneHeightAt` times the height scale, the I1 function, so the ground here is the
- * ground the globe showed. Colour is per VERTEX from `biomeAtLocal`, so two biomes blend across
- * the one triangle that straddles them instead of meeting at a hard edge.
+ * Height is `createSceneHeight`: `sceneHeightAt` times the height scale, which is the I1 function
+ * and the reason the ground here is the ground the globe showed, plus the walking-scale
+ * displacement, which the globe does not have and does not need (DECISIONS C2). The displacement
+ * is defined on this very lattice, so the mesh draws it exactly rather than approximating it, and
+ * the scene hands the same function out as `heightAt` for everything that has to stand on it.
+ * Colour is per VERTEX from `biomeAtLocal`, so two biomes blend across the one triangle that
+ * straddles them instead of meeting at a hard edge.
  *
  * Coordinates: OUT of here is three's frame, x east, y up, z SOUTH. Local metres run y NORTH, so
  * z is emitted as -y and the renderer does no conversion. The `heightAt` the scene carries takes
@@ -552,6 +853,12 @@ export interface RegionSceneOptions {
   resolution: number;
   /** Vertical exaggeration, metres of height per unit of normalised elevation. */
   heightScaleM: number;
+  /**
+   * The walking-scale displacement, or null for the macro field alone. Absent is
+   * {@link DEFAULT_DETAIL}; the option exists so a test can measure the two grounds against each
+   * other, not so a caller can ship a different one.
+   */
+  detail?: DetailOptions | null;
 }
 
 export const DEFAULT_REGION_OPTIONS: RegionSceneOptions = {
@@ -565,7 +872,7 @@ export interface RegionChunk {
   /** Triangle soup, three vertices each: x east, y up, z south, in metres. */
   positions: Float32Array;
   normals: Float32Array;
-  /** 0..1 per channel, from BIOME_COLOUR of the biome at each vertex. */
+  /** 0..1 per channel, LINEAR, from BIOME_COLOUR of the biome at each vertex. See linearRgb. */
   colours: Float32Array;
   triangleCount: number;
   /** A sphere containing every vertex, in the same frame, for frustum culling. */
@@ -610,6 +917,7 @@ export function buildRegionScene(
   const opts: RegionSceneOptions = {
     resolution: options.resolution ?? DEFAULT_REGION_OPTIONS.resolution,
     heightScaleM: options.heightScaleM ?? DEFAULT_REGION_OPTIONS.heightScaleM,
+    ...("detail" in options ? { detail: options.detail } : {}),
   };
   const step = opts.resolution;
   if (!(step > 0)) throw new RangeError(`resolution must be a positive step in metres, got ${step}`);
@@ -627,7 +935,13 @@ export function buildRegionScene(
     const [lat, lng] = cellToLatLng(c);
     return patch.toLocal(latLngToVec3(lat, lng)) ?? [0, 0];
   });
-  const heightAt = (x: number, y: number) => sceneHeightAt(patch, field, calibration, x, y) * opts.heightScaleM;
+  // THE height function, built once and handed out on the scene, so the mesh, the mover, the camera
+  // and every prop are seated by one piece of code. The displacement lives on this same lattice.
+  const heightAt = createSceneHeight(patch, field, calibration, {
+    heightScaleM: opts.heightScaleM,
+    resolution: step,
+    ...("detail" in opts ? { detail: opts.detail } : {}),
+  });
 
   // The lattice: grid line i is at (i - half) * step, so the anchor centre is a vertex and every
   // vertex is an integer multiple of the step. One extra line past the bound each side, so the
@@ -773,7 +1087,7 @@ export function buildRegionScene(
   }
 
   // 5. Fill the chunks, each sized exactly, reading every corner from the lattice arrays.
-  const colourOf = BIOMES.map((b) => BIOME_COLOUR[b].map((v) => v / 255) as [number, number, number]);
+  const colourOf = BIOMES.map((b) => BIOME_COLOUR_LINEAR[b]);
   const chunks: RegionChunk[] = cells.map((c, i) => ({
     cell: c,
     positions: new Float32Array(perCell[i]! * 9),

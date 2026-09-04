@@ -30,6 +30,7 @@ import * as THREE from "three";
 
 import { PALETTE } from "../src/game/three/palette";
 import {
+  ALBEDO_FIX,
   DAWN,
   DUSK,
   MIDDAY,
@@ -236,8 +237,14 @@ test("the horizon is never the zenith, so the gradient is a gradient", async () 
 test("no hour of the day leaves the ground unlit", () => {
   // The floor: what PALETTE.shadow itself is worth. The bible calls it ink and bans 0x000000, so
   // the world at its darkest may not fall below the darkest colour the world is allowed to contain.
+  //
+  // Times ALBEDO_FIX, because sceneLuminance is an IRRADIANCE and A11 made the albedo it lands on
+  // about 3.7x darker. Comparing an irradiance against a raw colour luminance was already loose;
+  // leaving it loose in the direction the fix moved would have let this test keep passing while
+  // the night got 3.7x closer to the silhouette it exists to forbid. This is the same factor the
+  // layer's own SHADOW_LUMA floor carries, imported so the two cannot drift apart.
   const ink = new THREE.Color(PALETTE.shadow);
-  const floor = 0.2126 * ink.r + 0.7152 * ink.g + 0.0722 * ink.b;
+  const floor = (0.2126 * ink.r + 0.7152 * ink.g + 0.0722 * ink.b) * ALBEDO_FIX;
 
   let darkest = Infinity;
   let darkestAt = 0;

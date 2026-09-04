@@ -27,7 +27,7 @@ import {
   setCellExtrusion,
 } from "../lib/globe.js";
 import { seedInventory } from "../lib/rounds.js";
-import { calibratePlanet, createTerrain } from "../lib/terrain.js";
+import { BIOME_COLOUR, BIOME_COLOUR_LINEAR, BIOMES, calibratePlanet, createTerrain, linearRgb, srgbToLinear } from "../lib/terrain.js";
 
 const field = createTerrain("echo-planet-1");
 const calibration = calibratePlanet(field, 0.6, 60_000);
@@ -316,7 +316,11 @@ test("painting and extruding a parcel touches that parcel's triangles only", () 
   const to = mesh.triangleOffsets[index + 1]! * 9;
 
   // The buffer is Float32, so the expected value has to be rounded the same way it is stored.
-  const target: readonly number[] = [255, 0, 128].map((v) => Math.fround(v / 255));
+  // It used to be `v / 255`, which pinned the C3 bug: a colour attribute is read as LINEAR and
+  // nothing on the path converts, so an owner colour stated in sRGB bytes has to go through the
+  // transfer exactly as the terrain under it does, or a claimed parcel is in a different colour
+  // space from the ground it sits on.
+  const target: readonly number[] = linearRgb([255, 0, 128]).map((v) => Math.fround(v));
   assert.equal(paintParcel(mesh, cell, [255, 0, 128]), (to - from) / 9);
   for (let o = 0; o < mesh.colours.length; o++) {
     if (o >= from && o < to) {

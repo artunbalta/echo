@@ -16,13 +16,17 @@ import { join } from "node:path";
 import { latLngToVec3, type Vec3 } from "../lib/geo.js";
 import {
   BIOMES,
+  BIOME_COLOUR,
+  BIOME_COLOUR_LINEAR,
   biome,
   biomeAt,
   calibratePlanet,
   createTerrain,
   fibonacciSphere,
+  linearRgb,
   measureLandFraction,
   normalisedHeight,
+  srgbToLinear,
   terrainFor,
   elevation as elevationOf,
   moisture as moistureOf,
@@ -271,4 +275,46 @@ test("the noise generators are seeded from the string, not from a global generat
   } finally {
     Math.random = original;
   }
+});
+
+// ── the colour seam (DECISIONS C3) ──────────────────────────────────────────────
+
+test("srgbToLinear is the exact IEC 61966-2-1 curve, not a gamma 2.2 approximation", () => {
+  // The endpoints and the knee, where the two halves of the piecewise function must meet.
+  assert.equal(srgbToLinear(0), 0);
+  assert.equal(srgbToLinear(1), 1);
+  assert.equal(srgbToLinear(0.04045), 0.04045 / 12.92);
+  assert.ok(Math.abs(srgbToLinear(0.04045) - ((0.04045 + 0.055) / 1.055) ** 2.4) < 1e-6, "the knee is discontinuous");
+  // Monotone, so no colour can invert against a neighbour.
+  for (let b = 1; b <= 255; b++) assert.ok(srgbToLinear(b / 255) > srgbToLinear((b - 1) / 255));
+
+  // And it is NOT pow(c, 2.2). This is the assertion that stops someone "simplifying" it: three's
+  // own Color runs the piecewise curve on every colour that does not come through this file, so a
+  // gamma here would put the ground and the tree standing on it back in two spaces. Measured over
+  // all 256 byte values the largest gap is 0.008528 in linear, at byte 191.
+  let worst = 0;
+  for (let b = 0; b <= 255; b++) worst = Math.max(worst, Math.abs(srgbToLinear(b / 255) - (b / 255) ** 2.2));
+  assert.ok(worst > 0.008, `a gamma 2.2 is only ${worst} away, so this test proves nothing`);
+  assert.ok(worst < 0.009, `the curve moved: the gap to gamma 2.2 is now ${worst}`);
+});
+
+test("BIOME_COLOUR stays in sRGB bytes and BIOME_COLOUR_LINEAR is that table through the transfer", () => {
+  for (const b of BIOMES) {
+    const bytes = BIOME_COLOUR[b];
+    for (const v of bytes) {
+      assert.ok(Number.isInteger(v) && v >= 0 && v <= 255, `${b} is not sRGB bytes: ${bytes.join(", ")}`);
+    }
+    // The bytes are what the 2D preview plate needs; the linear table is what a vertex-colour
+    // attribute needs. Both exist on purpose, and neither is the other divided by 255.
+    assert.deepEqual([...BIOME_COLOUR_LINEAR[b]], linearRgb(bytes));
+    for (let c = 0; c < 3; c++) {
+      assert.equal(BIOME_COLOUR_LINEAR[b][c], srgbToLinear(bytes[c]! / 255));
+    }
+  }
+  // Dark colours move much further than light ones, which is the whole reason the seam was
+  // visible: rainforest ground was 3.57x too bright in luminance while snow was only 1.08x.
+  const luma = (c: readonly number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+  const shift = (b: Biome) => luma(BIOME_COLOUR[b].map((v) => v / 255)) / luma(BIOME_COLOUR_LINEAR[b]);
+  assert.ok(Math.abs(shift("rainforest") - 3.57) < 0.01, `rainforest moved by ${shift("rainforest")}`);
+  assert.ok(Math.abs(shift("snow") - 1.08) < 0.01, `snow moved by ${shift("snow")}`);
 });

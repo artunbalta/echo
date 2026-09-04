@@ -27,8 +27,9 @@ import { cellToBoundary, cellToLatLng, cellToParent, getResolution, latLngToCell
 
 import { latLngToVec3, vec3ToLatLng, type Vec3 } from "./geo.js";
 import {
-  BIOME_COLOUR,
+  BIOME_COLOUR_LINEAR,
   biome,
+  linearRgb,
   normalisedHeight,
   type Calibration,
   type Rgb,
@@ -179,10 +180,39 @@ export interface GlobeOptions {
   assignedExtrusion: number;
 }
 
+/**
+ * reliefScale is 0.05 under DECISIONS C1, up from 0.025.
+ *
+ * It had to move, and the reason is the promise this file's header opens with rather than taste.
+ * The dial is a fraction of the radius; the ground a person walks is `heightScaleM` metres. So what
+ * the globe is really saying about the land is the ratio between them, `reliefScale * R /
+ * heightScaleM`, and when heightScaleM went 900 -> 2,700 that ratio fell from 5.6x to 1.9x on its
+ * own. The globe would have gone on drawing the same shape while under-reporting its roughness by
+ * three times, which is the same split between the previewed terrain and the walked terrain that
+ * DECISIONS C3 refused to accept for colour.
+ *
+ * It does NOT go back to 0.075, which is the number that restores 5.6x exactly. That was built and
+ * looked at, and the landing pays for it in the one thing the landing is for. Measured on the hero
+ * at 1280x800, the planet's own pixels and the raggedness of its limb, taken as the standard
+ * deviation of the silhouette radius over 720 rays from the centroid:
+ *
+ *   0.025   298,718 px   limb sd 2.43 px on a 308 px radius   0.79%   gain 1.9x
+ *   0.05    287,354 px   limb sd 3.93 px on a 302 px radius   1.30%   gain 3.7x
+ *   0.075   277,204 px   limb sd 5.57 px on a 297 px radius   1.88%   gain 5.6x
+ *
+ * The planet SHRINKS as the dial grows because `resize()` frames `1 + reliefScale` while the mean
+ * drawn radius is only 1.007: nearly all of the extra fitted radius is empty air around a handful
+ * of peaks, so 0.075 costs 7.2% of the hero for relief that is on a few summits. And at 0.075 the
+ * upper limb stops reading as a planet's edge and starts reading as a chipped rock.
+ *
+ * 0.05 is where the mountains first read as forms that cast shadows rather than as a grey colour
+ * on a smooth ball, at 3.8% of the hero and 1.3% of raggedness. Closing half the gap deliberately,
+ * with both halves of the cost written down, rather than closing all of it and losing the picture.
+ */
 export const DEFAULT_GLOBE_OPTIONS: GlobeOptions = {
   subdivisions: 6,
   outlineLift: 0.0075,
-  reliefScale: 0.025,
+  reliefScale: 0.05,
   assignedExtrusion: 0.006,
 };
 
@@ -257,10 +287,12 @@ export function buildGlobeGeometry(
     positions[i * 3 + 1] = d[1] * lift;
     positions[i * 3 + 2] = d[2] * lift;
 
-    const colour = BIOME_COLOUR[biome(height, field.moisture(d), field.temperature(d))];
-    terrainColours[i * 3] = colour[0] / 255;
-    terrainColours[i * 3 + 1] = colour[1] / 255;
-    terrainColours[i * 3 + 2] = colour[2] / 255;
+    // Linear: a colour attribute is read as linear and converted nowhere. See linearRgb, and
+    // DECISIONS C3 for why the globe and the walked world are fixed by the same function.
+    const colour = BIOME_COLOUR_LINEAR[biome(height, field.moisture(d), field.temperature(d))];
+    terrainColours[i * 3] = colour[0];
+    terrainColours[i * 3 + 1] = colour[1];
+    terrainColours[i * 3 + 2] = colour[2];
 
     const [lat, lng] = vec3ToLatLng(d[0], d[1], d[2]);
     const cell = registry.pick(lat, lng);
@@ -354,16 +386,19 @@ export function paintCell(geo: GlobeGeometry, cell: string, colour: Rgb | null, 
   if (index === undefined) return 0;
   const from = geo.offsets[index]!;
   const to = geo.offsets[index + 1]!;
+  // An owner colour is chosen in sRGB bytes like every other colour on this planet, and lands in
+  // the same linear attribute as the terrain under it, so it converts once, here, not per vertex.
+  const linear = colour === null ? null : linearRgb(colour);
   for (let k = from; k < to; k++) {
     const v = geo.cellVertices[k]! * 3;
-    if (colour === null) {
+    if (linear === null) {
       out[v] = geo.terrainColours[v]!;
       out[v + 1] = geo.terrainColours[v + 1]!;
       out[v + 2] = geo.terrainColours[v + 2]!;
     } else {
-      out[v] = colour[0] / 255;
-      out[v + 1] = colour[1] / 255;
-      out[v + 2] = colour[2] / 255;
+      out[v] = linear[0];
+      out[v + 1] = linear[1];
+      out[v + 2] = linear[2];
     }
   }
   return to - from;
@@ -513,7 +548,7 @@ export function buildParcelMesh(
     // The fill colour is sampled once, at the cell centre, exactly as section 6.1 specifies. One
     // parcel is one colour: a gradient across a deed would be a claim nobody made.
     const height = globeHeightAt(field, calibration, centre);
-    const colour = BIOME_COLOUR[biome(height, field.moisture(centre), field.temperature(centre))];
+    const colour = BIOME_COLOUR_LINEAR[biome(height, field.moisture(centre), field.temperature(centre))];
 
     for (let i = 0; i < ring.length; i++) {
       emit(centre, ring[i]!, ring[(i + 1) % ring.length]!, split);
@@ -549,9 +584,9 @@ export function buildParcelMesh(
         normals[o] = nx;
         normals[o + 1] = ny;
         normals[o + 2] = nz;
-        terrainColours[o] = colour[0] / 255;
-        terrainColours[o + 1] = colour[1] / 255;
-        terrainColours[o + 2] = colour[2] / 255;
+        terrainColours[o] = colour[0];
+        terrainColours[o + 1] = colour[1];
+        terrainColours[o + 2] = colour[2];
       }
       t++;
     }
@@ -585,15 +620,17 @@ export function paintParcel(mesh: ParcelMesh, cell: string, colour: Rgb | null):
   if (index === undefined) return 0;
   const from = mesh.triangleOffsets[index]!;
   const to = mesh.triangleOffsets[index + 1]!;
+  // Converted once, for the same reason as paintCell: the buffer this writes into is linear.
+  const linear = colour === null ? null : linearRgb(colour);
   for (let o = from * 9; o < to * 9; o += 3) {
-    if (colour === null) {
+    if (linear === null) {
       mesh.colours[o] = mesh.terrainColours[o]!;
       mesh.colours[o + 1] = mesh.terrainColours[o + 1]!;
       mesh.colours[o + 2] = mesh.terrainColours[o + 2]!;
     } else {
-      mesh.colours[o] = colour[0] / 255;
-      mesh.colours[o + 1] = colour[1] / 255;
-      mesh.colours[o + 2] = colour[2] / 255;
+      mesh.colours[o] = linear[0];
+      mesh.colours[o + 1] = linear[1];
+      mesh.colours[o + 2] = linear[2];
     }
   }
   return to - from;
