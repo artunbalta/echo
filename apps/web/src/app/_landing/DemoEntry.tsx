@@ -4,10 +4,20 @@
  * The demo entry (landing §1c). The trailer. Stays last: it is below the waitlist and deliberately
  * does not compete with it.
  *
- * The "Walk the demo" link into /play was removed. The way into the world is now the planet at the
- * top of the page: point at a parcel, and the card that comes up offers to put you on the ground
- * there. A second door at the bottom, into a different and older demo, competed with that one and
- * was the worse of the two.
+ * The "Walk the demo" link into /play was removed, and a different one has taken its place. What
+ * was removed pointed at an older world that competed with the planet at the top of the page for
+ * the same click and lost. What is here now points at the demo: the vertical slice, on the one
+ * parcel that is allowed a cave and a campfire, and it does not compete with the hero, because the
+ * hero puts you on the parcel you POINTED AT and this puts you on the one with something in it.
+ *
+ * The two doors say different things for that reason. The hero's says "Stand on it", because that
+ * is all it does. This one says demo, because this is the only address on the site where there is
+ * anything to do, and until DECISIONS.md C15 is answered it is the only one that ever will be.
+ *
+ * It links /demo rather than the parcel URL, and the redirect there does the rest. /demo is a
+ * server route, so the cell id stays in @echo/planet and is never pulled into this bundle, which
+ * is a client component in the landing's first payload; and the redirect leaves the reader on the
+ * parcel URL, which is the one worth copying out of the address bar.
  *
  * THE VIDEO IS NOT ALLOWED TO COST ANYTHING ON LOAD.
  *  - `preload="none"`     the mp4 is not fetched until someone presses play. Without this the
@@ -78,6 +88,15 @@ export default function DemoEntry() {
           Part of the world is already walkable. It is rough, and it is not the whole thing, but the
           shore is real and your echo is already watching.
         </p>
+
+        <div className="mt-6 flex justify-center">
+          <a
+            href="/demo"
+            className="rounded bg-echo px-4 py-2 font-pixel text-xs text-ink transition-opacity hover:opacity-90"
+          >
+            Walk the demo
+          </a>
+        </div>
       </div>
     </section>
   );

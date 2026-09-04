@@ -26,8 +26,9 @@ import {
   type PlacedAsset,
 } from "../lib/assets.js";
 import { sampleBiomeMask, type BiomeMask } from "../lib/biome-mask.js";
-import { DEMO_CELL, DEMO_FALLOFF, DEMO_LAND_BIOMES, DEMO_REGION_K } from "../lib/demo-cell.js";
+import { DEMO_CELL, DEMO_LAND_BIOMES } from "../lib/demo-cell.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
+import { PARCEL_REGION_K, SCATTER_FALLOFF } from "../lib/parcel.js";
 import { createTangentPatch, DEFAULT_SCENE_OPTIONS } from "../lib/scene.js";
 import { calibratePlanet, createTerrain, isLand, type Biome } from "../lib/terrain.js";
 import { regionBound, spawnPointFor } from "../lib/walkable.js";
@@ -36,17 +37,17 @@ import { SEED, shippedCalibration } from "./helpers/shipped.js";
 const field = createTerrain(SEED);
 const calibration = shippedCalibration(SEED, () => calibratePlanet(field, PLANET_PARAMS.landFractionTarget));
 const patch = createTangentPatch(DEMO_CELL, PLANET_PARAMS.radiusKm);
-const bound = regionBound(DEMO_CELL, DEMO_REGION_K, PLANET_PARAMS.radiusKm);
+const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, PLANET_PARAMS.radiusKm);
 // 10 m, as biome-mask.ts asks of any caller with a water band.
 const mask = sampleBiomeMask(patch, field, calibration, bound.radiusM, 10);
 const spawn = spawnPointFor(DEMO_CELL, field, calibration, PLANET_PARAMS.radiusKm)!;
-// The demo's own falloff. `densityPerKm2` is a NEAR FIELD density, so a test that placed without
-// this would dress fifteen square kilometres of rainforest at woodland density, hit the ceiling,
-// and prove nothing about the world anyone walks in.
+// The falloff every parcel is dressed with. `densityPerKm2` is a NEAR FIELD density, so a test
+// that placed without this would dress fifteen square kilometres of rainforest at woodland
+// density, hit the ceiling, and prove nothing about the world anyone walks in.
 const options = {
   heightScaleM: DEFAULT_SCENE_OPTIONS.heightScaleM,
   bound,
-  densityScale: spawnFalloff(spawn.x, spawn.y, DEMO_FALLOFF.fullM, DEMO_FALLOFF.farM, DEMO_FALLOFF.farFactor, DEMO_FALLOFF.cutoffM),
+  densityScale: spawnFalloff(spawn.x, spawn.y, SCATTER_FALLOFF.fullM, SCATTER_FALLOFF.farM, SCATTER_FALLOFF.farFactor, SCATTER_FALLOFF.cutoffM),
 };
 /** The densest class this cell actually has, so the test never names a class the cell lacks. */
 const denseId = [...DEMO_ASSET_CLASSES].sort((a, b) => b.densityPerKm2 - a.densityPerKm2)[0]!.id;

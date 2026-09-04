@@ -10,8 +10,14 @@
  * chain is what the campfire reads, so it is the thing whose correctness matters; and reading a
  * response body from the test side is racy in a way that made this check fail on a cold compile
  * while the app underneath was working perfectly.
+ *
+ * The handle it reaches for, `window.__demo`, is attached by ParcelCanvas wherever it is given a
+ * set of stations, under the same non-production guard it has always had (task A5). It is not on
+ * an ordinary parcel, because there is no slice there for it to name.
  */
 import { expect, test } from "@playwright/test";
+
+import { SLICE_HREF } from "./demoUrl";
 
 interface LogEntry {
   id: string;
@@ -48,7 +54,7 @@ test("walking into the cave moves the posterior, and the fire's reading names th
   const health = await request.get("/api/health/ml").then((r) => r.json());
   test.skip(!health.reachable, `echo-ml is not reachable from the dev server (${health.mlServiceUrlHost})`);
 
-  await page.goto("/demo");
+  await page.goto(SLICE_HREF);
   await page.getByRole("button", { name: "Let it watch" }).click();
   await page.locator("[data-phase='ready']").waitFor({ timeout: 120_000 });
 

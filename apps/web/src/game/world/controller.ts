@@ -248,12 +248,12 @@ export function localMToTile(xm: number, ym: number, tileM = TILE_M): [number, n
  * one place it flips for a polygon.
  *
  * It lives here rather than beside either of its two callers because it had two of them and grew a
- * second copy: demoStations.ts owns the demo's shapes and scatterLayer.ts owns the parcel's, and
- * because the exclusion type flows from the layer to the stations, the layer could not import back
- * without a cycle and quietly wrote its own. A duplicated sign flip is the exact failure
- * demoStations.ts's header warns about, and it is invisible: the mirror image of a footprint
- * excludes real ground and every test stays green. controller.ts already owns tileToLocalM, so it
- * is the seam both sides can reach.
+ * second copy: stations.ts owns the shapes a table of stations asks for and scatterLayer.ts owns
+ * the parcel's, and because the exclusion type flows from the layer to the stations, the layer
+ * could not import back without a cycle and quietly wrote its own. A duplicated sign flip is the
+ * exact failure stations.ts's header warns about, and it is invisible: the mirror image of a
+ * footprint excludes real ground and every test stays green. controller.ts already owns
+ * tileToLocalM, so it is the seam both sides can reach.
  */
 export function footprintToLocalM(
   origin: { x: number; y: number },

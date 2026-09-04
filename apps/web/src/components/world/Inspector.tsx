@@ -12,6 +12,16 @@
  *   reactions   every channel in REACTION_CHANNELS with base, offset, result, and THE EVENT ID
  *               AND POSTERIOR VERSION it responded to, from the reactions layer via props.
  *
+ * THE STATION-LESS MODE (task A6). Pass `walk` and the first and third sections are replaced by
+ * what was actually measured, because on ground with no stations there is nothing else true to
+ * show. There is no cave and no campfire on an ordinary parcel, so there is no bounded decision;
+ * the only channel walking opens is passive_locomotion, and ML /telemetry answers that with
+ * uncertainty and never with a mean. The posterior a person would be shown is therefore the seed
+ * read and nothing else, and eight bars at their seed values read to anybody as a result. Drawing
+ * them would be the code stating the conclusion this panel exists to disprove, so the panel says
+ * what it measured and says plainly why the posterior has not moved. That an ordinary parcel has
+ * nothing to do in it is a deferred design question, not an accident: DECISIONS.md C15.
+ *
  * It takes keyboard focus from nothing. The toggle is a window keydown listener that ignores text
  * fields and does not stop propagation; the panel is inert to focus (tabIndex -1, and mousedown is
  * cancelled so a click on it cannot move focus off the world). The world's own keys are untouched.
@@ -22,7 +32,8 @@ import { useEffect, useState } from "react";
 import { AXIS_POLES, PERSONA_AXIS_KEYS } from "@echo/shared";
 
 import { REACTION_CHANNELS, type ReactionChannel } from "@/game/world/actionMap";
-import type { ConsentState, MeasureChain, MeasureLogEntry, Posterior } from "@/game/world/measure";
+import { LOG_SIZE, type ConsentState, type MeasureChain, type MeasureLogEntry, type Posterior } from "@/game/world/measure";
+import type { WalkTally } from "@/game/world/walkLayer";
 
 /** One channel's current reading, as the reactions layer computed it. */
 export interface ReactionReading {
@@ -41,6 +52,13 @@ export interface InspectorProps {
   reactions?: readonly ReactionReading[];
   consent?: ConsentState;
   userId?: string;
+  /**
+   * The walk layer's tally, which puts this panel in its station-less mode (see the header). It is
+   * a getter rather than a value because the tally moves every frame and nothing subscribes to it;
+   * the panel polls it while it is open and not at all while it is shut. It must be STABLE across
+   * renders (a useCallback), or the poll restarts on every reading it causes.
+   */
+  walk?: () => WalkTally | null;
   /** The toggle key. Backtick by default. */
   toggleKey?: string;
 }
@@ -98,9 +116,24 @@ const REASONS: Record<string, string> = {
 const explain = (reason: string | undefined) => (reason ? REASONS[reason] ?? reason : "no reason given");
 const num = (v: number | null | undefined, digits = 3) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(digits) : "—");
 const clock = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour12: false });
+const amount = (v: number, digits = 0) => v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-export default function Inspector({ posterior, log, reactions = [], consent = "unset", userId, toggleKey = "`" }: InspectorProps) {
+/** How often the tally is read while the panel is open. Nothing polls while it is shut. */
+const TALLY_MS = 500;
+
+export default function Inspector({ posterior, log, reactions = [], consent = "unset", userId, walk, toggleKey = "`" }: InspectorProps) {
   const [open, setOpen] = useState(false);
+  const [tally, setTally] = useState<WalkTally | null>(null);
+
+  // Before the early return, because a hook is not allowed to depend on whether the panel is open;
+  // `open` is a dependency instead, so a shut panel holds no timer.
+  useEffect(() => {
+    if (!walk || !open) return;
+    const read = () => setTally(walk());
+    read();
+    const id = setInterval(read, TALLY_MS);
+    return () => clearInterval(id);
+  }, [walk, open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -119,9 +152,18 @@ export default function Inspector({ posterior, log, reactions = [], consent = "u
   return (
     <aside style={panel} tabIndex={-1} aria-label="measurement inspector" onMouseDown={(e) => e.preventDefault()}>
       <Header consent={consent} userId={userId} posterior={posterior} />
-      <PosteriorSection posterior={posterior} />
+      {walk ? (
+        <WalkSection tally={tally} consent={consent} log={log} posterior={posterior} />
+      ) : (
+        <PosteriorSection posterior={posterior} />
+      )}
       <EventsSection log={log} />
-      <ReactionsSection reactions={reactions} />
+      {/* No reactions section in the station-less mode. Not because every channel belongs to a
+          station: fog_offset comes from the passive_locomotion row and therefore belongs to walking,
+          which is the one thing happening here. It is hidden because nothing DRIVES fog_offset yet,
+          so the row would say "no reaction" about a channel that is wired to nothing, which reads
+          as one that has not happened yet rather than as one that cannot. */}
+      {walk ? null : <ReactionsSection reactions={reactions} />}
     </aside>
   );
 }
@@ -215,6 +257,88 @@ function AxisRow({ name, poles, mu, sd }: { name: string; poles: string; mu: num
   );
 }
 
+// ── the station-less reading ────────────────────────────────────────────────────
+
+/**
+ * What was measured, and why that is all there is. Every row is a quantity something in the world
+ * actually counted: the first four come from the walk layer's tally, which is summed from the same
+ * tile positions the locomotion sampler was fed, and the last two are the chain's own state. There
+ * is no row here that is an inference.
+ */
+function WalkSection({ tally, consent, log, posterior }: { tally: WalkTally | null; consent: ConsentState; log: readonly MeasureLogEntry[]; posterior: Posterior | null }) {
+  // Locomotion windows that actually reached the service. A mocked send moved nothing, so it does
+  // not count here: this number is the claim the card below makes, and it has to be a count of
+  // updates that happened rather than of attempts.
+  const windows = log.filter((e) => e.action === "passive_locomotion" && e.mocked === false).length;
+  const service = !posterior
+    ? "not read yet: the seed read happens when consent arms the chain"
+    : posterior.mocked
+      ? `mocked, so no number stands behind it: ${explain(posterior.reason)}`
+      : `answered, v${posterior.version ?? "?"}, ${posterior.source} read at ${clock(posterior.at)}`;
+
+  return (
+    <>
+      <Rule label="measured" />
+      {tally ? (
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 10, rowGap: 3 }}>
+          <Measured label="walked" value={`${amount(tally.distanceM, 1)} m`} />
+          <Measured
+            label="stood still"
+            value={`${amount(tally.dwellMs / 1000, 1)} s of ${amount(tally.measuredMs / 1000, 1)} s`}
+            note="time in the world, summed from frames: a hidden tab counts for nothing"
+          />
+          <Measured
+            label="ground covered"
+            value={`${tally.capped ? "at least " : ""}${amount(tally.areaM2)} m2, ${amount(tally.tiles)} tiles`}
+            note={tally.capped ? "the tile memory is full, so this is a floor rather than a total" : "distinct tiles touched, converted with the metres per tile the world was built with"}
+          />
+          <Measured label="events held" value={`${log.length} of ${LOG_SIZE}`} note={`the log keeps the last ${LOG_SIZE}; anything older was sent and then dropped from view, so this is not a session total`} />
+          <Measured label="consent" value={consent} />
+          <Measured label="service" value={service} />
+        </div>
+      ) : (
+        <div style={{ color: DIM }}>
+          {consent === "accepted"
+            ? "nothing measured yet: no frame has been counted, because the ground is not built and drawing."
+            : "nothing is being measured. Consent is " +
+              (consent === "declined" ? "declined" : "unanswered, which on this path means off") +
+              ", so no position is sampled, nothing is buffered, and no tally is kept here either."}
+        </div>
+      )}
+
+      <Rule label="posterior" />
+      <div style={{ border: `1px solid ${RULE}`, borderRadius: 4, padding: "6px 8px" }}>
+        <div style={{ color: ECHO, fontWeight: 700 }}>{windows > 0 ? "WALKING IS MOVING IT" : "NOTHING HAS MOVED IT YET"}</div>
+        <div style={{ color: DIM, marginTop: 3 }}>
+          {windows > 0
+            ? `${windows} locomotion ${windows === 1 ? "window has" : "windows have"} reached the service. Each one runs a Kalman update on two identified directions, novel_tile_ratio and path_tortuosity, which carry the largest loadings in the whole action map. This is the least fakeable channel there is, and it is the one you are on.`
+            : "No locomotion window has reached the service yet. Walk, and one lands about every second and a half."}
+        </div>
+        <div style={{ color: DIM, marginTop: 3 }}>
+          The axes are not drawn here because the route that receives a locomotion window answers
+          with uncertainty and no mean, so nothing on this screen could say by how much any one axis
+          moved. The version above is re-read after every window that lands, which is the honest
+          measure available: it counts the updates rather than describing them.
+        </div>
+        <div style={{ color: FAINT, marginTop: 3 }}>
+          There is still no bounded act on this ground: no cave to enter, no fire to keep, nothing
+          whose cost you could take or refuse. What an ordinary parcel gives a person to do is a
+          design question that was deferred on purpose, not an accident: see DECISIONS.md C15.
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Measured({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <>
+      <span style={{ color: DIM }} title={note}>{label}</span>
+      <span>{value}</span>
+    </>
+  );
+}
+
 // ── events ──────────────────────────────────────────────────────────────────────
 
 function EventsSection({ log }: { log: readonly MeasureLogEntry[] }) {
@@ -243,7 +367,14 @@ function EventsSection({ log }: { log: readonly MeasureLogEntry[] }) {
                 <td style={td}>{e.action}</td>
                 <td style={{ ...td, color: DIM }}>{e.route}</td>
                 <td style={{ ...td, color: DIM }}>{e.features.length ? e.features.join(", ") : "—"}</td>
-                <td style={{ ...td, textAlign: "right" }}>{num(e.delta_mu, 4)}</td>
+                {/* A dash next to a "real" flag reads as "moved nothing", and for a locomotion
+                    window that is exactly wrong: it moved the posterior and the route answered with
+                    uncertainty instead of a mean, so the number was never sent. Say which of the two
+                    silences this is. */}
+                <td style={{ ...td, textAlign: "right", color: e.delta_mu === null && e.route === "telemetry" ? FAINT : undefined }}
+                    title={e.delta_mu === null && e.route === "telemetry" ? "the telemetry route answers with uncertainty and no mean, so the size of this update was never reported" : undefined}>
+                  {e.delta_mu === null && e.route === "telemetry" ? "not reported" : num(e.delta_mu, 4)}
+                </td>
                 <td style={td}>
                   <Flag on={e.durable} yes="durable" no="volatile" />
                   {" "}

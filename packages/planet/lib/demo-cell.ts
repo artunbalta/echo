@@ -32,9 +32,6 @@ import type { Biome } from "./terrain.js";
 /** A rainforest coast: canopy running down to a beach, with open water in view. */
 export const DEMO_CELL = "847b949ffffffff";
 
-/** The disk the demo builds: the cell and its six neighbours. */
-export const DEMO_REGION_K = 1;
-
 /** Measured composition of the disk, by area. */
 export const DEMO_CELL_COMPOSITION: Readonly<Partial<Record<Biome, number>>> = {
   rainforest: 0.5,
@@ -56,20 +53,6 @@ export const DEMO_PAN_CLASSES = 6;
  * and the density that means. Measured, not hoped for; B1's perceptibility test is run against it.
  */
 export const DEMO_NEAR_FIELD_M = 120;
-
-/**
- * How the demo thins its scatter with distance (plan B4d).
- *
- * `densityPerKm2` in the registry is the NEAR FIELD density, what a rainforest floor really looks
- * like within sight. This is what keeps that affordable: full density out to `fullM`, decaying to
- * `farFactor` by `farM`, and nothing at all past `cutoffM`, which sits just beyond the fog because
- * what is never seen is never worth placing.
- *
- * Measured on this cell with these numbers: 5,995 instances within 120 m (13.25 per 100 m2, 12
- * classes), 43,108 over the whole disk against a ceiling of 120,000, 79 draw calls of 120, and
- * 252,538 triangles in view of 600,000 once each class uses its own LOD band.
- */
-export const DEMO_FALLOFF = { fullM: 150, farM: 700, farFactor: 0.06, cutoffM: 500 } as const;
 
 /** What the demo measured, so a test can catch a change rather than a reader noticing one. */
 export const DEMO_MEASURED = {

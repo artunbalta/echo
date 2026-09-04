@@ -30,8 +30,8 @@ import {
   DEMO_CELL,
   DEMO_MEASURED,
   DEMO_NEAR_FIELD_M,
-  DEMO_REGION_K,
   isLand,
+  PARCEL_REGION_K,
   PLANET_PARAMS,
   regionBound,
   sceneHeightAt,
@@ -42,9 +42,10 @@ import {
 import { TILE_M } from "@echo/shared";
 
 import { initialMover, localMToTile, stepMover, tileToLocalM, type MoveInput, type MoverState } from "../src/game/world/controller";
-import { DEMO_SCATTER, demoStationExclusions } from "../src/game/world/demoStations";
+import type { MeasureChain } from "../src/game/world/measure";
+import { parcelLayers, sliceOptionsFor } from "../src/game/world/parcelWorld";
 import { SCATTER_GEOMETRY } from "../src/game/world/scatterGeometry";
-import { scatterLayer } from "../src/game/world/scatterLayer";
+import type { ScatterLayer } from "../src/game/world/scatterLayer";
 import type { LayerContext, WorldFrame } from "../src/game/world/PlanetWorld";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -59,7 +60,7 @@ const seed = golden.seed;
 const calibration = golden.calibration;
 const field = createTerrain(seed);
 const patch = createTangentPatch(DEMO_CELL, PLANET_PARAMS.radiusKm);
-const bound = regionBound(DEMO_CELL, DEMO_REGION_K, PLANET_PARAMS.radiusKm);
+const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, PLANET_PARAMS.radiusKm);
 const spawn = spawnPointFor(DEMO_CELL, field, calibration, PLANET_PARAMS.radiusKm)!;
 const tileM = TILE_M;
 const heightScaleM = DEFAULT_SCENE_OPTIONS.heightScaleM;
@@ -98,15 +99,23 @@ const ctx: LayerContext = {
   calibration,
   seed,
   radiusKm: PLANET_PARAMS.radiusKm,
-  region: { cell: DEMO_CELL, k: DEMO_REGION_K, bound, extentM: bound.radiusM, spawn, spawnTile },
+  region: { cell: DEMO_CELL, k: PARCEL_REGION_K, bound, extentM: bound.radiusM, spawn, spawnTile },
   layer: () => undefined,
 };
 
 // The demo's stations are passed IN, which is the whole point of the layer being cell-agnostic:
 // with no options at all it dresses a bare parcel from that cell's own biomes and clears only the
-// buildable footprint and the spawn. This call is what DemoClient makes, so the numbers below are
-// the demo's numbers and a regression here is a regression on screen.
-const layer = scatterLayer(DEMO_SCATTER);
+// buildable footprint and the spawn.
+//
+// The layer is TAKEN OUT OF THE LIST THE APP BUILDS rather than constructed here, with the same
+// argument the demo's mount passes: a slice. That is the whole correction. This file used to build
+// its own `scatterLayer(DEMO_SCATTER)` above a comment claiming it was the call the demo made,
+// while the demo was calling `scatterLayer()` bare, and every number below was a true statement
+// about a configuration that shipped nowhere while a fourteen metre tree stood in the cave mouth.
+// Now there is one way to get this layer and the test uses it, so a mount that stops passing the
+// slice fails here instead of passing.
+const chain = { armed: () => false, feedPosition: () => {} } as unknown as MeasureChain;
+const layer = parcelLayers({ chain, slice: sliceOptionsFor("slice", {}) }).find((l) => l.name === "scatter") as ScatterLayer;
 await layer.build(ctx, new AbortController().signal);
 const placement = layer.placement()!;
 const colliders = layer.colliders()!;

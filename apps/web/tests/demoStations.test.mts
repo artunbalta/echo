@@ -24,7 +24,7 @@ import {
   createTerrain,
   DEMO_CELL,
   DEMO_LAND_BIOMES,
-  DEMO_REGION_K,
+  PARCEL_REGION_K,
   PLANET_PARAMS,
   regionBound,
   spawnPointFor,
@@ -36,18 +36,8 @@ import {
 import { TILE_M } from "@echo/shared";
 
 import { tileToLocalM } from "../src/game/world/controller";
-import {
-  DEMO_FOOTPRINT,
-  DEMO_PRESENCE_HOME,
-  DEMO_STATIONS,
-  footprintLocalM,
-  offsetLocalM,
-  pathsLocalM,
-  SLICE_STATIONS,
-  snapStations,
-  stationLocalM,
-  type SnapWorld,
-} from "../src/game/world/demoStations";
+import { DEMO_FOOTPRINT, DEMO_PATHS, DEMO_PRESENCE_HOME, DEMO_STATIONS, SLICE_STATIONS } from "../src/game/world/demoStations";
+import { footprintLocalM, offsetLocalM, pathsLocalM, snapStations, stationLocalM, type SnapWorld } from "../src/game/world/stations";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const golden = JSON.parse(readFileSync(resolve(here, "../../../packages/planet/tests/fixtures/goldens.echo-capacity-1.json"), "utf8")) as {
@@ -60,7 +50,7 @@ assert.equal(golden.demoCell, DEMO_CELL, "the goldens were written for a differe
 const calibration = golden.calibration;
 const field = createTerrain("echo-capacity-1");
 const patch = createTangentPatch(DEMO_CELL, PLANET_PARAMS.radiusKm);
-const bound = regionBound(DEMO_CELL, DEMO_REGION_K, PLANET_PARAMS.radiusKm);
+const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, PLANET_PARAMS.radiusKm);
 const spawn = spawnPointFor(DEMO_CELL, field, calibration, PLANET_PARAMS.radiusKm)!;
 
 /** The world the snap asks, in the frame the offsets are written in: tiles from the spawn. */
@@ -74,7 +64,7 @@ const world: SnapWorld = {
     return biomeAtLocal(patch, field, calibration, xm, ym);
   },
 };
-const snapped = snapStations(spawn, world);
+const snapped = snapStations(DEMO_STATIONS, spawn, world);
 
 test("the demo spawn is dry, inside the demo cell, and the one the goldens pinned", () => {
   assert.ok(spawn);
@@ -89,7 +79,7 @@ test("every station snaps onto walkable ground, and the snap is deterministic", 
     assert.ok(world.walkable(s.x, s.y), `${s.id} snapped onto water at (${s.x}, ${s.y})`);
     assert.ok(s.movedTiles <= (s.snapTiles ?? 10) * 1.5, `${s.id} moved ${s.movedTiles} tiles`);
   }
-  assert.deepEqual(snapStations(spawn, world), snapped, "the snap is not deterministic");
+  assert.deepEqual(snapStations(DEMO_STATIONS, spawn, world), snapped, "the snap is not deterministic");
   console.log(
     "snapped:",
     snapped.map((s) => `${s.id} (${s.x},${s.y}) ${s.biome}${s.movedTiles ? ` moved ${s.movedTiles.toFixed(1)}` : ""}${s.settled ? " SETTLED" : ""}`).join("; "),
@@ -164,8 +154,8 @@ test("the footprint is convex, and its metre-space polygon contains the homestea
     }
     return true;
   };
-  const polygon = footprintLocalM(spawn);
-  const [hx, hy] = stationLocalM(spawn, "homestead");
+  const polygon = footprintLocalM(spawn, DEMO_FOOTPRINT);
+  const [hx, hy] = stationLocalM(DEMO_STATIONS, spawn, "homestead");
   assert.ok(inside(polygon, hx, hy), "the homestead marker sits outside its own footprint in metre space");
   // The y flip is the point of the helper: a polygon built without it is the wrong hexagon.
   const mirror = DEMO_FOOTPRINT.map(([dx, dy]) => [spawn.x + dx * TILE_M, spawn.y + dy * TILE_M] as [number, number]);
@@ -173,9 +163,9 @@ test("the footprint is convex, and its metre-space polygon contains the homestea
 });
 
 test("paths convert to metre segments with the requested width", () => {
-  const paths = pathsLocalM(spawn, 4);
+  const paths = pathsLocalM(DEMO_STATIONS, DEMO_PATHS, spawn, 4);
   assert.equal(paths.length, 5);
   assert.deepEqual(paths[0]!.a, [spawn.x, spawn.y]);
-  assert.deepEqual(paths[0]!.b, stationLocalM(spawn, "cave_mouth"));
+  assert.deepEqual(paths[0]!.b, stationLocalM(DEMO_STATIONS, spawn, "cave_mouth"));
   assert.ok(paths.every((p) => p.widthM === 4));
 });

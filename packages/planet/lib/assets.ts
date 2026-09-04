@@ -106,8 +106,8 @@ export interface PlaceOptions {
 }
 
 /**
- * The falloff the demo uses: full density out to `fullM`, then a smooth decay to `farFactor` by
- * `farM`. A pure function of position, so the layout stays deterministic.
+ * The falloff every parcel is dressed with: full density out to `fullM`, then a smooth decay to
+ * `farFactor` by `farM`. A pure function of position, so the layout stays deterministic.
  */
 export function spawnFalloff(
   cx: number,

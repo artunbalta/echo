@@ -1,33 +1,24 @@
 /**
- * The landing demo (plan Section A, the vertical slice).
+ * /demo, which is no longer a world (task A5).
  *
- * The world manifest comes from the server, the same seed and the same calibrated sea level the
- * globe on the landing page draws with, so the ground here is the ground the globe showed. The
- * cell is DEMO_CELL, chosen by measurement rather than by eye: see packages/planet/lib/demo-cell.ts
- * for what was measured and packages/planet/scripts/rank-demo-cells.ts to reproduce it.
+ * The demo does not live at its own route any more. It is a parcel: the same page, the same host
+ * and the same layers as every other parcel, on the one cell that is allowed the cave and the
+ * campfire, asked for by name in the URL. Two routes rendering the same world is how the world
+ * they render drifts apart, and it already did once.
+ *
+ * What is left is the redirect, and it is worth keeping rather than deleting outright: /demo is a
+ * short, memorable address that is written into other people's notes and browser histories, and it
+ * hands anyone who follows it the parcel URL, which is the one that can be shared. The cell id is
+ * not repeated here; it comes from the same constant the page parses.
+ *
+ * TEMPORARY, not permanent, deliberately. `permanentRedirect` answers 308 and browsers cache that
+ * for as long as they like, so a mistake in this line survives its own fix on every machine that
+ * saw it once. Nothing about this route is hot enough to be worth that.
  */
-import { DEMO_CELL, DEMO_REGION_K } from "@echo/planet";
+import { redirect } from "next/navigation";
 
-import DemoClient from "@/components/world/DemoClient";
-import { planet } from "@/lib/planet";
-
-// A plain import, not next/dynamic with ssr:false, which a Server Component may not use. The
-// client boundary is DemoClient's own "use client"; three never reaches a server render because
-// WorldCanvas imports the host inside an effect, and nothing here opens a GL context.
-export const dynamic = "force-dynamic";
+import { SLICE_HREF } from "@/lib/stationSet";
 
 export default function DemoPage() {
-  const { world, calibration } = planet();
-  return (
-    <main className="h-screen w-screen overflow-hidden bg-[#1c1326]">
-      <DemoClient
-        cell={DEMO_CELL}
-        k={DEMO_REGION_K}
-        seed={world.seed}
-        seaLevel={calibration.seaLevel}
-        peakElevation={calibration.peakElevation}
-        radiusKm={world.radiusKm}
-      />
-    </main>
-  );
+  redirect(SLICE_HREF);
 }

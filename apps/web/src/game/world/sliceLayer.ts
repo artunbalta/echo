@@ -33,7 +33,8 @@ import {
 import { buildProp3D } from "../three/props3d";
 import type { PropKind } from "../props";
 import { SLICE_REACTION, reactionValue } from "./actionMap";
-import { offsetLocalM, snapStations, SLICE_STATIONS, type SnapWorld, type SnappedStation } from "./demoStations";
+import { DEMO_STATIONS, SLICE_STATIONS } from "./demoStations";
+import { offsetLocalM, snapStations, type SnappedStation, type SnapWorld } from "./stations";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 import type { MeasureChain } from "./measure";
 import type { ReactionReading } from "@/components/world/Inspector";
@@ -112,7 +113,7 @@ export function sliceLayer(options: SliceLayerOptions): SliceLayer {
           return biomeAtLocal(patch, ctx.field, ctx.calibration, xm, ym);
         },
       };
-      const all = snapStations(ctx.region.spawn, world, ctx.frame.tileM);
+      const all = snapStations(DEMO_STATIONS, ctx.region.spawn, world, ctx.frame.tileM);
       placed = all.filter((s) => SLICE_STATIONS.includes(s.id));
       if (signal.aborted) return;
 
@@ -153,8 +154,9 @@ export function sliceLayer(options: SliceLayerOptions): SliceLayer {
       const spawnTile = ctx.region.spawnTile;
       const p = playerTile();
 
-      // The locomotion channel: the sampler wants TILE positions, which is what we have.
-      chain.feedPosition(p.x, p.y);
+      // The locomotion feed used to be here, and it is walkLayer.ts's now. It was the only thing
+      // feeding the sampler, and this layer exists on one cell, so every other parcel was measured
+      // by nothing; the feed belongs to a layer every parcel has. This one still emits the ACT.
 
       // ── the beat ──
       if (cave && !committed) {

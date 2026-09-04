@@ -23,7 +23,8 @@ import { seedInventory } from "../lib/rounds.js";
 import { buildParcelScene, buildRegionScene, createTangentPatch, hashPosition, sceneHeightAt, type RegionScene } from "../lib/scene.js";
 import { BIOME_COLOUR, BIOMES, calibratePlanet, createTerrain, type Biome } from "../lib/terrain.js";
 import { biomeAtLocal } from "../lib/biome-mask.js";
-import { DEMO_CELL, DEMO_REGION_K } from "../lib/demo-cell.js";
+import { DEMO_CELL } from "../lib/demo-cell.js";
+import { PARCEL_REGION_K } from "../lib/parcel.js";
 import { regionBound } from "../lib/walkable.js";
 
 const field = createTerrain("echo-capacity-1");
@@ -161,10 +162,10 @@ let demoRegion: RegionScene | null = null;
 function demoScene(): RegionScene {
   if (demoRegion) return demoRegion;
   const t0 = performance.now();
-  demoRegion = buildRegionScene(DEMO_CELL, DEMO_REGION_K, field, calibration, RADIUS);
+  demoRegion = buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS);
   const ms = performance.now() - t0;
   console.log(
-    `buildRegionScene(${DEMO_CELL}, k=${DEMO_REGION_K}) at ${demoRegion.resolution} m: ` +
+    `buildRegionScene(${DEMO_CELL}, k=${PARCEL_REGION_K}) at ${demoRegion.resolution} m: ` +
       `${ms.toFixed(0)} ms, ${demoRegion.triangleCount} triangles in ${demoRegion.chunks.length} chunks ` +
       `(${demoRegion.chunks.map((c) => c.triangleCount).join(", ")})`,
   );
@@ -185,7 +186,7 @@ function pointsInsideAnchor(scene: RegionScene, count: number): Array<[number, n
 
 test("the region is one lattice: adjacent chunks share their edge vertices exactly, and no triangle is clipped", () => {
   const scene = demoScene();
-  const disk = gridDisk(DEMO_CELL, DEMO_REGION_K);
+  const disk = gridDisk(DEMO_CELL, PARCEL_REGION_K);
   assert.equal(scene.chunks.length, disk.length, "one chunk per cell of the disk");
   assert.deepEqual(scene.chunks.map((c) => c.cell), disk);
   for (const chunk of scene.chunks) {
@@ -264,7 +265,7 @@ test("I1: the mesh height is sceneHeightAt times the height scale, at the vertic
 
 test("every emitted vertex is inside the region bound or within one grid step of it, and inside its chunk's sphere", () => {
   const scene = demoScene();
-  const bound = regionBound(DEMO_CELL, DEMO_REGION_K, RADIUS);
+  const bound = regionBound(DEMO_CELL, PARCEL_REGION_K, RADIUS);
   assert.equal(scene.extentM, bound.radiusM);
   const step = scene.resolution;
   let rim = 0;
@@ -303,12 +304,12 @@ test("the region reports its water and its make-up, and is the same region every
 
   // Determinism at a coarser step, so two more builds cost a few ms each. Math.random is
   // replaced to prove it is never consulted, as the parcel test does.
-  const a = buildRegionScene(DEMO_CELL, DEMO_REGION_K, field, calibration, RADIUS, { resolution: 36 });
+  const a = buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS, { resolution: 36 });
   const original = Math.random;
   let b: RegionScene;
   try {
     Math.random = () => 0.123456789;
-    b = buildRegionScene(DEMO_CELL, DEMO_REGION_K, field, calibration, RADIUS, { resolution: 36 });
+    b = buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS, { resolution: 36 });
   } finally {
     Math.random = original;
   }
@@ -324,7 +325,7 @@ test("the region reports its water and its make-up, and is the same region every
 });
 
 test("a bad step or ring count is refused before any work is done", () => {
-  assert.throws(() => buildRegionScene(DEMO_CELL, DEMO_REGION_K, field, calibration, RADIUS, { resolution: 0 }), RangeError);
+  assert.throws(() => buildRegionScene(DEMO_CELL, PARCEL_REGION_K, field, calibration, RADIUS, { resolution: 0 }), RangeError);
   assert.throws(() => buildRegionScene(DEMO_CELL, -1, field, calibration, RADIUS), RangeError);
   assert.throws(() => buildRegionScene(DEMO_CELL, 1.5, field, calibration, RADIUS), RangeError);
 });
