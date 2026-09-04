@@ -1,5 +1,5 @@
 /**
- * The terrain layer (contract W2-4): the ground, the sea, the fog and the dusk light.
+ * The terrain layer (contract W2-4): the ground, the sea, and the box the shadows fall in.
  *
  * The ground is `buildRegionScene`, one mesh per H3 cell of the disk, straight from @echo/planet
  * with no conversion, because the builder already emits three's frame (x east, y up, z south).
@@ -12,23 +12,30 @@
  * changing. What the mesh promises instead is that it is the SAME ground the globe showed, which is
  * true because `buildRegionScene` samples `sceneHeightAt`, the I1 function.
  *
+ * THE AIR IS NOT THIS LAYER'S ANY MORE. Sky, fog colour, and the colour and strength of the two
+ * lights all belong to skyLayer.ts (W4-4), which owns them together because they are one thing: the
+ * fog has to be the sky's own horizon colour or the rim of the disk shows, and the light has to be
+ * the hour the sky is painting or the ground and the air disagree. Exactly one layer may own the
+ * air, and it is that one. What is left here is the fallback below, which paints a static dusk when
+ * nobody has claimed the air, so a world built without a sky layer still renders.
+ *
  * The world is finite, and the art bible would rather it dissolved than ended. The disk is about
  * 4 km across at the founder resolution and the scatter dresses only the first 500 m, so fog
  * closes at 420 m: far enough to see a headland, near enough that the rim of the mesh and the
- * undressed middle distance are never in view. The sky is a flat dusk colour under it, until a
- * sky layer paints a gradient.
+ * undressed middle distance are never in view. The sky layer keeps the same two distances.
  *
- * Light, per the bible: one low western dusk key, a cool hemisphere fill, long soft ink shadows.
- * The host makes a provisional key light named "key"; this layer retunes it rather than adding a
- * second sun, and moves its shadow box with the camera so the 240 m of ground around the player is
- * always the part that gets shadows. A day-cycle layer that takes the light over later finds it
- * under the same name, and the fill under "fill".
+ * What IS still this layer's is the shadow BOX: the key light is found by name, given a 240 m
+ * frustum and a 2048-square depth map, and that frustum is walked along with the camera so the
+ * ground around the player is always the part that gets shadows. The sky layer decides which way
+ * the light comes from and how hard it burns; this layer decides what it can see. The two meet at
+ * `key.target`, which this layer moves and the sky layer aims from.
  */
 
 import * as THREE from "three";
 import { buildRegionScene, type RegionScene } from "@echo/planet";
 
 import { PALETTE } from "../three/palette";
+import { KEY_DISTANCE_M } from "./skyLayer";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 
 export interface TerrainLayerOptions {
@@ -60,10 +67,12 @@ export interface TerrainLayer extends WorldLayer {
  */
 const WATER = 0x2374b0;
 
-/** The direction the dusk key light shines FROM: the west, sixteen degrees up, a little south. */
-const KEY_FROM = new THREE.Vector3(-1, 0.3, 0.22).normalize();
-/** How far back along that direction the light sits from its target. Beyond the shadow box. */
-const KEY_DISTANCE_M = 420;
+/**
+ * Where the key comes from WHEN THERE IS NO SKY LAYER: the bible's west, sixteen degrees up, a
+ * little south. With a sky layer present this vector is never read, because the sky layer's dusk is
+ * derived from this exact vector and it moves the light itself.
+ */
+const FALLBACK_KEY_FROM = new THREE.Vector3(-1, 0.3, 0.22).normalize();
 /** The camera boom is 9 m back and 5.5 m up, so the target is about 12 m ahead of the lens. */
 const CAMERA_TO_TARGET_M = 12;
 
@@ -82,6 +91,9 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
   let ground: THREE.MeshLambertMaterial | null = null;
   let key: THREE.DirectionalLight | null = null;
   let scene: THREE.Scene | null = null;
+  // True only when no sky layer had claimed the air by the time this layer built. It is what turns
+  // the static-dusk fallback on, and what it cleans up on the way out.
+  let ownsAir = false;
   // The last whole metre the shadow box was centred on, so update() is a comparison most frames.
   let shadowX = NaN;
   let shadowZ = NaN;
@@ -105,6 +117,11 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
     // The key light is the host's; only its target, which this layer added, is ours to remove.
     key?.target.removeFromParent();
     key = null;
+    if (ownsAir && scene) {
+      scene.background = null;
+      scene.fog = null;
+    }
+    ownsAir = false;
     scene = null;
     region = null;
     shadowX = NaN;
@@ -124,15 +141,20 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
     if (signal.aborted) return;
     region = built;
 
-    // Sky and fog first, so even the first chunk arrives into the right air. One colour for both,
-    // so the far ground fades into the very colour behind it and the rim of the mesh has nowhere
-    // to show. Halfway between the bible's dusk zenith and its horizon: the horizon is what a
-    // flat background stands in for, but at full strength it is an orange wall.
-    const sky = new THREE.Color(PALETTE.skyDusk).lerp(new THREE.Color(PALETTE.skyHorizon), 0.5);
-    ctx.scene.background = sky;
-    ctx.scene.fog = new THREE.Fog(sky, fogNear, fogFar);
+    // The air, only if nobody owns it. A non-null background is the sky layer having already been
+    // here (it builds first and sets one), so this is a fallback and never an override: a world
+    // composed without a sky layer still gets a dusk it can be seen in, and a world with one is
+    // left entirely alone. One flat colour for sky and fog together, so the far ground still fades
+    // into the very colour behind it. Halfway between the bible's dusk zenith and its horizon,
+    // because the horizon at full strength is the orange wall a playtester complained about.
+    if (ctx.scene.background === null) {
+      ownsAir = true;
+      const sky = new THREE.Color(PALETTE.skyDusk).lerp(new THREE.Color(PALETTE.skyHorizon), 0.5);
+      ctx.scene.background = sky;
+      ctx.scene.fog = new THREE.Fog(sky, fogNear, fogFar);
+    }
 
-    // Lighting is the host's key light, retuned, rather than a second light on top of it.
+    // The shadow box, on the one key light, found by name rather than added to.
     tuneLights(ctx);
 
     // Flat shading, per the bible: carved clay. Vertex colours still interpolate, so the biome
@@ -189,10 +211,13 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
   };
 
   /**
-   * The host's provisional lights, brought to the bible. The key is found by name so a scene
-   * that already has one is not given two suns, and the hemisphere fill is the first one in the
-   * scene or a new one. Shadows are on the renderer, which is shared with the globe; the flag is
-   * harmless to a scene whose lights do not cast.
+   * The shadow box. The key is found by name so a scene that already has one is not given two suns,
+   * and the hemisphere fill is the first one in the scene or a new one. Shadows are on the
+   * renderer, which is shared with the globe; the flag is harmless to a scene whose lights do not
+   * cast.
+   *
+   * COLOUR AND INTENSITY ARE NOT SET HERE unless this layer also took the air. The sky layer drives
+   * both, hour by hour, and a second writer would fight it every frame.
    */
   const tuneLights = (ctx: LayerContext) => {
     ctx.renderer.shadowMap.enabled = true;
@@ -205,8 +230,6 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
       ctx.scene.add(found);
     }
     key = found;
-    key.color.set(PALETTE.dusk);
-    key.intensity = 1.7;
     key.castShadow = true;
     key.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     const cam = key.shadow.camera;
@@ -225,7 +248,7 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
     key.shadow.bias = -0.0002;
     // A directional light shines at its target, and the target only tracks when it is in the
     // scene graph. Moving both together keeps the direction fixed while the box follows the player.
-    ctx.scene.add(key.target);
+    if (!key.target.parent) ctx.scene.add(key.target);
     placeKey(0, 0, 0);
 
     let fill = ctx.scene.children.find((o) => (o as THREE.HemisphereLight).isHemisphereLight) as
@@ -236,16 +259,33 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
       ctx.scene.add(fill);
     }
     fill.name = "fill";
-    // Cool sky opposite the warm key; ink below, never black, so a shadowed slope still reads.
+    if (!ownsAir) return;
+    // The fallback dusk, and only when this layer took the air. The bible's key and its cool sky
+    // fill, at the intensities three's post-r165 convention needs: intensity is no longer scaled by
+    // pi for you while MeshLambertMaterial still divides by it, so an unscaled 1.7 lands about a
+    // third of the light it reads as. skyLayer.ts's header has the measurement.
+    key.color.set(PALETTE.dusk);
+    key.intensity = 1.7 * Math.PI;
     fill.color.set(PALETTE.duskFill);
     fill.groundColor.set(PALETTE.shadow);
-    fill.intensity = 0.9;
+    fill.intensity = 0.9 * Math.PI;
   };
 
+  /**
+   * Move the shadow box. The TARGET is what this layer owns: it is the centre of the 240 m frustum
+   * and it is what the sky layer aims the light from, so moving it moves the box without ever
+   * touching the direction the light comes from. The light's own position is placed here only in
+   * the fallback, when there is no sky layer to place it.
+   */
   const placeKey = (x: number, y: number, z: number) => {
     if (!key) return;
     key.target.position.set(x, y, z);
-    key.position.set(x + KEY_FROM.x * KEY_DISTANCE_M, y + KEY_FROM.y * KEY_DISTANCE_M, z + KEY_FROM.z * KEY_DISTANCE_M);
+    if (!ownsAir) return;
+    key.position.set(
+      x + FALLBACK_KEY_FROM.x * KEY_DISTANCE_M,
+      y + FALLBACK_KEY_FROM.y * KEY_DISTANCE_M,
+      z + FALLBACK_KEY_FROM.z * KEY_DISTANCE_M,
+    );
   };
 
   /**

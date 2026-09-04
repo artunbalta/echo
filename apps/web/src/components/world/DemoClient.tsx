@@ -16,6 +16,8 @@ import Inspector, { useMeasureChain, type ReactionReading } from "@/components/w
 import WorldCanvas from "@/components/world/WorldCanvas";
 import { createMeasureChain, landingConsent, type MeasureChain } from "@/game/world/measure";
 import { playerLayer } from "@/game/world/playerLayer";
+import { scatterLayer } from "@/game/world/scatterLayer";
+import { skyLayer } from "@/game/world/skyLayer";
 import { sliceLayer } from "@/game/world/sliceLayer";
 import { terrainLayer } from "@/game/world/terrainChunks";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
@@ -59,7 +61,9 @@ export default function DemoClient(props: DemoClientProps) {
       if (process.env.NODE_ENV !== "production") {
         (window as unknown as { __demo?: unknown }).__demo = { world, player: p, slice, chain };
       }
-      return [terrainLayer(), p, slice];
+      // Sky first: it owns the air, and the terrain layer stands its fallback down when it
+      // finds the air already claimed.
+      return [skyLayer(), terrainLayer(), scatterLayer(), p, slice];
     },
     [chain, onReaction],
   );
