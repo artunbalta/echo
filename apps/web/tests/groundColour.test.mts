@@ -53,6 +53,7 @@ import {
   type RegionScene,
 } from "@echo/planet";
 
+import { FOLLOW_CAMERA, initialFollowCamera } from "../src/game/world/followCamera";
 import { PALETTE } from "../src/game/three/palette";
 import { GROUND_MEAN_SRGB, paintRegionGround } from "../src/game/world/groundColour";
 
@@ -514,5 +515,255 @@ test("A10: every material the ground is made of is a named palette entry, in lin
       const v = chunk.colours[o]!;
       assert.ok(v >= lo - 1e-6 && v <= hi + 1e-6, `channel ${o} is ${v}, outside every colour this palette has`);
     }
+  }
+});
+
+// ── the ground a person is STANDING ON (DECISIONS C18) ──────────────────────────
+
+/**
+ * WHY THERE IS A SECOND SPREAD MEASURE IN THIS FILE, and it is the seventh instance of the pattern
+ * this project keeps writing down.
+ *
+ * The assertion above bounds each biome's spread over the WHOLE 4 km disk, where the rainforest's
+ * albedo standard deviation is 10.4 levels of 255. Measured through the real camera on the frozen
+ * dusk frame, over the ground a person is actually looking at, it was 1.1. The test passed on a
+ * configuration nobody looks at: 43% of the ground rays in a shipped frame land inside ten metres,
+ * the whole visible floor touches 25 distinct 12 m lattice cells, and the finest field the paint
+ * had at the time was 72 m. So the disk bound is kept, because it catches a recipe that stopped
+ * painting, and this one is added, because only this one is about the floor underfoot.
+ *
+ * THE INSTRUMENT IS CAMERA-FREE ON PURPOSE, and it is derived rather than picked. An eye `h` above
+ * the ground sees a patch at horizontal distance `r` under a solid angle proportional to
+ * `h / (r^2 + h^2)^1.5`, which is the inverse square law times the grazing cosine, and integrating
+ * it says half of everything a standing person sees is inside `h * sqrt(3)` and 93% is inside 66 m.
+ * At this game's own eye height, taken from FOLLOW_CAMERA rather than copied, that predicted median
+ * is 7.8 m against the 10.7 m measured over 6,045 real camera rays. Weighting a disk that way is
+ * the whole of "the ground a person can see" with no yaw, no field of view and no viewport in it,
+ * and unlike one frame it does not depend on which way the player happens to be facing.
+ *
+ * It samples the DRAWN surface at 1 m, not the lattice, because the near floor is one triangle with
+ * a Gouraud gradient across it and the lattice points are 12 m apart: measuring the corners would
+ * be measuring something the eye never sees.
+ */
+const EYE_ABOVE_GROUND_M = (() => {
+  const state = initialFollowCamera();
+  return FOLLOW_CAMERA.chestM + state.boom * Math.sin(state.pitch);
+})();
+
+/** DECISIONS C18's own radius: the farthest ground ray in a shipped frame is 66 m. */
+const NEAR_FIELD_M = 66;
+
+/** The painted albedo of the drawn ground at a point, bilinear over the lattice. NaN off the mesh. */
+function drawnLumaAt(lat: { n: number; half: number; step: number; luma: Float64Array }, x: number, z: number): number {
+  const fi = x / lat.step + lat.half;
+  const fj = -z / lat.step + lat.half;
+  const i0 = Math.floor(fi);
+  const j0 = Math.floor(fj);
+  const tx = fi - i0;
+  const tz = fj - j0;
+  let v = 0;
+  for (let dj = 0; dj < 2; dj++) {
+    for (let di = 0; di < 2; di++) {
+      const k = (j0 + dj) * lat.n + i0 + di;
+      if (k < 0 || k >= lat.n * lat.n || Number.isNaN(lat.luma[k]!)) return NaN;
+      v += lat.luma[k]! * (di ? tx : 1 - tx) * (dj ? tz : 1 - tz);
+    }
+  }
+  return v;
+}
+
+/** The painted region as a lattice of albedo luma, with the biome each point had before the paint. */
+function paintedLattice(cell: string): { n: number; half: number; step: number; luma: Float64Array; label: Int8Array } {
+  const region = build(cell);
+  const { index, at } = labelLattice(region);
+  paintRegionGround(region, SEED);
+  const step = region.resolution;
+  const half = Math.ceil(region.extentM / step) + 2;
+  const n = 2 * half + 1;
+  const luma = new Float64Array(n * n).fill(NaN);
+  for (const chunk of region.chunks) {
+    for (let o = 0; o < chunk.positions.length; o += 3) {
+      luma[index(chunk.positions[o]!, chunk.positions[o + 2]!)] = lumaOfLinear(chunk.colours[o]!, chunk.colours[o + 1]!, chunk.colours[o + 2]!);
+    }
+  }
+  return { n, half, step, luma, label: at };
+}
+
+/**
+ * The horizontal half angle the shipped camera actually sees: fov 50 at 1280 by 800.
+ *
+ * This exists because the first version of the assertion below integrated a full 360 degree disk
+ * around the standing point, and a person is not a disk. The difference is not academic: over 121
+ * standing points times 8 headings the disk reads a median of 3.33 on the ordinary parcel while the
+ * wedge reads 2.50, and 63 percent of place-and-heading pairs come in under 3.0. Worse, the disk
+ * version PASSED the very configuration DECISIONS C18 opens by calling flat, at 2.95 against its
+ * own floor of 2.5, while that same paint reads 1.11 at the camera's own rays. A guard that cannot
+ * separate the failure it names from the fix is not a guard.
+ */
+const CAMERA_HALF_ANGLE = Math.atan(Math.tan((50 * Math.PI) / 360) * (1280 / 800));
+
+/**
+ * The albedo spread a person standing at (x0, z0) and looking along `heading` sees, weighted by how
+ * much of the eye each metre takes. Ground behind the shoulder is not seen and is not counted.
+ */
+function spreadFromHere(
+  lat: ReturnType<typeof paintedLattice>,
+  x0: number,
+  z0: number,
+  heading = 0,
+): number | null {
+  const h2 = EYE_ABOVE_GROUND_M * EYE_ABOVE_GROUND_M;
+  const fx = Math.sin(heading);
+  const fz = Math.cos(heading);
+  const cosLimit = Math.cos(CAMERA_HALF_ANGLE);
+  let w = 0;
+  let s = 0;
+  let s2 = 0;
+  for (let dz = -NEAR_FIELD_M; dz <= NEAR_FIELD_M; dz += 1) {
+    for (let dx = -NEAR_FIELD_M; dx <= NEAR_FIELD_M; dx += 1) {
+      const r2 = dx * dx + dz * dz;
+      if (r2 > NEAR_FIELD_M * NEAR_FIELD_M) continue;
+      // Inside the wedge the lens actually has. The point underfoot is always in it.
+      if (r2 > 1 && (dx * fx + dz * fz) / Math.sqrt(r2) < cosLimit) continue;
+      const y = drawnLumaAt(lat, x0 + dx, z0 + dz);
+      if (Number.isNaN(y)) continue;
+      const weight = EYE_ABOVE_GROUND_M / Math.pow(r2 + h2, 1.5);
+      w += weight;
+      s += weight * y;
+      s2 += weight * y * y;
+    }
+  }
+  if (w <= 0) return null;
+  const m = s / w;
+  return Math.sqrt(Math.max(0, s2 / w - m * m));
+}
+
+/** Every 120th drawn land point, which is a deterministic spread of standing places over the cell. */
+function standingPoints(lat: ReturnType<typeof paintedLattice>): [number, number][] {
+  const land: number[] = [];
+  for (let k = 0; k < lat.luma.length; k++) {
+    const b = lat.label[k]!;
+    if (b >= 0 && BIOMES[b] !== "ocean" && !Number.isNaN(lat.luma[k]!)) land.push(k);
+  }
+  const stride = Math.max(1, Math.floor(land.length / 120));
+  const out: [number, number][] = [];
+  for (let c = 0; c < land.length; c += stride) {
+    const k = land[c]!;
+    out.push([((k % lat.n) - lat.half) * lat.step, -(Math.floor(k / lat.n) - lat.half) * lat.step]);
+  }
+  return out;
+}
+
+const median = (v: number[]): number => {
+  const s = v.slice().sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)]!;
+};
+const pct = (v: number[], q: number): number => {
+  const s = v.slice().sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(s.length * q))]!;
+};
+
+test("C18: the ground a person is STANDING ON is not one colour", () => {
+  // Measured, median over about 120 standing points per cell: 3.36 on the ordinary parcel, 3.37 on
+  // the demo, 7.53 on savanna, 7.08 on tundra and 4.57 on the three-biome cell. The 5th percentile
+  // runs 1.88 to 3.84, so the bound below is not carried by a handful of lucky spots.
+  //
+  // 2.5 IS WHERE IT IS BECAUSE OF WHAT IT CATCHES, not because of the headroom it leaves. Pushing
+  // the paint's whole noise ladder from 36 / 48 / 216 m out to 216 / 432 / 864, which is exactly
+  // the failure DECISIONS C18 describes and which the disk assertion above passes with 9.0 levels
+  // of its required 4, takes these medians to 2.01 and 1.98 on the two shipped routes. The bound
+  // sits between that and the shipped 3.36, so the margin is 1.34x above and 1.24x below and both
+  // numbers were measured rather than assumed.
+  // 1.8 IS WHERE IT IS BECAUSE OF WHAT IT CAN AND CANNOT SEPARATE, measured at the camera's own
+  // wedge rather than over a disk. Shipped, the five cells read 2.45, 2.44, 4.70, 5.43 and 3.46,
+  // so the floor sits 1.36x under the tightest of them. An unpainted floor is one colour per biome
+  // and reads essentially zero, which is the thing this has to catch and does.
+  //
+  // WHAT IT CANNOT SEPARATE, said plainly rather than left to be discovered. Putting the paint's
+  // middle rung back to its pre-C18 72 m takes the two shipped routes to 2.21 and 2.15, which this
+  // floor passes. That is not a hole in the bound, it is the honest size of that change at the
+  // camera: the disk version of this statistic reported the same move as 2.95 to 3.33 and the
+  // wedge reports it as 2.21 to 2.45, about a tenth of a level of 255. DECISIONS C18 records the
+  // disk numbers and is corrected. A guard should not claim to discriminate what it cannot.
+  const floor = 1.8;
+  const p05Floor = 0.8;
+  const measured: string[] = [];
+  for (const cell of [PARCEL_CELL, DEMO_CELL, SAVANNA_CELL, TUNDRA_CELL, DRY_BEACH_CELL]) {
+    const lat = paintedLattice(cell);
+    const points = standingPoints(lat);
+    // Eight headings per standing point, because which way a person is facing changes what they
+    // see and the shipped heading is not special: measured, it ranks 27th of 36 at the spawn.
+    const spreads = points
+      .flatMap(([x, z]) => Array.from({ length: 8 }, (_, k) => spreadFromHere(lat, x, z, (k / 8) * Math.PI * 2)))
+      .filter((v): v is number => v !== null);
+    assert.ok(spreads.length > 60, `${cell}: only ${spreads.length} standing points had ground around them`);
+    const mid = median(spreads);
+    const sorted = [...spreads].sort((a, b) => a - b);
+    measured.push(`${cell} median ${mid.toFixed(2)} p05 ${sorted[Math.floor(sorted.length * 0.05)]!.toFixed(2)}`);
+    console.log(measured[measured.length - 1]);
+    assert.ok(
+      mid >= floor,
+      `${cell}: standing anywhere on it, the albedo inside ${NEAR_FIELD_M} m has a spread of ${mid.toFixed(2)} levels of 255 weighted by how much of the eye each metre takes, under the ${floor} this floor has to carry. The whole-disk assertion in this file does not see that: a paint whose variation has all moved out past the near field still passes it.`,
+    );
+    assert.ok(
+      pct(spreads, 0.05) >= p05Floor,
+      `${cell}: the flattest twentieth of standing places sees ${pct(spreads, 0.05).toFixed(2)} levels, under ${p05Floor}; the median of ${mid.toFixed(2)} is being carried by the rest of the cell`,
+    );
+  }
+});
+
+test("C18: and the near field is ground rather than a step between two vertices", () => {
+  // The other side of the same measurement. A paint could pass the bound above by putting all of
+  // its near-field spread AT the lattice frequency, which is not a floor with variation in it, it
+  // is a floor made of 12 m facets. So the median step between two lattice points a step apart is
+  // bounded against the spread a standing person sees, rather than against the whole disk's, which
+  // is the denominator the older fizz assertion in this file uses and is 3x larger.
+  //
+  // Measured: 0.70 on the ordinary parcel, 0.66 on the demo, 0.42 on savanna, 0.63 on tundra, and
+  // white noise at the lattice would be 0.95.
+  //
+  // WHERE THIS GUARD STARTS WORKING, measured rather than claimed, by shortening the paint's finest
+  // field and reading the ratio off the ordinary parcel: 36 m gives 0.704, 30 m 0.753, 26 m 0.776,
+  // 22 m 0.796, 18 m 0.838, 15 m 0.881. So a bound of 0.80 fires from 18 m down and does NOT fire
+  // at 22, which is already under the 24 m Nyquist of a 12 m lattice. That gap is real and it is
+  // written here rather than papered over: what holds the 36 m floor is the ladder's own comment in
+  // groundColour.ts and the older disk-based fizz assertion above, which fires on grassland at 15 m.
+  //
+  // THE NUMBERS ABOVE WERE TAKEN OVER A DISK, and the denominator is now the camera's own wedge,
+  // which is smaller and therefore reads a smaller spread. The same shipped ground that gave 0.704
+  // against the disk gives 0.93 against the wedge. Nothing about the ground changed; the ruler did.
+  //
+  // 0.95 is where the bound goes, and what it now means is worth being exact about, because the
+  // honest reading is uncomfortable. White noise at the lattice would be 0.95, so a shipped 0.93 is
+  // saying that across the near field the paint varies barely more than one step between two
+  // vertices 12 m apart. That is the real state of the floor and it is not a measurement artefact:
+  // inside 10 m, where 43.5% of the frame's ground rays land, the albedo standard deviation is 0.47
+  // of one level of 255. Per-vertex colour on a 12 m lattice cannot carry a metre-scale thing, which
+  // is why A28's fragment grain exists, and A28's swing was set to 0.16 after 0.24 was rendered,
+  // looked at and REJECTED for making the floor underfoot the loudest thing in the frame.
+  //
+  // So this bound catches the floor collapsing onto the lattice and does NOT assert that the near
+  // field is richly varied, because the design deliberately declined to buy that at the price it
+  // costs. DECISIONS C18 is corrected to say so rather than to claim a spread the camera never sees.
+  const bound = 0.95;
+  for (const cell of [PARCEL_CELL, DEMO_CELL, SAVANNA_CELL, TUNDRA_CELL]) {
+    const lat = paintedLattice(cell);
+    const steps: number[] = [];
+    for (let k = 0; k < lat.luma.length; k++) {
+      const b = lat.label[k]!;
+      if (b < 0 || BIOMES[b] === "ocean" || Number.isNaN(lat.luma[k]!)) continue;
+      for (const kk of [k + 1, k + lat.n]) {
+        if (kk >= lat.luma.length || lat.label[kk] !== b || Number.isNaN(lat.luma[kk]!)) continue;
+        steps.push(Math.abs(lat.luma[kk]! - lat.luma[k]!));
+      }
+    }
+    const points = standingPoints(lat);
+    const near = median(points.map(([x, z]) => spreadFromHere(lat, x, z)).filter((v): v is number => v !== null));
+    const ratio = median(steps) / near;
+    assert.ok(steps.length > 10_000, `${cell}: only ${steps.length} lattice steps were compared`);
+    assert.ok(
+      ratio <= bound,
+      `${cell}: the median step between two vertices 12 m apart is ${median(steps).toFixed(2)} levels against the ${near.toFixed(2)} a standing person sees across the whole near field (${ratio.toFixed(2)}); at that ratio the floor underfoot is not varied ground, it is the facets of the mesh`,
+    );
   }
 });

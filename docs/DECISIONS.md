@@ -369,6 +369,36 @@ rendered 4.3% darker than the paint said it should be. A hash that is wrong at t
 exactly where this world is looked at, and a test that sampled only far from it would have called
 that hash perfect; the shipped test samples both.
 
+### C18, corrected after review
+
+The numbers first recorded here were taken over a full 360 degree disk around the standing point,
+and a person is not a disk. The shipped camera is fov 50 at 1280 by 800, a horizontal half angle of
+36.7 degrees. Measured at that wedge instead, over 121 standing points times 8 headings:
+
+  near-field albedo spread, ordinary parcel   2.21 before the re-derivation, 2.45 after
+  near-field albedo spread, demo              2.15 before, 2.44 after
+
+not the 2.96 to 3.34 and 2.91 to 3.36 recorded above. The re-derivation is worth about a tenth of a
+level of 255 at the camera, not a doubling, and both numbers are under the 3 levels the decision set
+out to reach.
+
+The counterfactual renders say the same thing from the other side: of the frame's ground variance,
+83.0% is light, 3.8% is the paint alone and 11.1% is the covariance between them, which is C18's own
+diagnosis of the state it was written to fix, arriving again after the fix.
+
+Where the variation is not: 43.5% of the frame's ground rays land inside 10 m, and there the albedo
+standard deviation is 0.47 of one level of 255. Per-vertex colour on a 12 m lattice cannot carry a
+metre-scale thing. A28's fragment grain is what can, and its swing was set to 0.16 after 0.24 was
+rendered, looked at and rejected for making the floor underfoot the loudest thing in the frame.
+
+So C18 is PARTLY achieved and the rest was traded away deliberately. What it did buy is kept and is
+real: the floor's mean albedo went from 0.0908 to 0.0512 linear luminance, 2.26x darker in view, and
+the paint at the camera's own rays doubled from 1.11 to 2.28 levels. What it did not buy is a floor
+that reads as varied underfoot, and buying that means overriding a rendered-and-rejected decision on
+how loud the ground may be. That is a fresh question, not a bug, and it is left open.
+
+The guard was rebuilt to measure the wedge and to say in its own comment what it cannot separate.
+
 ## C19 — the displacement amplitude stays at 4 m, and the ladder behind it is measured at 2,700
 
 RE-SWEPT AND ANSWERED. The ladder was re-run at the shipped height scale by the method

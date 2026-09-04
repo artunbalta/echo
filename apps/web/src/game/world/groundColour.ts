@@ -37,18 +37,24 @@
  * the same 12 m vertices as the mesh and Gouraud-interpolates across each triangle, so the finest
  * thing that can be DRAWN rather than aliased is about three lattice steps, 36 m. Litter mottle at
  * the scale of a leaf, a game trail, a termite mound: none of those are available and none are
- * attempted.
+ * attempted HERE. groundGrain.ts draws that band per fragment (task A28), and the crossover between
+ * the two is the reason this file's ladder was re-derived below.
  *
- * That bound meets the camera, and the meeting has a cost that is worth stating rather than
- * discovering. The camera sits 5.5 m up and 9 m back at a 25 degree pitch, so the bottom of the
- * frame is ground about 5 m away and the middle of it is 15 to 25 m; 92 to 98% of the ground rays
- * in a shipped frame land inside 40 m. The floor in the bottom third of the picture is therefore
- * about ten metres of ground, and NOTHING this file can draw varies across ten metres. Measured: a
- * 400 by 250 pixel crop of the nearest floor comes back at a standard deviation of 1.9 levels of
- * 255 on a savanna parcel where the albedo's own spread is 20.7. What did move is everything from
- * about 15 m out: on the same parcel the ground's value band in the middle of the frame goes from
- * 4 levels wide to 22. So this reads as a place, and as ground you walk ACROSS rather than ground
- * you are standing on, and the last ten metres would need a finer mesh or a fragment shader.
+ * THAT BOUND MEETS THE CAMERA, AND THE MEETING WAS MEASURED (DECISIONS C18). Casting 128 by 80 rays
+ * through the real camera on the frozen dusk frame and reading the albedo each one lands on,
+ * interpolated off the very BufferAttribute the mesh is drawn from:
+ *
+ *   distance band          0-10 m   10-20   20-30   30-45   45-90
+ *   share of ground rays    43.4%   39.8%   12.4%    3.6%    0.8%
+ *   albedo sd, levels/255    0.23    0.70    0.80    1.08    2.26
+ *
+ * and the whole visible floor touches 25 distinct 12 m lattice cells. Over the same rays, the frame
+ * spread a UNIT value field delivers into the 0 to 10 m band by its wavelength is 0.202 at half a
+ * metre, 0.171 at 4 m, 0.053 at 12 m, 0.016 at 24 m and 0.007 at 36 m, against the field's own sd
+ * of 0.204. So the finest field this lattice can carry reaches the ground under a person's feet at
+ * 3.6% of its own amplitude and a metre-scale field reaches it at 95%: a factor of 26 that no
+ * re-weighting closes. This file draws the ground a person walks ACROSS and A28 draws the ground
+ * they are standing on, and the split is a measurement rather than a division of labour.
  *
  * The band that is available, 36 m to a few hundred, is where a burn scar, a treefall gap, a frost
  * polygon, a drift of thatch and a wet-sand fringe all live, so the ecology this draws is the
@@ -83,6 +89,7 @@ import {
 } from "@echo/planet";
 
 import { PALETTE } from "../three/palette";
+import { GRAIN_AXIS_BYTES } from "./groundGrain";
 
 /** A palette entry as the attribute must carry it. `linearRgb` takes bytes, which is what a hex is. */
 const lin = (hex: number): readonly [number, number, number] =>
@@ -205,6 +212,17 @@ export interface GroundPaint {
   millis: number;
   /** Which recipes ran, by biome, and on how many lattice points. */
   byBiome: Partial<Record<Biome, number>>;
+  /**
+   * The per-vertex grain axis (task A28), one Int8Array per chunk in the region's own chunk order,
+   * three normalised bytes per vertex, parallel to `chunk.positions`.
+   *
+   * It is written HERE rather than in groundGrain.ts because the biome label is the colour
+   * attribute and this pass is the one that overwrites it: after the paint there is nothing left in
+   * the chunk that says what the ground is. A vertex with no grain, which is the sea floor and any
+   * biome the pair table has no entry for, gets an axis of zero, so the attribute is its own mask
+   * and the shader needs no branch.
+   */
+  grain: Int8Array[];
 }
 
 /**
@@ -614,13 +632,35 @@ export function paintRegionGround(region: RegionScene, seed: string): GroundPain
   // of the picture is about forty metres of ground across. A field at 300 m is one flat value over
   // all of that: it moves the whole-frame average and leaves the floor underfoot exactly as flat as
   // it was. Measured that way first, at 108 and 324 m, and the savanna and the tundra came back
-  // with a burn scar and a frost net visible only on the horizon. So the workhorse is 72 m, which
-  // is half a period across the near field, and 36 m sits under it. 36 is the floor: three lattice
+  // with a burn scar and a frost net visible only on the horizon. 36 m is the floor: three lattice
   // steps, the finest wavelength this mesh can carry without aliasing into a per-vertex flicker.
+  //
+  // THE WORKHORSE MOVED FROM 72 m TO 48 m WHEN THE LADDER WAS RE-DERIVED AGAINST THE NEAR FIELD
+  // (DECISIONS C18). Measured at the real camera's own ray positions, the frame spread each rung
+  // delivers per unit of its own amplitude is 0.101 at 36 m, 0.076 at 48, 0.059 at 60, 0.046 at 72
+  // and 0.007 at 216: the rung carrying the largest weight was delivering the least. Shortening the
+  // middle rung is nearly free, because a value field's mean is 0.5 at any wavelength and the
+  // clamped blends barely notice, so no pinned mean in GROUND_MEAN_SRGB moved by more than 1.5 of
+  // its 4 allowed. Measured over about 120 standing points on each of five cells, weighted by how
+  // much of the eye each square metre of ground takes, the albedo spread inside 66 m went 2.96 to
+  // 3.34 on the ordinary parcel and 2.91 to 3.36 on the demo, and at the two shipped spawns it went
+  // 1.96 to 2.94 and 1.92 to 2.99. The lattice fizz went the right way with it: the median 12 m step
+  // against the near-field spread fell from 0.362 to 0.353 on the parcel.
+  //
+  // WHAT WAS TRIED AND REJECTED, so it is not tried again. (a) Swapping the fine and mid WEIGHTS so
+  // the 36 m rung is the workhorse: once the mid rung is at 48 m the two deliver within 1.33x of
+  // each other, and the swap bought 0.4% of near-field spread for 6% more lattice step, taking two
+  // biomes past 0.39 of the fizz bound. (b) Shortening the coarse rung from 216 m: it is the only
+  // thing that makes one parcel's ground read differently from the next over a walk, and at 144 m
+  // the demo's rainforest mean drifted 2.2 of its 4. (c) Saturating `swell` harder, at
+  // SWELL_SCALE_M 0.3 instead of 0.5: worth 9% of near-field spread, but that constant is derived
+  // from a measured relief and turning it into a sign rather than a magnitude is drawing ground
+  // that is not there.
+  //
   // 216 m is still here because it is what makes one parcel's ground read differently from the
   // next one's over a walk, but it carries the smallest weight of the three.
   const fine = noiseGrid(n, half, step, 36, 36, salt + 11, filled);
-  const mid = noiseGrid(n, half, step, 72, 72, salt + 12, filled);
+  const mid = noiseGrid(n, half, step, 48, 48, salt + 12, filled);
   const coarse = noiseGrid(n, half, step, 216, 216, salt + 13, filled);
   // Ridges, not blobs, and the only two grounds shaped by moving air rather than by water.
   const dunes = has("desert") || has("beach") ? noiseGrid(n, half, step, 54, 210, salt + 14, filled) : null;
@@ -867,9 +907,12 @@ export function paintRegionGround(region: RegionScene, seed: string): GroundPain
   //    vertex has one colour survives this.
   let painted = 0;
   let untouched = 0;
+  const grain: Int8Array[] = [];
   for (const chunk of region.chunks) {
     const p = chunk.positions;
     const col = chunk.colours;
+    const axis = new Int8Array(p.length);
+    grain.push(axis);
     for (let o = 0; o < p.length; o += 3) {
       const i = Math.round(p[o]! * perStep) + half;
       const j = Math.round(-p[o + 2]! * perStep) + half;
@@ -889,6 +932,10 @@ export function paintRegionGround(region: RegionScene, seed: string): GroundPain
       col[o] = paint[g3]!;
       col[o + 1] = paint[g3 + 1]!;
       col[o + 2] = paint[g3 + 2]!;
+      const a3 = kind * 3;
+      axis[o] = GRAIN_AXIS_BYTES[a3]!;
+      axis[o + 1] = GRAIN_AXIS_BYTES[a3 + 1]!;
+      axis[o + 2] = GRAIN_AXIS_BYTES[a3 + 2]!;
       painted++;
     }
   }
@@ -900,6 +947,7 @@ export function paintRegionGround(region: RegionScene, seed: string): GroundPain
     strays,
     unlabelled,
     millis: performance.now() - t0,
+    grain,
     byBiome: BIOMES.reduce<Partial<Record<Biome, number>>>((out, b, i) => {
       if (perBiome[i]! > 0) out[b] = perBiome[i]!;
       return out;

@@ -16,6 +16,10 @@
  *   terrain second, because the scatter stands each prop on the ground the terrain actually drew
  *     rather than on the placer's own z, which is sampled off a 10 m mask grid.
  *   scatter third.
+ *   canopy-closure fourth, and it can be nowhere else: it darkens the ground the terrain layer
+ *     uploaded by the crowns the scatter layer placed, so it is the one layer that needs BOTH of
+ *     them already built. DECISIONS C17. It reaches for them by name and complains if either is
+ *     missing rather than silently shipping a floor with the open sky's light on it.
  *   player after the scatter, and this one is load-bearing rather than tidy: `playerLayer.build`
  *     looks the scatter up by name and takes its collider index, so a player built ahead of it
  *     walks through every trunk on the parcel.
@@ -39,6 +43,7 @@
  * never will be.
  */
 
+import { canopyClosureLayer } from "./canopyClosure";
 import { DEMO_SCATTER } from "./demoStations";
 import type { MeasureChain } from "./measure";
 import { playerLayer } from "./playerLayer";
@@ -95,6 +100,7 @@ export function parcelLayers({ chain, slice }: ParcelWorldOptions): WorldLayer[]
     // DEMO_SCATTER is a value, not a shape repeated at each call site, so this line and the test
     // cannot drift apart again. The bare call is what an ordinary parcel ships with.
     slice ? scatterLayer(DEMO_SCATTER) : scatterLayer(),
+    canopyClosureLayer(),
     player,
     walkLayer({ chain, playerTile }),
   ];

@@ -78,14 +78,18 @@ test("a parcel and the demo build one list, in one order, differing only in the 
   const parcel = parcelLayers({ chain, slice: sliceOptionsFor(undefined, {}) }).map((l) => l.name);
   const demo = parcelLayers({ chain, slice: sliceOptionsFor("slice", {}) }).map((l) => l.name);
 
-  assert.deepEqual(parcel, ["sky", "terrain", "scatter", "player", "walk"]);
-  assert.deepEqual(demo, ["sky", "terrain", "scatter", "player", "walk", "slice"]);
+  assert.deepEqual(parcel, ["sky", "terrain", "scatter", "canopy-closure", "player", "walk"]);
+  assert.deepEqual(demo, ["sky", "terrain", "scatter", "canopy-closure", "player", "walk", "slice"]);
 
-  // The two rationales that are load-bearing, stated as the relations they are, so that a
-  // reordering fails here with the reason and not merely with a different array.
+  // The rationales that are load-bearing, stated as the relations they are, so that a reordering
+  // fails here with the reason and not merely with a different array.
   assert.equal(parcel[0], "sky", "the terrain layer paints its orange fallback unless the sky claimed the air first");
   assert.ok(parcel.indexOf("scatter") < parcel.indexOf("player"), "the player takes the scatter's collider index at build, so it must be built after it");
   assert.ok(demo.indexOf("player") < demo.indexOf("walk"), "the walk layer reports the position the mover committed this frame");
+  // DECISIONS C17: the closure darkens the ground the TERRAIN uploaded by the crowns the SCATTER
+  // placed, so it is the one layer that has two predecessors and both of them are hard.
+  assert.ok(parcel.indexOf("terrain") < parcel.indexOf("canopy-closure"), "the closure writes into the terrain's own colour attribute, so there has to be one");
+  assert.ok(parcel.indexOf("scatter") < parcel.indexOf("canopy-closure"), "the closure is computed from the placement, so the scatter has to have placed it");
 });
 
 test("every parcel gets the walk layer, which is what feeds the chain on ground with no slice", () => {
