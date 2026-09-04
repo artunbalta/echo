@@ -26,13 +26,15 @@ export const PALETTE = {
   // LIGHTNESS and restore the saturation. Measured on identical frames: S 17.1% -> 42.9% in the
   // rendered pixels, blue-minus-red +8.8 -> +28.7.
   //
-  // seaDeep and seaFoam are still NOT DRAWN anywhere. §3 also asks for "shallow turquoise grading to
+  // seaDeep is still NOT DRAWN anywhere. seaFoam now is, though never as a surface: skyLayer.ts
+  // blends it into the daylight sky, the moonlight key and the day fill, which is light mixed
+  // with light and the only mixing this file sanctions. §3 also asks for "shallow turquoise grading to
   // deep ink-blue in gentle depth bands", and an attempt at that by subdividing the sea plane and
   // vertex-colouring it was measured and REJECTED: the plane is 1152 units, the shelf is 20.8, so at
   // 96 segments the gradient resolved across 1.73 cells and was invisible, while costing 18,432
   // triangles against the seven island discs' 5,600. A uniform grid is the wrong instrument at that
   // ratio. If the depth bands are wanted they belong in the fragment shader, where the feature scale
-  // and the sampling rate can match. These two stay defined so that work has its palette ready.
+  // and the sampling rate can match. seaDeep stays defined so that work has its palette ready.
   seaDeep: 0x1c3a5e,
   seaShallow: 0x2b6d9e,
   seaFoam: 0x9fc9dd,
@@ -56,6 +58,19 @@ export const PALETTE = {
   bush: 0x47663f,
   bushDry: 0x8a8455,
   flower: 0xd8b04a,
+
+  // ── cold country ──
+  // Added when the scatter reached the biomes the island world never visited. The palette had no
+  // word for snow, for lichen, or for a conifer, so three forms blended their own values in place:
+  // a taiga canopy pulled toward `duskFill`, which is a LIGHT colour and the only surface in the
+  // codebase ever painted with one, and a snow drift painted entirely in `cloth`, which is a built
+  // thing being used for nature against the law at the top of this file. Naming them here is the
+  // difference between a palette and a habit. Values are muted the way the rest of the land is:
+  // snow is the one legitimate high-value entry, because snow is, and it is still pulled off white.
+  conifer: 0x3e5a44,     // taiga canopy: colder and bluer than `leafDark`, which is a warm forest
+  lichen: 0x797f6c,      // the grey-green crust on cold rock, between `rockLight` and `grassDry`
+  snowLit: 0xcfc9b2,     // a drift's crest under the warm western key
+  snowShade: 0xb9c9c5,   // its lee, cooled toward the sky rather than darkened toward ink
 
   // ── built things (geometric) ──
   wood: 0x8a5733,
