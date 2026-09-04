@@ -25,11 +25,19 @@ import {
   type Exclusions,
   type PlacedAsset,
 } from "../lib/assets.js";
+import { classesForBiomes } from "../lib/assets.js";
 import { sampleBiomeMask, type BiomeMask } from "../lib/biome-mask.js";
 import { DEMO_CELL, DEMO_LAND_BIOMES } from "../lib/demo-cell.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
 import { PARCEL_REGION_K, SCATTER_FALLOFF } from "../lib/parcel.js";
-import { createTangentPatch, DEFAULT_SCENE_OPTIONS } from "../lib/scene.js";
+import {
+  createSceneHeight,
+  createTangentPatch,
+  sceneHeightAt,
+  DEFAULT_DETAIL,
+  DEFAULT_REGION_OPTIONS,
+  DEFAULT_SCENE_OPTIONS,
+} from "../lib/scene.js";
 import { calibratePlanet, createTerrain, isLand, type Biome } from "../lib/terrain.js";
 import { regionBound, spawnPointFor } from "../lib/walkable.js";
 import { SEED, shippedCalibration } from "./helpers/shipped.js";
@@ -154,6 +162,58 @@ test("every placed instance is allowed where it stands, inside the region, and o
   }
   assert.equal(Object.values(byClass).reduce((a, b) => a + b, 0), total);
   console.log(`demo disk: ${placed.length} instances`, byClass);
+});
+
+test("PlacedAsset.z is the macro height under the instance and NOT the ground the scene draws", () => {
+  // THE CONTRACT, MEASURED. `z` is shared with the server, and its doc comment used to say "metres
+  // above sea level", which a reader is entitled to hear as "the ground". It never quite was, and
+  // since DECISIONS C2 it is not close: the scene adds a displacement on its own lattice that the
+  // placer, which samples the macro field through a 10 m mask, has no way to see. The numbers below
+  // are the ones written into PlacedAsset.z. If one of them moves, that comment is what has to move
+  // with it, which is the whole reason this test states them rather than just bounding them.
+  const registry = classesForBiomes(DEMO_LAND_BIOMES);
+  const { placed } = placeAssets(mask, registry, SEED, NO_EXCLUSIONS, options);
+  const drawn = createSceneHeight(patch, field, calibration, {
+    heightScaleM: options.heightScaleM,
+    resolution: DEFAULT_REGION_OPTIONS.resolution,
+  });
+  const macro = (x: number, y: number) => sceneHeightAt(patch, field, calibration, x, y) * options.heightScaleM;
+
+  const stat = (v: number[]) => {
+    const sorted = [...v].sort((a, b) => a - b);
+    return { mean: v.reduce((a, b) => a + b, 0) / v.length, p95: sorted[Math.floor(sorted.length * 0.95)]!, max: sorted.at(-1)! };
+  };
+  const vsDrawn = stat(placed.map((p) => Math.abs(p.z - drawn(p.x, p.y))));
+  const vsMacro = stat(placed.map((p) => Math.abs(p.z - macro(p.x, p.y))));
+
+  assert.equal(placed.length, 43_108);
+  // Against the MACRO field, z is only the mask's grid: nearest neighbour at 10 m across a slope.
+  assert.ok(vsMacro.max > 0.5 && vsMacro.max < 1.0, `the grid term is now ${vsMacro.max} m, documented as 0.818`);
+  assert.ok(vsMacro.mean > 0.12 && vsMacro.mean < 0.22, `the grid term's mean is now ${vsMacro.mean} m, documented as 0.163`);
+  // Against the DRAWN ground, the displacement dominates it.
+  assert.ok(vsDrawn.mean > 1.0 && vsDrawn.mean < 1.3, `the drawn gap's mean is now ${vsDrawn.mean} m, documented as 1.150`);
+  assert.ok(vsDrawn.p95 < 2.6, `the drawn gap's p95 is now ${vsDrawn.p95} m, documented as 2.410`);
+  assert.ok(vsDrawn.max > 3.5 && vsDrawn.max < 4.0, `the drawn gap's worst is now ${vsDrawn.max} m, documented as 3.799`);
+  // A ceiling that holds by construction rather than by measurement: the displacement can move the
+  // ground by at most its amplitude, and the grid can miss by at most the grid term.
+  assert.ok(vsDrawn.max <= DEFAULT_DETAIL.amplitudeM + vsMacro.max, "the gap exceeds displacement plus grid, so something else has moved");
+
+  // THE TEETH. It is not enough that the gap is nonzero; the point of the comment is that the gap
+  // is dominated by something z cannot see. Measured 4.65x at the worst and 7.06x in the mean, so a
+  // world that lost its relief, or a placer that started sampling the scene's own height, fails
+  // here rather than quietly making the comment wrong.
+  assert.ok(vsDrawn.max > 3 * vsMacro.max, `the drawn gap is only ${(vsDrawn.max / vsMacro.max).toFixed(2)}x the grid term`);
+  assert.ok(vsDrawn.mean > 4 * vsMacro.mean, `the drawn gap's mean is only ${(vsDrawn.mean / vsMacro.mean).toFixed(2)}x the grid term`);
+
+  // And what it would cost to believe the old comment: apps/web seats every instance through
+  // frame.toScene and apps/web/tests/scatter.test.mts holds that to 0.15 m off the uploaded
+  // triangles. Seated on z instead, 94.7% of this cell would miss that tolerance.
+  const seatable = placed.filter((p) => Math.abs(p.z - drawn(p.x, p.y)) <= 0.15).length;
+  assert.ok(seatable / placed.length < 0.1, `${((seatable / placed.length) * 100).toFixed(1)}% of instances would seat correctly on z, so z has become the ground`);
+  console.log(
+    `z against the drawn ground: mean ${vsDrawn.mean.toFixed(3)} m, p95 ${vsDrawn.p95.toFixed(3)} m, worst ${vsDrawn.max.toFixed(3)} m ` +
+    `over ${placed.length} instances; the mask grid alone is ${vsMacro.mean.toFixed(3)} m and ${vsMacro.max.toFixed(3)} m`,
+  );
 });
 
 test("the exclusions removed something, and only from the classes that list them", () => {

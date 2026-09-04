@@ -57,9 +57,38 @@ export interface AssetClass {
 
 export interface PlacedAsset {
   classId: AssetClassId;
-  /** Local metres east and north of the anchor centre, and metres above sea level. */
+  /** Local metres east and north of the anchor centre. */
   x: number;
   y: number;
+  /**
+   * How high this instance's GROUND stands on the planet. Not the ground it is drawn on.
+   *
+   * WHAT IT IS. The macro height under (x, y): `max(0, mask.heightAt(x, y)) * heightScaleM`. That
+   * is the field the globe draws and the registry assigns parcels from, read off the biome mask by
+   * NEAREST NEIGHBOUR on the mask's own grid, 10 m in every shipped build, and floored at sea level
+   * so a candidate over water reports 0 rather than a depth.
+   *
+   * WHAT IT IS NOT. The surface anything is drawn on. Two things stand in between. The mask grid is
+   * the smaller: 0.163 m in the mean and 0.818 m at worst. DECISIONS C2's detail displacement is
+   * the larger and it did not exist when this field was documented as "metres above sea level":
+   * `createSceneHeight` adds up to 4 m of walking-scale relief that a placer sampling the macro
+   * field cannot see. Measured together over the 43,108 instances of the demo cell, z sits 1.150 m
+   * in the mean, 2.410 m at p95 and 3.799 m at worst from the height the scene builder draws.
+   * (Seed echo-capacity-1, cell 847b949ffffffff, mask 10 m, resolution 12 m, heightScaleM 2,700.)
+   *
+   * WHO MAY RELY ON IT. Anything reasoning about ALTITUDE rather than about contact: which height
+   * band a class fell in, how high up the parcel an instance sits, bucketing or sorting by
+   * elevation, a server asking whether two placements are on the same terrace. It is the same macro
+   * field on both sides of the wire and it is a pure function of position, so two processes agree
+   * on it to the last bit, which is the property this contract is for.
+   *
+   * WHO MAY NOT. Anything that SEATS the instance. The authoritative ground is the scene's own
+   * height function, `RegionScene.heightAt`, which is `createSceneHeight`, and a renderer must put
+   * the instance on that and not on this. The client does: every scatter instance goes through
+   * `frame.toScene`, and `apps/web/tests/scatter.test.mts` measures the result against the
+   * triangles the terrain layer uploaded. Seating on z instead would float a fern most of a storey
+   * off the ground at the far end of that 3.799 m.
+   */
   z: number;
   biome: Biome;
   scale: number;
@@ -98,7 +127,28 @@ export const NO_EXCLUSIONS: Exclusions = { paths: [], footprints: [], sightlines
 export const INSTANCE_CEILING = 120_000;
 
 export interface PlaceOptions {
-  /** Metres of height per unit of normalised elevation; must match the scene builder's. */
+  /**
+   * Metres of height per unit of normalised elevation. It must be the scene builder's own
+   * `heightScaleM`, 2,700 under DECISIONS C1, because that is the only thing putting `z` and the
+   * scene's ground in the same units on the same planet.
+   *
+   * Matching it does NOT make `z` the ground the scene draws, and the old one-line version of this
+   * comment was read as promising that it did. Since C2 the scene adds a displacement on its own
+   * lattice that a placer sampling the macro field has no way to reach. PlacedAsset.z carries what
+   * that costs, who may rely on the number and who may not.
+   *
+   * HOW TO SEAT A PROP, in one sentence, because forbidding the wrong way and not stating the right
+   * one is half a contract. Build `createSceneHeight` with the SAME `heightScaleM`, the SAME
+   * `resolution` and the SAME `detail` the scene builder used, and read the ground from that.
+   *
+   * All three, and this was measured rather than assumed. Five authors were written from these
+   * comments alone and checked against the client's own ground over 120,000 instances: matching all
+   * three lands every instance exactly; the mask's 10 m step, which these comments name twice,
+   * costs 126 mm at worst and still passes; a server choosing its own 24 m step misses by 364 mm
+   * and fails on 18.5% of instances; and reading `detail` as a rendering flourish and passing null
+   * misses by 3.334 m and fails on 90.5%. That last author recovers 89 percent of the error this
+   * comment exists to prevent, and nothing here used to say the word `detail` at all.
+   */
   heightScaleM: number;
   /** Stop placing at this many instances and say so. */
   maxInstances?: number;

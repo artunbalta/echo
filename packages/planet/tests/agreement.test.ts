@@ -5,14 +5,33 @@
  * the same 500 world positions via the in world scene path, assert the values agree to within
  * 1e-6. If this test does not exist, the feature is not done."
  *
+ * SINCE DECISIONS C2 THERE ARE TWO SCENE PATHS, AND THIS TEST HOLDS BOTH.
+ *
+ * `sceneHeightAt` is the macro field read on the tangent patch. That is what the globe draws, what
+ * the registry assigns from, and what `isLand`, every parcel boundary and every deed are computed
+ * over. `createSceneHeight` is that same macro field PLUS the walking-scale displacement, and it
+ * is what `buildRegionScene` builds the mesh from and what `PlanetWorld` seats the body, the
+ * camera and every prop on. The second one is the ground a person is standing on; the first one is
+ * not, and has not been since C2.
+ *
+ * This test used to measure only the first, which made it a test of something that is not what
+ * ships. Run the shipped path against this file's own 1e-6 and 13,198 of its 25,000 samples fail,
+ * worst 3.3631 m, or 1.246e-3 normalised. Nothing was wrong with the world; what was wrong was
+ * that the evidence named a promise it was not checking.
+ *
+ * So the promise is TWO promises and each is asserted separately below, named for what it holds:
+ * exact to 1e-6 on the macro field, because that is the one field the globe and the registry
+ * share and any drift there is two planets, and within the displacement's own amplitude on the
+ * drawn ground, because that is precisely what C2 spent to buy walking scale.
+ *
  * It is worth being precise about what this can and cannot catch, because a test named after the
  * product's central promise is exactly the kind that quietly becomes a rubber stamp.
  *
- * Both renderers call the same terrain function, so the values can only disagree if they disagree
- * about the POSITION. That is the whole risk and it is a real one: the scene works in local metres
- * on a tangent plane and the globe works in unit vectors on a sphere, and there are several
- * plausible ways to convert between them that are subtly wrong. The last test in this file builds
- * two of those wrong ways and proves they fail the same assertion by six to nine orders of
+ * Both renderers call the same terrain function, so the macro values can only disagree if they
+ * disagree about the POSITION. That is the whole risk and it is a real one: the scene works in
+ * local metres on a tangent plane and the globe works in unit vectors on a sphere, and there are
+ * several plausible ways to convert between them that are subtly wrong. A later test in this file
+ * builds two of those wrong ways and proves they fail the same assertion by six to nine orders of
  * magnitude, so passing means something.
  *
  * Run:  node --import tsx --test packages/planet/tests/agreement.test.ts
@@ -25,7 +44,15 @@ import { latLngToVec3, vec3ToLatLng, type Vec3 } from "../lib/geo.js";
 import { globeHeightAt } from "../lib/globe.js";
 import { PLANET_PARAMS } from "../lib/manifest.js";
 import { seedInventory } from "../lib/rounds.js";
-import { createTangentPatch, sceneHeightAt, tangentDistortion } from "../lib/scene.js";
+import {
+  createSceneHeight,
+  createTangentPatch,
+  DEFAULT_DETAIL,
+  DEFAULT_REGION_OPTIONS,
+  sceneHeightAt,
+  tangentDistortion,
+  type DetailOptions,
+} from "../lib/scene.js";
 import { calibratePlanet, createTerrain, normalisedHeight } from "../lib/terrain.js";
 import { spawnPointFor } from "../lib/walkable.js";
 import { loadGoldens, SEED } from "./helpers/shipped.js";
@@ -35,6 +62,35 @@ import { loadGoldens, SEED } from "./helpers/shipped.js";
 // people stand on.
 const RADIUS_KM = PLANET_PARAMS.radiusKm;
 const TOLERANCE = 1e-6;
+
+/**
+ * The drawn ground's own tolerance, in METRES above sea level, and why it is a second number.
+ *
+ * C2 added the walking-scale displacement to the scene height and to nothing else, so the ground
+ * underfoot stands away from the globe's ground by however much that displacement is worth. Four
+ * metres is not an estimate of that, it is a hard ceiling on it: the octave amplitudes are
+ * normalised to sum to `amplitudeM` by construction, each octave of value noise lands in -1..1,
+ * the shore taper only ever scales the sum DOWN, and the read-back between lattice points is a
+ * convex combination of lattice offsets. Nothing in that chain can exceed the dial.
+ *
+ * It is written out as a literal instead of read off DEFAULT_DETAIL because a tolerance that moves
+ * with the dial it measures would pass at any setting of the dial, which is the failure this file
+ * is being repaired for. The two assertions below pin it to the dial from the other side: it may
+ * not be LARGER than the amplitude the displacement promises, and the measured worst must reach
+ * most of it, so a displacement that grew and one that quietly went missing both fail here.
+ *
+ * Measured worst over the 25,000 samples: 3.3631 m, which is 1.246e-3 normalised and 84% of the
+ * budget. Mean absolute divergence is 0.80 m, against the 0.94 m mean magnitude DEFAULT_DETAIL
+ * records for the displacement alone: the gap is the samples that land on water, where the taper
+ * has already taken the displacement to zero.
+ */
+const DRAWN_TOLERANCE_M = 4;
+
+// The vertical scale and the lattice the region builder ships, so what is measured below is the
+// ground the app draws and not a neighbour of it. Both come from DEFAULT_REGION_OPTIONS rather
+// than from literals, because `buildRegionScene` and `PlanetWorld` both read them from there.
+const HEIGHT_SCALE_M = DEFAULT_REGION_OPTIONS.heightScaleM;
+const RESOLUTION_M = DEFAULT_REGION_OPTIONS.resolution;
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -72,16 +128,27 @@ function chooseParcels(count: number, random: () => number): string[] {
   return chosen;
 }
 
-test("the globe and the walkable scene agree on elevation to within 1e-6, over 50 parcels", () => {
+test("the globe and the walked ground agree: exactly on the macro field, and to 4 m on the drawn scene", () => {
   const random = mulberry32(0x60be);
   const parcels = chooseParcels(50, random);
 
-  let worst = 0;
-  let worstParcel = "";
+  let worstMacro = 0;
+  let worstMacroParcel = "";
+  let worstDrawnM = 0;
+  let worstDrawnParcel = "";
   let samples = 0;
 
   for (const cell of parcels) {
     const patch = createTangentPatch(cell, RADIUS_KM);
+    // The height function the app itself builds. `buildRegionScene` and `PlanetWorld` both make
+    // exactly this call, on the anchor patch, at the shipped step, and hand the result out as the
+    // scene's `heightAt`. Its lattice is at integer multiples of the step from the patch origin
+    // and the builder's grid line i sits at (i - half) * step, so the two lattices are the same
+    // lattice and this is the drawn surface rather than a resampling of it.
+    const drawnAt = createSceneHeight(patch, field, calibration, {
+      heightScaleM: HEIGHT_SCALE_M,
+      resolution: RESOLUTION_M,
+    });
 
     for (let i = 0; i < 500; i++) {
       // A position inside the parcel, expressed the way the walkable scene expresses positions.
@@ -93,22 +160,111 @@ test("the globe and the walkable scene agree on elevation to within 1e-6, over 5
 
       const fromGlobe = globeHeightAt(field, calibration, direction);
       const fromScene = sceneHeightAt(patch, field, calibration, x, y);
-
-      const difference = Math.abs(fromGlobe - fromScene);
-      if (difference > worst) {
-        worst = difference;
-        worstParcel = cell;
+      const macroDifference = Math.abs(fromGlobe - fromScene);
+      if (macroDifference > worstMacro) {
+        worstMacro = macroDifference;
+        worstMacroParcel = cell;
       }
-      samples++;
       assert.ok(
-        difference < TOLERANCE,
-        `${cell} at local (${x}, ${y}): globe ${fromGlobe}, scene ${fromScene}`,
+        macroDifference < TOLERANCE,
+        `macro: ${cell} at local (${x}, ${y}): globe ${fromGlobe}, scene ${fromScene}`,
       );
+
+      // Metres against metres: the globe's ground at this point, and the ground a body standing
+      // at this point rests on.
+      const drawnDifference = Math.abs(fromGlobe * HEIGHT_SCALE_M - drawnAt(x, y));
+      if (drawnDifference > worstDrawnM) {
+        worstDrawnM = drawnDifference;
+        worstDrawnParcel = cell;
+      }
+      assert.ok(
+        drawnDifference <= DRAWN_TOLERANCE_M,
+        `drawn: ${cell} at local (${x}, ${y}): globe ${fromGlobe * HEIGHT_SCALE_M} m, drawn ${drawnAt(x, y)} m`,
+      );
+
+      samples++;
     }
   }
 
   assert.equal(samples, 25_000);
-  assert.ok(worst < TOLERANCE, `worst disagreement ${worst} at ${worstParcel}`);
+
+  // PROMISE ONE, the one the globe and the registry share. There is one macro field, both paths
+  // reach it at one position, and the two numbers are the same number. This is the promise that
+  // may never soften: a drift here is not a rounding, it is two planets, and it is what decides
+  // whether the parcel the registry sold is the parcel the globe drew. Measured worst: exactly 0.
+  assert.ok(worstMacro < TOLERANCE, `the macro field disagreed by ${worstMacro} at ${worstMacroParcel}`);
+
+  // PROMISE TWO, the one a person's feet keep, and an APPROXIMATE promise by DECISIONS C2. The
+  // ground drawn and stood on is the macro field plus the walking-scale displacement, so it stands
+  // away from the globe by up to the displacement's amplitude and by no more than that.
+  assert.ok(
+    worstDrawnM <= DRAWN_TOLERANCE_M,
+    `the drawn ground stood ${worstDrawnM} m off the globe at ${worstDrawnParcel}, past the ${DRAWN_TOLERANCE_M} m C2 spent`,
+  );
+  // The tolerance is the displacement's amplitude, not a number chosen to fit the measurement.
+  // Raising the dial without raising this line's budget is caught by the per-sample assertion
+  // above; lowering the dial is caught here.
+  assert.ok(
+    DRAWN_TOLERANCE_M <= DEFAULT_DETAIL.amplitudeM,
+    `the tolerance ${DRAWN_TOLERANCE_M} m is larger than the ${DEFAULT_DETAIL.amplitudeM} m the displacement can reach`,
+  );
+  // And it is not slack. A displacement that went missing, or was tapered away to nothing, would
+  // leave this test passing on a world with no relief in it at all, which is the shape of the bug
+  // being repaired here. Measured 3.3631 m against a 4 m budget, so the margin is 16%.
+  assert.ok(
+    worstDrawnM > DRAWN_TOLERANCE_M * 0.5,
+    `the worst divergence was only ${worstDrawnM} m; the displacement is not reaching the ground`,
+  );
+});
+
+test("the drawn-scene tolerance has teeth: a louder displacement fails it while the macro promise stays green", () => {
+  // The proof the repair is owed. A guard nobody has watched fail is not evidence, so here is the
+  // failure, kept rather than described: the same displacement, twice as tall.
+  //
+  // The taper widens in the same ratio because `createSceneHeight` refuses a taper under 1.5 times
+  // the amplitude, on pain of a shore that runs backwards into the sea. Doubling only the amplitude
+  // would throw there and prove nothing about this tolerance.
+  const loud: DetailOptions = {
+    ...DEFAULT_DETAIL,
+    amplitudeM: DEFAULT_DETAIL.amplitudeM * 2,
+    taperM: DEFAULT_DETAIL.taperM * 2,
+  };
+
+  const random = mulberry32(0x60be);
+  let worstMacro = 0;
+  let worstDrawnM = 0;
+
+  for (const cell of chooseParcels(8, random)) {
+    const patch = createTangentPatch(cell, RADIUS_KM);
+    const drawnAt = createSceneHeight(patch, field, calibration, {
+      heightScaleM: HEIGHT_SCALE_M,
+      resolution: RESOLUTION_M,
+      detail: loud,
+    });
+    for (let i = 0; i < 500; i++) {
+      const x = (random() * 2 - 1) * patch.extentM;
+      const y = (random() * 2 - 1) * patch.extentM;
+      const fromGlobe = globeHeightAt(field, calibration, patch.toDirection(x, y));
+      worstMacro = Math.max(worstMacro, Math.abs(fromGlobe - sceneHeightAt(patch, field, calibration, x, y)));
+      worstDrawnM = Math.max(worstDrawnM, Math.abs(fromGlobe * HEIGHT_SCALE_M - drawnAt(x, y)));
+    }
+  }
+
+  // Measured 6.7235 m on these 4,000 samples against a 4 m budget, so the drawn-scene assertion
+  // above rejects this ground by 68%. Run for real, by editing DEFAULT_DETAIL rather than passing
+  // an override, an amplitude of 6 trips the per-sample assertion at 4.2437 m and an amplitude of
+  // 2.5 trips the tolerance assertion; a taper widened until it swallows the relief leaves the
+  // worst divergence at 0.0015 m and trips the slack assertion. All three have been watched to
+  // fail, which is the only reason to believe any of them.
+  assert.ok(
+    worstDrawnM > DRAWN_TOLERANCE_M,
+    `a doubled displacement only moved the ground ${worstDrawnM} m, inside the ${DRAWN_TOLERANCE_M} m budget`,
+  );
+  // And this is why the two promises are two assertions. The macro agreement is blind to the
+  // displacement by construction, so it stays at exactly 0 through a change that moves every
+  // vertex of the world people walk on. One assertion covering both would have to be the loose
+  // one, and would have caught nothing here.
+  assert.ok(worstMacro < TOLERANCE, `the macro field noticed the displacement, by ${worstMacro}`);
 });
 
 test("the agreement holds for raw elevation too, not only for the normalised height", () => {

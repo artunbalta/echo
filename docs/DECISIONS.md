@@ -30,6 +30,43 @@ The cost of the middle path, stated plainly: the macro landscape keeps whatever 
 gave it, because the finest feature the field can express is about 1.56 km wide. What is bought is
 walking scale, which is where a person actually is.
 
+THE SECOND COST, which was not written down when this shipped and is being written down now.
+There are two height functions and they are not the same ground. `sceneHeightAt` is the macro
+field: what the globe draws, what the registry assigns from, what `isLand` and every parcel
+boundary are computed over. `createSceneHeight` is that plus the displacement, and it is what the
+mesh is built from and what the body, the camera and every prop stand on. So invariant I1, the
+terrain on the globe is the terrain you walk on, became an APPROXIMATE promise the moment this
+landed. The drawn ground stands away from the globe's ground by up to the displacement's amplitude,
+4 m by construction, measured at 3.3631 m worst and 0.80 m in the mean over `agreement.test.ts`'s
+25,000 samples on the shipped seed; 3.3631 m is 1.246e-3 normalised, and 13,198 of those 25,000
+samples exceed the 1e-6 that test was written to enforce.
+
+As with C4, that is acceptable only because it is documented and tested on both sides, and it is
+now both. `agreement.test.ts` holds the macro field at 1e-6, where it measures exactly 0, because
+that is the one field the globe and the registry share and a drift there is two planets. It holds
+the drawn ground at the amplitude, asserts the tolerance is no LARGER than the dial the
+displacement is set from, and asserts the measured worst reaches most of the tolerance so the bound
+cannot quietly go slack on a world that lost its relief. A companion test doubles the displacement
+and watches the drawn assertion reject it while the macro assertion stays at 0, so the guard has
+been seen failing rather than assumed to work.
+
+IT ALSO MOVED A CONTRACT, quietly. `PlacedAsset.z` is the macro height under an instance and was
+documented as "metres above sea level", with `PlaceOptions.heightScaleM` promising only that it
+"must match the scene builder's". The displacement put z 1.150 m in the mean and 3.799 m at worst
+from the ground the scene draws, over the demo cell's 43,108 instances, against 0.163 m and 0.818 m
+of mask-grid quantisation alone; 94.7% of that cell would now miss the 0.15 m seating tolerance the
+client is held to. No behaviour was wrong, because the client re-seats every instance through
+`frame.toScene` and the realtime server does not yet import `@echo/planet` at all. But this is a
+file shared with the server by contract and the comment IS the contract. It now says what z is,
+what it is not, who may rely on it and that the authoritative ground is the scene's own `heightAt`,
+and `assets.test.ts` pins every one of those numbers so the sentence cannot go stale in silence.
+
+What does NOT move is worth stating exactly, because it is the whole reason this option was taken.
+The taper reads the lowest macro ground within one lattice step, so every triangle containing the
+waterline is undisplaced and the h = 0 contour does not shift by a millimetre. Land fraction,
+parcel boundaries, assignability, spawn points, the goldens and every deed are computed on the
+macro field alone and none of them can see this.
+
 ## C3 — the colour space is fixed at the shared seam, and the globe moves with it
 
 `packages/planet` writes sRGB bytes over 255 into a vertex-colour attribute three reads as linear,
@@ -40,6 +77,33 @@ changes, which was the reason this was a question.
 Fixing it only in `terrainChunks` was rejected: it leaves the globe and the walked world telling
 different stories about the same colour, which is the exact shape of the bug that put a mirrored
 parcel inset into production.
+
+WHAT THE MOVE MISSED, recorded because this seam will move again one day. Every consumer that hands
+a colour to a RENDERER was found and converted. The one that does not hand it to a renderer was
+not: `scripts/preview-globe.ts` rasterises the very buffers a WebGL layer would take and writes the
+PNG bytes itself, so it needed the other half of the transfer and was given nothing. Its ocean fell
+from (43, 78, 109) to (6, 17, 34) at full lambert and its rainforest from (57, 107, 75) to
+(9, 33, 16). That file's own header promises that if its image is wrong the shipped globe is wrong
+too, so for one commit the promise pointed backwards: the product was right and its evidence was a
+black sea. `linearToSrgb` is now the return trip, the framebuffer stays linear through lambert and
+the box filter, and the encode happens once, at the byte.
+
+WOULD A DISTINCT TYPE HAVE CAUGHT IT. No, and that was tested rather than assumed. Brand `Rgb` as
+sRGB bytes and give the linear table a type of its own, and tsc does reject handing one table to
+something expecting the other, which is a real class of mistake and not this one. What crossed the
+seam here was a `Float32Array` of anonymous numbers, and `Math.round(colours[i] * shade * 255)`
+compiles under any branding, because TypeScript has no nominal number; branding the array does not
+help either, since indexing a `Float32Array` yields `number` whatever the array is called. So the
+decision is not to brand: the churn reaches every colour literal in the package and buys nothing
+against the failure that actually happened. What is bought instead is a sentence on
+`ParcelMesh.colours` naming its space, and a guard that measures the shipped bytes. The preview now
+finds the brightest pixel of open water in the image it just wrote, decodes it with `srgbToLinear`,
+and requires it to be `BIOME_COLOUR.ocean` under that pixel's own lambert term to within 4% of the
+light. It has been watched failing on the original bug (0.08x), on the transfer applied twice
+(7.20x), on a 1/2.2 gamma substituted for the piecewise curve (1.19x), and on a mesh fill sent back
+to bytes. Its first draft predicted through the same encode function it was measuring and passed
+the double transfer happily, which is the dud-guard shape this repair exists to clear out, so the
+prediction now runs through the forward transfer only.
 
 ## C4 — the beach rule splits, explicitly, with both sides pinned by a test
 

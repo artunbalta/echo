@@ -497,6 +497,26 @@ export const linearRgb = (colour: Rgb): [number, number, number] => [
   srgbToLinear(colour[2] / 255),
 ];
 
+/**
+ * The inverse of {@link srgbToLinear}: a linear number back as the sRGB component a byte carries.
+ *
+ * WHO NEEDS THIS AND WHO DOES NOT. Nothing that hands a colour to a renderer, because a renderer
+ * wants the linear number and encodes it itself on the way to the display. It exists for the one
+ * direction that has no shader in it: code that has SHADED in linear and now has to write image
+ * BYTES. That is scripts/preview-globe.ts, which rasterises the very buffers a WebGL layer would
+ * take and writes a PNG, and it is the only such caller today.
+ *
+ * Leaving it out is not a subtle error. When `buildParcelMesh` moved to linear under DECISIONS C3
+ * and that rasteriser was not touched, its ocean fell from (43, 78, 109) to (6, 17, 34) at full
+ * lambert and its rainforest from (57, 107, 75) to (9, 33, 16): the sea rendered black.
+ *
+ * The knee is 0.0031308 rather than 0.04045 because that is the same piecewise curve read from the
+ * linear side, 0.04045 / 12.92. terrain.test.ts asserts the pair round-trips every one of the 256
+ * bytes back to itself.
+ */
+export const linearToSrgb = (c: number): number =>
+  c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
+
 /** {@link BIOME_COLOUR}, converted once, for the inner loops that fill a mesh. */
 export const BIOME_COLOUR_LINEAR: Record<Biome, Rgb> = (() => {
   const table = {} as Record<Biome, Rgb>;
