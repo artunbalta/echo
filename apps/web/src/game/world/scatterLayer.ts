@@ -61,24 +61,51 @@
  * wants it within 90 m of water and that disk holds none. That is the general shape of the answer:
  * the biomes decide who is invited, and each class's own rules decide who shows up.
  *
- * DRAW CALLS AND TRIANGLES, AND THE BUDGET THIS BREAKS. One InstancedMesh per class is fifteen
- * draw calls for the demo's whole disk, which is what the budget allows. It is NOT the plan's full
- * LOD scheme: the plan's 252,538 triangles in view assume one mesh per class AND CHUNK plus
- * impostors past each class's `lod.farM`, and without that split every instance in the disk is
- * submitted every frame, because one bounding sphere covering the disk is never culled.
+ * DRAW CALLS AND TRIANGLES, AND THE BUDGET THIS USED TO BREAK. One InstancedMesh per class was
+ * fifteen draw calls for the demo's whole disk, and one bounding sphere over the whole disk is
+ * never culled, so every instance was submitted every frame. The demo's cell is 45% ocean and
+ * measured 566,249 triangles, under the 600,000 budget, and that number was quietly doing the
+ * arguing. Made general, the layer hands out homogeneous rainforest: 8482589ffffffff measured
+ * 844,775 in the main pass plus 594,335 through the shadow pass, and the worst of 120 sampled
+ * assignable res-4 cells submitted 1.43 M. That was steady state, not a peak.
  *
- * That was survivable while this layer only ever built one cell. It is not survivable now. The
- * demo's cell is 45% ocean and measures 566,249 triangles, under the 600,000 budget, and that
- * number was quietly doing the arguing. Made general, the layer hands out homogeneous rainforest:
- * 8482589ffffffff, the first parcel a person actually opened, measures 844,775 plus 594,335 through
- * the shadow pass. Over 120 sampled assignable res-4 cells, 34 exceed 600,000, and the worst,
- * 8486927ffffffff, submits 1.43 M triangles every frame. This is steady state, not a peak.
+ * A7 SPLIT IT, and the split is scatterSplit.ts's: the instances of a class are sorted into a grid
+ * of buckets once at build, and every frame the buckets whose boxes meet the frustum are copied as
+ * whole runs into the front of the class's instance buffer, with `count` set to how many landed
+ * there. It is one draw call per class, exactly what the layer already spent, and the grid can be
+ * as fine as it likes because a bucket is not a mesh. A class that casts shadows gets a second
+ * InstancedMesh packed against the shadow camera instead, because three uploads a matrix buffer at
+ * most once per `render()` and the two passes need two different sets; that twin draws zero
+ * instances in the main pass, which three skips before the draw call, so it costs neither a call
+ * nor a triangle there. See scatterSplit.ts for why the plan's per-cell split was measured and
+ * abandoned, and why the grid is not resolved in the scene graph.
  *
- * So the chunk split is no longer the next ticket, it is a debt this file is currently carrying in
- * the open. Keeping the forms between 4 and 36 triangles buys roughly a factor of four and it is
- * not enough on its own. Until the split lands, the honest statement is that a dense cell costs
- * about two and a half times its budget and holds frame rate only because the machines it has been
- * measured on have the headroom to absorb it.
+ * WHAT IT COSTS AND WHAT IT BUYS, measured in the browser on the real GPU, whole frame, both
+ * passes (`info.autoReset` off with a wrapper on `shadowMap.render`), against the same frame in the
+ * same session with the split taken back out:
+ *
+ *                          at the spawn            worst of twelve views      draw calls
+ *   8482589ffffffff   1,623,152 -> 445,158 tri     1,623,354 -> 622,210        39 -> 39
+ *   847b949ffffffff   1,118,418 -> 368,606 tri     1,139,246 -> 553,466        53 -> 47
+ *
+ * That is 3.65x and 3.03x at the spawn and 2.61x and 2.06x at the worst view a drag can reach, and
+ * NOT ONE DRAW CALL was spent to get it. Over a walk of about 870 frames the parcel runs p50
+ * 605,524 and worst 615,746 in 39 calls, and the demo p50 516,798 and worst 551,355 in 61.
+ *
+ * WHAT IS STILL OVER, said plainly. The 600,000 of DECISIONS C16 is now met at the spawn on both
+ * routes with 26% and 39% to spare, and missed by 3.7% on the densest parcel when you turn to face
+ * the forest. What that 622,210 is made of: 194,516 scatter triangles in the main pass, 243,645
+ * scatter triangles in the shadow pass, and 184,049 that are not this layer's at all, the seven
+ * terrain chunks through both passes. The terrain is 30% of the frame and has the shape the scatter
+ * had before A7, seven meshes over a 4 km disk with a bounding sphere each; the same split applied
+ * to the ground is where the next 100,000 is, and it is terrainChunks.ts's to make.
+ *
+ * WHAT IT COSTS PER FRAME: the cull is 0.2 ms p50 and 0.4 ms worst on the parcel over that walk,
+ * on an M4 Pro, and skips its copy and its upload entirely on a frame whose visible bucket set has
+ * not changed. AT BUILD: 9.3 ms of a 413 ms build on the parcel and 7.3 of 468 on the demo, 2.2%
+ * and 1.6%, inside the same yields and abort checks the rest of the build already had. IN MEMORY:
+ * three copies of an instance matrix for a class that casts and two for one that does not, 9.90 MB
+ * on the parcel and 6.63 on the demo, plus 0.45 MB and 0.32 MB of bucket boxes.
  */
 
 import * as THREE from "three";
@@ -105,6 +132,7 @@ import {
 
 import { footprintToLocalM } from "./controller";
 import { hasScatterGeometry, SCATTER_GEOMETRY, SCATTER_MATERIAL } from "./scatterGeometry";
+import { bucketise, frustumHas, packInto, planesOf, visibleRuns, SHADOW_PAD_M, type ScatterBuckets } from "./scatterSplit";
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 
 /**
@@ -198,11 +226,32 @@ export interface ScatterLayerOptions {
   /** Let the classes that ask for it cast shadows. Off is a cheap way to buy back a shadow pass. */
   shadows?: boolean;
   /**
+   * Grid step of the frustum-culling buckets, metres. See {@link DEFAULT_BUCKET_M} for the sweep
+   * this was chosen off; it changes what is SUBMITTED and can never change what is placed.
+   */
+  bucketM?: number;
+  /**
    * Own the whole answer instead. This REPLACES the footprint, the clearing and the stations, so a
    * caller that reaches for it is taking responsibility for the spawn being standable too. Prefer
    * `stations` and `footprintTiles`, which add to a floor that is already right.
    */
   exclusions?: (ctx: LayerContext) => Exclusions;
+}
+
+/** What one `cull` submitted, per pass. Triangles here are the renderer's own definition. */
+export interface CullReport {
+  /** Meshes with at least one instance left, which is one draw call each. */
+  mainMeshes: number;
+  mainInstances: number;
+  mainTriangles: number;
+  shadowMeshes: number;
+  shadowInstances: number;
+  shadowTriangles: number;
+  /** What the same frame would submit with no split at all: every instance, every frame. */
+  unsplitMainTriangles: number;
+  unsplitShadowTriangles: number;
+  /** Wall-clock milliseconds this cull took, both passes. */
+  ms: number;
 }
 
 export interface ScatterLayer extends WorldLayer {
@@ -217,8 +266,31 @@ export interface ScatterLayer extends WorldLayer {
   blockingClasses(): ReadonlySet<AssetClassId>;
   /** The exclusions the placement ran with, for a test that wants to check them. */
   exclusions(): Exclusions | null;
-  /** One InstancedMesh per class that got at least one instance. */
+  /**
+   * The MAIN pass mesh of each class that got at least one instance. Its `count` is what the last
+   * `cull` left standing, not the class's whole placement; the placement is `buckets`.
+   */
   readonly meshes: ReadonlyMap<AssetClassId, THREE.InstancedMesh>;
+  /** The shadow-pass twin of each class that casts one. Empty when `shadows` is off. */
+  readonly shadowMeshes: ReadonlyMap<AssetClassId, THREE.InstancedMesh>;
+  /** The split itself: every instance of a class, in bucket order, with each bucket's world box. */
+  readonly buckets: ReadonlyMap<AssetClassId, ScatterBuckets>;
+  /**
+   * Pack each class against these two cameras and report what was submitted. `shadowCamera` null
+   * means no shadow pass this frame, and every twin draws nothing.
+   */
+  cull(camera: THREE.Camera, shadowCamera: THREE.Camera | null): CullReport;
+  /** What the last `cull` submitted, or null if none has run. */
+  lastCull(): CullReport | null;
+  /**
+   * Forget what the last `cull` packed, so the next one copies rather than trusting the buffers.
+   *
+   * The cull skips its copy and its upload when this frame's visible buckets are the same as last
+   * frame's, which is what makes a standing camera free. That is only sound while nothing else
+   * writes the instance buffers, and the layer cannot know when something has. Anything that does,
+   * a harness comparing the split against no split, a future effect, calls this first.
+   */
+  invalidate(): void;
   /**
    * Would a body of `radiusM` standing at this TILE position be inside something solid. This is
    * the one question the mover asks; the frame conversion lives here so the mover never learns
@@ -227,6 +299,8 @@ export interface ScatterLayer extends WorldLayer {
   blockedTile(x: number, y: number, radiusM: number): boolean;
   /** Wall-clock milliseconds the build took. Reported, because the budget is an acceptance number. */
   buildMs(): number;
+  /** Milliseconds the split's bucket sort cost on top of the placement. */
+  splitMs(): number;
 }
 
 /** A macrotask, so the browser can paint and an abort can land between two pieces of work. */
@@ -234,6 +308,34 @@ const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 /** Props stand upright and turn about the world's up axis, and only about that. */
 const UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * The bucket grid, metres. SWEPT ON THE ORDINARY PARCEL, at the spawn, whole frame, both passes.
+ * Finer is not free: a bucket is a box test twice a frame, and the boxes are per class, so the
+ * count is the sum over the classes and not one grid.
+ *
+ *   grid   buckets   scatter triangles   the worst of twelve   cull p50    split, of a
+ *            (all      main + shadow      whole frames         (M4 Pro)    ~390 ms build
+ *          classes)     at the spawn
+ *   4000 m       32        1,439,110           1,623,354       0.079 ms        3.9 ms
+ *    250 m      128          858,196                   -       0.105 ms        4.1 ms
+ *    128 m      462          505,519                   -       0.029 ms        4.8 ms
+ *     64 m    1,538          356,996                   -       0.032 ms        6.2 ms
+ *     32 m    4,977          289,100                   -       0.071 ms        6.8 ms
+ *     24 m    7,931          273,894             639,358       0.085 ms        6.9 ms
+ *     16 m   14,191          260,010             622,210       0.141 ms        7.3 ms
+ *     12 m   20,074          254,022             615,168       0.197 ms       11.2 ms
+ *
+ * The 4,000 m row is the degenerate control, one bucket per class, and it reproduces the unsplit
+ * 1,439,110 exactly, which is how the sweep was checked against the thing it is measuring.
+ *
+ * SIXTEEN IS WHERE THE MARGINAL BUCKET STOPS PAYING. Going 24 to 16 buys 17,148 whole-frame
+ * triangles for 6,260 more buckets, 2.7 triangles a bucket; going 16 to 12 buys 7,042 for 5,883,
+ * which is 1.2, less than half the rate, for the same 0.056 ms again. The floor underneath all of
+ * it is geometric: at these sizes a bucket's box is mostly the forms' own reach, so halving the
+ * grid stops halving the volume.
+ */
+export const DEFAULT_BUCKET_M = 16;
 
 /** A convex polygon approximating a disc, for `Exclusions.footprints`, which takes polygons only. */
 function clearing(xm: number, ym: number, radiusM: number, sides = 8): Array<[number, number]> {
@@ -311,7 +413,24 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   const shadows = options.shadows ?? true;
   const blockingHeightM = options.blockingHeightM ?? 1.7;
 
+  const bucketM = options.bucketM ?? DEFAULT_BUCKET_M;
+
   const meshes = new Map<AssetClassId, THREE.InstancedMesh>();
+  const shadowMeshes = new Map<AssetClassId, THREE.InstancedMesh>();
+  const buckets = new Map<AssetClassId, ScatterBuckets>();
+  /** Per class, everything the per-frame cull needs and nothing it has to allocate. */
+  const splits: Array<{
+    id: AssetClassId;
+    trianglesPerInstance: number;
+    buckets: ScatterBuckets;
+    mesh: THREE.InstancedMesh;
+    shadowMesh: THREE.InstancedMesh | null;
+    /** What the last cull left in the twin, so the main pass can borrow its count and give it back. */
+    shadowCount: number;
+    runs: Int32Array;
+    lastMain: { runs: Int32Array; count: number };
+    lastShadow: { runs: Int32Array; count: number };
+  }> = [];
   // The registry is not known until the mask says what this cell is made of, so these two are
   // filled in `build` and cleared by `dispose`, exactly as `placement` and `index` already are.
   let classes: readonly AssetClass[] = [];
@@ -321,13 +440,29 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   let used: Exclusions | null = null;
   let frame: WorldFrame | null = null;
   let buildMs = 0;
+  let splitMs = 0;
+  let report: CullReport | null = null;
 
   const position = new THREE.Vector3();
   const quaternion = new THREE.Quaternion();
   const scale = new THREE.Vector3();
   const matrix = new THREE.Matrix4();
+  // The cull's whole working set, allocated once. A per-frame `new THREE.Frustum` is 6 planes and
+  // 6 vectors of garbage sixty times a second for a layer whose entire point is not costing that.
+  const frustum = new THREE.Frustum();
+  const projScreen = new THREE.Matrix4();
+  const mainPlanes = new Float32Array(24);
+  const shadowPlanes = new Float32Array(24);
+  const meshSphere = new THREE.Sphere();
 
   const dispose = () => {
+    for (const mesh of shadowMeshes.values()) {
+      // The twin SHARES the class's geometry and material with the main mesh, so it gives back
+      // only its own instance buffer here; disposing the shared pair is the main mesh's job below.
+      mesh.removeFromParent();
+      mesh.dispose();
+    }
+    shadowMeshes.clear();
     for (const mesh of meshes.values()) {
       mesh.removeFromParent();
       mesh.geometry.dispose();
@@ -337,6 +472,10 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       mesh.dispose();
     }
     meshes.clear();
+    buckets.clear();
+    splits.length = 0;
+    report = null;
+    splitMs = 0;
     classes = [];
     blocking = new Set<AssetClassId>();
     placement = null;
@@ -368,21 +507,18 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   };
 
   /**
-   * One class, one InstancedMesh. The scene positions are collected as they are computed so the
-   * bounding sphere can be built without asking the height function for all of them a second time:
-   * `toScene` is a terrain field evaluation, and there are forty thousand of them in a build.
+   * One class: the matrices, the buckets they are sorted into, and the one or two meshes that draw
+   * them. The scene positions are collected as they are computed so the bounding sphere can be
+   * built without asking the height function for all of them a second time: `toScene` is a terrain
+   * field evaluation, and there are forty thousand of them in a build.
    */
-  const buildClass = (ctx: LayerContext, cls: AssetClass, group: readonly PlacedAsset[]): THREE.InstancedMesh => {
+  const buildClass = (ctx: LayerContext, cls: AssetClass, group: readonly PlacedAsset[]) => {
     // Both lookups are total over `classes`, which `drawableClasses` filtered before anything was
     // placed. That filter is the only thing standing between here and a crash.
     const geometry = SCATTER_GEOMETRY[cls.id]!();
     const material = SCATTER_MATERIAL[cls.id]!();
-    const mesh = new THREE.InstancedMesh(geometry, material, group.length);
-    mesh.name = `scatter:${cls.id}`;
-    mesh.castShadow = shadows && cls.castsShadow;
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = true;
 
+    const source = new Float32Array(group.length * 16);
     const scenePositions = new Float32Array(group.length * 3);
     let minX = Infinity;
     let minY = Infinity;
@@ -398,7 +534,7 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       quaternion.setFromAxisAngle(UP, p.rotation);
       scale.setScalar(p.scale);
       matrix.compose(position, quaternion, scale);
-      mesh.setMatrixAt(i, matrix);
+      matrix.toArray(source, i * 16);
       scenePositions[i * 3] = position.x;
       scenePositions[i * 3 + 1] = position.y;
       scenePositions[i * 3 + 2] = position.z;
@@ -409,13 +545,16 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       if (position.y > maxY) maxY = position.y;
       if (position.z > maxZ) maxZ = position.z;
     }
-    mesh.instanceMatrix.needsUpdate = true;
 
     // The bounding sphere, computed rather than left to three. `InstancedMesh.computeBoundingSphere`
     // would do it, but it walks every instance matrix a second time, and a WRONG sphere is the
     // classic instancing bug: too small and whole classes blink out at the edge of the screen, too
     // large and nothing is ever culled. `reach` is how far the form's own geometry extends from its
     // instance origin, and it survives the Y rotation because a rotation preserves a length.
+    //
+    // It is still the sphere over EVERY instance and not over the ones drawn this frame, because it
+    // is what three tests the whole object against, in both passes, before the layer's own buckets
+    // get a say. A sphere shrunk to the packed set would cull the mesh that is about to be repacked.
     const gs = geometry.boundingSphere!;
     const reach = gs.center.length() + gs.radius;
     const centre = new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
@@ -427,8 +566,167 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       const r = Math.hypot(dx, dy, dz) + group[i]!.scale * reach;
       if (r > radius) radius = r;
     }
-    mesh.boundingSphere = new THREE.Sphere(centre, radius);
-    return mesh;
+
+    const t0 = performance.now();
+    const split = bucketise(source, group.length, gs.center, gs.radius, bucketM);
+    splitMs += performance.now() - t0;
+
+    const casts = shadows && cls.castsShadow;
+    const make = (suffix: string, cast: boolean): THREE.InstancedMesh => {
+      const mesh = new THREE.InstancedMesh(geometry, material, group.length);
+      mesh.name = `scatter:${cls.id}${suffix}`;
+      mesh.castShadow = cast;
+      // The twin never draws in the main pass, so its own shadow receiving is moot; it matches the
+      // main mesh anyway because `receiveShadow` is a PROGRAM parameter and the two share one
+      // material. Differing here would compile the same material twice and add a program to a
+      // count the budget watches.
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = true;
+      mesh.boundingSphere = new THREE.Sphere(centre.clone(), radius);
+      // Rewritten every frame the visible set changes, so the driver is told to expect it rather
+      // than left to discover it on a buffer marked static.
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Until the first `cull`, a mesh draws its whole class. That is the honest state for anything
+      // that never culls at all, a still frame or a headless build, and it is what the seating test
+      // walks; one frame of it is the worst a mount can pay before its first `beforeRender`.
+      (mesh.instanceMatrix.array as Float32Array).set(split.matrices);
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.count = group.length;
+      return mesh;
+    };
+
+    // The main mesh does NOT cast: its twin does, out of a buffer packed against the shadow camera
+    // rather than against the eye. With no twin (a class the registry says casts nothing, or
+    // `shadows` off) the main mesh is the only mesh and casts nothing either, as before.
+    const mesh = make("", false);
+    const shadowMesh = casts ? make(":shadow", true) : null;
+    const runs = new Int32Array(split.start.length * 2);
+    return {
+      mesh,
+      shadowMesh,
+      split,
+      entry: {
+        id: cls.id,
+        trianglesPerInstance: geometry.getAttribute("position").count / 3,
+        buckets: split,
+        mesh,
+        shadowMesh,
+        shadowCount: shadowMesh ? group.length : 0,
+        runs,
+        lastMain: { runs: new Int32Array(runs.length), count: -1 },
+        lastShadow: { runs: new Int32Array(runs.length), count: -1 },
+      },
+    };
+  };
+
+  /**
+   * Pack every class against these two cameras. This is the whole per-frame cost of the split.
+   *
+   * THE ORDER OF THE TWO PASSES IS THE RENDERER'S, not this function's: three uploads each mesh's
+   * instance buffer during `projectObject`, before either pass draws, so both sets have to be in
+   * their own buffer before `render` is called at all. That is why the shadow pass has its own
+   * mesh, and why this is a `beforeRender` hook rather than an `onBeforeShadow` one.
+   *
+   * WHEN EACH UPLOAD ACTUALLY HAPPENS, which is worth writing down because it is not obvious and
+   * it was measured rather than assumed. `WebGLObjects.update` uploads an instanced mesh at most
+   * once per value of `info.render.frame`, and `render()` increments that counter BETWEEN
+   * `projectObject` and the shadow pass. So each object is offered two chances a frame and takes
+   * the first one it is eligible for: the main meshes, which cast nothing and are therefore never
+   * visited by the shadow pass, upload at `projectObject`; the twins, tagged by the previous
+   * frame's shadow pass, skip `projectObject` and upload inside the shadow pass, immediately
+   * before the draw that reads them. Both land before their own pass, which is all that is needed.
+   * Flipping a mesh's `castShadow` between renders breaks that alternation and defers its upload
+   * by one render; nothing in the layer does, and a harness that does has to render once to settle.
+   */
+  const cull = (camera: THREE.Camera, shadowCamera: THREE.Camera | null): CullReport => {
+    const t0 = performance.now();
+    const out: CullReport = {
+      mainMeshes: 0,
+      mainInstances: 0,
+      mainTriangles: 0,
+      shadowMeshes: 0,
+      shadowInstances: 0,
+      shadowTriangles: 0,
+      unsplitMainTriangles: 0,
+      unsplitShadowTriangles: 0,
+      ms: 0,
+    };
+
+    projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreen);
+    planesOf(frustum, mainPlanes);
+    let shadowReady = false;
+    if (shadowCamera) {
+      projScreen.multiplyMatrices(shadowCamera.projectionMatrix, shadowCamera.matrixWorldInverse);
+      frustum.setFromProjectionMatrix(projScreen);
+      planesOf(frustum, shadowPlanes, SHADOW_PAD_M);
+      shadowReady = true;
+    }
+
+    for (const s of splits) {
+      const all = s.buckets.instances * s.trianglesPerInstance;
+      out.unsplitMainTriangles += all;
+      if (s.shadowMesh) out.unsplitShadowTriangles += all;
+
+      // The object-level test three would do anyway, done first: a class entirely behind the
+      // camera costs one sphere test rather than one box test per bucket.
+      meshSphere.copy(s.mesh.boundingSphere!).applyMatrix4(s.mesh.matrixWorld);
+      let n = 0;
+      if (frustumHas(mainPlanes, meshSphere)) {
+        n = packInto(s.mesh, s.buckets, s.runs, visibleRuns(s.buckets, mainPlanes, s.runs), s.lastMain);
+      } else {
+        n = packInto(s.mesh, s.buckets, s.runs, 0, s.lastMain);
+      }
+      if (n > 0) {
+        out.mainMeshes++;
+        out.mainInstances += n;
+        out.mainTriangles += n * s.trianglesPerInstance;
+      }
+
+      if (!s.shadowMesh) continue;
+      let m = 0;
+      if (shadowReady && frustumHas(shadowPlanes, meshSphere)) {
+        m = packInto(s.shadowMesh, s.buckets, s.runs, visibleRuns(s.buckets, shadowPlanes, s.runs), s.lastShadow);
+      } else {
+        m = packInto(s.shadowMesh, s.buckets, s.runs, 0, s.lastShadow);
+      }
+      s.shadowCount = m;
+      if (m > 0) {
+        out.shadowMeshes++;
+        out.shadowInstances += m;
+        out.shadowTriangles += m * s.trianglesPerInstance;
+      }
+    }
+
+    out.ms = performance.now() - t0;
+    report = out;
+    return out;
+  };
+
+  /**
+   * The hook PlanetWorld calls after every layer's `update` and after the camera has been moved,
+   * which is the last moment the eye is knowable and the first moment three would look at a matrix
+   * buffer. Anything culled earlier would be culled against last frame's camera, and on a turn
+   * that is a wall of trees arriving a frame late.
+   */
+  const beforeRender = (ctx: LayerContext) => {
+    if (splits.length === 0) return;
+    // The player layer writes `camera.position` and `camera.quaternion` directly; the world matrix
+    // and its inverse are three's to derive and it does so inside `render`, which is too late.
+    ctx.camera.updateMatrixWorld();
+    let shadowCamera: THREE.Camera | null = null;
+    const key = ctx.scene.getObjectByName("key") as THREE.DirectionalLight | undefined;
+    if (key?.isDirectionalLight && key.castShadow && ctx.renderer?.shadowMap?.enabled !== false) {
+      // The same three calls `WebGLShadowMap.render` is about to make, made here because it makes
+      // them AFTER this hook. They are pure functions of the light's position and its target, both
+      // of which the sky and terrain layers have already set for this frame, so three repeating
+      // them a moment later lands on the same matrices.
+      key.updateWorldMatrix(true, false);
+      key.target.updateWorldMatrix(true, false);
+      key.shadow.updateMatrices(key);
+      shadowCamera = key.shadow.camera;
+    }
+    cull(ctx.camera, shadowCamera);
   };
 
   const build = async (ctx: LayerContext, signal: AbortSignal): Promise<void> => {
@@ -500,16 +798,44 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     for (const cls of classes) {
       const group = byClass.get(cls.id);
       if (!group || group.length === 0) continue;
-      const mesh = buildClass(ctx, cls, group);
+      const built = buildClass(ctx, cls, group);
       if (signal.aborted) {
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
-        mesh.dispose();
+        // Nothing built here has been added to the scene yet, so it is given back here and the
+        // rest of the layer is torn down by `dispose`. A build that adds after the signal is the
+        // leak the layer contract exists to prevent, and a build that drops a buffer on the floor
+        // instead is the same leak with no scene graph to find it in.
+        built.mesh.geometry.dispose();
+        (built.mesh.material as THREE.Material).dispose();
+        built.mesh.dispose();
+        built.shadowMesh?.dispose();
         dispose();
         return;
       }
-      ctx.scene.add(mesh);
-      meshes.set(cls.id, mesh);
+      ctx.scene.add(built.mesh);
+      meshes.set(cls.id, built.mesh);
+      buckets.set(cls.id, built.split);
+      if (built.shadowMesh) {
+        ctx.scene.add(built.shadowMesh);
+        shadowMeshes.set(cls.id, built.shadowMesh);
+        // The twin is not drawn by the main pass, and this is how: three calls `onBeforeRender`
+        // between building the render list and issuing the draw, and `renderInstances` returns
+        // before `gl.drawArraysInstanced` when the count is zero, so the main pass sees neither a
+        // call nor a triangle.
+        //
+        // THE COUNT IS PUT BACK IMMEDIATELY, in the paired `onAfterRender`, and this is not
+        // tidiness. Leaving it at zero until the next `beforeRender` made the shadow pass of any
+        // SECOND render of the same frame draw nothing, and a renderer renders a scene twice for
+        // more reasons than a frame loop: a transmission pass, an XR eye, a screenshot taken by
+        // hand. The bug was caught by a control that rendered one unchanged state twice and got
+        // 620,615 differing pixels of 1,024,000, which no count of instances could have seen.
+        built.shadowMesh.onBeforeRender = () => {
+          built.shadowMesh!.count = 0;
+        };
+        built.shadowMesh.onAfterRender = () => {
+          built.shadowMesh!.count = built.entry.shadowCount;
+        };
+      }
+      splits.push(built.entry);
       // One class per macrotask: this is where an unmount during the build lands.
       await yieldToLoop();
       if (signal.aborted) {
@@ -524,14 +850,26 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   return {
     name: "scatter",
     meshes,
+    shadowMeshes,
+    buckets,
     build,
+    beforeRender,
     dispose,
+    cull,
+    lastCull: () => report,
+    invalidate() {
+      for (const s of splits) {
+        s.lastMain.count = -1;
+        s.lastShadow.count = -1;
+      }
+    },
     placement: () => placement,
     colliders: () => index,
     classes: () => classes,
     blockingClasses: () => blocking,
     exclusions: () => used,
     buildMs: () => buildMs,
+    splitMs: () => splitMs,
     blockedTile(x, y, radiusM) {
       if (!index || !frame || index.count === 0) return false;
       const [xm, ym] = frame.toLocalM(x, y);

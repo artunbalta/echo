@@ -584,6 +584,38 @@ was born" the literal answer for this biome is mammoth steppe. The familiar tund
 instead. The rule therefore reads: pre-agricultural Earth everywhere, with the cold biome taken at
 its post-glacial form. Nobody needs to re-open this; it is a decision, not an oversight.
 
+## C20 — only things 1.7 m and taller cast a shadow
+
+The same threshold the colliders already use, and for a related reason: below it, a thing is
+something you shoulder through rather than walk around, and its own shadow disappears into the bands
+the canopy is already casting.
+
+The bill this pays. After the A7 split the shadow pass is 345,055 triangles at the parcel's spawn,
+which is 78% of the whole frame and 58% of C16's entire budget before the main pass draws anything.
+The split cannot touch it: the 240 m shadow box follows the lens POSITION and not its direction, so
+over sixteen headings the shadow pass moves by 1,479 triangles in total. Thicket alone is 14,060
+instances at 20 triangles, about 281,000 triangles, and it is the largest single contributor.
+
+At dusk, which is where this world spends its time, the long shadows come from the trees. That is
+what makes this the cheap half of the trade rather than a loss.
+
+## C21 — a far-band impostor per class, past each class's own lod.farM
+
+The split works when you stand INSIDE the scatter and fails when you look at it from the rim. The
+worst frame measured is 1,008,252 triangles, 1.68x the ceiling, standing 390 m from the spawn
+looking back across the disk: there the grid culls essentially nothing, because 99.2% of the class
+total falls inside the camera's cone.
+
+ASSET_CLASSES already carries lod.nearM and lod.farM per class and nothing has ever read farM. Past
+it, an instance drops to one cheap form: a tree becomes two triangles.
+
+Pulling the fog in from 420 m to 300 m was rejected as the cheaper alternative. It would shrink the
+world to buy the frame, and the beach rule already puts kilometres of sand between a spawn and its
+sea, so it would make the sea harder to see at exactly the moment that was fixed.
+
+The cost that has to be measured rather than assumed: the transition must not pop. That is the whole
+risk of this task.
+
 ## Still open
 
 C8 (echo-ml on a paid plan), C10 (provision DATABASE_URL and run the seed), C11 (freeze exception for
