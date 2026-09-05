@@ -160,6 +160,15 @@ export interface WorldLayer {
    */
   build(ctx: LayerContext, signal: AbortSignal): Promise<void>;
   update?(dt: number, ctx: LayerContext): void;
+  /**
+   * The last moment before `renderer.render`, after EVERY layer's `update` and after the camera
+   * has moved. `update` is not that moment: the player layer drives the camera and runs after the
+   * scatter, so a layer that culls in its own `update` culls against the previous frame's eye, and
+   * on a turn that is a wall of trees arriving one frame late. A layer that needs the final camera
+   * or the final light takes this hook and nothing else; it runs sixty times a second and may not
+   * build, allocate or await.
+   */
+  beforeRender?(ctx: LayerContext): void;
   dispose?(): void;
 }
 
@@ -402,6 +411,9 @@ export class PlanetWorld {
     const ctx = this.context();
     for (const layer of this.layers) layer.update?.(dt, ctx);
     this.stepCamera(dt);
+    // After the camera, before the renderer: see WorldLayer.beforeRender for why the scatter's
+    // frustum cull cannot live in `update`.
+    for (const layer of this.layers) layer.beforeRender?.(ctx);
     this.handle.renderer.render(this.scene, this.camera);
     if (this.options.devInfo) this.sampleInfo(now);
   };

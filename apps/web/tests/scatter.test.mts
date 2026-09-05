@@ -465,7 +465,11 @@ const SEATED_TOLERANCE_M = 0.15;
 
 test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding sphere that fits", () => {
   const drawn = new Map<string, number>();
-  for (const [id, mesh] of layer.meshes) drawn.set(id, mesh.count);
+  // The CAPACITY of the buffer, not `mesh.count`. Since A7 the count is what the last frustum cull
+  // left standing, so reading it here would make this assertion depend on whether a cull had run
+  // and on where the camera was; the capacity is the class's whole placement and is what this test
+  // has always been about. `scatterSplit.test.mts` is where the count is measured.
+  for (const [id, mesh] of layer.meshes) drawn.set(id, mesh.instanceMatrix.count);
 
   // Every class the placer used has a mesh, every mesh has a class, and the counts are equal. A
   // class that placed instances and drew none is the original defect in miniature.
@@ -473,6 +477,8 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
     [...drawn].sort((x, y) => x[0].localeCompare(y[0])),
     Object.entries(placement.byClass).sort((x, y) => x[0].localeCompare(y[0])),
   );
+  // Fifteen classes, fifteen draw calls in the main pass. The A7 shadow twins add none: a twin is
+  // drawn with zero instances there, and three returns before the draw call when the count is 0.
   assert.ok(layer.meshes.size <= 15, `${layer.meshes.size} draw calls added, the budget is 15`);
 
   const position = new THREE.Vector3();
@@ -488,10 +494,20 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
     const perInstance = mesh.geometry.getAttribute("position").count / 3;
     assert.ok(perInstance <= 60, `${id} is ${perInstance} triangles; the silhouette budget is 60`);
     assert.ok(mesh.geometry.getAttribute("color"), `${id} has no vertex colours, so its parts are one colour`);
-    triangles += perInstance * mesh.count;
+    triangles += perInstance * mesh.instanceMatrix.count;
 
     const cls = byId.get(id)!;
-    assert.equal(mesh.castShadow, cls.castsShadow, `${id} does not cast what the registry says it casts`);
+    // The registry still decides who casts; since A7 the caster is the class's shadow twin rather
+    // than this mesh, because the two passes need two different instance sets and three uploads one
+    // buffer per frame. Exactly one of the pair casts, and it is there iff the registry says so.
+    const twin = layer.shadowMeshes.get(id);
+    assert.equal(
+      mesh.castShadow || (twin?.castShadow ?? false),
+      cls.castsShadow,
+      `${id} does not cast what the registry says it casts`,
+    );
+    assert.equal(mesh.castShadow, false, `${id}'s main mesh casts as well as its twin, so it is drawn twice`);
+    assert.equal(twin !== undefined, cls.castsShadow, `${id} has a shadow twin the registry did not ask for`);
     assert.ok(mesh.instanceMatrix.needsUpdate || mesh.instanceMatrix.version >= 0);
 
     // The bounding sphere is the classic instancing bug: too small and the whole class blinks out
@@ -500,7 +516,7 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
     assert.ok(sphere && sphere.radius > 0, `${id} has no bounding sphere, so three would compute one per frame`);
     const local = mesh.geometry.boundingSphere!;
     let worst = { d: -Infinity, i: -1 };
-    for (let i = 0; i < mesh.count; i++) {
+    for (let i = 0; i < mesh.instanceMatrix.count; i++) {
       mesh.getMatrixAt(i, matrix);
       matrix.decompose(position, quaternion, scale);
       const centre = local.center.clone().applyMatrix4(matrix);
@@ -528,7 +544,7 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
     let worstAt = -1;
     let liftSum = 0;
     let offMesh = 0;
-    for (let i = 0; i < mesh.count; i++) {
+    for (let i = 0; i < mesh.instanceMatrix.count; i++) {
       mesh.getMatrixAt(i, matrix);
       matrix.decompose(position, quaternion, scale);
       const groundY = heightOfDrawnGround(position.x, position.z);
@@ -545,14 +561,14 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
         worstAt = i;
       }
     }
-    seated += mesh.count;
+    seated += mesh.instanceMatrix.count;
     liftTotal += liftSum;
     if (worstLift > worstSeating.lift) worstSeating = { id, i: worstAt, lift: worstLift };
-    assert.equal(offMesh, 0, `${id}: ${offMesh} of ${mesh.count} instances stand where the terrain layer drew no triangle`);
+    assert.equal(offMesh, 0, `${id}: ${offMesh} of ${mesh.instanceMatrix.count} instances stand where the terrain layer drew no triangle`);
     assert.ok(
       worstLift < SEATED_TOLERANCE_M,
       `${id} instance ${worstAt} sits ${(worstLift * 1000).toFixed(0)} mm off the triangles the terrain ` +
-        `layer drew (mean ${((liftSum / mesh.count) * 1000).toFixed(1)} mm over ${mesh.count}). Curvature ` +
+        `layer drew (mean ${((liftSum / mesh.instanceMatrix.count) * 1000).toFixed(1)} mm over ${mesh.instanceMatrix.count}). Curvature ` +
         `between ${frame.resolutionM} m lattice points is worth at most 97 mm anywhere measured; past ` +
         `${SEATED_TOLERANCE_M * 1000} mm the prop is seated by a different surface from the one uploaded.`,
     );
@@ -572,10 +588,12 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
 
 test("the scene holds exactly the meshes the layer built, and dispose gives them all back", () => {
   const added = scene.children.filter((o) => o.name.startsWith("scatter:"));
-  assert.equal(added.length, layer.meshes.size);
+  // One per class plus one shadow twin per casting class, since A7.
+  assert.equal(added.length, layer.meshes.size + layer.shadowMeshes.size);
   layer.dispose!();
   assert.equal(scene.children.filter((o) => o.name.startsWith("scatter:")).length, 0);
   assert.equal(layer.meshes.size, 0);
+  assert.equal(layer.shadowMeshes.size, 0);
   assert.equal(layer.placement(), null);
   assert.equal(layer.colliders(), null);
   // With nothing built, the world is the world it was before W2-3: open ground.
