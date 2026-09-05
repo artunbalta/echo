@@ -18,9 +18,9 @@
  * IT MEASURES, AND IT ASKS FIRST (task A1). A person walking their own land is being measured
  * exactly as much as a person in the demo, and has the same right to see it and to refuse it, so
  * the whole apparatus is here and not only on the demo cell: one chain for the life of the page,
- * the consent card, the inspector, and the line in the HUD that says which key opens it. Consent is
- * unset-means-OFF on this path: until somebody says yes, no position is sampled, nothing is
- * buffered, and the walk layer keeps no tally either.
+ * the consent card, the recognition meter, the inspector, and the line in the HUD that says which
+ * key opens it. Consent is unset-means-OFF on this path: until somebody says yes, no position is
+ * sampled, nothing is buffered, and the walk layer keeps no tally either.
  *
  * THE INSPECTOR IS TOLD WHICH WORLD IT IS IN by which of the two it is handed. With stations there
  * are reactions to show, because there is a fire that answers a posterior. Without them the panel
@@ -50,6 +50,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import ConsentCard from "@/components/world/ConsentCard";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
+import Minimap from "@/components/world/Minimap";
+import RecognitionMeter from "@/components/world/RecognitionMeter";
 import WorldCanvas from "@/components/world/WorldCanvas";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "@/game/world/parcelWorld";
@@ -155,7 +157,17 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
         </p>
       ) : null}
 
+      {/* Where you are in your parcel and where the parcel is on the planet. It reads the world
+          out of the same ref the walk tally does, so it can never be handed a world this mount is
+          not showing. */}
+      <Minimap world={() => world.current} />
+
       <ConsentCard consent={consent} onAccept={() => chain.accept()} onDecline={() => chain.decline()} />
+
+      {/* The one thing a person can read without knowing a key exists. It is handed the same chain
+          state the inspector gets, so the glance and the panel cannot disagree; what it may say
+          about it is decided in recognitionReading.ts. */}
+      <RecognitionMeter posterior={posterior} log={log} consent={consent} />
 
       {/* Exactly one of these two is ever passed, and which one IS the mode: reactions where there
           are stations to react, the walk tally where there are none. */}

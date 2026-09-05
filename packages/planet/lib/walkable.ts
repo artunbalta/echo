@@ -277,3 +277,93 @@ export function connected(
   }
   return false;
 }
+
+// ── where the water is ──────────────────────────────────────────────────────────
+
+export interface WaterSighting {
+  /** The wet point, in the patch's own frame: metres east and north of its origin. */
+  x: number;
+  y: number;
+  /** Straight-line distance from the point that was asked about, metres. */
+  distanceM: number;
+}
+
+export interface WaterSearchOptions {
+  /** How far to look, metres. Default 1,600. */
+  rangeM?: number;
+  /**
+   * Spacing between samples, metres. Default 8. It bounds the error twice over: rings are this
+   * far apart and samples along a ring are this far apart, so the answer is within about one step
+   * of the true nearest wet point.
+   */
+  stepM?: number;
+}
+
+/**
+ * The nearest water to a point on a patch, or null if there is none within range.
+ *
+ * WHY THIS IS IN THE SHARED LIBRARY. A person arriving on a coastal parcel was put down facing a
+ * fixed compass heading, and on both shipped coastal routes the sea was behind them: measured, the
+ * sea contributed 0 pixels of 1,024,000 to the frame the game gives you, on a parcel that is 45%
+ * ocean with its shore 226 m away. Which way the sea is, is a fact about the terrain, so it is
+ * computed here, next to isLand and spawnPointFor, rather than in a renderer. The server places
+ * players too.
+ *
+ * The search is rings outward from the point, so the FIRST ring holding water wins and the answer
+ * is the nearest one rather than the first one some scan order happened to reach. Samples are
+ * spaced `stepM` apart along each ring as well as between rings, which is what makes the two
+ * errors the same size. It is `isLand` that decides, not a biome label, so this agrees with the
+ * registry and the drawn waterline to the point.
+ *
+ * Cost is the area searched: 1,600 m at 8 m spacing is about 125,000 field evaluations, 90 ms in
+ * node. Callers that only care about water a person could SEE should pass their own fog distance.
+ */
+export function nearestWaterFrom(
+  patch: TangentPatch,
+  field: TerrainField,
+  seaLevel: number,
+  fromX: number,
+  fromY: number,
+  options: WaterSearchOptions = {},
+): WaterSighting | null {
+  const rangeM = options.rangeM ?? 1600;
+  const stepM = options.stepM ?? 8;
+  if (!(rangeM > 0) || !(stepM > 0)) throw new RangeError("rangeM and stepM must be positive");
+
+  const wet = (x: number, y: number): boolean => {
+    const direction = patch.toDirection(x, y);
+    return !isLand(field, seaLevel, direction);
+  };
+  if (wet(fromX, fromY)) return { x: fromX, y: fromY, distanceM: 0 };
+
+  const rings = Math.ceil(rangeM / stepM);
+  for (let k = 1; k <= rings; k++) {
+    const radius = k * stepM;
+    // Arc spacing at most stepM, and never fewer than eight headings, so a ring close in is still
+    // a ring and not a cross.
+    const count = Math.max(8, Math.ceil((2 * Math.PI * radius) / stepM));
+    let best: WaterSighting | null = null;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const x = fromX + Math.cos(angle) * radius;
+      const y = fromY + Math.sin(angle) * radius;
+      if (!wet(x, y)) continue;
+      // Walk back along this heading to the waterline, so the distance is the shore's and not the
+      // ring's. The bracket is one step wide and eight halvings of it is 3 cm.
+      let dry = radius - stepM;
+      let sea = radius;
+      for (let h = 0; h < 8; h++) {
+        const mid = (dry + sea) / 2;
+        if (wet(fromX + Math.cos(angle) * mid, fromY + Math.sin(angle) * mid)) sea = mid;
+        else dry = mid;
+      }
+      // Ties inside one ring go to the lowest heading index, which is a fixed order and not a
+      // hash: two runs of the same seed give the same shore.
+      if (best === null || sea < best.distanceM) {
+        best = { x: fromX + Math.cos(angle) * sea, y: fromY + Math.sin(angle) * sea, distanceM: sea };
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}

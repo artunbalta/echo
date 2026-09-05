@@ -123,6 +123,80 @@ several hundred metres of every coast is bare sand with nothing on it.
 APPROXIMATE promise. That is acceptable only because it is documented and tested on both sides. A
 silent divergence here would be the same failure as C3's rejected option.
 
+## C4, revisited: the beach rule is NOT why you cannot see the sea
+
+C4 above splits the beach rule, and it is still owed. What is recorded here is that it was measured
+and is not the cause of the complaint it was about to be spent on, so it was not spent.
+
+THE COMPLAINT was that a coastal parcel does not show you the sea. Measured on both shipped coastal
+routes, standing exactly where the game puts you at the camera it gives you, the sea contributed
+0 pixels of 1,024,000, on 847b949ffffffff, which is 45% ocean with its shore 226 m away, and on
+847b959ffffffff, whose shore is 78 m away.
+
+WHAT WAS CLEARED, each on numbers. The water mesh is built whenever the region has ocean, is
+6,259 m across against a 2,084 m region so it overhangs the fog on every side, sits at sea level,
+is submitted on every frame at every station on both routes, and at the shore reads 116 levels of
+255 away from the sand beside it. It is not buried by the tripled height scale: 0.4482 of the demo
+cell's 416,592 emitted vertices are below sea level, which is its ocean composition exactly. The
+beach rule is not the cause either, and it points the wrong way: A9 makes the beach NARROWER, which
+grows the rainforest closer to the waterline and puts MORE canopy between a person and the sea.
+
+THE CAUSE was the spawn. `initialMover`'s heading is PI / 2, south, and `initialFollowCamera`'s yaw
+is PI, so everybody on every parcel began facing the same compass point, and on both coastal routes
+the sea is north. Turning the whole way round at the demo's spawn, no heading reaches 0.35% of the
+frame; on 847b959ffffffff the sea is a plain 8.97% at 180 degrees from the shipped one and exactly
+zero at the shipped one and the three either side of it. The second cause is the framing: at pitch
+0.42 against a 50 degree field of view the top edge of the frame sits 0.94 degrees above the
+horizon, so the sea could only ever be a strip jammed under it, and 0 of 2,560 rays at either spawn
+reached the sky.
+
+SO THE SPAWN FACES THE SEA WHEN THERE IS ONE IN SIGHT, and the camera comes up until the horizon
+stands nine degrees inside the top of the frame. Which way the water is, is a fact about the
+terrain, so it is `nearestWaterFrom` in @echo/planet next to `isLand` and `spawnPointFor`, and the
+server places people too. The sight range is the fog's own 420 m: past that the sea is 92% fog
+colour and turning somebody toward it would point them at a grey wall.
+
+WHAT IT BOUGHT, measured by rendering the frame twice and differencing the water out of it.
+847b959ffffffff goes 0.00% to 6.24% of the frame AT THE SPAWN, in rows 172 to 243 of 800 with sky
+above. The demo goes 0.00% to 0.07%, which is slivers between trunks, and 120 m of walking along
+the heading it now faces reaches 7.95% and open sand. Nothing moves on a parcel with no sea inside
+the fog, which is 94.2% of them: heading PI / 2, yaw PI, pitch 0.42, unchanged to the digit.
+
+WHAT IS STILL OWED IS C4 ITSELF. Across the planet the beach rule holds and the numbers are the
+ones C4 records. It is a separate defect about what the coast LOOKS like, and it was left alone
+here rather than folded into a fix for something it does not cause.
+
+## C20: picking raycasts the surface the globe draws, not a unit sphere
+
+Section 6.1 says picking is "a raycast against a plain unit sphere plus arithmetic", and that
+sentence shipped as a bug. The planet is DRAWN displaced to `1 + reliefScale * max(0, height)`, so
+the sphere and the ground are two different surfaces and one ray meets them at two different points
+on the globe. Over 3,041 live rays on the shipped page the gap came to a median 0.264 and a p95
+2.177 degrees against a resolution 4 parcel 0.40 degrees wide: 77.8% of pixels showing land were
+answered with a cell other than the one drawn there, and 4.9% of pixels showing SEA were offered as
+an assignable parcel. The landing's whole gesture is "point at the planet, every hexagon is one
+parcel", and it was telling people savanna was open water.
+
+`raycastGlobe` replaces it. Seen from the planet's centre a straight ray is an arc of directions, so
+the march steps in ARC ACROSS THE PLANET rather than in distance along the ray, which is what stops
+it tunnelling through a headland at the limb. It costs 0.024 ms a ray against the 0.26 ms the whole
+old pick took and the 43.49 ms an intersection of the drawn 1,310,720-triangle mesh was measured at.
+
+THE OTHER TWO CALL SITES MOVED WITH IT, because they shared the assumption. `outlineLift` was
+0.0075 of the radius, which on a 200 km planet is a hexagon drawn 1.5 km in the air; seen from off
+to one side that lands 0.13 to 1.26 degrees outward from the middle of the disk, which is back
+toward the cursor and onto the land beside the answer, and is what made a wrong pick look right. It
+is now 0.0006, 120 m, which is what it takes to clear the drawn mesh: the icosphere's flat triangles
+stand above the continuous surface the outline is sampled from on 30.7% of the ground, by p99 59.1 m
+and 125.9 m at worst. `screenPositionOf` multiplied by the height of the planet's highest peak for
+every cell whatever its own height, and now asks `globeRadiusAt`.
+
+THE LIFT COULD ONLY COME DOWN BECAUSE THE DEPTH BUFFER MOVED. The globe's camera ran near 0.01 and
+far 100, which spends 24 bits on empty space: one depth step measured 1.13e-4 of the radius at the
+globe, 22.6 m of ground, so a 120 m lift was four depth steps and a kilometre of air was the only
+way a line stayed visible. The planes are now derived from where the camera is, which puts a depth
+step at 0.13 m and the lift 450 steps clear.
+
 ## C5 — ASSET_CLASSES gets its own version, separate from terrainVersion
 
 Every ecology change alters what `placeAssets` returns, which is shared with the server by contract,

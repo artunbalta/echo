@@ -25,7 +25,9 @@ import {
   cellCentre,
   createRegistryIndex,
   DEFAULT_GLOBE_OPTIONS,
+  globeRadiusAt,
   landFractionOfCell,
+  raycastGlobe,
   vec3ToLatLng,
   createTerrain,
   linearRgb,
@@ -66,6 +68,22 @@ export interface PickedParcel {
   assignable: boolean;
 }
 
+/**
+ * A read handle on the drawn scene, out of the dev build only.
+ *
+ * It exists for one purpose: a guard that checks the pick has to raycast the mesh the GPU actually
+ * drew, and it must reach that mesh without going anywhere near the pick's own arithmetic. A test
+ * that asked this class where the pointer is would be asking the thing under test. Nothing in the
+ * app reads it, and it is not in the production bundle.
+ */
+export interface PlanetGlobeProbe {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  /** The group the terrain, the markers and the outlines hang off. Its transform is the spin. */
+  planet: THREE.Group;
+  host: HTMLElement;
+}
+
 export interface PlanetGlobeOptions {
   seed: string;
   seaLevel: number;
@@ -91,9 +109,10 @@ export interface PlanetGlobeOptions {
   /**
    * Turn on pointing at the planet.
    *
-   * Picking is arithmetic, exactly as section 6.1 says: raycast a plain unit sphere, convert the
-   * hit to lat/lng, ask H3 which cell that is. No GPU picking, no BVH, no per parcel colliders,
-   * and nothing proportional to the size of the registry.
+   * Picking is arithmetic, as section 6.1 says: intersect the ray with the surface the globe
+   * draws, convert the hit to lat/lng, ask H3 which cell that is. No GPU picking, no BVH, no per
+   * parcel colliders, and nothing proportional to the size of the registry. What section 6.1
+   * actually said was "a plain unit sphere", and that sentence was the bug: see raycastGlobe.
    *
    * The registry at round 1 is every cell at parcelResolution except the reserved commons, so the
    * lookup needs no set of ids at all. A mixed resolution registry, after the first subdivision,
@@ -128,6 +147,23 @@ const FOV_DEGREES = 34;
 // pushing the camera into a surface with no detail left in it.
 const ARRIVED_DISTANCE = 1.06;
 
+/**
+ * How far the hover patch stands off the ground it names, as a fraction of the radius. 60 m.
+ *
+ * Derived from the mesh it has to beat, not chosen. The globe is a displaced icosphere at 8
+ * subdivisions, and its flat triangles stand above the continuous surface the patch is sampled
+ * from on 30.7% of the ground, by p90 31.1 m and p99 59.1 m over 141,700 measured samples. 60 m
+ * puts the patch above the drawn triangles over 99% of the planet; on the last percent a ridge
+ * stands in front of it and hides part of it, which is what a ridge in front of something is for.
+ *
+ * The cost of the lift is that the patch is seen from off to one side and so lands outward from
+ * the middle of the disk: 0.0054 degrees a third of the way to the silhouette and 0.0522 at 0.95 of
+ * the way, which on a 0.386 degree parcel is a seventieth and a seventh of one. The
+ * assignedExtrusion this used to borrow costs 0.1074 and 1.0125 there, 0.28 and 2.62 parcels. It is
+ * not zero because zero would let the drawn mesh tear through the patch.
+ */
+const MARKER_LIFT = 0.0003;
+
 export class PlanetGlobe {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -154,8 +190,12 @@ export class PlanetGlobe {
   private hovered: string | null = null;
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
-  /** An invisible unit sphere. The only thing the raycaster ever has to hit. */
-  private readonly pickSphere = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32));
+  /** Scratch for parcelAt, which runs on every pointer move and allocates nothing. */
+  private readonly pickMatrix = new THREE.Matrix4();
+  private readonly pickFrom = new THREE.Vector3();
+  private readonly pickTo = new THREE.Vector3();
+  private readonly depthForward = new THREE.Vector3();
+  private readonly depthToPlanet = new THREE.Vector3();
   /** Land fraction by cell. Forty nine terrain samples each, so worth keeping, cheap to compute. */
   private readonly landCache = new Map<string, number>();
 
@@ -208,12 +248,14 @@ export class PlanetGlobe {
     this.calibration = { seaLevel: options.seaLevel, peakElevation: options.peakElevation, landFraction: 0.6 };
 
     if (process.env.NODE_ENV !== "production") {
-      (window as unknown as { __THREE?: typeof THREE }).__THREE = THREE;
+      // __globeProbe, not __globe: GlobeCanvas already puts the whole instance on __globe for the
+      // registration screen, and a guard that wants the DRAWN scene must not get the pick's own class.
+      const probe = window as unknown as { __THREE?: typeof THREE; __globeProbe?: PlanetGlobeProbe };
+      probe.__THREE = THREE;
+      probe.__globeProbe = { scene: this.scene, camera: this.camera, planet: this.planet, host };
     }
     this.buildTerrain();
     if (options.picking) {
-      this.pickSphere.visible = false;
-      this.planet.add(this.pickSphere);
       host.style.cursor = "crosshair";
       host.addEventListener("pointermove", this.onPointerMove);
       host.addEventListener("pointerleave", this.onPointerLeave);
@@ -244,6 +286,8 @@ export class PlanetGlobe {
       geometry,
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }),
     );
+    // Named so a guard can find the ground the GPU drew without guessing which child is which.
+    mesh.name = "globe:terrain";
     this.planet.add(mesh);
   }
 
@@ -320,7 +364,10 @@ export class PlanetGlobe {
       ),
     );
 
-    const outline = buildParcelOutlines([cell], this.field, this.calibration);
+    // Over a parcel that IS extruded, so the line has to clear the extrusion as well as the ground.
+    const outline = buildParcelOutlines([cell], this.field, this.calibration, {
+      outlineLift: DEFAULT_GLOBE_OPTIONS.assignedExtrusion + DEFAULT_GLOBE_OPTIONS.outlineLift,
+    });
     const lines = new THREE.BufferGeometry();
     lines.setAttribute("position", new THREE.BufferAttribute(outline.positions, 3));
     // Echo violet, which is the one colour on this planet that no biome uses, so the deed line can
@@ -370,12 +417,51 @@ export class PlanetGlobe {
     }
 
     this.camera.lookAt(0, 0, 0);
+    this.frameDepth();
     this.renderer.render(this.scene, this.camera);
   };
 
+  /**
+   * Put the near and far planes around the planet, every frame, instead of 0.01 and 100.
+   *
+   * A depth buffer's resolution goes as z^2 (f - n) / (2 f n), so 0.01 against 100 spent the whole
+   * 24 bits on empty space and left one depth step measuring 1.13e-4 of the radius at the globe:
+   * 22.6 m of ground, which is the same order as the 60 m a marker is lifted by and is why the
+   * old lifts had to be kilometres to be seen at all. Derived from where the camera actually is,
+   * the step becomes 6.7e-7, which is 0.13 m, and a 60 m lift is 450 depth steps clear.
+   *
+   * The near plane is HALF the gap to the highest ground the planet can have, so a peak that the
+   * camera has descended toward cannot clip through the front of the frame.
+   */
+  private frameDepth(): void {
+    // Along the camera's own forward axis, which is where a frustum plane is measured, and not the
+    // straight-line distance: the camera looks at the origin while the PLANET is offset sideways
+    // by up to a third of a radian of it, so the two differ by 6% at the hero's own composition.
+    const forward = this.depthForward.copy(this.camera.position).negate().normalize();
+    const depth = this.depthToPlanet.copy(this.planet.position).sub(this.camera.position).dot(forward);
+    const rMax = 1 + DEFAULT_GLOBE_OPTIONS.reliefScale;
+    const near = Math.max(0.01, (depth - rMax) / 2);
+    const far = Math.max(near + 1, depth + rMax * 1.2);
+    if (near === this.camera.near && far === this.camera.far) return;
+    this.camera.near = near;
+    this.camera.far = far;
+    this.camera.updateProjectionMatrix();
+  }
+
   // ── pointing at the planet ────────────────────────────────────────────────────
 
-  /** The parcel under a pointer position, or null when the pointer is off the planet. */
+  /**
+   * The parcel under a pointer position, or null when the pointer is off the planet.
+   *
+   * THE RAY IS PUT INTO THE PLANET'S OWN SPACE FIRST, and the intersection is taken there against
+   * the surface the planet is DRAWN at. It used to be taken against an invisible unit sphere, and
+   * the planet is drawn displaced by relief, so the two hits were two different points: a median
+   * 0.264 and a p95 2.177 degrees apart on a parcel 0.40 degrees wide. See raycastGlobe.
+   *
+   * `matrixWorld` is deliberately NOT refreshed here. The pixel the pointer is over belongs to the
+   * frame that has already been drawn, so the pick has to be answered against the rotation that
+   * drew it. Refreshing would answer against a frame nobody has seen yet.
+   */
   private parcelAt(clientX: number, clientY: number): PickedParcel | null {
     const picking = this.options.picking;
     if (!picking) return null;
@@ -384,12 +470,23 @@ export class PlanetGlobe {
     this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const hit = this.raycaster.intersectObject(this.pickSphere, false)[0];
+    // Two points on the world-space ray through the planet's inverse transform, rather than the
+    // direction through a rotation: the difference is a vector however the group is placed, and
+    // this cannot go wrong the day something puts a scale or a second parent above the planet.
+    const inverse = this.pickMatrix.copy(this.planet.matrixWorld).invert();
+    const from = this.pickFrom.copy(this.raycaster.ray.origin).applyMatrix4(inverse);
+    const along = this.pickTo.copy(this.raycaster.ray.origin).add(this.raycaster.ray.direction).applyMatrix4(inverse).sub(from);
+
+    const hit = raycastGlobe(
+      this.field,
+      this.calibration,
+      [from.x, from.y, from.z],
+      [along.x, along.y, along.z],
+      { subdivisions: this.options.subdivisions ?? 8 },
+    );
     if (!hit) return null;
 
-    // The hit is in world space; the cell is a property of the planet, so undo its rotation first.
-    const local = this.planet.worldToLocal(hit.point.clone()).normalize();
-    const [lat, lng] = vec3ToLatLng(local.x, local.y, local.z);
+    const [lat, lng] = vec3ToLatLng(hit.direction[0], hit.direction[1], hit.direction[2]);
     const cell = latLngToCell(lat, lng, picking.parcelResolution);
     const commonsCell = cellToParent(cell, picking.commonsResolution);
     const commonsName = picking.commons[commonsCell] ?? null;
@@ -463,7 +560,14 @@ export class PlanetGlobe {
         : [122, 156, 190];
     const group = new THREE.Group();
 
-    const mesh = buildParcelMesh([cell], this.field, this.calibration, { reliefSubdivisions: 2 });
+    // MARKER_LIFT, not the assignedExtrusion an owned parcel gets. An owned parcel stands proud on
+    // purpose and is read from orbit; this patch has one job, which is to say WHICH GROUND the
+    // pointer is on, and a patch 1.2 km in the air is seen from the side and lands up to three
+    // parcels away from that ground. See MARKER_LIFT.
+    const mesh = buildParcelMesh([cell], this.field, this.calibration, {
+      reliefSubdivisions: 2,
+      assignedExtrusion: MARKER_LIFT,
+    });
     paintParcel(mesh, cell, colour);
     setParcelExtrusion(mesh, cell, true);
     const fill = new THREE.BufferGeometry();
@@ -483,7 +587,9 @@ export class PlanetGlobe {
       ),
     );
 
-    const outline = buildParcelOutlines([cell], this.field, this.calibration);
+    const outline = buildParcelOutlines([cell], this.field, this.calibration, {
+      outlineLift: MARKER_LIFT + DEFAULT_GLOBE_OPTIONS.outlineLift,
+    });
     const line = new THREE.BufferGeometry();
     line.setAttribute("position", new THREE.BufferAttribute(outline.positions, 3));
     group.add(
@@ -505,8 +611,13 @@ export class PlanetGlobe {
   screenPositionOf(cell: string): { x: number; y: number } | null {
     const { direction } = cellCentre(cell);
     this.planet.updateMatrixWorld(true);
+    // The radius THIS cell is drawn at, plus the lift the marker patch itself gets. It used to be
+    // 1 + reliefScale, the height of the highest peak on the planet, for every cell whatever its
+    // own height: on 84611b1ffffffff, drawn at 1.00179, that put the circle 11.0 px off the cell
+    // at spin 0 and 21.0 px at worst, and in one captured frame off the planet in black space.
+    const radius = globeRadiusAt(this.field, this.calibration, direction) + MARKER_LIFT;
     const world = new THREE.Vector3(direction[0], direction[1], direction[2])
-      .multiplyScalar(1 + DEFAULT_GLOBE_OPTIONS.reliefScale)
+      .multiplyScalar(radius)
       .applyMatrix4(this.planet.matrixWorld);
 
     // Behind the planet's own limb, from where the camera is.
