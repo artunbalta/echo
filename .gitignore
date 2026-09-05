@@ -27,3 +27,7 @@ __pycache__/
 pipeline/assets/out/
 .higgsfield/
 *.tmp
+
+# Playwright leaves per-run traces and artefacts here. They are output, not source.
+apps/web/test-results/
+apps/web/playwright-report/

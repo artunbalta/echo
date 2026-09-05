@@ -21,7 +21,7 @@ import { PLANET_PARAMS } from "../lib/manifest.js";
 import { seedInventory } from "../lib/rounds.js";
 import { createTangentPatch } from "../lib/scene.js";
 import { calibratePlanet, createTerrain, isLand, type Calibration } from "../lib/terrain.js";
-import { circleBound, connected, regionBound, spawnInsideParcel, spawnPointFor, walkableAt } from "../lib/walkable.js";
+import { circleBound, connected, nearestWaterFrom, regionBound, spawnInsideParcel, spawnPointFor, walkableAt } from "../lib/walkable.js";
 import { DEMO_CELL } from "../lib/demo-cell.js";
 import { SEED, shippedCalibration } from "./helpers/shipped.js";
 
@@ -131,4 +131,95 @@ test("connected: a wall blocks, a gap in it connects, off-grid points are unreac
   // But an endpoint whose four surrounding nodes are all water is not on the ground.
   const island = (x: number, y: number) => Math.hypot(x, y) < 1;
   assert.ok(!connected(island, [0, 0], [10, 10], opts));
+});
+
+/**
+ * Which way the sea is (bug 2). The instrument the spawn's heading is built on.
+ *
+ * The expectation comes from a brute-force scan of the same square, which is a different algorithm
+ * over the same predicate: every grid point in a box, nearest wet one wins. `nearestWaterFrom`
+ * walks rings outward and stops at the first that is wet, so if the two agree the ring order is
+ * finding the NEAREST water and not merely some water.
+ */
+test("nearestWaterFrom finds the nearest water, agrees with a brute-force scan, and says so twice", () => {
+  const range = 420;
+  const step = 8;
+  let coastal = 0;
+  let inland = 0;
+
+  // Two coastal cells and one that is not: the demo, the beach cell beside it, and the ordinary
+  // parcel the plan's routes open, whose nearest water is 6.9 km away.
+  for (const cell of ["847b949ffffffff", "847b959ffffffff", "8482589ffffffff"]) {
+    const patch = createTangentPatch(cell, RADIUS);
+    const spawn = spawnPointFor(cell, field, calibration, RADIUS);
+    assert.ok(spawn, `${cell} has no spawn`);
+    const found = nearestWaterFrom(patch, field, calibration.seaLevel, spawn.x, spawn.y, { rangeM: range, stepM: step });
+
+    // Brute force: every point of a square lattice inside the range, wettest-nearest wins.
+    let bruteD = Infinity;
+    for (let dy = -range; dy <= range; dy += 2) {
+      for (let dx = -range; dx <= range; dx += 2) {
+        const d = Math.hypot(dx, dy);
+        if (d > range || d >= bruteD) continue;
+        if (!isLand(field, calibration.seaLevel, patch.toDirection(spawn.x + dx, spawn.y + dy))) bruteD = d;
+      }
+    }
+
+    if (!Number.isFinite(bruteD)) {
+      assert.equal(found, null, `${cell}: the scan found no water in ${range} m and nearestWaterFrom found some`);
+      inland++;
+      continue;
+    }
+    assert.ok(found, `${cell}: the scan found water at ${bruteD.toFixed(1)} m and nearestWaterFrom found none`);
+    coastal++;
+
+    // Both are quantised, the scan to its 2 m lattice and the search to its own step, so they
+    // agree to about a step and not to a metre. What is asserted is that neither found water the
+    // other missed by more than that. WHAT THIS TOLERANCE CANNOT SEE, said out loud: which of two
+    // wet headings ON THE SAME RING wins. They are the same radius, so the refined distances differ
+    // by less than a step and this passes either way; taking the first index instead of the nearest
+    // was tried and did not move a number here. What holds that is the deepEqual below, which fails
+    // the moment the order stops being fixed.
+    assert.ok(
+      Math.abs(found.distanceM - bruteD) < step * 1.5,
+      `${cell}: rings say ${found.distanceM.toFixed(1)} m and the scan says ${bruteD.toFixed(1)} m`,
+    );
+
+    // The point it returns is wet, and ONE METRE back along the same bearing is dry: it is the
+    // WATERLINE and not merely a point in the sea.
+    //
+    // One metre, not four. At four this assertion could not see the bisection at all: deleting the
+    // eight halvings outright left both tests in this file green, because the unrefined ring answer
+    // comes back at 232.000 m against a true waterline at 225.100 on that bearing, and four metres
+    // short of 232 is still water. The bisection resolves an 8 m step to 8/256 = 3 cm, so a metre
+    // is thirty times its precision and seven times under the error it removes. Measured: refined
+    // 225.031 m, unrefined 232.000 m.
+    assert.ok(!isLand(field, calibration.seaLevel, patch.toDirection(found.x, found.y)), `${cell}: the answer is dry land`);
+    const back = 1 - 1 / Math.max(1, found.distanceM);
+    assert.ok(
+      isLand(field, calibration.seaLevel, patch.toDirection(spawn.x + (found.x - spawn.x) * back, spawn.y + (found.y - spawn.y) * back)),
+      `${cell}: one metre short of the waterline is already water, so the shore was not refined`,
+    );
+
+    const again = nearestWaterFrom(patch, field, calibration.seaLevel, spawn.x, spawn.y, { rangeM: range, stepM: step });
+    assert.deepEqual(again, found, `${cell}: two identical searches gave two different shores`);
+  }
+  assert.equal(coastal, 2, "the coastal cells stopped being coastal, so this test proves nothing about water");
+  assert.equal(inland, 1, "the inland cell found water, so the null case was never exercised");
+});
+
+test("nearestWaterFrom's range is a range: the ordinary parcel's sea is out past it, not absent", () => {
+  const cell = "8482589ffffffff";
+  const patch = createTangentPatch(cell, RADIUS);
+  const spawn = spawnPointFor(cell, field, calibration, RADIUS)!;
+  assert.equal(
+    nearestWaterFrom(patch, field, calibration.seaLevel, spawn.x, spawn.y, { rangeM: 420, stepM: 8 }),
+    null,
+    "there is water within the fog on the parcel this test uses as its dry one",
+  );
+  // The negative control. The same point, the same function, a range that reaches: 6.9 km away
+  // there is a sea, so the null above is the RANGE talking and not the search failing to look.
+  const far = nearestWaterFrom(patch, field, calibration.seaLevel, spawn.x, spawn.y, { rangeM: 8000, stepM: 40 });
+  assert.ok(far, "no water within 8 km of the ordinary parcel, so the null case above proves nothing");
+  assert.ok(far.distanceM > 420, `the far search found water at ${far.distanceM.toFixed(0)} m, inside the range that found none`);
 });

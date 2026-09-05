@@ -15,6 +15,7 @@
     "dev": "npm run build:shared && concurrently -n web,realtime -c cyan,magenta \"npm:dev:web\" \"npm:dev:realtime\"",
     "build": "npm run build:shared && npm run build -w @echo/realtime && npm run build -w @echo/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run build:shared && npm run test --workspaces --if-present",
     "seed": "node db/seed/seed.mjs",
     "gen:assets": "node pipeline/generate-venue-assets.mjs",
     "gen:island-assets": "node pipeline/generate-island-assets.mjs",

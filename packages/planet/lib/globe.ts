@@ -170,10 +170,26 @@ export interface GlobeOptions {
   /**
    * How far a boundary line floats above the terrain, as a fraction of the radius.
    *
-   * It has to clear assignedExtrusion, or an assigned parcel rises through its own outline and
-   * buries it, which is the one line on the screen that must never be ambiguous.
+   * It has to clear whatever the parcel under it is drawn at. Over terrain that is the drawn
+   * MESH, which stands above the continuous surface these points are sampled from wherever a
+   * triangle spans a hollow; over an EXTRUDED parcel it is the extrusion as well, and a caller
+   * that extrudes has to say so by passing `assignedExtrusion + outlineLift`, or the parcel rises
+   * through its own outline and buries it.
    */
   outlineLift: number;
+  /**
+   * The longest straight piece a boundary edge is drawn as, in radians of arc. 250 m at 200 km.
+   *
+   * An edge drawn as ONE chord is under the ground it spans wherever that ground is convex, and a
+   * buried outline is the one line on the screen that has to be unambiguous. Measured over 400
+   * seeded resolution 4 cells on the shipped seed, whose edges are 800 m, the depth of a boundary
+   * chord below its own terrain: 1 piece p99 37.4 m and 81.0 m worst, 2 pieces 9.8 and 25.2,
+   * 4 pieces 2.6 and 6.5, 8 pieces 0.7 and 3.4. That is the quadratic a chord's sagitta should be,
+   * so it is written as a LENGTH and not as a count: a commons is reserved at resolution 1 and its
+   * edges are sixteen times longer, where four pieces each dive 650 m, measured, and take the line
+   * under the mountain it is drawn over.
+   */
+  outlineSegmentArc: number;
   /** How far the highest ground stands off the sphere, as a fraction of the radius. */
   reliefScale: number;
   /** How far an assigned parcel lifts off the surface, section 6.1. */
@@ -211,7 +227,8 @@ export interface GlobeOptions {
  */
 export const DEFAULT_GLOBE_OPTIONS: GlobeOptions = {
   subdivisions: 6,
-  outlineLift: 0.0075,
+  outlineLift: 0.0006,
+  outlineSegmentArc: 0.00125,
   reliefScale: 0.05,
   assignedExtrusion: 0.006,
 };
@@ -256,6 +273,213 @@ export function globeHeightAt(field: TerrainField, calibration: Calibration, dir
   return normalisedHeight(field.elevation(direction), calibration);
 }
 
+/**
+ * The radius the globe DRAWS at a direction: where the ground actually is.
+ *
+ * buildGlobeGeometry, setCellExtrusion, buildParcelMesh and buildParcelOutlines each lifted a
+ * direction by this same expression written out four times, and picking used none of them: it
+ * raycast a plain unit sphere. That is the whole of bug 1. Every consumer now says "the drawn
+ * radius" by calling this, so a pick, a marker, an outline and an arrow cannot be told four
+ * different stories about where the surface is.
+ *
+ * Water sits flat at radius 1, which is why the max(0, h): see buildGlobeGeometry.
+ */
+export function globeRadius(height: number, reliefScale = DEFAULT_GLOBE_OPTIONS.reliefScale): number {
+  return 1 + reliefScale * Math.max(0, height);
+}
+
+/** The same, for a direction whose height is not already in hand. Costs one field evaluation. */
+export function globeRadiusAt(
+  field: TerrainField,
+  calibration: Calibration,
+  direction: Vec3,
+  options: Partial<GlobeOptions> = {},
+): number {
+  return globeRadius(globeHeightAt(field, calibration, direction), options.reliefScale ?? DEFAULT_GLOBE_OPTIONS.reliefScale);
+}
+
+export interface GlobeHit {
+  /** Unit direction of the surface point. This is what becomes a lat/lng and then a cell. */
+  direction: Vec3;
+  /** Distance from the ray origin, in radius units. */
+  distance: number;
+  /**
+   * Radius of the hit. `direction * radius` is exactly `origin + normalize(ray) * distance`: the
+   * three fields describe ONE point on the ray, which is what a caller placing a marker at the
+   * hit needs. It agrees with `globeRadiusAt(direction)` to the solver's own tolerance, which is
+   * the surface's slope times `angularTolerance`: measured worst 5.8e-6 of the radius, 1.2 m of
+   * ground, over 400 rays from the hero's camera.
+   */
+  radius: number;
+}
+
+export interface GlobeRaycastOptions extends GlobeOptions {
+  /**
+   * How far apart, in radians of arc across the planet, the march samples the surface.
+   *
+   * A QUARTER of the icosphere's own edge at `subdivisions`, because a feature narrower than one
+   * drawn triangle is not on the screen to be pointed at and four samples across the narrowest
+   * one that is cannot step over it. Swept against a step 64 times finer, from the hero's own
+   * camera, 3,000 rays in each of the two bands where a ray grazes the ground rather than meeting it:
+   *
+   *   band        edge/2                        edge/4         edge/8         ms/ray at edge/4
+   *   b 0.90-1.00 2 of 2,972 rays wrong by 4.9  0 of 2,972     0 of 2,972     0.048
+   *   b 1.00-1.05 2 of 3,000 hit/miss splits    0 of 3,000     0 of 3,000     0.114
+   *
+   * Everywhere else every step from edge/2 to edge/16 agrees to 3e-5 degrees, which is 1/13,000
+   * of a parcel and is the bisection's own tolerance rather than the sampling. edge/4 is where the
+   * grazing band stops disagreeing too, and it costs 0.024 ms averaged over the whole disk against
+   * the 0.26 ms the pick used to take and the 43.49 ms a raycast of the drawn mesh was measured at.
+   */
+  angularStep: number;
+  /** Bisection stops when the bracket is narrower than this, in radians. */
+  angularTolerance: number;
+}
+
+/** The icosahedron's edge on a unit sphere, 4 / sqrt(10 + 2 sqrt 5). Halves at every subdivision. */
+const ICOSAHEDRON_EDGE = 4 / Math.sqrt(10 + 2 * Math.sqrt(5));
+
+/**
+ * Where a ray meets the surface the globe draws. The shared half of the pick.
+ *
+ * WHY THIS EXISTS AT ALL. Picking used to raycast `new THREE.SphereGeometry(1, 48, 32)`, and the
+ * planet is drawn displaced to `globeRadiusAt`. Two hits on one ray at two radii are two different
+ * points on a sphere, and the gap between them is exactly
+ * `atan(sqrt(R2 - b2)/b) - atan(sqrt(1 - b2)/b)` for a ray passing `b` from the centre. Measured
+ * over 3,041 live rays on the shipped page that closed form reproduced the browser's own two hit
+ * points to a median of 3.73e-12 degrees, so this is an identity and not a correlation. It cost
+ * a median 0.264 and a p95 2.177 degrees against a resolution 4 parcel 0.40 degrees wide: 77.8% of
+ * pixels showing land were answered with some other cell, and 4.9% of pixels showing SEA were
+ * offered as an assignable parcel.
+ *
+ * WHY IT IS A MARCH AND NOT A MESH RAYCAST. Intersecting the drawn globe itself was measured on
+ * the shipped page at 43.49 ms per pointer move against 0.26 ms for the whole of the old pick,
+ * because that mesh is 1,310,720 triangles. This solves the same intersection against the
+ * CONTINUOUS surface the mesh samples, in the field, for the cost of a few dozen elevation
+ * evaluations.
+ *
+ * THE PARAMETRISATION IS THE GEOMETRY THAT CAUSED THE BUG. Seen from the planet's centre a
+ * straight ray is an arc of directions: at angle psi from its closest approach it is at radius
+ * b / cos(psi) in the direction cos(psi) * Chat + sin(psi) * Dhat, with Chat and Dhat orthogonal
+ * unit vectors. So the march steps in ARC ACROSS THE PLANET, which is the thing the sampling has
+ * to resolve, rather than in distance along the ray, which is nearly tangential at the limb and
+ * would tunnel straight through a headland there.
+ *
+ * The shell is entered at radius 1 + reliefScale, which nothing can be drawn above because
+ * normalisedHeight clamps at 1, and anything at radius <= 1 is already under the ground, because
+ * the drawn radius is never below 1. Between those two the march looks for the first crossing and
+ * bisects it.
+ */
+export function raycastGlobe(
+  field: TerrainField,
+  calibration: Calibration,
+  origin: Vec3,
+  ray: Vec3,
+  options: Partial<GlobeRaycastOptions> = {},
+): GlobeHit | null {
+  const reliefScale = options.reliefScale ?? DEFAULT_GLOBE_OPTIONS.reliefScale;
+  const subdivisions = options.subdivisions ?? DEFAULT_GLOBE_OPTIONS.subdivisions;
+  const angularStep = options.angularStep ?? ICOSAHEDRON_EDGE / Math.pow(2, subdivisions) / 4;
+  const angularTolerance = options.angularTolerance ?? 1e-6;
+  if (!(angularStep > 0)) throw new RangeError(`angularStep must be positive, got ${angularStep}`);
+
+  const length = Math.hypot(ray[0], ray[1], ray[2]);
+  if (!(length > 0)) return null;
+  const dx = ray[0] / length;
+  const dy = ray[1] / length;
+  const dz = ray[2] / length;
+
+  const rMax = 1 + reliefScale;
+  // Closest approach: the foot of the perpendicular from the planet's centre onto the ray.
+  const tc = -(origin[0] * dx + origin[1] * dy + origin[2] * dz);
+  const cx = origin[0] + tc * dx;
+  const cy = origin[1] + tc * dy;
+  const cz = origin[2] + tc * dz;
+  const b = Math.hypot(cx, cy, cz);
+  if (b >= rMax) return null;
+
+  // A ray straight at the centre has no plane of its own, so the arc below cannot be built for it.
+  // Written out instead: the origin is at `-tc` along the ray from the centre, the surface is met
+  // once on each side, and the nearer of the two that is still ahead of the camera wins.
+  if (b < 1e-12) {
+    const ahead: Vec3 = [dx, dy, dz];
+    const behind: Vec3 = [-dx, -dy, -dz];
+    const candidates: Array<{ direction: Vec3; distance: number; radius: number }> = [];
+    for (const [direction, sign] of [
+      [ahead, 1],
+      [behind, -1],
+    ] as const) {
+      const radius = globeRadiusAt(field, calibration, direction, { reliefScale });
+      candidates.push({ direction, distance: sign * radius + tc, radius });
+    }
+    const near = candidates.filter((c) => c.distance >= 0).sort((a, c) => a.distance - c.distance)[0];
+    return near ?? null;
+  }
+
+  const ux = cx / b;
+  const uy = cy / b;
+  const uz = cz / b;
+  const directionAt = (psi: number): Vec3 => {
+    const c = Math.cos(psi);
+    const s = Math.sin(psi);
+    // Unit by construction: Chat and Dhat are orthonormal, so no normalise is needed and none is
+    // done. That matters, because the direction is what becomes a latitude.
+    return [ux * c + dx * s, uy * c + dy * s, uz * c + dz * s];
+  };
+  // Positive above the ground, negative below it.
+  const gapAt = (psi: number): number => {
+    const R = b / Math.cos(psi);
+    if (R <= 1) return R - 1; // nothing is drawn below radius 1, so this is under the ground
+    return R - globeRadiusAt(field, calibration, directionAt(psi), { reliefScale });
+  };
+
+  // The point of the ray at an angle, as one place so the three fields cannot drift apart.
+  const hitAt = (psi: number): GlobeHit => ({
+    direction: directionAt(psi),
+    distance: tc + b * Math.tan(psi),
+    radius: b / Math.cos(psi),
+  });
+
+  const psiExit = Math.acos(b / rMax);
+  // Start where the ray enters the shell, or at the ray's own origin if that is already inside it.
+  const start = Math.max(-psiExit, Math.atan2(-tc, b));
+  if (start >= psiExit) return null;
+  const startGap = gapAt(start);
+  // Under the ground already: a ray that begins inside the planet has no near surface to meet.
+  if (startGap < 0) return null;
+  // Exactly ON it, which is a ray entering the shell at a full-height peak, or any ray at all when
+  // reliefScale is zero and the shell has no thickness. Both are hits at the entry point.
+  if (startGap === 0) return hitAt(start);
+
+  // `start` is the base of every step and `lo` is the running bracket, and they are two variables
+  // on purpose: stepping from the bracket instead adds the step to a moving point, which makes the
+  // march accelerate quadratically and jump the arc it was meant to walk.
+  const steps = Math.max(1, Math.ceil((psiExit - start) / angularStep));
+  const step = (psiExit - start) / steps;
+  let lo = start;
+  let hi = start;
+  let found = false;
+  for (let i = 1; i <= steps; i++) {
+    const psi = start + step * i;
+    if (gapAt(psi) <= 0) {
+      hi = psi;
+      found = true;
+      break;
+    }
+    lo = psi;
+  }
+  if (!found) return null;
+
+  // Bisect. The bracket starts one angular step wide and halves every turn; the cap is what that
+  // takes from the default step, and is there so a caller passing a huge step cannot spin.
+  for (let k = 0; k < 40 && hi - lo > angularTolerance; k++) {
+    const mid = (lo + hi) / 2;
+    if (gapAt(mid) > 0) lo = mid;
+    else hi = mid;
+  }
+  return hitAt((lo + hi) / 2);
+}
+
 export function buildGlobeGeometry(
   field: TerrainField,
   calibration: Calibration,
@@ -282,7 +506,7 @@ export function buildGlobeGeometry(
 
     // Water sits flat at the sphere's own radius. Bathymetry is real but a dented ocean reads as a
     // rendering fault at globe scale, and the parcel outlines have to lie on something smooth.
-    const lift = 1 + opts.reliefScale * Math.max(0, height);
+    const lift = globeRadius(height, opts.reliefScale);
     positions[i * 3] = d[0] * lift;
     positions[i * 3 + 1] = d[1] * lift;
     positions[i * 3 + 2] = d[2] * lift;
@@ -418,7 +642,7 @@ export function setCellExtrusion(geo: GlobeGeometry, cell: string, extruded: boo
   const extra = extruded ? geo.options.assignedExtrusion : 0;
   for (let k = from; k < to; k++) {
     const v = geo.cellVertices[k]!;
-    const lift = 1 + geo.options.reliefScale * Math.max(0, geo.heights[v]!) + extra;
+    const lift = globeRadius(geo.heights[v]!, geo.options.reliefScale) + extra;
     geo.positions[v * 3] = geo.directions[v * 3]! * lift;
     geo.positions[v * 3 + 1] = geo.directions[v * 3 + 1]! * lift;
     geo.positions[v * 3 + 2] = geo.directions[v * 3 + 2]! * lift;
@@ -438,7 +662,25 @@ export interface Outlines {
  * The boundary of every parcel, as line segments lying just above the terrain.
  *
  * Drawn on top of the displaced surface rather than into it, so a boundary running over a ridge
- * stays visible. The lift is proportional to the relief scale, so it survives any relief setting.
+ * stays visible. The lift is proportional to nothing: it is a length, and the length is the
+ * argument this function had wrong.
+ *
+ * WHAT WAS WRONG, AND WHAT IT COST (bug 1, third call site). `outlineLift` was 0.0075, which on a
+ * 200 km planet is a hexagon drawn 1.5 km in the air. A ring that high is seen from a viewpoint
+ * that is not the planet's centre, so it lands OUTWARD from the middle of the disk, away from the
+ * ground it bounds: for a ray passing `b` from the centre the shift is
+ * `atan(sqrt((1+lift)^2 - b^2)/b) - atan(sqrt(1 - b^2)/b)`, which is 0.134 degrees at b = 0.3 and
+ * 1.256 at b = 0.95, against a resolution 4 parcel 0.40 degrees wide. Up to three parcels of
+ * hexagon over ground it does not name, and outward is toward the cursor, which is what made a
+ * wrong pick look right.
+ *
+ * WHAT THE LIFT ACTUALLY HAS TO CLEAR, measured rather than assumed. The drawn globe is a
+ * displaced icosphere at 8 subdivisions and its flat triangles stand ABOVE the continuous surface
+ * these points are sampled from on 30.7% of the ground, by p90 31.1 m, p99 59.1 m and 125.9 m at
+ * worst over 141,700 samples. 0.0006 is 120 m, which clears the mesh over more than 99.9% of the
+ * planet, and where it does not the line is hidden by a ridge standing in front of it, which is
+ * what a ridge is supposed to do. It costs 0.0108 degrees of shift at b = 0.3 and 0.1042 at
+ * b = 0.95: a twelfth of the old error, and 0.03 of a parcel becoming 0.27 of one at the limb.
  */
 export function buildParcelOutlines(
   cells: readonly string[],
@@ -449,18 +691,36 @@ export function buildParcelOutlines(
   const opts: GlobeOptions = { ...DEFAULT_GLOBE_OPTIONS, ...options };
   const segments: number[] = [];
 
+  // A point on the drawn surface under a direction, lifted. The direction is renormalised because
+  // the callers below interpolate between two unit vectors, and a lerp of two unit vectors is not
+  // one: at an 800 m edge on this planet the chord is shorter than the arc by 2.6e-6 of itself,
+  // which is 0.5 mm of ground, so the cheap interpolation is exact enough and the normalise is
+  // what makes the SAMPLE land on the boundary rather than a hair inside it.
+  const surface = (x: number, y: number, z: number): [number, number, number] => {
+    const len = Math.hypot(x, y, z);
+    const d: Vec3 = [x / len, y / len, z / len];
+    const lift = globeRadius(globeHeightAt(field, calibration, d), opts.reliefScale) + opts.outlineLift;
+    return [d[0] * lift, d[1] * lift, d[2] * lift];
+  };
+
   for (const cell of cells) {
-    const boundary = cellToBoundary(cell);
-    const points = boundary.map(([lat, lng]) => {
-      const d = latLngToVec3(lat, lng);
-      const height = normalisedHeight(field.elevation(d), calibration);
-      const lift = 1 + opts.reliefScale * Math.max(0, height) + opts.outlineLift;
-      return [d[0] * lift, d[1] * lift, d[2] * lift] as const;
-    });
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i]!;
-      const b = points[(i + 1) % points.length]!;
-      segments.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+    const ring = cellToBoundary(cell).map(([lat, lng]) => latLngToVec3(lat, lng));
+    for (let i = 0; i < ring.length; i++) {
+      const a = ring[i]!;
+      const b = ring[(i + 1) % ring.length]!;
+      // The edge follows the ground rather than cutting through it: see outlineSegmentArc. The
+      // arc is measured off the chord, which is shorter by 4e-6 of itself at a resolution 1 edge
+      // and by nothing worth a trigonometric function at any finer one. Capped, so a caller
+      // passing a tiny arc cannot ask for a million line segments.
+      const chord = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      const parts = Math.min(256, Math.max(1, Math.ceil(chord / opts.outlineSegmentArc)));
+      let from = surface(a[0], a[1], a[2]);
+      for (let k = 1; k <= parts; k++) {
+        const t = k / parts;
+        const to = surface(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t);
+        segments.push(from[0], from[1], from[2], to[0], to[1], to[2]);
+        from = to;
+      }
     }
   }
 
@@ -538,7 +798,7 @@ export function buildParcelMesh(
   /** A boundary or centre point, lifted onto the terrain. */
   const lift = (d: Vec3): Vec3 => {
     const height = globeHeightAt(field, calibration, d);
-    const r = 1 + opts.reliefScale * Math.max(0, height);
+    const r = globeRadius(height, opts.reliefScale);
     return [d[0] * r, d[1] * r, d[2] * r];
   };
 

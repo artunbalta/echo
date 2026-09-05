@@ -30,6 +30,7 @@ import {
   type FollowCameraState,
 } from "./followCamera";
 import { createInput, type WorldInput } from "./input";
+import { SPAWN_HORIZON_MARGIN_DEG, spawnView } from "./spawnView";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 
 export interface PlayerLayerOptions {
@@ -98,8 +99,19 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     name: "player",
 
     async build(ctx, signal) {
-      state = initialMover(ctx.region.spawnTile[0], ctx.region.spawnTile[1]);
-      cam = initialFollowCamera(options.camera);
+      // Which way a person is facing when they arrive, and how far down the camera looks: toward
+      // the sea when there is one in sight, and the shipped heading otherwise. See spawnView.
+      const view = spawnView(
+        ctx.frame.patch,
+        ctx.field,
+        ctx.calibration.seaLevel,
+        ctx.region.spawn.x,
+        ctx.region.spawn.y,
+        initialFollowCamera(options.camera),
+        { fovDegrees: ctx.camera.fov, horizonMarginDeg: SPAWN_HORIZON_MARGIN_DEG },
+      );
+      state = initialMover(ctx.region.spawnTile[0], ctx.region.spawnTile[1], view.heading);
+      cam = view.camera;
       camOpts = { ...options.camera, tileM: ctx.frame.tileM, nearM: ctx.camera.near };
       animTime = 0;
 
