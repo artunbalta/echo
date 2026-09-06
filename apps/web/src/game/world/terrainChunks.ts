@@ -118,6 +118,13 @@ const CAMERA_TO_TARGET_M = 12;
  */
 export const DEFAULT_SHADOW_HALF_M = 120;
 
+/**
+ * The shadow map's side in texels, exported for the same reason the half width is: what a texel
+ * covers on the ground is `2 * DEFAULT_SHADOW_HALF_M / DEFAULT_SHADOW_MAP_SIZE`, 117 mm as shipped,
+ * and that length is what any margin around the shadow camera has to be measured in.
+ */
+export const DEFAULT_SHADOW_MAP_SIZE = 2048;
+
 /** A macrotask, so the browser can paint and an abort can land between two pieces of work. */
 const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -125,7 +132,7 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
   const fogNear = options.fogNearM ?? 150;
   const fogFar = options.fogFarM ?? 420;
   const shadowHalf = options.shadowHalfM ?? DEFAULT_SHADOW_HALF_M;
-  const shadowMapSize = options.shadowMapSize ?? 2048;
+  const shadowMapSize = options.shadowMapSize ?? DEFAULT_SHADOW_MAP_SIZE;
 
   let region: RegionScene | null = null;
   const chunks: THREE.Mesh[] = [];

@@ -28,8 +28,21 @@ export default defineConfig({
     // frames before it will click. At half a second a frame the consent card never settles inside
     // a click timeout, so every click times out on a button that is visible, unobstructed and the
     // top element at its own centre. The suite was testing a machine nobody has.
+    //
+    // AND VSYNC OFF, which is DECISIONS C16's own measuring condition: at 120 Hz a p50 of 8.3 ms
+    // hides however much headroom there really is, so the budget is read on a loop that is allowed
+    // to run as fast as it can. The triangle and draw-call counts these specs assert are unaffected
+    // by it; what it changes is how long a spec that samples a run of frames at each of 24 headings
+    // takes to finish, which is minutes.
     launchOptions: {
-      args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-swiftshader"],
+      args: [
+        "--use-angle=metal",
+        "--enable-gpu",
+        "--ignore-gpu-blocklist",
+        "--enable-unsafe-swiftshader",
+        "--disable-gpu-vsync",
+        "--disable-frame-rate-limit",
+      ],
     },
   },
   webServer: {

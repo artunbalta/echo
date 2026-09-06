@@ -509,3 +509,116 @@ test("a beach is not darkened: the open sand is untouched and only the ground un
       `${under.length} under palms keep ${(keptUnder * 100).toFixed(1)}%`,
   );
 });
+
+// ── (g) C17 and C20 are two mechanisms and they still agree ────────────────────
+
+/**
+ * DECISIONS C20 stopped everything under 1.7 m casting a shadow, and thicket is 1.6. This file's
+ * subject is the OTHER mechanism that darkens a floor, and the question it has to answer is whether
+ * the picture still says the same thing about a bush now that the shadow map says nothing about it.
+ *
+ * THE TWO THRESHOLDS ARE FAR APART AND THE ORDER IS THE POINT. C17's canopy line is
+ * {@link CANOPY_HEIGHT_M}, 4 m, and C20's is 1.7. So every class the closure reads as canopy clears
+ * C20's bar with two and a bit metres to spare, and not one crown stopped casting. What C20 silenced
+ * is entirely below what C17 ever counted: thicket, fallen-log, berry-bush, driftwood, shore-rock,
+ * none of which the closure has ever had a crown for. The mechanisms cannot have swapped roles.
+ *
+ * SO THE GROUND UNDER A BUSH IS DARK FOR THE CLOSURE'S REASON, and this measures that it still is.
+ * The bush is not what darkens it and never was, at either mechanism: it is 1.6 m of leaf on a 12 m
+ * lattice, under crowns that are. Measured here, every thicket on all three routes stands on ground
+ * the closure has already darkened, which is what C20's "its shadow disappears into the bands the
+ * canopy is already casting" claims and is the half of that claim a node test can reach.
+ *
+ * IT IS MEASURED ON THE BEACH ROUTE because a comparison against a clearing needs a clearing, and
+ * neither dense route has one: over both, not one lattice vertex has nothing standing within 12 m
+ * of it. That is C17's own finding about these two cells, arriving again.
+ */
+test("C17's closure still darkens the ground under a bush that C20 stopped casting", () => {
+  const SHOULDER_M = 1.7;
+
+  // The order of the two lines, and then every class between them, so this is a statement about the
+  // registry and not about the two numbers.
+  assert.ok(
+    CANOPY_HEIGHT_M > SHOULDER_M,
+    `C17 calls a ${CANOPY_HEIGHT_M} m thing canopy and C20 lets a ${SHOULDER_M} m thing cast: the closure would be ` +
+      `reading crowns off classes with no shadow, which is the two mechanisms disagreeing about what a tree is`,
+  );
+  for (const w of [parcel, beach]) {
+    for (const cls of w.scatter.classes()) {
+      if (!cls.collider || cls.collider.heightM < CANOPY_HEIGHT_M) continue;
+      assert.ok(
+        cls.castsShadow && cls.collider.heightM >= SHOULDER_M,
+        `${cls.id} is canopy to the closure at ${cls.collider.heightM} m and casts no shadow under C20, so its crown ` +
+          `darkens the ground while the sun goes straight through it`,
+      );
+    }
+  }
+
+  const thicketsOf = (w: Awaited<ReturnType<typeof buildWorld>>) => {
+    const out: Array<[number, number]> = [];
+    for (const p of w.scatter.placement()!.placed as readonly PlacedAsset[]) {
+      if (p.classId !== "thicket") continue;
+      const [tx, ty] = w.frame.fromLocalM(p.x, p.y);
+      out.push([tx * w.frame.tileM, ty * w.frame.tileM]);
+    }
+    return out;
+  };
+  const nearest = (xs: ReadonlyArray<readonly [number, number]>, x: number, z: number) => {
+    let best = Infinity;
+    for (const [px, pz] of xs) {
+      const d = Math.hypot(px - x, pz - z);
+      if (d < best) best = d;
+    }
+    return best;
+  };
+
+  const bushes = thicketsOf(beach);
+  assert.ok(bushes.length > 100, `the beach route holds only ${bushes.length} thickets, so this proves nothing`);
+
+  // Half a lattice step: the closest a 12 m vertex ever gets to standing under a 1.6 m bush.
+  const under = beachV.filter((v) => nearest(bushes, v.x, v.z) <= 6);
+  // Nothing standing near it at all, by both counts, which is what a clearing is.
+  const clearing = beachV.filter((v) => v.nearestTreeM > 80 && nearest(bushes, v.x, v.z) > 30);
+  assert.ok(under.length > 50, `only ${under.length} vertices sit under a thicket`);
+  assert.ok(clearing.length > 200, `only ${clearing.length} vertices are open ground`);
+
+  const keptUnder = mean(under.map((v) => v.kept));
+  const keptOpen = mean(clearing.map((v) => v.kept));
+  assert.ok(
+    keptUnder < keptOpen * 0.9,
+    `ground under a thicket keeps ${(keptUnder * 100).toFixed(1)}% of its albedo and open ground keeps ` +
+      `${(keptOpen * 100).toFixed(1)}%: since C20 the bush casts no shadow either, so if the closure is not darkening ` +
+      `this ground then a thicket now stands on a floor as bright as a clearing and reads as a sticker on it`,
+  );
+  // The other side, the one that says this is a field and not an exposure cut: the clearing has to
+  // be untouched, not merely brighter.
+  assert.ok(
+    keptOpen > 0.999,
+    `open ground kept ${(keptOpen * 100).toFixed(3)}% of its albedo rather than all of it, so the comparison above is ` +
+      `between two darkened grounds and says nothing about a clearing`,
+  );
+
+  // The fact C20's argument rests on, on every route this file builds.
+  const lines: string[] = [];
+  for (const [name, w] of [["parcel", parcel], ["beach", beach]] as const) {
+    const f = w.closure.field()!;
+    const bs = thicketsOf(w);
+    let covered = 0;
+    for (const [x, z] of bs) {
+      const i = f.indexOfScene(x, z);
+      if (i >= 0 && f.L[i]! > 0.1) covered++;
+    }
+    const share = (100 * covered) / Math.max(1, bs.length);
+    assert.ok(
+      share > 95,
+      `only ${share.toFixed(1)}% of ${name}'s ${bs.length} thickets stand under canopy the closure can measure, so ` +
+        `${(100 - share).toFixed(1)}% of them now sit on ground nothing darkens and nothing shadows`,
+    );
+    lines.push(`${name} ${share.toFixed(1)}% of ${bs.length} thickets under measurable canopy`);
+  }
+
+  console.log(
+    `C20 vs C17: beach ground under a thicket keeps ${(keptUnder * 100).toFixed(1)}% against a clearing's ` +
+      `${(keptOpen * 100).toFixed(1)}% (${under.length} and ${clearing.length} vertices); ${lines.join(", ")}`,
+  );
+});

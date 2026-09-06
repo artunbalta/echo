@@ -599,6 +599,85 @@ instances at 20 triangles, about 281,000 triangles, and it is the largest single
 At dusk, which is where this world spends its time, the long shadows come from the trees. That is
 what makes this the cheap half of the trade rather than a loss.
 
+### C20, built and measured
+
+WHAT IT DOES TO THE REGISTRY'S OWN FLAG, which was the open question. `ASSET_CLASSES.castsShadow`
+was authored by eye and this decision does not replace it: the two are ANDed. Over the whole table
+the disagreement runs in ONE DIRECTION ONLY. Five classes are flagged true and stand under 1.7 m,
+thicket 1.6, berry-bush 1.1, fallen-log 0.9, shore-rock 0.8 and driftwood 0.5; NOT ONE is flagged
+false and stands at or above it. So the conjunction and the height test alone select the same eight
+classes on the shipped table, C20 is a pure narrowing, and what the flag is still for is stopping
+arithmetic from handing a shadow to some future tall class that should not have one, a pane, a
+mist, a thing made of cards. Both halves are pinned in `scatter.test.mts`: the five names with their
+heights, so a table edit that moves a class across the line has to come here and say so, and the
+one-directional claim, so authoring a tall class with the flag false fails where this paragraph can
+be corrected rather than passing quietly and leaving it wrong. The threshold has one home,
+`SHOULDER_HEIGHT_M` in scatterLayer.ts, and a caller overriding `blockingHeightM` for movement
+reasons does not move it.
+
+THE BILL IT PAID, whole frame, both passes, on the real GPU with vsync off, at the spawn and over a
+real 360 degree turn of 24 headings each read back off the camera's own yaw:
+
+                     at the spawn        worst over the turn      headings over 600,000
+  8482589ffffffff    444,052 -> 325,308  615,220 -> 497,080       6 of 24 -> 0
+  8496a91ffffffff    654,655 -> 538,179  658,396 -> 541,768      24 of 24 -> 0
+  8477057ffffffff    642,787 -> 527,555  668,653 -> 553,481      12 of 24 -> 0
+  847b949ffffffff    365,589 -> 280,561  550,837 -> 476,959       0 of 24 -> 0
+
+Both columns of a row are one session on one machine. The e2e re-reads the two shipped routes in
+its own and gets 326,414 and 511,322 on the parcel and 283,578 and 476,959 on the demo.
+
+ALL FOUR ROUTES NOW FIT C16 AT EVERY HEADING, including the two that were over AT REST. The
+scatter's own shadow pass halves everywhere: 243,114 -> 125,846 at the parcel's spawn, 235,121 ->
+119,545, 238,874 -> 124,694, 178,195 -> 92,119, and its worst over 33 stand points 245,215 ->
+127,551, which is 21.3% of the whole frame's budget against the 45% the guard allows a pass that
+draws no picture. It gives back draw calls rather than spending them, 5 to 3 on the parcel and 7 to
+3 on the demo. C21 is still owed and this does not do its job: the main pass at the worst heading
+is 284,259 on the parcel and did not move.
+
+WHAT THE PICTURES LOST, and they were rendered and looked at rather than reasoned about: twelve
+poses, two routes, dusk and midday, 1280 by 800, differenced pixel by pixel with the UI masked out.
+The largest change on any of them is 2.1% of the frame moving by more than 4 levels of 255 and 1.3%
+by more than 8, on the parcel at MIDDAY; at dusk the worst is 1.6% and 1.2%. For scale, C17's
+canopy closure moved 56.7% of the same parcel's pixels by more than 8. Every changed pixel got
+BRIGHTER, and the mean shift over a whole frame runs +0.00 to +0.32 levels.
+
+WHAT IT IS, at the crops: a thicket loses its CONTACT SHADOW and its self-shading. The band it laid
+on the ground beside it goes, and the leaf that was half in its own shade lights evenly, so the bush
+reads flatter and a little less seated. On open sand the same thing happens to driftwood and
+shore-rock, and there it is smaller still because those forms are half a metre. No clearing stopped
+reading as a clearing: the corridors the scatter sweeps are drawn by canopy bands 5 to 20 m long
+from trees that still cast, not by the bushes at their edges.
+
+WHY SO LITTLE, and this is the number that answers the decision's own claim. Projecting every drawn
+triangle along the key onto the ground over a 160 m square at the two shipped spawns: at dusk the
+silenced classes shaded 6,123 m2 of the parcel's near field and 6,604 of the demo's, and 82.6% and
+85.1% of that was ALREADY inside a shadow the canopy still casts. Ground in shadow goes 87.6% ->
+83.4% and 88.1% -> 84.2%, so 4.15% and 3.84% of the near field goes from shaded to lit. AT MIDDAY
+THE CLAIM IS HALF AS TRUE: with the sun at 78 degrees the bands are short and only 46.2% and 49.6%
+of the lost shade was already covered, and 6.16% and 6.18% of the ground brightens. This world
+opens at dusk, so the cheap half of the trade is the half it spends its time in, but "the shadow
+disappears into the canopy's bands" is a statement about a 16 degree sun and not about the class.
+
+C17 AND C20 DO NOT COLLIDE, checked rather than assumed. The closure's canopy line is 4 m and this
+one is 1.7, so every class the closure reads as canopy still casts and nothing it darkens the
+ground from stopped shadowing it; what C20 silenced is entirely below what C17 ever counted. Ground
+under a thicket is still darker than a clearing and the closure is what makes it so: measured on
+847b959ffffffff, the only shipped route with open ground on it, a lattice vertex under a thicket
+keeps 62.3% of its albedo against a clearing's 100.0%. It works because 97.9% of the parcel's
+14,060 thickets and 96.2% of that beach's 4,177 stand under canopy the closure can measure. Neither
+dense route has one lattice vertex with nothing standing within 12 m of it, which is C17's own
+finding about those two cells arriving again.
+
+ONE GUARD WENT SLACK AND IS REPLACED AT ITS CAUSE. The shadow pass's ceiling is 45% of C16's frame,
+a division of the budget rather than a reading off the layer, and it had been demonstrated failing
+by widening `SHADOW_PAD_M` to 30 m, which read 300,516. Halve the pass and the same widening reads
+155,256 and passes; so do 60, 90 and 120 m, at 179,117, 202,422 and 221,246. A budget-derived bound
+does not tighten when the thing it bounds gets cheaper, which is correct, so the pad is now bounded
+in the units it is for as well: PCFSoft reaches about one texel and a texel is 117 mm of ground at
+the shipped 240 m box and 2048 map, so the pad must be between 1 and 8 of them. It rejects 2.0 m
+and 0.05 m and the shipped 0.5 m is 4.3 texels.
+
 ## C21 — a far-band impostor per class, past each class's own lod.farM
 
 The split works when you stand INSIDE the scatter and fails when you look at it from the rim. The
@@ -615,6 +694,146 @@ sea, so it would make the sea harder to see at exactly the moment that was fixed
 
 The cost that has to be measured rather than assumed: the transition must not pop. That is the whole
 risk of this task.
+
+### C21, built and measured
+
+WHAT AN INSTANCE BECOMES, and it is derived from the form rather than authored beside it. A
+hand-drawn stand-in is a second piece of art that drifts from the first one in silence, so
+`apps/web/src/game/world/scatterImpostor.ts` RASTERISES each class's own merged geometry from twelve
+horizontal azimuths and reads four things off the silhouette: its height and the height of its foot,
+its projected area averaged over the twelve, that area's vertical centroid, and the projected-area
+weighted mean of its own vertex colours. Two triangles is exactly enough to satisfy the first three,
+because a TRAPEZIUM has two free widths and area and centroid are two equations, and that is the
+whole reason the form is a trapezium and not a rectangle: a buttress-tree comes out 1.00 m wide at
+the ground and 3.09 m at the crown, a conifer the other way round at 1.46 and 0.73, a broadleaf 0.15
+under a 3.77 m dome. The colour is a blend of the parts the eye can see, so it is a colour this world
+already contains by exactly the argument scatterGeometry's own `mix` makes, and the test pins it
+inside the convex hull of the class's own parts rather than trusting it.
+
+IT TURNS TO FACE THE LENS, in the vertex shader, and NOT ONE INSTANCE MOVES to do it: the rotation is
+applied to the card's local vertices before three multiplies by `instanceMatrix`, so the buffer that
+reaches the GPU is the placer's own bytes. A card at a fixed yaw would be invisible edge-on, which is
+a worse pop than the one this decision exists to prevent; measured on the page, the far band paints
+3,449 pixels turning and 2,013 with the patch taken off, which is the two thirds a cosine gives.
+
+ITS NORMALS ARE FITTED, which is the part that took the measuring. A card lit by its own flat facing
+is far too directional: fully keyed looking away from the sun, unkeyed looking into it, where the
+blob it replaces keeps its fill and half its key. So the four corners carry normals over a spherical
+cap that LEANS by the elevation of the form's own mean visible normal, and whose RADIUS is fitted per
+class against the form's response over twelve azimuths and twelve hours. Against the same derivation
+with the cap collapsed, which is an unfitted card: NINETEEN of twenty-six classes come inside a ratio
+band of two, against ONE. What stays bad is the near-flat litter, fallen-log at 0.45x to 4.20x,
+because a thing lying on the ground faces the sky and an upright card cannot.
+
+WHAT IT BOUGHT, whole frame, both passes, on the real GPU with vsync off, at eighteen stand points
+per route, each rim point looking back across the disk:
+
+                     at the spawn        worst stand point       views over 600,000
+  8482589ffffffff    496,615 -> 470,655  704,644 -> 544,164       4 of 18 -> 0
+  8477057ffffffff    527,555 -> 500,035  744,331 -> 587,271       5 of 18 -> 0
+  8496a91ffffffff    538,179 -> 513,191  772,275 -> 616,355      12 of 18 -> 2
+  847b949ffffffff    304,535 -> 302,527  597,464 -> 495,062       0 of 16 -> 0
+  847b959ffffffff    359,789 -> 334,163  359,789 -> 334,163       0 of 14 -> 0
+
+Both columns of every row are one session on one machine, the far band put back to its full form by
+appending what the cull packed into each class's far mesh onto the end of that class's own mesh.
+
+IT BUYS LITTLE AT THE SPAWN AND MUCH AT THE RIM, which is exactly what it was for and is worth saying
+plainly: 5.2% off the parcel's spawn frame against 22.8% off its worst, 0.7% off the demo's spawn
+against 20.4% off its worst. Nineteen of the twenty-one views that were over C16's ceiling now fit.
+The two that do not are on 8496a91ffffffff at 616,355 and 601,080, 2.7% and 0.2% past a ceiling they
+were 28.7% and 25.6% past; what is left there is the ground, and the terrain's own split is where the
+next hundred thousand is.
+
+IT SPENDS DRAW CALLS RATHER THAN GIVING THEM BACK, unlike C20: one more per class with a far band, 37
+to 41 at the parcel's spawn and 57 to 64 at the demo's rim, against C16's 120. And it does not touch
+the shadow pass at all, checked rather than hoped: identical triangle for triangle at all 84 views
+across the five routes, because no class that casts is ever past its own `farM` inside the 240 m box.
+The shortest casting `farM` is dead-tree's 700 m and a caster inside the box stands at most 591 m
+from the lens at a 16 degree sun.
+
+THE NEAR FIELD IS UNTOUCHED, and it is proved by pixels rather than by argument. A bucket joins the
+far band only when the NEAREST point of its box is past the class's `farM`, and the box already holds
+every instance's own sphere, so an impostored instance is past `farM` by its whole radius. Measured
+on the page with the lens clipped one metre inside the shortest `farM` the cell grows, 200 m on the
+parcel and 120 m on the demo: 0 of 1,024,000 pixels differ. Unclipped it is also 0, and that is the
+larger finding.
+
+THE FAR BAND IS VERY NEARLY INVISIBLE IN THIS WORLD, which was not expected and is why the pop is as
+small as it is. At seven stand points on the ordinary parcel and seven on the demo, drawing the far
+band as cards rather than as full forms moves 0 or 1 pixels of 1,024,000, and DRAWING IT AT ALL
+against not drawing it moves the same 0 or 1: between the fog, which is exactly 1 at 420 m of view
+depth, and the near forest standing in front of it, the whole band is hidden. The instrument was
+checked against a positive control on the same frames, hiding the whole scatter, which moves 886,306
+pixels. Where the band IS visible is 847b959ffffffff, the one shipped route with open ground: over
+123 walkable views there, the worst steady-state difference between cards and full forms is 2,087
+pixels of 1,024,000, 1,521 of them by more than 4 levels and 1,230 by more than 8. For scale, C20
+moved 2.1% and 1.3% of a frame and C17's closure moved 56.7% by more than 8.
+
+IT DOES NOT POP, measured by holding the lens exactly still and stepping only the classification: at
+each 10.7 cm step, one frame of walking, the frame is drawn twice from the same camera, once with
+this frame's level of detail and once with the previous frame's, so everything the walk does to the
+picture cancels and what is left is the buckets that changed side. Over a 32 m walk:
+
+  847b959ffffffff, open beach   worst frame 76 pixels of 1,024,000, 70 of them by more than 8
+                                levels; 250 of 299 frames move nothing at all
+  847b949ffffffff, the demo     worst frame 106 pixels, 96 by more than 8; 262 of 299 move nothing
+  8482589ffffffff, the parcel   0 pixels on every one of 299 frames, with 15,581 to 17,664 instances
+                                in the far band the whole way
+
+The frustum-only control on the same frames, the same substitution with the far band drawn in full,
+reads 0, so what moved was the switch and not a bucket entering the cone. What the switch looks like
+at the crops is a two-pixel row of understorey along the horizon getting a shade greener; there is no
+frame in which a shape appears or leaves.
+
+AND THE CONTRACT COMMENT WAS WRONG AND IS CORRECTED. `AssetClass.lod` has said "full mesh within
+nearM, impostor to farM, culled beyond" since the contracts landed, and it was authored before
+anything read either number. That scheme cannot be built here: `farM` as a CULL distance would delete
+ferns at 220 m and shells at 120 m, well inside the 420 m the fog takes a fragment at, so the ground
+would go bare in front of a walker. What ships is two bands, the full form within `farM` and one
+cheap stand-in past it, never culled. `nearM` is still read by nobody and is kept as what it is: a
+fact about the class, not a promise the renderer keeps.
+
+### C20, corrected after review
+
+The rule was "1.7 m and taller casts" and the reasoning was that a short thing's shadow disappears
+into the bands the canopy is already casting. Measured, that reasoning holds only WHERE THERE IS
+CANOPY, and every picture C20 was validated on was one of two dense-canopy routes.
+
+On 842cd0dffffffff, a 100% grassland cell served by the same route, only 31.7% of its 2,763 thickets
+and 26% of its 481 berry-bushes stand under any canopy the closure can measure, and the median
+optical depth under a grassland thicket is 0.020, a transmittance of 0.962. There the shadow is not
+disappearing into anything. It is simply being deleted, and the world loses its dusk on open ground,
+which is the one hour the art bible is written around.
+
+So the rule becomes: a thing casts if it is TALL or if there is little canopy over it. The closure
+C17 already computes is the input, so the data is in hand and this is a second reader of it rather
+than a new mechanism.
+
+What this costs is honest and is paid elsewhere: the saving shrinks, and C22 is where the budget
+comes from instead. What C20 already bought is kept, and it was not small. No cell is over budget at
+its spawn any more: the highest is 512,624 against the 653,332 and 642,276 that were over before.
+
+## C22 — lod.farM is re-derived against the disk the scatter actually fills
+
+The impostor was built, is at full strength, and structurally cannot help six of the classes.
+lod.farM is 900 m for buttress-tree, canopy-palm, boulder, conifer, broadleaf and acacia, and
+SCATTER_FALLOFF cuts the scatter dead at cutoffM 500. So from every camera a person can reach, not
+one instance of those six is ever past its own far distance. On the ordinary parcel that is 303,451
+triangles, 35.9% of the scatter, that no far band can touch.
+
+Measured proof that the impostor itself is fine: at the worst frame the far band held 34,167
+instances as cards worth 327,828 triangles in full, and putting them back raised the frame by
+258,454, matching the layer's own cull arithmetic exactly. The mechanism works; its threshold was
+authored for a bigger world than the one that ships.
+
+Each class's farM is re-derived by MEASURING where its own form falls to a few pixels, and every
+value lands inside the 500 m disk. A single shared ceiling was rejected: it would card a fern and a
+fourteen metre buttress tree at the same distance, and on screen those are nothing like the same
+size.
+
+Under C5 this is a registry-version change. It moves no instance: farM decides which form is drawn
+and nothing else.
 
 ## Still open
 

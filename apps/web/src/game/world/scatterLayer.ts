@@ -82,23 +82,81 @@
  *
  * WHAT IT COSTS AND WHAT IT BUYS, measured in the browser on the real GPU, whole frame, both
  * passes (`info.autoReset` off with a wrapper on `shadowMap.render`), against the same frame in the
- * same session with the split taken back out:
+ * same session with the split taken back out.
  *
- *                          at the spawn            worst of twelve views      draw calls
- *   8482589ffffffff   1,623,152 -> 445,158 tri     1,623,354 -> 622,210        39 -> 39
- *   847b949ffffffff   1,118,418 -> 368,606 tri     1,139,246 -> 553,466        53 -> 47
+ * THE TURN COLUMN IS A WHOLE TURN NOW, and it did not used to be. It read "worst of twelve views",
+ * and the views came from an e2e helper that fed degrees into a radians-per-pixel dial: its twelve
+ * drags swept 97 degrees in total, 27% of the circle, so 622,210 and 553,466 were the worst of a
+ * quarter turn presented as the worst a drag can reach. Re-measured over twenty-four headings
+ * fifteen degrees apart, each one read back off the camera's own yaw:
  *
- * That is 3.65x and 3.03x at the spawn and 2.61x and 2.06x at the worst view a drag can reach, and
- * NOT ONE DRAW CALL was spent to get it. Over a walk of about 870 frames the parcel runs p50
+ *                          at the spawn            worst over a whole turn     draw calls
+ *   8482589ffffffff   1,623,152 -> 445,158 tri     1,623,354 -> 629,366        39 at both
+ *   847b949ffffffff   1,118,418 -> 368,606 tri     1,139,246 -> 564,363        53 spawn, 67 turned
+ *
+ * That is 3.65x and 3.03x at the spawn and 2.58x and 2.02x at the worst heading, and NOT ONE DRAW
+ * CALL of the budget's 120 was spent to get it. Over a walk of about 870 frames the parcel runs p50
  * 605,524 and worst 615,746 in 39 calls, and the demo p50 516,798 and worst 551,355 in 61.
  *
- * WHAT IS STILL OVER, said plainly. The 600,000 of DECISIONS C16 is now met at the spawn on both
- * routes with 26% and 39% to spare, and missed by 3.7% on the densest parcel when you turn to face
- * the forest. What that 622,210 is made of: 194,516 scatter triangles in the main pass, 243,645
- * scatter triangles in the shadow pass, and 184,049 that are not this layer's at all, the seven
- * terrain chunks through both passes. The terrain is 30% of the frame and has the shape the scatter
- * had before A7, seven meshes over a 4 km disk with a bounding sphere each; the same split applied
- * to the ground is where the next 100,000 is, and it is terrainChunks.ts's to make.
+ * WHAT WAS STILL OVER, and what closed it. After A7 the 600,000 of DECISIONS C16 was met at both
+ * spawns and missed on the parcel at ELEVEN OF THE TWENTY-FOUR HEADINGS, worst 629,366, of which
+ * 284,259 was the main pass and 345,107 the shadow pass. The shadow pass was the LARGER HALF, 55%
+ * of that frame, and the split could not touch it: 345,437 at the spawn against 345,107 at the
+ * worst heading, because the 240 m box follows the lens POSITION and only 12 m of its direction.
+ *
+ * DECISIONS C20 CLOSED IT, on the same 24 headings on the same GPU. Nothing under shoulder height
+ * casts any more (see {@link SHOULDER_HEIGHT_M}), which is thicket, fallen-log, driftwood and
+ * shore-rock here, and the whole frame becomes:
+ *
+ *                    at the spawn        worst over a whole turn      of 24 headings over 600,000
+ *   8482589ffffffff  444,052 -> 325,308  615,220 -> 497,080           6 -> 0
+ *   8496a91ffffffff  654,655 -> 538,179  658,396 -> 541,768          24 -> 0
+ *   8477057ffffffff  642,787 -> 527,555  668,653 -> 553,481          12 -> 0
+ *   847b949ffffffff  365,589 -> 280,561  550,837 -> 476,959           0 -> 0
+ *
+ * Both columns of every row are one session on one machine, which is the only way a difference is
+ * a difference. tests/e2e/scatterSplit.spec.ts re-reads the two shipped routes in its own session
+ * and gets 326,414 and 511,322 on the parcel and 283,578 and 476,959 on the demo, so session to
+ * session is worth about 1 to 3% and none of it is worth arguing over.
+ *
+ * The scatter's own shadow pass halves on every route: 243,114 -> 125,846 at the parcel's spawn,
+ * 178,195 -> 92,119 at the demo's, and its worst over 33 stand points 245,215 -> 127,551, which is
+ * 21.3% of the frame against the 45% tests/scatterSplit.test.mts allows a pass that draws no
+ * picture. It gives back draw calls rather than spending them: the scatter's shadow pass goes 5 to
+ * 3 on the parcel and 7 to 3 on the demo.
+ *
+ * DECISIONS C21 IS THE OTHER HALF, AND IT IS THE RIM'S. Everything above is measured at the spawn
+ * or turning on the spot, which is where the split works. Walk out to the rim and look back and it
+ * stops working, because from out there almost the whole disk is inside the cone: measured on the
+ * real GPU at eighteen stand points per route, the worst frame is 704,644 triangles on the parcel,
+ * 744,331 on 8477057ffffffff and 772,275 on 8496a91ffffffff, and 21 of the 84 views over five
+ * routes are over C16's 600,000. Past each class's own `lod.farM` an instance now drops to the
+ * two-triangle card scatterImpostor.ts derives from the class's own form, and the whole frame
+ * becomes:
+ *
+ *                    at the spawn        worst of eighteen stand points   of those views over 600,000
+ *   8482589ffffffff  496,615 -> 470,655  704,644 -> 544,164                4 -> 0
+ *   8477057ffffffff  527,555 -> 500,035  744,331 -> 587,271                5 -> 0
+ *   8496a91ffffffff  538,179 -> 513,191  772,275 -> 616,355               12 -> 2
+ *   847b949ffffffff  304,535 -> 302,527  597,464 -> 495,062                0 -> 0
+ *   847b959ffffffff  359,789 -> 334,163  359,789 -> 334,163                0 -> 0
+ *
+ * IT BUYS LITTLE AT THE SPAWN AND MUCH AT THE RIM, and that is exactly what it is for: 5.2% off the
+ * parcel's spawn frame against 22.8% off its worst, and 0.7% off the demo's spawn against 20.4%.
+ * The two views on 8496a91ffffffff that are still over are 616,355 and 601,080, 2.7% and 0.2% past
+ * the ceiling where they were 28.7% and 25.6% past it; what is left there is the ground, and the
+ * terrain's own split is where the next hundred thousand is.
+ *
+ * IT SPENDS DRAW CALLS RATHER THAN GIVING THEM BACK, which C20 did not: one more per class that has
+ * a far band, 37 to 41 at the parcel's spawn and 57 to 64 at the demo's rim, against the 120 of
+ * C16. And it does not touch the shadow pass at all: identical, triangle for triangle, at all 84
+ * views measured, because no class that casts is ever past its own `farM` inside the 240 m box.
+ *
+ * THE SHADOW PASS IS STILL THE LARGER HALF AT REST, 226,693 of the parcel's 325,308, because the
+ * terrain still has the shape the scatter had before A7: seven meshes over a 4 km disk with a
+ * bounding sphere each, about 102,000 triangles through the shadow pass whatever you look at. The
+ * same split applied to the ground is where the next 100,000 is, and it is terrainChunks.ts's to
+ * make.
  *
  * WHAT IT COSTS PER FRAME: the cull is 0.2 ms p50 and 0.4 ms worst on the parcel over that walk,
  * on an M4 Pro, and skips its copy and its upload entirely on a frame whose visible bucket set has
@@ -132,7 +190,17 @@ import {
 
 import { footprintToLocalM } from "./controller";
 import { hasScatterGeometry, SCATTER_GEOMETRY, SCATTER_MATERIAL } from "./scatterGeometry";
-import { bucketise, frustumHas, packInto, planesOf, visibleRuns, SHADOW_PAD_M, type ScatterBuckets } from "./scatterSplit";
+import { impostorFor, impostorMaterial, sweptRadius, IMPOSTOR_TRIANGLES } from "./scatterImpostor";
+import {
+  bucketise,
+  frustumHas,
+  packInto,
+  planesOf,
+  visibleRuns,
+  visibleRunsByRange,
+  SHADOW_PAD_M,
+  type ScatterBuckets,
+} from "./scatterSplit";
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 
 /**
@@ -143,6 +211,33 @@ import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
  * is its only consumer, and this is its address now. A caller with a real surveyed plot passes
  * `footprintTiles` instead.
  */
+/**
+ * Shoulder height, metres. One number, two decisions, and DECISIONS C20 is why it is one.
+ *
+ * WHAT IT ALREADY DECIDED: what stops a walking body. A class whose collider reaches this high is
+ * something you walk AROUND; anything shorter is something you shoulder through. `blockingHeightM`
+ * defaults to it and `blockedTile` honours the set it selects.
+ *
+ * WHAT IT NOW ALSO DECIDES: what casts a shadow. C20's argument is the same argument seen from the
+ * light: a thing you shoulder through is a thing whose own shadow disappears into the bands the
+ * canopy is already casting, so it may be drawn and not cast. The bill it pays is the shadow pass,
+ * which after the A7 split was the larger half of the frame and does not fall when you turn.
+ *
+ * THE REGISTRY'S `castsShadow` IS NOT REPLACED BY THIS, IT IS NARROWED BY IT, and the two are
+ * ANDed rather than one winning. Measured over the whole of ASSET_CLASSES, the flag and this test
+ * disagree in one direction only: five classes are flagged true with a collider under 1.7 m, and
+ * NOT ONE class is flagged false with a collider at or above it. So on the shipped table the
+ * conjunction and the height test alone select the same nine classes, and the flag is what keeps
+ * a future tall class that should not cast (something thin, something glassy) from being given a
+ * shadow by arithmetic. The five it silences, with their collider heights:
+ *
+ *   thicket 1.6 m, fallen-log 0.9, berry-bush 1.1, shore-rock 0.8, driftwood 0.5
+ *
+ * `tests/scatter.test.mts` pins that list and the one-directional disagreement, so a table edit
+ * that puts a tall class on the wrong side of the flag is a failure and not a silence.
+ */
+export const SHOULDER_HEIGHT_M = 1.7;
+
 export const BUILDABLE_FOOTPRINT_TILES: ReadonlyArray<readonly [number, number]> = [
   [-6, 0],
   [6, 0],
@@ -214,8 +309,11 @@ export interface ScatterLayerOptions {
    * a thicket.
    *
    * This is a movement decision, not a registry one: assets.ts says what a thing's collider IS and
-   * the client says what a walking body bumps into. It has to exist, and 1.7 m (chest height) is
-   * where it goes. Measured on the demo cell: honouring every collider puts about 45% of the ground
+   * the client says what a walking body bumps into. It has to exist, and {@link SHOULDER_HEIGHT_M}
+   * is where it goes. Overriding it here moves what BLOCKS and never what casts: DECISIONS C20's
+   * shadow test reads the constant directly, because a caller loosening a movement rule for its own
+   * reasons must not quietly hand the shadow pass a hundred thousand triangles. Measured on the
+   * demo cell: honouring every collider puts about 45% of the ground
    * within 120 m of the spawn inside a disc, and randomly placed overlapping discs stop leaving a
    * connected path through them at around 33%, which is not a dense rainforest, it is a maze with
    * no way out. Honouring only trunks and boulders puts it near 19%, and the walk test proves the
@@ -223,13 +321,27 @@ export interface ScatterLayerOptions {
    * a bush and you walk around a tree.
    */
   blockingHeightM?: number;
-  /** Let the classes that ask for it cast shadows. Off is a cheap way to buy back a shadow pass. */
+  /**
+   * Let the classes that ask for it cast shadows. Off is a cheap way to buy back a shadow pass.
+   *
+   * "Ask for it" is two tests since DECISIONS C20, not one: the registry's `castsShadow` and a
+   * collider at least {@link SHOULDER_HEIGHT_M} tall. This flag is the third and it is the caller's.
+   */
   shadows?: boolean;
   /**
    * Grid step of the frustum-culling buckets, metres. See {@link DEFAULT_BUCKET_M} for the sweep
    * this was chosen off; it changes what is SUBMITTED and can never change what is placed.
    */
   bucketM?: number;
+  /**
+   * Let each class drop to its two-triangle far form past its own `lod.farM` (DECISIONS C21).
+   *
+   * On is the shipped answer. Off is not a taste: it is the control the guards render against, in
+   * the same session on the same machine, so "what the impostor bought" and "what the impostor
+   * changed" are differences and not two remembered numbers. It changes what is SUBMITTED and, like
+   * `bucketM`, can never change where an instance stands.
+   */
+  impostors?: boolean;
   /**
    * Own the whole answer instead. This REPLACES the footprint, the clearing and the stations, so a
    * caller that reaches for it is taking responsibility for the spawn being standable too. Prefer
@@ -247,6 +359,15 @@ export interface CullReport {
   shadowMeshes: number;
   shadowInstances: number;
   shadowTriangles: number;
+  /**
+   * The far band, which is inside the three main-pass numbers above and broken out here.
+   * `impostorTriangles` is two per instance; `farBandFullTriangles` is what those same instances
+   * would have cost drawn in full, so the difference is exactly what DECISIONS C21 bought.
+   */
+  impostorMeshes: number;
+  impostorInstances: number;
+  impostorTriangles: number;
+  farBandFullTriangles: number;
   /** What the same frame would submit with no split at all: every instance, every frame. */
   unsplitMainTriangles: number;
   unsplitShadowTriangles: number;
@@ -273,6 +394,11 @@ export interface ScatterLayer extends WorldLayer {
   readonly meshes: ReadonlyMap<AssetClassId, THREE.InstancedMesh>;
   /** The shadow-pass twin of each class that casts one. Empty when `shadows` is off. */
   readonly shadowMeshes: ReadonlyMap<AssetClassId, THREE.InstancedMesh>;
+  /**
+   * The far-band mesh of each class, drawing the two-triangle card past that class's own
+   * `lod.farM`. Empty when `impostors` is off. Its `count` is what the last `cull` left standing.
+   */
+  readonly impostorMeshes: ReadonlyMap<AssetClassId, THREE.InstancedMesh>;
   /** The split itself: every instance of a class, in bucket order, with each bucket's world box. */
   readonly buckets: ReadonlyMap<AssetClassId, ScatterBuckets>;
   /**
@@ -411,24 +537,38 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   const clearingM = options.clearingM ?? 3.5;
   const colliderCellM = options.colliderCellM ?? 8;
   const shadows = options.shadows ?? true;
-  const blockingHeightM = options.blockingHeightM ?? 1.7;
+  const blockingHeightM = options.blockingHeightM ?? SHOULDER_HEIGHT_M;
 
   const bucketM = options.bucketM ?? DEFAULT_BUCKET_M;
 
+  const impostors = options.impostors ?? true;
+
   const meshes = new Map<AssetClassId, THREE.InstancedMesh>();
   const shadowMeshes = new Map<AssetClassId, THREE.InstancedMesh>();
+  const impostorMeshes = new Map<AssetClassId, THREE.InstancedMesh>();
   const buckets = new Map<AssetClassId, ScatterBuckets>();
+  /**
+   * One material for the whole far band, made on the first class that needs one. The colour rides
+   * on the card's vertices, so a fern's card and a thicket's differ only in their buffers; sharing
+   * is one shader program for the far band instead of one per class.
+   */
+  let farMaterial: THREE.MeshLambertMaterial | null = null;
   /** Per class, everything the per-frame cull needs and nothing it has to allocate. */
   const splits: Array<{
     id: AssetClassId;
     trianglesPerInstance: number;
+    /** This class's own `lod.farM`, or Infinity when the far band is switched off. */
+    farM: number;
     buckets: ScatterBuckets;
     mesh: THREE.InstancedMesh;
     shadowMesh: THREE.InstancedMesh | null;
+    farMesh: THREE.InstancedMesh | null;
     /** What the last cull left in the twin, so the main pass can borrow its count and give it back. */
     shadowCount: number;
     runs: Int32Array;
+    farRuns: Int32Array;
     lastMain: { runs: Int32Array; count: number };
+    lastFar: { runs: Int32Array; count: number };
     lastShadow: { runs: Int32Array; count: number };
   }> = [];
   // The registry is not known until the mask says what this cell is made of, so these two are
@@ -454,8 +594,19 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   const mainPlanes = new Float32Array(24);
   const shadowPlanes = new Float32Array(24);
   const meshSphere = new THREE.Sphere();
+  const eye = new THREE.Vector3();
 
   const dispose = () => {
+    for (const mesh of impostorMeshes.values()) {
+      // The card's geometry is memoised per class in scatterImpostor.ts and shared with every
+      // other world that ever draws this class, so it is NOT disposed here; the material is this
+      // layer's own and is given back once, below. What this frees is the instance buffer.
+      mesh.removeFromParent();
+      mesh.dispose();
+    }
+    impostorMeshes.clear();
+    farMaterial?.dispose();
+    farMaterial = null;
     for (const mesh of shadowMeshes.values()) {
       // The twin SHARES the class's geometry and material with the main mesh, so it gives back
       // only its own instance buffer here; disposing the shared pair is the main mesh's job below.
@@ -517,6 +668,9 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     // placed. That filter is the only thing standing between here and a crash.
     const geometry = SCATTER_GEOMETRY[cls.id]!();
     const material = SCATTER_MATERIAL[cls.id]!();
+    // DECISIONS C21. The card is derived from `geometry` itself, memoised on the class id, so this
+    // is 1 to 14 ms on the first cell that grows this class and nothing on any cell after it.
+    const card = impostors ? impostorFor(cls.id) : null;
 
     const source = new Float32Array(group.length * 16);
     const scenePositions = new Float32Array(group.length * 3);
@@ -555,8 +709,14 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     // It is still the sphere over EVERY instance and not over the ones drawn this frame, because it
     // is what three tests the whole object against, in both passes, before the layer's own buckets
     // get a say. A sphere shrunk to the packed set would cull the mesh that is about to be repacked.
+    // The form's own sphere, widened to hold the card as well where the card pokes out of it. The
+    // bucket boxes are built from this one sphere and are what BOTH main-pass meshes are culled by,
+    // so a box that held only the form could cull a bucket whose card was still on screen. See
+    // `sweptRadius`: it leaves twenty-five of the twenty-six classes untouched, so C20's shadow
+    // pass reads the same numbers it read before C21 on every shipped route.
     const gs = geometry.boundingSphere!;
-    const reach = gs.center.length() + gs.radius;
+    const cullRadius = card ? Math.max(gs.radius, sweptRadius(card.geometry, gs.center)) : gs.radius;
+    const reach = gs.center.length() + cullRadius;
     const centre = new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
     let radius = 0;
     for (let i = 0; i < group.length; i++) {
@@ -568,12 +728,15 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     }
 
     const t0 = performance.now();
-    const split = bucketise(source, group.length, gs.center, gs.radius, bucketM);
+    const split = bucketise(source, group.length, gs.center, cullRadius, bucketM);
     splitMs += performance.now() - t0;
 
-    const casts = shadows && cls.castsShadow;
-    const make = (suffix: string, cast: boolean): THREE.InstancedMesh => {
-      const mesh = new THREE.InstancedMesh(geometry, material, group.length);
+    // DECISIONS C20: the registry says whether a class casts AT ALL, and this height test says
+    // whether it is tall enough to be worth the shadow pass. Both have to agree. `collider` null is
+    // a thing you walk over, which is under any height there is.
+    const casts = shadows && cls.castsShadow && cls.collider !== null && cls.collider.heightM >= SHOULDER_HEIGHT_M;
+    const make = (suffix: string, cast: boolean, form = geometry, paint: THREE.Material = material): THREE.InstancedMesh => {
+      const mesh = new THREE.InstancedMesh(form, paint, group.length);
       mesh.name = `scatter:${cls.id}${suffix}`;
       mesh.castShadow = cast;
       // The twin never draws in the main pass, so its own shadow receiving is moot; it matches the
@@ -600,20 +763,38 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     // `shadows` off) the main mesh is the only mesh and casts nothing either, as before.
     const mesh = make("", false);
     const shadowMesh = casts ? make(":shadow", true) : null;
+    // The far band never casts. Measured on both shipped routes, no instance of any class that
+    // casts is ever past its own `farM` inside the 240 m shadow box, because the shortest `farM`
+    // among the casters is 700 m; tests/scatterImpostor.test.mts holds that rather than assuming
+    // it, so a future class that casts and stands close is caught rather than drawn twice.
+    let farMesh: THREE.InstancedMesh | null = null;
+    if (card) {
+      farMaterial ??= impostorMaterial();
+      farMesh = make(":far", false, card.geometry, farMaterial);
+      // Until the first cull the far mesh draws NOTHING, where the main mesh draws its whole class.
+      // Both are the honest state of a layer that has not been culled: the main mesh is the world
+      // in full, and the far band is the part of it that has been replaced, which is none of it.
+      farMesh.count = 0;
+    }
     const runs = new Int32Array(split.start.length * 2);
     return {
       mesh,
       shadowMesh,
+      farMesh,
       split,
       entry: {
         id: cls.id,
         trianglesPerInstance: geometry.getAttribute("position").count / 3,
+        farM: card ? cls.lod.farM : Infinity,
         buckets: split,
         mesh,
         shadowMesh,
+        farMesh,
         shadowCount: shadowMesh ? group.length : 0,
         runs,
+        farRuns: new Int32Array(split.start.length * 2),
         lastMain: { runs: new Int32Array(runs.length), count: -1 },
+        lastFar: { runs: new Int32Array(runs.length), count: -1 },
         lastShadow: { runs: new Int32Array(runs.length), count: -1 },
       },
     };
@@ -647,6 +828,10 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       shadowMeshes: 0,
       shadowInstances: 0,
       shadowTriangles: 0,
+      impostorMeshes: 0,
+      impostorInstances: 0,
+      impostorTriangles: 0,
+      farBandFullTriangles: 0,
       unsplitMainTriangles: 0,
       unsplitShadowTriangles: 0,
       ms: 0,
@@ -655,6 +840,10 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projScreen);
     planesOf(frustum, mainPlanes);
+    // The lens's own world position, which is where every far distance is measured from. Read off
+    // the matrix rather than off `camera.position`, because a camera parented to something would
+    // have a local position and the buckets are in world space.
+    eye.setFromMatrixPosition(camera.matrixWorld);
     let shadowReady = false;
     if (shadowCamera) {
       projScreen.multiplyMatrices(shadowCamera.projectionMatrix, shadowCamera.matrixWorldInverse);
@@ -672,15 +861,30 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       // camera costs one sphere test rather than one box test per bucket.
       meshSphere.copy(s.mesh.boundingSphere!).applyMatrix4(s.mesh.matrixWorld);
       let n = 0;
+      let far = 0;
       if (frustumHas(mainPlanes, meshSphere)) {
-        n = packInto(s.mesh, s.buckets, s.runs, visibleRuns(s.buckets, mainPlanes, s.runs), s.lastMain);
+        // One sweep, two lists: the buckets inside this class's own far distance and the ones past
+        // it. With no far mesh `farM` is Infinity and this is exactly `visibleRuns`.
+        const split = visibleRunsByRange(s.buckets, mainPlanes, eye.x, eye.y, eye.z, s.farM, s.runs, s.farRuns);
+        n = packInto(s.mesh, s.buckets, s.runs, split.nearCount, s.lastMain);
+        if (s.farMesh) far = packInto(s.farMesh, s.buckets, s.farRuns, split.farCount, s.lastFar);
       } else {
         n = packInto(s.mesh, s.buckets, s.runs, 0, s.lastMain);
+        if (s.farMesh) far = packInto(s.farMesh, s.buckets, s.farRuns, 0, s.lastFar);
       }
       if (n > 0) {
         out.mainMeshes++;
         out.mainInstances += n;
         out.mainTriangles += n * s.trianglesPerInstance;
+      }
+      if (far > 0) {
+        out.mainMeshes++;
+        out.mainInstances += far;
+        out.mainTriangles += far * IMPOSTOR_TRIANGLES;
+        out.impostorMeshes++;
+        out.impostorInstances += far;
+        out.impostorTriangles += far * IMPOSTOR_TRIANGLES;
+        out.farBandFullTriangles += far * s.trianglesPerInstance;
       }
 
       if (!s.shadowMesh) continue;
@@ -808,12 +1012,17 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
         (built.mesh.material as THREE.Material).dispose();
         built.mesh.dispose();
         built.shadowMesh?.dispose();
+        built.farMesh?.dispose();
         dispose();
         return;
       }
       ctx.scene.add(built.mesh);
       meshes.set(cls.id, built.mesh);
       buckets.set(cls.id, built.split);
+      if (built.farMesh) {
+        ctx.scene.add(built.farMesh);
+        impostorMeshes.set(cls.id, built.farMesh);
+      }
       if (built.shadowMesh) {
         ctx.scene.add(built.shadowMesh);
         shadowMeshes.set(cls.id, built.shadowMesh);
@@ -851,6 +1060,7 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     name: "scatter",
     meshes,
     shadowMeshes,
+    impostorMeshes,
     buckets,
     build,
     beforeRender,
@@ -860,6 +1070,7 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     invalidate() {
       for (const s of splits) {
         s.lastMain.count = -1;
+        s.lastFar.count = -1;
         s.lastShadow.count = -1;
       }
     },

@@ -497,17 +497,30 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
     triangles += perInstance * mesh.instanceMatrix.count;
 
     const cls = byId.get(id)!;
-    // The registry still decides who casts; since A7 the caster is the class's shadow twin rather
-    // than this mesh, because the two passes need two different instance sets and three uploads one
-    // buffer per frame. Exactly one of the pair casts, and it is there iff the registry says so.
+    // WHO CASTS is two tests, not one. The registry's `castsShadow` says whether the class casts at
+    // all; DECISIONS C20 says a thing under shoulder height does not, because its shadow disappears
+    // into the bands the canopy is already casting and the shadow pass is the larger half of the
+    // frame. Both written out here rather than imported, so this is a statement about the decision
+    // and not an echo of the layer's own expression of it.
+    //
+    // Since A7 the caster is the class's shadow twin rather than this mesh, because the two passes
+    // need two different instance sets and three uploads one buffer per frame. So at most one of
+    // the pair casts, and the twin exists exactly when both tests pass.
+    const shouldCast = cls.castsShadow && cls.collider !== null && cls.collider.heightM >= 1.7;
     const twin = layer.shadowMeshes.get(id);
     assert.equal(
       mesh.castShadow || (twin?.castShadow ?? false),
-      cls.castsShadow,
-      `${id} does not cast what the registry says it casts`,
+      shouldCast,
+      `${id} casts ${mesh.castShadow || (twin?.castShadow ?? false)} where the registry says castsShadow ` +
+        `${cls.castsShadow} and its collider stands ${cls.collider ? `${cls.collider.heightM} m` : "nowhere"} ` +
+        `against C20's 1.7 m`,
     );
     assert.equal(mesh.castShadow, false, `${id}'s main mesh casts as well as its twin, so it is drawn twice`);
-    assert.equal(twin !== undefined, cls.castsShadow, `${id} has a shadow twin the registry did not ask for`);
+    assert.equal(
+      twin !== undefined,
+      shouldCast,
+      `${id} has a shadow twin ${twin !== undefined ? "the registry and C20 did not ask for" : "it was owed"}`,
+    );
     assert.ok(mesh.instanceMatrix.needsUpdate || mesh.instanceMatrix.version >= 0);
 
     // The bounding sphere is the classic instancing bug: too small and the whole class blinks out
@@ -588,12 +601,14 @@ test("one InstancedMesh per class, sized to Placement.byClass, inside a bounding
 
 test("the scene holds exactly the meshes the layer built, and dispose gives them all back", () => {
   const added = scene.children.filter((o) => o.name.startsWith("scatter:"));
-  // One per class plus one shadow twin per casting class, since A7.
-  assert.equal(added.length, layer.meshes.size + layer.shadowMeshes.size);
+  // One per class, plus one shadow twin per casting class since A7, plus one far-band card per
+  // class since DECISIONS C21.
+  assert.equal(added.length, layer.meshes.size + layer.shadowMeshes.size + layer.impostorMeshes.size);
   layer.dispose!();
   assert.equal(scene.children.filter((o) => o.name.startsWith("scatter:")).length, 0);
   assert.equal(layer.meshes.size, 0);
   assert.equal(layer.shadowMeshes.size, 0);
+  assert.equal(layer.impostorMeshes.size, 0);
   assert.equal(layer.placement(), null);
   assert.equal(layer.colliders(), null);
   // With nothing built, the world is the world it was before W2-3: open ground.
@@ -677,5 +692,82 @@ test("every asset class in the registry has a form, within budget and agreeing w
     `forms: ${ASSET_CLASSES.length}/${ASSET_CLASSES.length} classes dressed, ` +
       `worst collider agreement ${worst.id} ${worst.ratio.toFixed(2)}x` +
       (budget.length ? `, heaviest ${budget.join(", ")}` : ""),
+  );
+});
+
+/**
+ * DECISIONS C20 against the flag it narrows, over the whole registry rather than one cell's slice.
+ *
+ * TWO TABLES DECIDE WHO CASTS and nothing in the type system makes them agree: `castsShadow`, which
+ * was authored by eye, and the collider height, which was authored for walking. C20 ANDs them. The
+ * honest question is which of the two wins where they disagree, and the answer is that on the
+ * shipped table the disagreement runs in one direction only: five classes are flagged true and
+ * stand under 1.7 m, and NOT ONE is flagged false and stands at or above it. So C20 is a pure
+ * narrowing, the conjunction selects the same nine classes the height test alone would, and the
+ * flag's remaining job is to stop arithmetic from handing a shadow to a future tall class that
+ * should not have one.
+ *
+ * BOTH HALVES ARE PINNED HERE because both can go stale in silence. The five names and heights are
+ * a literal in this file, compared against the registry, so a table edit that silences a sixth
+ * class, or un-silences one of these, has to come and say so. The one-directional claim is asserted
+ * separately, so authoring a tall class with `castsShadow` false fails HERE, where the comment
+ * above and DECISIONS C20 can be corrected, rather than passing quietly and leaving both wrong.
+ *
+ * The 1.7 is written out rather than imported from the layer for the reason every number in this
+ * file is: an expectation read off the thing under test agrees with it by construction.
+ */
+test("C20 narrows the registry's castsShadow and never contradicts it", () => {
+  const SHOULDER_M = 1.7;
+
+  /** Flagged as a caster, too short to be one. Name and collider height, from DECISIONS C20. */
+  const SILENCED: ReadonlyArray<readonly [string, number]> = [
+    ["fallen-log", 0.9],
+    ["thicket", 1.6],
+    ["berry-bush", 1.1],
+    ["driftwood", 0.5],
+    ["shore-rock", 0.8],
+  ];
+
+  const silenced = ASSET_CLASSES.filter((c) => c.castsShadow && c.collider !== null && c.collider.heightM < SHOULDER_M).map(
+    (c) => [c.id, c.collider!.heightM] as const,
+  );
+  assert.deepEqual(
+    [...silenced].sort(),
+    [...SILENCED].sort(),
+    `C20 silences ${silenced.map(([id, h]) => `${id} ${h} m`).join(", ")}, where this file records ` +
+      `${SILENCED.map(([id, h]) => `${id} ${h} m`).join(", ")}. A class moved across the threshold changes what the ` +
+      `shadow pass costs and what the world looks like at dusk; say which, here and in DECISIONS C20.`,
+  );
+
+  // Flagged as a caster with no collider at all: nothing today, and it would be the same silence
+  // for a different reason, so it is counted separately rather than folded into the five.
+  const flagged = ASSET_CLASSES.filter((c) => c.castsShadow && c.collider === null).map((c) => c.id);
+  assert.deepEqual(flagged, [], `${flagged.join(", ")} asks to cast with no collider, so C20 has no height to test`);
+
+  // The direction that matters: the flag may be BROADER than C20 and must never be narrower, or the
+  // sentence "C20 narrows the flag" is false and the conjunction is doing something else.
+  const contradicts = ASSET_CLASSES.filter((c) => !c.castsShadow && c.collider !== null && c.collider.heightM >= SHOULDER_M).map(
+    (c) => `${c.id} ${c.collider!.heightM} m`,
+  );
+  assert.deepEqual(
+    contradicts,
+    [],
+    `${contradicts.join(", ")} stands at or above C20's ${SHOULDER_M} m with castsShadow false. That is legal and the ` +
+      `layer honours it, because the two tests are ANDed and the flag wins where it says no. What is no longer true ` +
+      `is this file's and DECISIONS C20's claim that the disagreement runs one way only. Correct both.`,
+  );
+
+  const casting = ASSET_CLASSES.filter((c) => c.castsShadow && c.collider !== null && c.collider.heightM >= SHOULDER_M);
+  const byHeight = ASSET_CLASSES.filter((c) => c.collider !== null && c.collider.heightM >= SHOULDER_M);
+  assert.deepEqual(
+    casting.map((c) => c.id),
+    byHeight.map((c) => c.id),
+    "the conjunction and the height test alone no longer select the same classes",
+  );
+  assert.ok(casting.length > 0 && silenced.length > 0, "one side of the split is empty, so this proves nothing");
+
+  console.log(
+    `  C20: ${casting.length} of ${ASSET_CLASSES.length} classes cast (${casting.map((c) => `${c.id} ${c.collider!.heightM}m`).join(", ")});` +
+      ` silenced ${silenced.map(([id, h]) => `${id} ${h}m`).join(", ")}`,
   );
 });
