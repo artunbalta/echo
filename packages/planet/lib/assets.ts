@@ -38,7 +38,25 @@ export interface AssetClass {
   /** When set, each accepted candidate is a cluster centre with `count` members within `radiusM`. */
   cluster?: { radiusM: number; count: number };
   excludes: readonly ExclusionKind[];
-  /** Full mesh within `nearM`, impostor to `farM`, culled beyond. */
+  /**
+   * Where the renderer may stop drawing the whole form, metres from the lens.
+   *
+   * WHAT THIS COMMENT USED TO SAY, and it was authored before anything read either number: "full
+   * mesh within `nearM`, impostor to `farM`, culled beyond". DECISIONS C21 built the far band and
+   * that sentence describes a scheme this world cannot have. `farM` as a CULL distance would delete
+   * ferns at 220 m and shells at 120, which is well inside the 420 m the client's fog takes a
+   * fragment at, so a player would watch the ground go bare in front of them. And `nearM` as the
+   * impostor distance is 60 to 200 m, where a thicket is thirty pixels tall and a card standing in
+   * for it is plainly a card.
+   *
+   * WHAT IT MEANS NOW, which is the two bands the renderer actually draws: the full form within
+   * `farM`, and one cheap stand-in past it, never culled. `nearM` is STILL READ BY NOBODY and is
+   * kept because it is the distance at which a class stops being worth its detail, which is a fact
+   * about the class that a future third band would want; it is not a promise the renderer keeps.
+   *
+   * Neither number moves an instance: `placeAssets` does not read them, so an edit here is a
+   * renderer change and not a placement one, and it needs no version bump.
+   */
   lod: { nearM: number; farM: number };
   /**
    * Null for things you walk over (a dune ripple, a shell).

@@ -39,28 +39,37 @@
  * the instances' own transformed geometry spheres, which is both tighter and, for a layer of props
  * lying on the ground, tighter in the direction that matters.
  *
- * AND THERE IS NO IMPOSTOR, which was the other half of the plan and is not built, on numbers.
- * Measured on the ordinary parcel over twelve views, main pass, against the split's own output:
+ * AND THE IMPOSTOR IS BUILT NOW, which this header used to argue against. What it argued was true
+ * of the frame it was measured on and false of the frame that actually breaks the budget, and the
+ * correction is worth keeping rather than deleting, because it is a lesson about where a
+ * measurement was taken. The old paragraph read, over twelve views AT THE SPAWN:
  *
  *   past each class's own `lod.farM`, which is the band the plan named    0 to 20.9%, 39,364 tri
  *   past the FOG, which is the band that is actually invisible            0 to 7.4%, 13,993 tri
  *
- * The first band is nearly all fern and bromeliad, at 6 and 16 triangles an instance, so the very
- * best an impostor could return is about two thirds of it, 26,000 triangles, 4% of a 622,210
- * frame; and it returns nothing at all in the shadow pass, because neither class casts. The second
- * band is smaller still, and it is the one that could simply be deleted rather than impostored:
- * three's linear fog is `smoothstep(near, far, viewDepth)`, exactly 1 at and beyond `far`, and the
- * sky layer pins the fog colour to the dome's own horizon stop, so a prop past it carries none of
- * its own colour. That was not argued, it was rendered: removing the whole fog band and re-reading
- * the framebuffer moves 0 of 1,024,000 pixels at all twenty-four route-and-view pairs. Fourteen
- * thousand triangles is not worth a second geometry path, a transition to tune and a pop to
- * prevent, so neither band is built and the reason is here rather than in a ticket.
+ * and concluded that fourteen to twenty-six thousand triangles was not worth a second geometry
+ * path. AT THE SPAWN it still is not: DECISIONS C21 measured on the real GPU takes the parcel's
+ * spawn frame from 496,615 to 470,655, 5.2%. FROM THE RIM the same band is half the frame: standing
+ * 390 m out and looking back, 279,490 of the 576,774 instanced triangles in the cone stand past
+ * their own `lod.farM`, and the whole frame goes 704,644 to 544,164, from over C16's ceiling to
+ * under it. The band the old measurement called small is the same band; the camera it was measured
+ * from was the one the split already works at.
  *
- * The plan's own version of the far band is emptier than either. `buttress-tree`, `canopy-palm`,
- * `boulder`, `conifer`, `broadleaf` and `acacia` all carry `farM` 900 while `spawnFalloff`'s
- * `cutoffM` is 500, so from a camera anywhere near the spawn not one instance of the six is ever
- * past its own far distance: on the parcel that is 303,451 triangles, 35.9% of the scatter,
- * structurally outside any band those two constants can describe.
+ * The other half of that paragraph stands and is now load bearing for a different reason. Three's
+ * linear fog is `smoothstep(near, far, viewDepth)`, exactly 1 at and beyond `far`, and the sky
+ * layer pins the fog colour to the dome's own horizon stop, so a prop past 420 m carries none of
+ * its own colour. That is why the far band is nearly free to look at: measured on the shipped page
+ * at seven stand points on the ordinary parcel, drawing it as cards rather than as full forms moves
+ * 0 or 1 pixels of 1,024,000, because between the fog and the near forest standing in front of it
+ * the whole band is invisible. scatterImpostor.ts has the numbers and the routes where it is not.
+ *
+ * The plan's own reading of the far band is still emptier than either, and this is still true.
+ * `buttress-tree`, `canopy-palm`, `boulder`, `conifer`, `broadleaf` and `acacia` all carry `farM`
+ * 900 while `spawnFalloff`'s `cutoffM` is 500, so from a camera anywhere near the spawn not one
+ * instance of the six is ever past its own far distance, and even from the rim the furthest
+ * instance on the disk is 890 m away. On the parcel that is 303,451 triangles, 35.9% of the
+ * scatter, structurally outside any band those two constants can describe: C21 does not touch a
+ * single tree on this route, and everything it buys it buys from the understorey.
  */
 
 import * as THREE from "three";
@@ -279,6 +288,91 @@ export function visibleRuns(buckets: ScatterBuckets, planes: Float32Array, runs:
     runCount++;
   }
   return runCount;
+}
+
+/**
+ * Which visible buckets are inside a class's own far distance and which are past it (DECISIONS
+ * C21). One sweep, two run lists, so the far band costs no second pass over the buckets.
+ *
+ * THE TEST IS ON THE BOX'S NEAREST POINT, and that is what makes the near field safe. A bucket goes
+ * to the far list only when the closest point of its box is further than `farM` from the eye, and
+ * the box already contains every instance's own bounding sphere, so every instance drawn as an
+ * impostor is past `farM` by its whole radius. The other direction is deliberately loose: an
+ * instance past `farM` sharing a bucket with something nearer is still drawn in full. That costs
+ * triangles and can never cost a pixel, which is the only asymmetry a level of detail is allowed.
+ *
+ * `farM` of Infinity is the whole feature turned off: no bucket can be past it, `farCount` comes
+ * back 0, and the near list is exactly what {@link visibleRuns} would have returned. That is how
+ * the guards render the world with impostors and without in one session, on one machine.
+ */
+export function visibleRunsByRange(
+  buckets: ScatterBuckets,
+  planes: Float32Array,
+  eyeX: number,
+  eyeY: number,
+  eyeZ: number,
+  farM: number,
+  nearRuns: Int32Array,
+  farRuns: Int32Array,
+): { nearCount: number; farCount: number } {
+  const { box, start, length } = buckets;
+  const n = start.length;
+  const farSq = farM === Infinity ? Infinity : farM * farM;
+  let nearCount = 0;
+  let farCount = 0;
+  let openNear = -1;
+  let openFar = -1;
+  let lastNear = -1;
+  let lastFar = -1;
+  const close = (runs: Int32Array, count: number, from: number, to: number) => {
+    runs[count * 2] = start[from]!;
+    runs[count * 2 + 1] = start[to]! + length[to]!;
+    return count + 1;
+  };
+  for (let b = 0; b < n; b++) {
+    const o = b * 6;
+    let inside = true;
+    for (let i = 0; i < PLANE_FLOATS; i += 4) {
+      const nx = planes[i]!;
+      const ny = planes[i + 1]!;
+      const nz = planes[i + 2]!;
+      const px = nx > 0 ? box[o + 3]! : box[o]!;
+      const py = ny > 0 ? box[o + 4]! : box[o + 1]!;
+      const pz = nz > 0 ? box[o + 5]! : box[o + 2]!;
+      if (nx * px + ny * py + nz * pz + planes[i + 3]! < 0) {
+        inside = false;
+        break;
+      }
+    }
+    let far = false;
+    if (inside && farSq !== Infinity) {
+      // The squared distance from the eye to the box: zero on any axis the eye is between the
+      // faces of, which is the standard point-to-box and is exact rather than a corner test.
+      const dx = eyeX < box[o]! ? box[o]! - eyeX : eyeX > box[o + 3]! ? eyeX - box[o + 3]! : 0;
+      const dy = eyeY < box[o + 1]! ? box[o + 1]! - eyeY : eyeY > box[o + 4]! ? eyeY - box[o + 4]! : 0;
+      const dz = eyeZ < box[o + 2]! ? box[o + 2]! - eyeZ : eyeZ > box[o + 5]! ? eyeZ - box[o + 5]! : 0;
+      far = dx * dx + dy * dy + dz * dz > farSq;
+    }
+    const wantNear = inside && !far;
+    const wantFar = inside && far;
+    if (wantNear) {
+      if (openNear < 0) openNear = b;
+      lastNear = b;
+    } else if (openNear >= 0) {
+      nearCount = close(nearRuns, nearCount, openNear, lastNear);
+      openNear = -1;
+    }
+    if (wantFar) {
+      if (openFar < 0) openFar = b;
+      lastFar = b;
+    } else if (openFar >= 0) {
+      farCount = close(farRuns, farCount, openFar, lastFar);
+      openFar = -1;
+    }
+  }
+  if (openNear >= 0) nearCount = close(nearRuns, nearCount, openNear, lastNear);
+  if (openFar >= 0) farCount = close(farRuns, farCount, openFar, lastFar);
+  return { nearCount, farCount };
 }
 
 /**

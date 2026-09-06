@@ -54,11 +54,12 @@ import { localMToTile, tileToLocalM } from "../src/game/world/controller";
 import { FOLLOW_CAMERA, initialFollowCamera, stepFollowCamera, type FollowCameraOptions, type FollowCameraState } from "../src/game/world/followCamera";
 import { parcelLayers, sliceOptionsFor } from "../src/game/world/parcelWorld";
 import type { MeasureChain } from "../src/game/world/measure";
-import { DEFAULT_BUCKET_M, scatterLayer, type ScatterLayer } from "../src/game/world/scatterLayer";
+import { DEFAULT_BUCKET_M, scatterLayer, type CullReport, type ScatterLayer } from "../src/game/world/scatterLayer";
 import { DEMO_SCATTER } from "../src/game/world/demoStations";
 import { spawnView, SPAWN_HORIZON_MARGIN_DEG } from "../src/game/world/spawnView";
 import { DUSK, KEY_DISTANCE_M, skyState } from "../src/game/world/skyLayer";
-import { DEFAULT_SHADOW_HALF_M } from "../src/game/world/terrainChunks";
+import { SHADOW_PAD_M } from "../src/game/world/scatterSplit";
+import { DEFAULT_SHADOW_HALF_M, DEFAULT_SHADOW_MAP_SIZE } from "../src/game/world/terrainChunks";
 import type { LayerContext, WorldFrame } from "../src/game/world/PlanetWorld";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -84,6 +85,35 @@ const VIEW_W = 1280;
 const VIEW_H = 800;
 const NEAR_M = 0.1;
 const FAR_M = 6000;
+
+// ── the budget: DECISIONS C16, whole frame, both passes ──────────────────────────
+
+/**
+ * What a frame may cost, and how much of it the pass nobody looks at may have.
+ *
+ * The first two are DECISIONS C16 unmodified: 600,000 triangles and 120 draw calls for the WHOLE
+ * frame, both passes together, on a mid-range laptop with vsync off.
+ *
+ * THE THIRD IS A SHARE OF THE FIRST, and it is a judgement stated here rather than a reading taken
+ * off the layer. The shadow pass draws no picture, it darkens one: the main pass carries the
+ * scatter, the ground, the sea, the sky and the character, and the shadow pass carries the casters
+ * alone. A means may not cost as much as the end it serves, so it gets the smaller share of the
+ * budget, 45% against 55%, which leaves the main pass 330,000 and is the loosest split that still
+ * says the picture comes first. Nothing about the current output went into that; what the current
+ * output IS gets printed by the sweep in (d2). It read 245,215 on the parcel, 41% of the whole
+ * frame's budget with the ground's own casters not yet counted, and DECISIONS C20 took it to
+ * 127,551, 21.3%, by stopping everything under shoulder height casting.
+ *
+ * SO THIS CEILING NOW HAS TWICE THE HEADROOM IT HAD, and that is a hole rather than a comfort. It
+ * was demonstrated failing by widening SHADOW_PAD_M to 30 m, which used to read 300,516; the same
+ * widening now reads 155,256 and passes, and so do 60, 90 and 120 m at 179,117, 202,422 and
+ * 221,246. A bound derived from the budget does not tighten when the thing it bounds gets cheaper,
+ * which is correct and is why the pad is now bounded at its own cause as well, in the shadow map's
+ * texels, further down this file.
+ */
+const TRIANGLE_CEILING = 600_000;
+const DRAW_CALL_CEILING = 120;
+const SHADOW_TRIANGLE_CEILING = Math.round(TRIANGLE_CEILING * 0.45);
 
 // ── one world, without a renderer ───────────────────────────────────────────────
 
@@ -271,13 +301,17 @@ function camerasFor(b: Built): Array<{ label: string; camera: THREE.PerspectiveC
 /**
  * The key light's shadow camera, built the way terrainChunks builds it: the exported half width,
  * the exported key distance, and the dusk sun direction the sky layer derives from the art bible.
- * The box is aimed at the spawn, which is where the terrain layer aims it when you are standing
- * there.
+ *
+ * WHERE THE BOX GOES is terrainChunks' own `update`: the centre is the ground point 12 m ahead of
+ * the lens, snapped to whole metres. Twelve metres of a 240 m box is 5%, so the box is a function
+ * of WHERE THE PLAYER IS STANDING and barely of which way they face, which is why this takes a
+ * tile position and not a camera, and why the sweep in (d2) walks stand points rather than
+ * headings. It defaults to the spawn, which is where the box is when you arrive.
  */
-function shadowCameraFor(b: Built): THREE.OrthographicCamera {
+function shadowCameraFor(b: Built, xTile = b.spawnTile[0], yTile = b.spawnTile[1]): THREE.OrthographicCamera {
   const half = DEFAULT_SHADOW_HALF_M;
   const cam = new THREE.OrthographicCamera(-half, half, half, -half, 1, KEY_DISTANCE_M * 2.2);
-  const target = b.frame.toScene(b.spawnTile[0], b.spawnTile[1], 0);
+  const target = b.frame.toScene(xTile, yTile, 0);
   const from = skyState(DUSK).keyFrom;
   cam.position.set(target.x + from.x * KEY_DISTANCE_M, target.y + from.y * KEY_DISTANCE_M, target.z + from.z * KEY_DISTANCE_M);
   cam.lookAt(target);
@@ -519,15 +553,25 @@ test("the split submits what the camera can see and little else, at eight headin
         // Nothing vanished: every instance the per-instance test kept is in the packed buffer. The
         // check is on the MATRIX, not on the count, because a split that packed the wrong bucket
         // would pass a count and draw the wrong trees.
+        //
+        // THE UNION OF BOTH MAIN-PASS BUFFERS, since DECISIONS C21: an instance past its class's
+        // own far distance is drawn by the far-band mesh and is missing from the full one, which is
+        // the point of it. WHICH of the two it is in is scatterImpostor.test.mts's question; this
+        // one asks only that the camera can still see it.
         let missing = 0;
         let firstMissing = "";
         for (const [id, mesh] of b.layer.meshes) {
           const buckets = b.layer.buckets.get(id)!;
-          const arr = mesh.instanceMatrix.array as Float32Array;
           const keyOf = (a: Float32Array, i: number) =>
             `${a[i * 16 + 12]!.toFixed(3)},${a[i * 16 + 13]!.toFixed(3)},${a[i * 16 + 14]!.toFixed(3)}`;
           const packed = new Set<string>();
+          const arr = mesh.instanceMatrix.array as Float32Array;
           for (let i = 0; i < mesh.count; i++) packed.add(keyOf(arr, i));
+          const farMesh = b.layer.impostorMeshes.get(id);
+          if (farMesh) {
+            const farArr = farMesh.instanceMatrix.array as Float32Array;
+            for (let i = 0; i < farMesh.count; i++) packed.add(keyOf(farArr, i));
+          }
           for (const i of must.get(id)!) {
             if (packed.has(keyOf(buckets.matrices, i))) continue;
             missing++;
@@ -543,13 +587,22 @@ test("the split submits what the camera can see and little else, at eight headin
 
         // And it actually culled, against a bound that is measured to lie between the shipped grid
         // and the collapsed one on this very frame.
-        const surplus = report.mainTriangles / mustTriangles;
-        const flatSurplus = flat.mainTriangles / mustTriangles;
+        //
+        // THE FAR BAND IS PUT BACK AT FULL PRICE FIRST, and it has to be. This ratio is about the
+        // GRID: how much more a bucket-at-a-time cull submits than a per-instance one, whose
+        // denominator counts every visible instance at its full form's cost. Leaving C21's two
+        // triangles in the numerator would measure the grid and the level of detail together, and
+        // the bound would loosen every time the far band got cheaper, which is the exact shape of
+        // the slack DECISIONS C20 opened in the shadow ceiling. `full` is what the main pass
+        // submitted before C21, reconstructed from the layer's own report.
+        const full = (r: CullReport) => r.mainTriangles - r.impostorTriangles + r.farBandFullTriangles;
+        const surplus = full(report) / mustTriangles;
+        const flatSurplus = full(flat) / mustTriangles;
         worstShipped = Math.max(worstShipped, surplus);
         leastCollapsed = Math.min(leastCollapsed, flatSurplus);
         assert.ok(
           surplus <= BUCKET_SURPLUS,
-          `${b.cell} ${label}: the split submitted ${report.mainTriangles.toLocaleString()} triangles where a ` +
+          `${b.cell} ${label}: the split submitted ${full(report).toLocaleString()} triangles at full form where a ` +
             `per-instance cull submits ${mustTriangles.toLocaleString()}, a surplus of ${surplus.toFixed(2)}x against the ` +
             `${BUCKET_SURPLUS}x a ${DEFAULT_BUCKET_M} m grid is allowed. One bucket per class costs ` +
             `${flatSurplus.toFixed(2)}x on this same frame, so the grid has stopped culling.`,
@@ -560,16 +613,14 @@ test("the split submits what the camera can see and little else, at eight headin
             `${COLLAPSED_SURPLUS_FLOOR}x this bound is meant to sit below. The two configurations are not separated ` +
             `here, so the ${BUCKET_SURPLUS}x above is not a bound on anything at this view.`,
         );
-        // One draw call per class with something left, which is what the whole design is for.
-        assert.ok(
-          report.mainMeshes <= b.layer.meshes.size,
-          `${b.cell} ${label}: ${report.mainMeshes} draw calls for ${b.layer.meshes.size} classes`,
-        );
+        // What the frame COSTS in draw calls is not asserted here and cannot be: this loop culls
+        // with no shadow camera, so it sees one of the two passes. It is (c2), which culls both and
+        // counts the calls off the scene rather than off the report.
         lines.push(
-          `${b.cell.slice(0, 7)} ${label.padEnd(12)} ${String(report.mainTriangles).padStart(7)} of ` +
-            `${String(report.unsplitMainTriangles).padStart(7)} (${((100 * report.mainTriangles) / report.unsplitMainTriangles).toFixed(1)}%), ` +
+          `${b.cell.slice(0, 7)} ${label.padEnd(12)} ${String(full(report)).padStart(7)} of ` +
+            `${String(report.unsplitMainTriangles).padStart(7)} (${((100 * full(report)) / report.unsplitMainTriangles).toFixed(1)}%), ` +
             `${surplus.toFixed(2)}x a per-instance cull against the collapsed grid's ${flatSurplus.toFixed(1)}x, ` +
-            `${report.mainMeshes} draw calls`,
+            `${report.mainMeshes} classes packed`,
         );
       }
     } finally {
@@ -581,6 +632,101 @@ test("the split submits what the camera can see and little else, at eight headin
     `  surplus over a per-instance cull: shipped grid worst ${worstShipped.toFixed(2)}x of ${BUCKET_SURPLUS}x allowed, ` +
       `collapsed grid best ${leastCollapsed.toFixed(2)}x of ${COLLAPSED_SURPLUS_FLOOR}x required`,
   );
+});
+
+// ── (c2) the draw calls the renderer would actually issue ───────────────────────
+
+/** The arguments three hands `onBeforeRender` that this layer's own hooks never read. */
+const NO_RENDERER = null as unknown as THREE.WebGLRenderer;
+const NO_SCENE = null as unknown as THREE.Scene;
+const NO_CAMERA = null as unknown as THREE.Camera;
+const NO_GROUP = null as unknown as THREE.Group;
+
+/**
+ * What this scene would cost in draw calls, both passes, counted the way three counts them.
+ *
+ * WHAT THIS REPLACES, because the guard it replaces could not fail. This file used to assert
+ * `report.mainMeshes <= layer.meshes.size` and call it the draw-call bound. `mainMeshes` is
+ * incremented at most once per entry of `splits`, and `splits` and `meshes` are filled in the same
+ * loop iteration of the build and cleared together, so the two sides count the same thing: it read
+ * 8 <= 8 at all eight headings on the parcel and would have stayed true if every mesh in the scene
+ * had been doubled. It named the budget and measured the layer's own bookkeeping against itself.
+ *
+ * So this walks the SCENE and plays three's gates over it. A twin that leaks into the main pass, a
+ * report that has drifted from what is in the scene, and the plan's rejected mesh-per-bucket shape
+ * all cost calls here, and none of them can cost a call in `mainMeshes`.
+ *
+ * THE GATES, read off three r0.169 in node_modules rather than assumed:
+ *   - `renderInstances` returns before `gl.draw*Instanced` when the instance count is 0
+ *     (three.cjs:15767 non-indexed, :17716 indexed), so a zero-count InstancedMesh is not a call.
+ *   - the shadow pass runs FIRST and draws what is `visible` and `castShadow`
+ *     (`WebGLShadowMap.renderObject`, three.cjs:22553). It calls `onBeforeShadow`, which is
+ *     Object3D's no-op here, and NOT `onBeforeRender`, so the twin keeps its count for this pass.
+ *   - the main pass calls `onBeforeRender` immediately before the draw and `onAfterRender`
+ *     immediately after, which is the handshake the twin uses to draw nothing in it.
+ */
+function drawCalls(scene: THREE.Scene): { shadow: number; main: number; meshes: number } {
+  const drawn: THREE.InstancedMesh[] = [];
+  scene.traverse((o) => {
+    if ((o as THREE.InstancedMesh).isInstancedMesh && o.visible) drawn.push(o as THREE.InstancedMesh);
+  });
+  let shadow = 0;
+  for (const m of drawn) if (m.castShadow && m.count > 0) shadow++;
+  let main = 0;
+  for (const m of drawn) {
+    m.onBeforeRender(NO_RENDERER, NO_SCENE, NO_CAMERA, m.geometry, m.material as THREE.Material, NO_GROUP);
+    if (m.count > 0) main++;
+    m.onAfterRender(NO_RENDERER, NO_SCENE, NO_CAMERA, m.geometry, m.material as THREE.Material, NO_GROUP);
+  }
+  return { shadow, main, meshes: drawn.length };
+}
+
+test("the draw calls the scene would issue, both passes, against C16's 120", () => {
+  const lines: string[] = [];
+  let worst = 0;
+  for (const b of [demo, parcel]) {
+    const shadowCamera = shadowCameraFor(b);
+    for (const { label, camera } of camerasFor(b)) {
+      b.layer.cull(camera, shadowCamera);
+      const report = b.layer.lastCull()!;
+      const calls = drawCalls(b.ctx.scene);
+
+      assert.ok(calls.meshes > 0, `${b.cell} ${label}: the scene holds no instanced mesh at all, so this proves nothing`);
+
+      // The budget first, because it is the one C16 wrote down.
+      const total = calls.main + calls.shadow;
+      worst = Math.max(worst, total);
+      assert.ok(
+        total <= DRAW_CALL_CEILING,
+        `${b.cell} ${label}: the scatter alone would issue ${total} draw calls (${calls.main} main, ${calls.shadow} ` +
+          `shadow) against the ${DRAW_CALL_CEILING} DECISIONS C16 gives the WHOLE frame. The ground, the sea and the ` +
+          `character are not in this scene and have not been counted; the page's own total is e2e/scatterSplit.spec.ts's.`,
+      );
+
+      // Then the layer's own accounting against what the renderer would do with the scene the
+      // layer left behind. Two different sources, so a report that has drifted from the scene is
+      // caught here and cannot be caught by comparing the report with itself.
+      assert.equal(
+        calls.main,
+        report.mainMeshes,
+        `${b.cell} ${label}: the scene would issue ${calls.main} main-pass draw calls where the cull reports ` +
+          `${report.mainMeshes}. Something in the scene draws in the main pass that the layer is not counting; the ` +
+          `usual cause is a shadow twin whose onBeforeRender no longer zeroes its count.`,
+      );
+      assert.equal(
+        calls.shadow,
+        report.shadowMeshes,
+        `${b.cell} ${label}: the scene would issue ${calls.shadow} shadow-pass draw calls where the cull reports ` +
+          `${report.shadowMeshes}.`,
+      );
+      lines.push(
+        `${b.cell.slice(0, 7)} ${label.padEnd(12)} ${String(total).padStart(3)} draw calls (${calls.main} main, ` +
+          `${calls.shadow} shadow) of ${DRAW_CALL_CEILING}, ${calls.meshes} meshes in the scene`,
+      );
+    }
+  }
+  for (const l of lines) console.log(`  ${l}`);
+  console.log(`  worst draw calls over sixteen views: ${worst} of ${DRAW_CALL_CEILING}`);
 });
 
 // ── (d) the shadow pass has its own set, and the main pass does not draw it ─────
@@ -656,6 +802,114 @@ test("the twin is packed against the shadow camera, and the main pass draws none
   }
 });
 
+// ── (d2) the shadow pass has a ceiling, and it is the budget's ─────────────────
+
+/**
+ * Where a player can stand: the spawn and four rings around it, land only.
+ *
+ * THE SHADOW BOX FOLLOWS THE STANDING PLACE, not the heading: it is centred 12 m ahead of a lens
+ * inside a 240 m box, so turning on the spot moves it by 5% of its own width and walking moves it
+ * by everything. A guard that sampled headings would therefore sample one number sixteen times,
+ * which is how the pass came to have no bound at all. These rings are the walk instead: 60 m is
+ * inside the scatter's densest ground, 390 m is the distance the worst measured view was taken
+ * from, and `walkableTile` drops the ones that are sea or too steep to stand on, which is two of
+ * the demo's eight at 390 m and none of the parcel's.
+ */
+function standPoints(b: Built): Array<{ label: string; x: number; y: number }> {
+  const out = [{ label: "the spawn", x: b.spawnTile[0], y: b.spawnTile[1] }];
+  for (const rM of [60, 120, 240, 390]) {
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      const x = b.spawnTile[0] + (rM * Math.cos(a)) / b.frame.tileM;
+      const y = b.spawnTile[1] + (rM * Math.sin(a)) / b.frame.tileM;
+      if (!b.frame.walkableTile(x, y)) continue;
+      out.push({ label: `${rM} m at ${((a * 180) / Math.PI).toFixed(0)} deg`, x, y });
+    }
+  }
+  return out;
+}
+
+test("the shadow pass costs no more than the budget allows it, everywhere a player can stand", () => {
+  for (const b of [demo, parcel]) {
+    // The eye is held still and only the box moves, because the shadow pass does not read the eye:
+    // its own camera is the light's. Holding it still makes the sweep one variable.
+    const eye = camerasFor(b)[0]!.camera;
+    const points = standPoints(b);
+    assert.ok(
+      points.length >= 24,
+      `${b.cell}: only ${points.length} of 33 stand points are land you can stand on, so this sweep covers too ` +
+        `little of the walk to bound anything`,
+    );
+
+    let worst = { triangles: 0, meshes: 0, where: "" };
+    for (const p of points) {
+      b.layer.cull(eye, shadowCameraFor(b, p.x, p.y));
+      const r = b.layer.lastCull()!;
+      if (r.shadowTriangles > worst.triangles) worst = { triangles: r.shadowTriangles, meshes: r.shadowMeshes, where: p.label };
+    }
+    assert.ok(worst.triangles > 0, `${b.cell}: the shadow pass submitted nothing anywhere, so this proves nothing`);
+
+    const share = (100 * worst.triangles) / TRIANGLE_CEILING;
+    assert.ok(
+      worst.triangles <= SHADOW_TRIANGLE_CEILING,
+      `${b.cell}: standing at ${worst.where} the shadow pass submits ${worst.triangles.toLocaleString()} triangles in ` +
+        `${worst.meshes} draw calls, ${share.toFixed(1)}% of the ${TRIANGLE_CEILING.toLocaleString()} DECISIONS C16 ` +
+        `gives the whole frame, against the ${SHADOW_TRIANGLE_CEILING.toLocaleString()} this file allows a pass that ` +
+        `draws no picture. The main pass and the ground's own casters have to fit in what is left. Widening ` +
+        `SHADOW_PAD_M is the usual cause: every metre of it packs casters the shadow camera cannot use.`,
+    );
+    console.log(
+      `  ${b.cell.slice(0, 7)} shadow worst over ${points.length} stand points: ${worst.triangles.toLocaleString()} ` +
+        `triangles at ${worst.where}, ${share.toFixed(1)}% of the frame's ${TRIANGLE_CEILING.toLocaleString()}, ` +
+        `against ${SHADOW_TRIANGLE_CEILING.toLocaleString()} allowed`,
+    );
+  }
+});
+
+/**
+ * The shadow pad, bounded at its cause rather than at its consequence.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM THE CEILING ABOVE, and it is a hole DECISIONS C20 opened in a
+ * guard that was working. The ceiling is 45% of C16's frame, a division of the budget and not a
+ * reading off the layer, and it was demonstrated failing by widening SHADOW_PAD_M: at 30 m the
+ * parcel's pass read 300,516 and the guard caught it. C20 then took the classes under 1.7 m out of
+ * the pass and halved it, and the same widening now reads 155,256 and passes. Re-measured over the
+ * same stand points with the pad at 30, 60, 90 and 120 m, the parcel reads 155,256, 179,117,
+ * 202,422 and 221,246 and not one of them reaches 270,000. A pad 240 times the shipped one is
+ * invisible to that ceiling now.
+ *
+ * SO THE PAD IS BOUNDED IN THE UNITS IT IS FOR. It exists because PCFSoft samples a neighbourhood,
+ * so a caster just outside the frustum can still darken a texel inside it; the reach of that filter
+ * is about ONE texel, and a texel is the shadow box's width over the map's side, 117 mm as shipped.
+ * Eight of them is 0.94 m, which leaves the shipped 0.5 m most of a doubling of headroom and still
+ * rejects a pad that has stopped being a filter margin and started being a second frustum. Both
+ * numbers are imported from the layers that own them, so a wider box or a smaller map moves this
+ * bound with them.
+ */
+test("SHADOW_PAD_M is a filter margin and not a second frustum, in the shadow map's own texels", () => {
+  const texelM = (2 * DEFAULT_SHADOW_HALF_M) / DEFAULT_SHADOW_MAP_SIZE;
+  const allowedM = 8 * texelM;
+  assert.ok(
+    SHADOW_PAD_M <= allowedM,
+    `SHADOW_PAD_M is ${SHADOW_PAD_M} m, ${(SHADOW_PAD_M / texelM).toFixed(0)} texels of a shadow map whose texel ` +
+      `covers ${(texelM * 1000).toFixed(0)} mm of ground, against the ${allowedM.toFixed(2)} m this file allows a ` +
+      `margin that exists for a filter reaching one texel. Everything past that is casters packed into a pass that ` +
+      `cannot use them, and since DECISIONS C20 halved that pass the triangle ceiling above has enough headroom to ` +
+      `let 120 m of pad through.`,
+  );
+  // The other side: a pad of zero is not free either, and this is the assertion that says so, so a
+  // future edit cannot satisfy the bound above by deleting the margin the filter needs.
+  assert.ok(
+    SHADOW_PAD_M >= texelM,
+    `SHADOW_PAD_M is ${SHADOW_PAD_M} m, under the ${(texelM * 1000).toFixed(0)} mm one texel of the shadow map ` +
+      `covers, so a caster the PCF filter reads can fall outside the packed set and blink a shadow edge`,
+  );
+  console.log(
+    `  shadow pad ${SHADOW_PAD_M} m = ${(SHADOW_PAD_M / texelM).toFixed(1)} texels of ${(texelM * 1000).toFixed(0)} mm, ` +
+      `bound 1 to 8 texels`,
+  );
+});
+
 // ── (e) the build discipline the layer already had ─────────────────────────────
 
 test("a build aborted part way adds nothing to the scene and leaves no buckets behind", async () => {
@@ -695,7 +949,7 @@ test("the split costs a small share of a build that was already 390 ms", () => {
 test("the scene holds the main mesh and its twin, and dispose gives both back", () => {
   const scene = demo.ctx.scene;
   const named = scene.children.filter((o) => o.name.startsWith("scatter:"));
-  assert.equal(named.length, demo.layer.meshes.size + demo.layer.shadowMeshes.size);
+  assert.equal(named.length, demo.layer.meshes.size + demo.layer.shadowMeshes.size + demo.layer.impostorMeshes.size);
   for (const [id, twin] of demo.layer.shadowMeshes) {
     assert.equal(twin.geometry, demo.layer.meshes.get(id)!.geometry, `${id}: the twin has a second copy of the form`);
     assert.equal(twin.material, demo.layer.meshes.get(id)!.material, `${id}: the twin has a second copy of the material`);
@@ -704,4 +958,5 @@ test("the scene holds the main mesh and its twin, and dispose gives both back", 
   assert.equal(scene.children.filter((o) => o.name.startsWith("scatter:")).length, 0);
   assert.equal(demo.layer.buckets.size, 0);
   assert.equal(demo.layer.shadowMeshes.size, 0);
+  assert.equal(demo.layer.impostorMeshes.size, 0);
 });
