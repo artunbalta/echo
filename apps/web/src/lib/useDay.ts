@@ -150,7 +150,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
       const now = Date.now();
       const state: IslandDayState = loaded?.state ?? {
         cropStage: "none", cropPlantedAt: null, raft: freshRaft(), vitalityCarry: 0.85,
-        scarcityLevel: 0.15, dayCount: 0, tieWarmth: {}, updatedAt: now,
+        scarcityLevel: 0.15, dayCount: 0, tieWarmth: {}, promisedTo: null, updatedAt: now,
       };
       // A state persisted before the raft was unified has no `raft` key; treat it as an
       // untouched shore rather than crashing on a missing field.

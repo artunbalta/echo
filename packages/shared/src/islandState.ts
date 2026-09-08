@@ -75,6 +75,20 @@ export interface IslandDayState {
   dayCount: number;
   /** Tended-tie warmth per counterpart id, 0..1. Cools toward 0 between sessions (G7). */
   tieWarmth: Record<string, number>;
+  /**
+   * A promise made to a counterpart and not yet resolved — F4's return beat (level design F4,
+   * "the player can commit to a future action ... over real elapsed sessions").
+   *
+   * It lives HERE, beside tieWarmth, rather than in a store of its own. A promise is the same kind
+   * of thing tieWarmth is: the island remembering something about a person across absences. It
+   * decays through the same pass, persists through the same route, and is erased by the same
+   * cascade. A parallel trust store would be a second source of truth for one relationship, which
+   * is the mistake `structureProgress01` was written to avoid.
+   *
+   * NOTE it is deliberately NOT a "promises kept" counter. Invariant 1: no tallies, no score. The
+   * memory wall of the F4 easter egg records marks, never a number.
+   */
+  promisedTo: { counterpartId: string; madeAt: number } | null;
   /** Epoch ms of the last persisted change — the anchor wall-clock decay measures from. */
   updatedAt: number;
 }
@@ -88,6 +102,7 @@ export function freshIslandState(now: number): IslandDayState {
     scarcityLevel: 0.15,
     dayCount: 0,
     tieWarmth: {},
+    promisedTo: null,
     updatedAt: now,
   };
 }
@@ -245,6 +260,20 @@ export function tendTie(state: IslandDayState, counterpartId: string, delta: num
     ...state,
     tieWarmth: { ...state.tieWarmth, [counterpartId]: clamp01(cur + delta) },
   };
+}
+
+/** Commit to coming back to someone (F4 beat 1). Made by an act — a palm pressed to their post. */
+export function makePromise(state: IslandDayState, counterpartId: string, now: number): IslandDayState {
+  return { ...state, promisedTo: { counterpartId, madeAt: now } };
+}
+
+/** Resolve an outstanding promise. A kept one warms the tie; a broken one cools it. The world
+ *  remembers what happened without keeping a tally of it (Invariant 1). */
+export function resolvePromise(state: IslandDayState, kept: boolean): IslandDayState {
+  const p = state.promisedTo;
+  if (!p) return state;
+  const next = tendTie(state, p.counterpartId, kept ? 0.2 : -0.15);
+  return { ...next, promisedTo: null };
 }
 
 // ── persistence seam (mirrors archipelago.IslandStore exactly) ───────────────────
