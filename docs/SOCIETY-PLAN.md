@@ -451,7 +451,7 @@ Same workstream: **enumerate every string in the product that a populated world 
 Inspector's honest-emptiness mode (task A6), the claim page's ownership promise, ConsentCard's
 revoke sentence.
 
-### SOC-0.G — C11 ✅, and the fate of `feat/f4-trust` ☐
+### SOC-0.G — C11 ✅, and `feat/f4-trust` ✅ merged
 
 **C11 — ANSWERED by C27, in the direction of KEEP.** `/play`, `ThreeWorld` and `/flow1` stay alive,
 frozen, as the individuation fixture and receive no features. The headline number is produced by
@@ -460,14 +460,28 @@ driving a real headless Chromium through `/flow1` twice against a 2D baseline of
 re-baseline that breaks comparability with everything previously quoted. It is a measuring
 instrument now, and it is maintained as one.
 
-**`feat/f4-trust`** ☐ — verified not an ancestor of `HEAD` or `main`. **Its line counts here were
-wrong and the reason is worth recording**: "649 lines of activity code, 170 of shared types, 503 of
-harness, 119 of `ingest.py`" is verbatim the per-file stat block of ONE COMMIT (`f67750f`), mistaken
-for the branch's diff against main. The branch is `19 files, +3,147 / −15`; the activity code is 666
-lines and the harness 1,399, and about nine files were missed entirely. The `170` and the `119` are
-right. Stale build output is on disk in `packages/shared/dist`.
-*Recommendation on record: **MERGE**, not retire* — but do it **before** any new society cue touches
-`ingest.py`, which is the one file the re-anchor rule protects.
+**`feat/f4-trust` ✅ MERGED**, 2026-09-08, and on the deadline this item names: SOC-6.G's cue ids
+landed the commit before, so the next society cue would have touched `ingest.py` with half its
+routing still on a branch.
+
+**Its line counts here were wrong and the reason is worth recording**: "649 lines of activity code,
+170 of shared types, 503 of harness, 119 of `ingest.py`" is verbatim the per-file stat block of ONE
+COMMIT (`f67750f`), mistaken for the branch's diff against main. The branch is 19 files, +3,063/−15
+as merged; the activity code is 666 lines and the harness 1,399, and about nine files were missed
+entirely. The `170` and the `119` are right.
+
+**One conflict, in `known-gaps.md`, and it resolved to ours because ours is a superset** — ⚑17 and
+⚑18 were lifted off this branch under SOC-0.E days earlier so that `main`'s register could resolve
+its own cross-references. The resolution is verified byte-identical to the branch's own block, and
+`check:register` passes on the result.
+
+**The cue-renumber safety claim was re-checked after the merge rather than assumed:** the merged
+`ingest.py` still reads cue-id prefixes only for F1/F3/F7/F9, D11, G11, H1 and K1/K11, and none of
+C8, C9, C11, C12, G12 or G15 is one of them. `packages/shared/dist` is gitignored, so the stale build
+output noted earlier never entered the tree.
+
+What it buys the direction: reciprocity, promise-keeping across sessions, and conflict/repair — the
+nearest thing the repo has to an NPC who remembers you, which is SOC-6.F and SOC-6.I territory.
 
 ---
 
