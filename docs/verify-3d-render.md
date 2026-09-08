@@ -240,6 +240,67 @@ island with nothing else on it, and takes the condition from the URL. Single tab
 
 ---
 
+## 8. Flow 4, repeated games and trust, embodied
+
+F4 is four beats with ONE recurring partner. The thing to check is that **no menu ever appears**: a
+promise kept or broken, a conflict forgiven or retaliated or withdrawn from or repaired, generosity
+given or withheld are all written in the level design as decisions, and four named branches invite
+four buttons. Every one of them here is inferred from what your body did.
+
+**The isolated slice.** `/flow4` puts one beat on an island with the partner, their post, the shared
+cache and your own store, and takes the beat from the URL. Single tab, no day loop.
+
+- <http://localhost:3000/flow4?u=you&beat=promise>
+- <http://localhost:3000/flow4?u=you&beat=return>
+- <http://localhost:3000/flow4?u=you&beat=exchange>
+- <http://localhost:3000/flow4?u=you&beat=conflict>
+- <http://localhost:3000/flow4?u=you&beat=generosity>
+
+- [ ] **The partner is a person, not a stall.** A standing figure in a sea-grey tunic, breathing
+      slightly, at their own post. Their post is a stake with a hollow worn smooth by palms — the
+      wear IS the affordance, and nothing on screen says "press here".
+- [ ] **The promise is made by an act.** `beat=promise`: walk to the post and hold [space]. The
+      whisper is "the wood is warm where other hands have been. tomorrow, then." No dialogue box, no
+      confirm button.
+- [ ] **It actually persists.** Devtools, Application, or just reload `beat=return` with the same
+      `?u=`: the POST to `/api/island/state` carries `promisedTo`. It lives beside `tieWarmth` in the
+      same state, not in a store of its own.
+- [ ] **The return is unprompted.** `beat=return`: nothing tells you to go. The partner is where they
+      said they would be, and two of your own errands (berry bushes) sit the other way. Walk straight
+      to them and the event carries `unprompted: true` and `detoured_first01: 0`. Do the errands
+      first and `detoured_first01` rises and `return_directness01` falls, and **the branch is the
+      same either way** — that is the whole point.
+- [ ] After about 25 seconds a whisper says "someone is still standing out by the post." It never
+      says you promised anything, and arriving after it flips `unprompted` to false.
+- [ ] **The exchange is four rounds and the pattern is the cue.** `beat=exchange`: walk to your store
+      to pick your stake up (proximity, no button), carry it to the cache, hold [space] to place it.
+      **How long you hold is how much you put in** — the cache visibly heaps above its rim.
+- [ ] Carry a stake to the cache and walk away with it instead. That is the round's other ending and
+      it is performed, not chosen. Confirm the event's `action` is `defect`.
+- [ ] **The partner takes the lot at round 3.** Nothing announces it: the cache is simply empty and
+      the whisper is "the cache is empty. it was not empty this morning."
+- [ ] The FINAL round's event, and only that one, carries `rounds_cooperated`, `rounds_total` and
+      `response_to_defect01`. A single defection must never by itself set the cooperation rate.
+- [ ] **The conflict has four branches and no menu.** `beat=conflict`: you find out by finding out —
+      nothing is measured until you reach the emptied cache and see their mark. Then:
+      - leave something at their post (hold [space] there) and the event is `repair`
+      - hold at the emptied cache to take back what is left and it is `retaliate`
+      - come close, stand there, and walk away having done nothing and it is `forgive`
+      - stop short of them and turn away and it is `withdraw`
+- [ ] Confirm `settle_distance` in the event matches roughly how close you actually stopped. **Known
+      limitation:** if you get there with click-to-walk rather than the keys, the controller settles
+      at a fixed distance from a prop and this cue reads the controller, not you.
+- [ ] **Generosity has nobody in it.** `beat=generosity`: the partner is gone, only their post
+      remains. Pick something up at your store, carry it over, hold to leave it. Holding longer
+      leaves more; going back to your store for a second load increments `trips`. Vitality drains as
+      you carry, so the cost is real and is never shown as a number.
+- [ ] Come with something, stand at their post, and walk home without holding. The event is
+      `withhold_unreciprocated`, and it is read rather than penalized.
+- [ ] **Nothing counts anything, anywhere in F4.** No tally of kept promises, no score, no bar, no
+      timer. The cache's silhouette and the distance you stop at are the only things showing state.
+
+---
+
 ## If anything above fails
 
 Stop and report it rather than merging. The two defects this file was written for are:

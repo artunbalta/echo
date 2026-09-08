@@ -666,12 +666,17 @@ change and its own piece of work, and it is forbidden here, so it is named as an
     0.20 to 0.04). The same `(state, now)` gives byte-identical output twice, a different `now`
     changes it, and a launched raft never weathers. `islandState.ts` contains no `Date.now`,
     `new Date`, `performance.now` or `Math.random`.
-- **One honest limitation:** the HTTP route calls `loadIslandState(userId)` with its default
-  `now = Date.now()`, so the injectable clock is not reachable over HTTP. The crop branch was
-  exercised end to end because decay reads `cropPlantedAt` directly, but the raft-weather and
-  tie-cool branches key off `now - updatedAt`, which POST re-stamps, so those two were proven on the
-  pure core rather than over the wire. If a future test needs compressed decay through the route, the
-  route would have to accept an injected `now`, and that is a change nobody has needed yet.
+- **One honest limitation, CLOSED 2026-08-08 (same day):** the HTTP route called
+  `loadIslandState(userId)` with its default `now = Date.now()`, so the injectable clock was not
+  reachable over HTTP. The crop branch was exercised end to end because decay reads `cropPlantedAt`
+  directly, but the raft-weather and tie-cool branches key off `now - updatedAt`, which POST
+  re-stamps, so those two were proven on the pure core rather than over the wire. This was filed as
+  "a change nobody has needed yet", and that was wrong within the same round: **`tieWarmth` is the
+  exact substrate F4 rides on**, so the one cross-session mechanism the harness could demonstrate
+  was the one F4 does not use. The route now accepts an injected `now` behind a server-side gate
+  (see the route's own comment, and P30 in the F4 report, for what makes it unreachable from a
+  production client), and the harness shows a tie cooling 0.60 to 0.36 across a session boundary
+  over HTTP.
 - **Status:** CLOSED as a correction. The substrate F4 needs is real, durable and decaying.
 
 ## ⚑ 16. Concurrent observations for ONE actor silently lost the posterior update (2026-08-08)
