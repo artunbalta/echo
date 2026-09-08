@@ -766,6 +766,90 @@ which point the lock has to move to wherever the state then lives.
 - **Status:** CLOSED for the single-process deployment. The multi-worker case is a property of the
   store, tracked here rather than left implicit.
 
+## ⚑ 17. F4 is measured against an NPC partner, and that may not generalize to human partners (2026-08-08)
+
+- **Opened:** 2026-08-08, resolving F4's partner fork.
+- **The decision, which stands:** F4's recurring partner is an **NPC**, resolved from the design
+  rather than from convenience (the F4 asset manifest names `f4_recurring_partner` with relationship
+  states neutral to ally to wronged; the easter egg is an NPC who becomes a steadfast ally; the F3 to
+  F4 transition is the clearing's NPCs beginning to persist and recognize the player). The argument
+  for it is that F4 measures the **player's** pattern — tit-for-tat versus exploit versus forgive,
+  promise-keeping across elapsed sessions, response to being wronged, giving when nothing returns —
+  and every one of those is a property of the player rather than of the pair. The counterpart must
+  persist, must have done something to you, and must remember; it need not be human.
+- **What that argument does NOT settle:** whether a promise made to a visibly artificial partner is
+  **the same construct** as a promise made to a person. F5's entire thesis is that people behave
+  differently depending on who is watching, and there is no principled reason that logic stops at the
+  boundary between people and NPCs. If it does not, then F4's integrity and loyalty reads are
+  measured under a condition that systematically differs from the one they are meant to generalize
+  to, and the direction of the bias is not obvious: a player might be freer with an NPC (nothing real
+  at stake) or more consistent (no social pressure to perform).
+- **This is a construct-validity question, and the harness cannot answer it.** No synthetic drive
+  can: a scripted persona keeps a promise because the script says so, and it has no opinion about who
+  it made the promise to. Answering it needs the same beats run against a human partner with real
+  people on both ends, which is an experiment, not a test.
+- **Not a blocker.** F4 is built and measured against the NPC partner. This is recorded so that no
+  later reader treats an F4 pass as evidence about promises to people.
+- **Status:** OPEN, and open in the way that does not resolve by building more.
+
+## ⚑ 18. F4's manner scalars, and the running unrouted list the re-anchor has to cover (2026-08-08)
+
+- **Opened:** 2026-08-08, building F4's four beats.
+- **The rule this is under, unchanged:** cue-to-axis loadings stay LEARNED in W. A manner scalar is
+  routed only where an already-anchored feature's definition genuinely fits. Everything else is
+  emitted, carried in `raw_signals` for the second re-anchor's corpus, and flagged — never attached
+  to the nearest plausible loading.
+
+### F4, eight flagged
+
+| Scalar | Why it has nowhere clean to go |
+|---|---|
+| `response_to_defect01` | **the important one.** What you did in the round after they took more than their share: the tit-for-tat signature, and F4's entire reason to exist. `consistency` is the cooperation LEVEL, not its conditional response to being wronged, and routing it there would collapse a forgiving cooperator and a steadfast one into one number |
+| `settle_distance` | the proxemics of a grievance. `proxemics_close` / `proxemics_far` were anchored at the interaction-OPEN gate, a different quantity from where you stop when you are angry |
+| `return_directness01` | graded path deviation on the way back. `path_tortuosity` was anchored on the P3 sampler's normalized ratio, which this is not — ⚑6's exact mistake |
+| `circled01` | identical to F5's, unrouted for the identical reason |
+| `detoured_first01` | a fraction of a DELAY, not a share of a day, so no `ts_*` fits |
+| `unprompted` | no anchored feature means self-starting; `decision_latency` already carries the timing |
+| `stake_amount01` | a reciprocal stake in an exchange, deliberately kept apart from `gift_amount01`, which the existing F7 give/share anchor does fit |
+| `cost_paid01` | what the act cost you. Same argument as ⚑13 |
+
+### A second, separate problem with `settle_distance`, and how it was found
+
+The first version of the F4 drive aimed at a fixed tile beside the partner. Two personas driven to
+settle at visibly different distances both came back at **1.5**, because the auto-walk controller
+stops at a fixed distance from a solid prop — the cue was reporting the CONTROLLER, not the persona.
+The same fixed-tile approach also failed 7 of 9 conflict drives outright, because the post and the
+partner are both solid and a chosen offset is often not standable.
+
+Fixed by walking toward them and stopping when you are as close as you meant to get, which is also
+what a person does. `settle_distance` now separates (1.5 against 3.0) and the beat completes 6 of 6.
+
+**The lesson is the one worth keeping:** a spatial cue driven by a pathing controller measures the
+controller unless the drive stops the way a player stops. This is the P21 class again, and it means
+any spatial scalar in the re-anchor's corpus needs checking against the controller before it is
+trusted, not just against the persona.
+
+### The running list, which is the re-anchor's actual scope
+
+The second W re-anchor happens ONCE, after all flows exist, on the full cue set. That list now is:
+
+- **⚑13, F5, four:** `cost_paid01`, `approach_detour01`, `circled01`, `dwell_at_marker_ms`. Plus
+  `dwell_ms`, which was routed to `ts_build` and then un-routed on the category argument, making it
+  **five**. Plus `taken01`'s untested interior (routed, but the graded middle between the two
+  anchored endpoints has never been observed).
+- **⚑18, F4, eight:** the table above.
+- **⚑6, embodied:** `decoration`, still carried as extra build time rather than routed to openness.
+- **⚑1 / ⚑3, the openness cues** across F0, F2, F3 and travel.
+
+**Thirteen manner scalars across F4 and F5 alone**, and in both flows the cue that most directly IS
+the flow's thesis is on the flagged side: F5's `circled01` (the unobserved self) and F4's
+`response_to_defect01` (the iterated game). That is a pattern, not a coincidence: a flow's signature
+cue is by definition the one the previous corpus had no reason to contain, so W cannot have a
+direction for it. It also means **no new flow currently measures its own thesis**, and any acceptance
+bar that passes today passes through generic manner cues. Say so whenever one is quoted.
+
+- **Status:** OPEN by design. Do NOT retrain W for these. Do not route them meanwhile.
+
 ## ⚑ 19. FINDING: the ★P5 corpus is 100% synthetic, so the lost updates cost it nothing (2026-08-08)
 
 - **Opened:** 2026-08-08, asking what ⚑16's lost updates did to the corpus that anchored the
@@ -865,3 +949,125 @@ have been. See ⚑20.
      round already does that in prose; it is not yet a rule.
 - **Not acted on.** No re-anchor is scheduled, W is untouched, and nothing here changes any flow.
 - **Status:** OPEN, for a human decision.
+
+## ⚑ 21. The corpus now exists, and what it still cannot do (2026-08-08)
+
+- **Opened:** 2026-08-08, building the missing pipeline ⚑19 exposed.
+- **What was wrong, and it was worse than ⚑19 said.** ⚑19 established that the committed W was fit
+  on a synthetic corpus. The mechanism meant to replace that was `UserState.locomotion`, which
+  `app.py` reported as "the ★ re-anchor's corpus volume" by name. It was a bounded in-process list
+  with **no write path anywhere** — no Supabase, no disk, no serialization of any kind. It died with
+  the process, and the ML service restarts on every redeploy while Render's starter plan spins down.
+  **No real corpus had ever accumulated, and nothing was collecting one.** The same gap meant every
+  live user's posterior reset to the prior on every restart.
+- **Built:**
+  - `services/ml/echo_ml/corpus.py`, a recorder at the ingress covering `/observe`,
+    `/observe/behavioral` and `/telemetry`. Supabase-backed when keyed, in-memory otherwise, exactly
+    as `Store` and `island_state` already degrade.
+  - `db/migrations/0009_measurement_corpus.sql`. (0006 was used twice in this repo's history, so
+    0009 was checked against both the tree and `git log --all --diff-filter=A`.)
+  - Replay hydration: a first-seen user is rebuilt from their corpus through the **real endpoint
+    functions**, so the rebuild cannot drift from the live fold. Bit-identical, `cond` buckets
+    included.
+  - `scripts/export_corpus.py`, corpus to the jsonl `train_measurement.py --anchors` expects.
+- **The corpus stores RAW payloads, never featurized rows.** A corpus of already-featurized rows
+  would be the synthetic trap one layer down, frozen against today's 66 features. Storing raw is
+  also what records the thirteen flagged manner scalars (⚑13, ⚑18) for the first time: they ride in
+  `raw_signals`, which `featurize_raw` discards.
+- **Ordering matters and was found by a failing test.** Hydrate, then record, then fold. With the
+  record first, a background flush landing between the record and the rebuild let the replay fold an
+  event the endpoint was about to fold again: four events produced five updates.
+
+### What it still cannot do, and this is the binding constraint
+
+`--anchors` expects `{"text", "telemetry", "axes"}` and **`axes` is a LABEL** — the supervision that
+resolves factor analysis's rotation indeterminacy. **The corpus supplies φ and cannot supply z.** A
+recorded event says what somebody did, not how warm they are. Exporting rows is mechanical; getting
+labels is not, and no amount of recorded play produces them.
+
+Measured on a 240-row behavioural corpus exported and fed through `train_measurement.py`:
+
+| | |
+|---|---|
+| features with ANY variance | **7 of 66** (`approach`, `ts_social`, `ts_leisure`, `solitude_tol`, `decision_latency`, `persistence`, `consistency`) |
+| features constant, so unidentifiable | **59 of 66**, of which 32 are the embedding dims and the rest stylometry, all of which need TEXT |
+| labels from one user's posterior | constant across that user's rows, so `‖W‖ = 0.00` and Fisher information is zero on every axis |
+| labels varying across 12 users | `‖W‖ = 1.78`, information non-zero on all eight axes, `max |W_new - W_committed| = 1.3937` |
+
+So the door opens and the committed artifact stayed byte-identical throughout
+(`sha256 da1918477f99dd8a` before and after). **What a second re-anchor needs is not rows. It needs
+(a) labels from outside the loop — a curated self-report, a human-rated subset, or an outcome the
+axes are supposed to predict — and (b) coverage of more than 7 of the 66 features, which means the
+corpus must include text-bearing events and not only behavioural ones.** Anchoring on the users' own
+posteriors is circular by construction: those posteriors were produced BY the committed W.
+
+- **Status:** OPEN. Recording is live; the re-anchor is not schedulable until labels exist. This is
+  what turns ⚑20 from a philosophical question into a costed one.
+
+## ⚑ 22. LEGAL: a durable behavioural log is a retention decision nobody has made (2026-08-08)
+
+- **Opened:** 2026-08-08, on shipping the corpus. **Flagged, not decided.**
+- **What changed.** Until now the behavioural model was in-memory and died with the process. As of
+  ⚑21 there is a durable, timestamped, identity-keyed log of what a person did, stored indefinitely.
+  That is a materially different retention posture, and it is the thing data-protection regimes ask
+  about first.
+- **Under GDPR and KVKK this is profiling.** The corpus exists precisely to infer personality traits
+  from behaviour, which is the definition. The questions that follow are not engineering questions:
+  what is the lawful basis; how long is the log kept; is the retention window disclosed; does a
+  subject-access request return the raw log as well as the derived posterior; is a trait inference
+  itself personal data that must be disclosed.
+- **⚑7 is the precedent and the warning:** the photo path shipped before a lawyer reviewed it. This
+  entry exists so the same thing does not happen twice with a heavier artifact.
+- **What IS built, because erasure is engineering:**
+  - `Store.delete()` wipes the corpus under the same per-user lock that guards the posterior, so no
+    caller can forget it.
+  - `measurement_corpus` is in `api/account/delete`'s cascade as well, so erasure still works if the
+    ML service is down.
+  - Proven end to end rather than asserted: write 5 rows, delete the account, `corpus_rows_deleted`
+    comes back 5 and the read returns empty (`tests/test_corpus_hydration.py`).
+- **What is NOT built, deliberately: any retention window.** Migration 0009 has no TTL, no pruning
+  job and no expiry column, and the code has no default. Choosing one is a legal decision with a
+  product cost attached — a shorter window is safer and shrinks the corpus the re-anchor needs — and
+  it is not an engineering default to pick quietly.
+- **Status:** OPEN, for a human and probably for a lawyer. **A retention policy is now an open
+  decision with no default.**
+
+## ⚑ 23. `consistency` is an EXACT ZERO column, and the Ring of Gyges routes to nothing else (2026-09-07)
+
+- **Opened:** 2026-09-07, while taking `⚑20`'s decision (DECISIONS C29). **Measured, not suspected**
+  — read straight off `services/ml/echo_ml/artifacts/measurement.npz`, `W.shape == (8, 66)`,
+  version 1.
+- **What.** Four of `W`'s 66 columns are exactly zero on every one of the 8 axes:
+  `ellipsis_ratio`, `emoji_ratio`, `digit_ratio`, **`consistency`**. The first three are text-manner
+  features on a channel the product does not measure by promise, so their being dead is consistent
+  with what the consent card says. `consistency` is not: it is a live
+  `TELEMETRY_FEATURE_NAMES` entry that `ingest.py` sets on six actions.
+- **For four of those six it is the ONLY feature the action sets:**
+
+  | Action | What it sets | Anything else? |
+  |---|---|---|
+  | `conform_custom` | `consistency` 0.85 | no |
+  | `travel_near` | `consistency` 0.70 | no |
+  | `return_cache` | `consistency` 0.90 | no |
+  | `keep_cache` | `consistency`, graded by how much was taken | no |
+  | `wait_in_queue` | `consistency` 0.85 **+ `persistence` 0.8** | yes — formality +0.284 carries it |
+  | `cut_queue` | `consistency` 0.1 **+ `approach` False** | yes — warmth +0.700 carries it |
+
+- **Why this is worse than the thirteen manner scalars `⚑20` cites.** `return_cache` / `keep_cache`
+  **IS the Ring of Gyges** — the blueprint's flagship moral probe, Stage 7, the costly good nobody
+  will ever know about, the entire private-versus-public design. Its designed feature moves the
+  posterior by **exactly zero**. It still moves the posterior through the action-label embedding, as
+  every flagged cue does, but the signal it was built to carry is dark. And `travel_near` is one half
+  of the travel stand's far/near contrast: `travel_far` routes to `risk_index` (dominance +0.410) and
+  `travel_novelty`, so **the contrast is measured on one side only**, which is not a contrast.
+- **`⚑13` already half-knew.** It records `taken01` → `consistency` as one of F5's ROUTED scalars,
+  and calls that routing safe because it interpolates between two anchored endpoints. It is safe from
+  extrapolation and dark all the same: both endpoints sit on a zero column.
+- **Not re-routed, deliberately.** Attaching these to the nearest live feature is the silent re-route
+  cross-cutting rule #1 forbids and `⚑6` records the cost of. They stay where they are.
+- **Acted on, minimally:** `services/ml/tests/test_zero_columns.py` pins the four zero columns and
+  the four single-feature actions, so the day a re-anchor gives `consistency` a direction the test
+  fails and somebody reads this entry. `consistency` is the first named line in C29's
+  pre-registration scope.
+- **Status:** OPEN. It is fixed by the re-anchor or it is not fixed at all.
+

@@ -1097,13 +1097,36 @@ keyboard, which is the point: every rule controller.test.mts and followCamera.te
 the phone for free, and the merge lives in the input rather than in the layer that says in its own
 header that it decides nothing about movement.
 
-THE STICK CANNOT BE ANALOG. stepMover normalises the direction it is given and picks its speed from
-the boolean `run`, and MOVER.WALK is frozen for parity with WorldRoom.integrate. So deflection buys
-exactly one thing, the run flag, with hysteresis at 0.85 on and 0.70 off — the mover crosses the
-walk-to-run gap in 86 ms and poseCharacter drives leg swing off that speed, so a single threshold
-under a resting thumb is a visible flicker on the body. Anyone who later "fixes" the stick by making
-the mover speed-proportional drifts the client off the authority on the first step and silently
-rescales the sampler's speedVar, which the frozen model was fitted on.
+THE STICK CANNOT BE ANALOG, AND NOT FOR THE REASON THIS ENTRY FIRST GAVE (corrected, SOC-0.C).
+stepMover normalises the direction it is given and takes its speed from the boolean `run` out of two
+fixed numbers, so a half-deflected thumb walks at exactly the speed a fully deflected one does. That
+is the whole reason and it is a fact about the mover. What this entry originally offered instead —
+"MOVER.WALK is frozen for parity with WorldRoom.integrate" — was already false on this route the day
+it was written: `playerLayer` installs `parcelMovement(ctx.frame.tileM)` and passes it to
+`stepMover`, so the parcel walks at 1.65/1.6 = 1.031 tiles/s against the server's `WORLD.MOVE_SPEED`
+of 4, a factor of 3.88, and the parcel route never joins a `WorldRoom` at all — no colyseus import
+reaches it. So deflection buys exactly one thing, the run flag, with hysteresis at 0.85 on and 0.70
+off. The derivation for that band, redone against the profile the parcel actually passes: the
+walk-to-run gap is 4.2 - 1.65 = 2.55 m/s at an accel of 7 m/s², so the mover crosses it in 364 ms,
+and because the tile scale cancels out of that ratio it is 364 ms at EVERY `tileM`. The 86 ms first
+recorded here was MOVER.ACCEL's arithmetic (2.4 / 28) — correct for the LEGACY profile, which is not
+on this route, and 4.25x too fast. The conclusion survives and is stronger: what a rim-resting thumb
+restarts is not the state, which flips within about 2 ms, but `playerLayer`'s `runBlend`, and
+poseCharacter drives leg swing and cadence off that, so a third of a second of blend is visibly
+re-triggered several times a second. Note MOVER is not fully retired on this route — `stepMover`
+still reads its STILL, TURN_RATE, TURN_THRESHOLD and JUMP_S; only the four speed numbers come from
+the profile, and "the parcel does not use MOVER" would be a fresh wrong record. Anyone who later
+"fixes" the stick by making it speed-proportional is changing the mover, and owes an answer for the
+networked route that does still run MOVER at `WORLD.MOVE_SPEED`. `tests/controller.test.mts` now
+derives the 364 ms from `parcelMovement` across four tile scales, so this cannot drift again.
+
+The sentence that closed this paragraph — that a speed-proportional mover "silently rescales the
+sampler's speedVar, which the frozen model was fitted on" — is struck for the same reason C23's
+parity claim is. `speedVar` is routed nowhere and no `W` column was ever anchored on it (SOC-0.C,
+§3 item 4). The scalar a mover speed change really moves is `novel_tile_ratio`, whose denominator is
+distinct tiles per 1.5 s window and is therefore speed-dependent; it carries the fourth-largest
+absolute loading on openness of 66 features, +0.4006, behind `path_tortuosity` at +0.4654, which is
+computed over the same time-boxed window and is speed-coupled for the same reason.
 
 THE PINCH CONSTANT IS COMPUTED, NEVER WRITTEN DOWN. FollowInput.zoom is in wheel pixels spent as
 `distance * zoomPerNotch^(zoom/100)`, so a pinch is worth `100/ln(zoomPerNotch) * ln(before/after)`
@@ -1157,20 +1180,472 @@ rather than a second render. There is not one millisecond anywhere in this file:
 triangles and draw calls, all taken on an M4 Pro. Arithmetic over this repo's own cull and geometry
 code puts the frame at the spawn near C16's 600,000 ceiling before a phone is considered, and the
 two layers that are not in any table here — detailLayer and meadowLayer — are most of what closed
-that gap. Two things follow, and neither is done: RenderInfo already carries fps, calls and
-triangles and WorldCanvas already writes them to data attributes, gated to NODE_ENV != production,
-so ungating that behind a query parameter is the cheapest way to turn "a phone probably struggles"
-into a row in this file; and the meadow ring places 63,700 blades while its own shader discards
-everything past 24 m, 42% of them provably invisible on every route measured. That is a triangle
-win with no fidelity cost at all, on every device, and it is left here as a named next step rather
-than taken in a change about controls.
+that gap. Two things follow, and one of them was wrong when it was written (corrected under
+SOC-0.C).
 
+RIGHT: `RenderInfo` already carries fps, calls and triangles and `WorldCanvas` already writes them
+to data attributes, gated to NODE_ENV != production, so ungating that behind a query parameter is
+the cheapest way to turn "a phone probably struggles" into a row in this file. Two corrections to
+that sentence, both of which a reader would otherwise trip on: the attributes are
+`data-world-fps` / `data-world-triangles` / `data-world-calls` — the DOM hyphenates a dataset key, so
+the camel-case spelling first written here matches nothing — and `RenderInfo` is a TypeScript
+interface plus a `devInfo` option, not a component. And the ungate ALONE does not produce a
+whole-frame number: three calls `info.reset()` after `shadowMap.render()`, so `world.info` is the
+MAIN PASS ALONE. That is the same half-frame error `tests/e2e/scatterSplit.spec.ts` was written to
+correct (928,034 reported against 1,623,152 actual), so the ungate has to ship the pass split with
+it or SOC-1.A records another half-frame.
+
+WRONG: "the meadow ring places 63,700 blades … 42% of them provably invisible on every route
+measured. That is a triangle win with no fidelity cost at all." Three errors in two sentences.
+63,700 is the ALLOCATION CEILING (49 patches x 1300 slots), not a census — `mesh.count` starts at
+zero and only accepted blades raise it, and a non-green patch draws none. "On every route measured"
+is not true of anything: the meadow has never appeared in a measured frame, which this very entry
+concedes two paragraphs earlier; 42.30% is a GEOMETRIC ratio, pi * 24^2 over 56^2, the overhead of
+covering a disc with a square grid. And the remedy does not exist: the ring radius ALREADY equals
+the fade distance exactly — RADIUS 3 x SIZE 8 = 24 m against a `smoothstep(17., 24., …)` far stop —
+so there is nothing to pull, and pulling RADIUS to 2 opens an 8 m annulus of missing grass whose
+inner metre is before the smoothstep has even opened, at full opacity, sweeping the ground as the
+player walks. `tests/meadowRing.test.mts` now fails on exactly that edit, and the constants and the
+GLSL are derived from one pair of exported numbers so they cannot drift apart again.
+
+WHAT WAS ACTUALLY TAKEN, and it is smaller than the claim: the 4 to 10 patches of the 49 whose
+nearest corner is past the far stop at any instant are no longer submitted. They stay resident,
+because the player's offset inside its own patch changes as they walk and a rebuild is 1,300 terrain
+samples. The rest of the 42.30% is structural to a square grid over a disc and comes back only by
+moving the fade window, which is a fidelity decision and belongs in a screenshot review rather than
+in a trim.
+
+## C24 — one epoch, the twelve-minute day is kept, and a life is seven real months
+
+Answers SOCIETY-PLAN.md SOC-0.A(a), taken 2026-09-07.
+
+There is no world clock. `skyLayer.ts:478-479` accumulates `dt` from `DUSK` PER MOUNT, and
+`parcelWorld.ts:105` pins `timeOfDay: 0.38` on every mount, so two people standing on the same
+ground today are looking at two different mornings and neither of them is the world's.
+
+ONE EPOCH: `WorldManifest.createdAt` (`manifest.ts:145`). It is already a per-world constant that a
+restart cannot move, which is the only property the job needs. The hour is derived, never
+accumulated: `timeOfDay = wrapTime(((now - createdAt) / 1000) / 720)`. `0.38` stops being a value
+and becomes what it always was, a screenshot of 09:07.
+
+THE RATE DOES NOT MOVE. `DEFAULT_CYCLE_S` stays `12 * 60`. A world-day is twelve real minutes.
+
+  1 world-day   =        720 s real
+  1 world-year  =    262,800 s real  = 73 hours EXACTLY (365 x 720)
+  a 70-year life = 18,396,000 s real = 5,110 hours = 212 days 22 h
+
+Call it seven months. That is the whole decision: a person born the day this ships is elderly next
+spring, and the planet is generational on the scale of a year, not of an afternoon.
+
+WHY IT IS IRREVERSIBLE, and why it is taken before a line of society code: once one birth or death
+timestamp is in a row, moving `720` rewrites every lifespan on the planet, and any NPC a player has
+already met becomes a different person with a different age and a different set of dead parents.
+The number is cheap now and unpayable later.
+
+WHAT THIS DECISION COSTS, stated rather than discovered: mortality is INVISIBLE inside one session
+and inside one month. Nobody will watch an NPC die. So SOC-6.H — graves, an old person talking about
+someone dead, a half-built house, "in my father's time this was..." — is promoted by this decision
+from a want to a REQUIREMENT. The first session has to carry the evidence that time passes, because
+the clock will not supply it in time to matter. A world whose only proof of mortality is patience
+has no proof of mortality.
+
+## C25 — NPCs hold land in the substrate, and the registry stays the players' table
+
+Answers SOC-0.A(b).
+
+`parcels.owner_id` (`0009_planet_registry.sql:61`) never holds an NPC. An NPC settlement is
+`society(seed, t)` and has ZERO ROWS until a player touches something in it, which is L1 exactly:
+the seed is the prior, the database is the delta. The house already took this shape twice — 0004's
+"empty cells are simply absent rows" and 0009's terminal-cell rule that avoided 140 million ocean
+rows — and a peopled planet is where it stops being a tidiness argument: five people per parcel is
+1,420,020 agents and 1.4 M rows of people nobody will ever meet.
+
+`PUBLISHED_CAPACITY` = 1,074,942 (`manifest.ts:98`) therefore keeps EXACTLY the meaning it has
+today. Nothing on the claim page becomes false by arithmetic.
+
+ONE THING ON THE CLAIM PAGE DOES BECOME FALSE, and it is the good half of this decision: buying a
+parcel buys the GROUND, and the ground has people on it. That is a stronger ownership story than an
+empty disc and it is the honest one — but it is also C15's deferred question arriving, and it asks
+the thing the product has to answer anyway: can you evict them? Not decided here. C26 bounds it at
+one end by deciding you cannot kill them.
+
+## C26 — the demographic layer is READ-ONLY to players
+
+Answers SOC-0.A(c).
+
+  alive(n, t)  =  n.birth + n.lifespan > t
+
+That is the entire mortality model, and it is arithmetic. Lifespan is drawn from the seed at birth,
+children are pre-drawn at pairing with their birth days, and so the whole lineage of the planet is
+computable at any instant WITHOUT HAVING BEEN SIMULATED. This is what lets 1.4 M people exist
+without 1.4 M rows, without a tick that has nowhere to run (SOC-3.E), and without any of it having
+happened while nobody was looking.
+
+MUTABLE, and fully so: relationships, regard, reputation, wealth, employment, where someone is and
+what they are doing today.
+IMMUTABLE: birth, lifespan, death, parentage.
+
+WHY, in one sentence: the moment a player can save or end a life, that person leaves the closed form
+AND SO DOES EVERY DESCENDANT — the cascade has no bound, and the substrate becomes stored state on
+the first act. There is no version of "just this one exception" that stays one exception.
+
+This also answers half of a question nobody had answered: erasing a player never has to delete a
+person. A player who married into a lineage leaves the lineage behind, because the lineage was never
+theirs to hold.
+
+## C27 — the shared world is the PLANET frame, and the shared unit is ONE PARCEL
+
+Answers SOC-0.B, and with it C11.
+
+The two frames are not reconcilable by a transform. `WorldRoom.integrate`'s land gate is
+`oceanLandAt` over 100 phyllotaxis discs (`WorldRoom.ts:885`); the parcel's gate is H3 region
+membership plus the terrain field. One `k=1` parcel is a 2,084 m radius disc (`parcel.ts:20-22`)
+against a whole shared room of 768 tiles = 1,229 m. ONE PARCEL IS LARGER THAN THE ENTIRE EXISTING
+MULTIPLAYER WORLD. So this is a choice, not a merge.
+
+THE ROOM KEY IS THE PARCEL'S H3 INDEX. Rooms are created on demand; up to 1,074,942 of them exist in
+principle and approximately none exist in practice, which is L1 applied to processes instead of
+rows. `ROOM_CAPACITY` 150 is not the binding constraint on a 2,084 m disc and never was — one room
+per parcel is.
+
+WHAT THIS RETIRES: the archipelago geometry, and with it `travel_far`/`travel_near`, whose basis is
+the old map's distances. That channel loses its ground and must be RE-DERIVED against parcel-scale
+distances, with the distribution measured over an identical path at both scales BEFORE either side
+moves. Flag 9's rule holds: nobody moves one side of a measured pair alone.
+
+WHAT THIS KEEPS ALIVE, which is C11 answered in the direction of KEEP: `/play`, `ThreeWorld` and
+`/flow1` stay, frozen, as the individuation fixture. The headline number is produced by driving a
+real headless Chromium through `/flow1` twice against a 2D baseline of 0.2620, and retiring the
+route retires the number or forces a re-baseline that breaks comparability with everything
+previously quoted. The fixture receives no features, no society, no NPC with a family. It is a
+measuring instrument and it is maintained as one.
+
+WHAT THIS DOES NOT DECIDE: whether a room is a Colyseus room, a process, a shard, or something that
+is not Colyseus at all. On a 768-tile map with 109 entities one `MapSchema` broadcast to everyone is
+fine; at planet scale it is the whole architecture, and that stays open as SOC-3.C.
+
+## C28 — the shipped whole frame IS measured now, and it is 1.5x over the C16 ceiling
+
+Answers half of SOCIETY-PLAN SOC-1.A, taken 2026-09-07, and it was free: the number was already
+being computed by a spec nobody was running.
+
+THE NUMBER DID NOT NEED A NEW HARNESS. `tests/e2e/scatterSplit.spec.ts` already drives a real
+headless Chromium, already walks the eight headings at the real spawn, and — this is the part that
+matters — already sums BOTH PASSES, because it was written to correct exactly the half-frame error
+`world.info` produces on its own (three calls `info.reset()` after `shadowMap.render()`, so the
+renderer's own counter is the main pass alone: 928,034 reported against 1,623,152 actual). It was
+simply red, and had been.
+
+MEASURED, Apple M4 Pro, macOS 15.6, headless Chromium via Playwright 1.62.1, at the real parcel
+spawn, worst of eight headings:
+
+  route              whole frame      main pass     shadow pass    ceiling (C16)
+  ordinary parcel      907,250         664,805        242,445        600,000
+  demo cell            695,457         489,459        205,998        600,000
+
+  after the two changes taken in the same pass (SOC-1.B's patch cull and SOC-1.C's ranged upload):
+  ordinary parcel      899,450         657,005        242,445        -7,800
+  demo cell            640,857         434,859        205,998       -54,600
+
+WHAT THIS SAYS, and it is not what the record implied. `DECISIONS.md:806-807` gives 326,414 tri / 37
+draws at the real parcel spawn; the whole frame at that same spawn is 907,250 — the older figure was
+one pass, one layer set, or both. `living-world-rendering.md`'s 628,415 is closer and self-labels as
+a single-view observation on a different machine. **The ordinary parcel — the route with NO demo
+structures on it, the one every buyer walks — is the more expensive of the two**, because the demo's
+station clearings remove scatter that an ordinary parcel keeps.
+
+SO THE HONEST STATEMENT OF THE FRAME BUDGET IS: **the shipped world is at 1.5x its own ceiling on an
+M4 Pro, and C16 says the reference machine is an M1 Air or an integrated-GPU Windows laptop, which is
+slower.** Every number in SOCIETY-PLAN's SOC-4 rests on the headroom left over from this one, and
+there is none: a character rig is ~15,868 triangles and ~46 draw calls, so "other bodies in the
+parcel" is not a rendering task on top of a frame that fits — it is a task that has to make the frame
+fit first.
+
+WHAT IS STILL OWED under SOC-1.A, stated so this is not mistaken for the whole item: no phone
+reading, and no per-LAYER split. The per-layer attribution is not available from `parcelWorld`'s
+composition — every layer writes into one shared scene and the object names already collide — and
+getting it needs about forty lines in `PlanetWorld` (tag at `scene.add`, read back through three's
+own per-object hooks) rather than a change to any layer.
+
+AND THE RED SPECS, WHICH THIS ENTRY FIRST UNDERSTATED — corrected under SOC-1.D. It said "one more
+red spec". A full run of the suite at three workers is **10 failed, 24 passed, 2.9 minutes, and ZERO
+timeouts**, and the ten are across FIVE spec files, not two:
+
+  globePick.spec.ts        2   the parcel the landing names / the hexagon over the ground it names
+  scatterImpostor.spec.ts  4   the far band at 390 m and 448 m, ordinary parcel and demo
+  scatterSplit.spec.ts     2   the whole-frame overage this entry is about
+  slice.spec.ts            1   the walk into the cave, ending 1.57–1.86 tiles short of 1.3
+  spawnSea.spec.ts         1   a parcel with no sea is left exactly as it shipped
+
+**Every one fails on an ASSERTION and not on a clock**, and every one was verified pre-existing by
+stashing the day's render changes and re-running: the seven in `globePick`, `scatterImpostor` and
+`spawnSea` fail identically without them. Three of the five are measurement paths — `slice` is the
+demo's locomotion channel, `scatterImpostor` is C21's far band, `spawnSea` is the sea-relief pass —
+so this is not cosmetic debt. Each is owed its own item; none of them is this one.
+
+## C29 — the re-anchor stays one-time, and it is PRE-REGISTERED
+
+Answers SOCIETY-PLAN SOC-0.D, taken 2026-09-07. Takes `⚑20` option 3, and makes option 4 a rule at
+the same time because it costs nothing.
+
+WHAT IS DECIDED. The second `W` re-anchor still happens ONCE, on the full cue set — the
+tuning-pressure argument for that rule is real and nothing here weakens it. What changes is that
+before it runs, `docs/world-design/reanchor-preregistration.md` states, for every flagged cue, what
+"it carries signal" would look like: which axis, which sign, and at what threshold. The threshold is
+not invented for the occasion — it is **0.15**, the repo's own bar from `action-axis-map.md`, the one
+that already decides whether an action may drive a world reaction at all.
+
+WHY A PIECE OF PAPER IS THE WHOLE INTERVENTION. `⚑19` establishes that the committed `W` was fit on
+an entirely synthetic corpus, so the second re-anchor is not a refinement of a measured matrix — it
+is the FIRST time any loading is tested against behaviour. A single non-repeatable event whose
+success criteria are written afterwards, by the people who designed the cues, is not a measurement;
+it is an interpretation, and every outcome will look like a confirmation.
+
+THE THIRD OUTCOME IS THE POINT. The pre-registration has three verdicts, not two: CARRIES, DARK, and
+**UNDERPOWERED** (fewer than 120 emissions across 30 users). Without the third, a cue nobody emitted
+enough times reads as a cue that carries nothing, and a design decision gets retired for the wrong
+reason. It also fixes signs in advance: a scalar that loads the opposite way is a FAILED construct,
+not an interesting inversion, because post-hoc sign flips are how a pre-registration becomes
+decoration. And several predictions carry a collinearity clause — a feature within cosine 0.9 of one
+already in the model has not measured a new construct, however well it loads.
+
+OPTION 4, NOW A RULE: an acceptance bar passed by a flow whose signature cue is unrouted is **not**
+evidence that the flow measures its thesis, and every flow report says so in those words. This round
+already did it in prose; prose gets skimmed.
+
+A COUNT CORRECTED WHILE DOING IT. `⚑20` says "thirteen flagged manner scalars (⚑13's five, ⚑18's
+eight)". That is thirteen (scalar, flow) PAIRS but **eleven distinct scalars** — `circled01` and
+`cost_paid01` are each flagged in both F4 and F5, and `⚑18` says so itself. Both counts are
+defensible and they are not the same count; the register quotes the larger one without saying which
+it means.
+
+WHAT THIS DOES NOT SOLVE, and it is the larger half. Establishing real `z` labels is a research
+programme and does not resolve by building more. `⚑21` measured why: 7 of 66 features had any
+variance in a 240-row corpus, and labels taken from a user's own posterior give ‖W‖ = 0.00 BY
+CONSTRUCTION, because that posterior was produced by the committed `W`. This decision makes the
+re-anchor evaluable. It does not make a corpus.
+
+## C30 — `consistency` is an exact zero column, and four shipped cues route only to it
+
+Found while taking C29, measured rather than suspected, and recorded as `⚑23`.
+
+  W is (8, 66), version 1. Four of its 66 columns are EXACTLY zero on every axis:
+      ellipsis_ratio · emoji_ratio · digit_ratio · consistency
+
+The first three are text-manner features on a route the product does not measure by promise, so
+their being dead is consistent with the consent card. **`consistency` is not.** It is a
+`TELEMETRY_FEATURE_NAMES` entry that `ingest.py` sets on six actions, and for FOUR of them it is the
+only feature the action sets at all:
+
+  conform_custom   consistency 0.85   — and nothing else
+  travel_near      consistency 0.70   — and nothing else
+  return_cache     consistency 0.90   — and nothing else
+  keep_cache       consistency graded — and nothing else
+
+`wait_in_queue` and `cut_queue` survive because they also set `persistence` (formality +0.284) and
+`approach` (warmth +0.700) respectively.
+
+WHY THIS MATTERS MORE THAN THE THIRTEEN MANNER SCALARS `⚑20` CITES. `return_cache` / `keep_cache` IS
+the Ring of Gyges — the blueprint's flagship moral probe, the costly good nobody will ever know
+about, Stage 7, the thing the whole private-versus-public design exists to read. **Its designed
+feature moves the posterior by exactly zero.** It still moves the posterior through the action-label
+embedding, the way every flagged cue does, but the signal it was built to carry is dark. So is
+`travel_near`, which is one half of the travel stand's far/near contrast — the other half,
+`travel_far`, routes to `risk_index` (dominance +0.410) and `travel_novelty`, so **the contrast is
+measured on one side only**, and a contrast measured on one side is not a contrast.
+
+NOT ROUTED ELSEWHERE, DELIBERATELY. Attaching these to the nearest plausible live feature is the
+silent re-route cross-cutting rule #1 forbids, and it is the exact mistake `⚑6` records. They stay
+where they are, flagged, and `consistency` becomes the first named line of the C29 pre-registration's
+scope. `packages/planet` has nothing to do with this; the pin is
+`services/ml/tests/test_zero_columns.py`, so the day a re-anchor gives `consistency` a direction, the
+test fails and somebody reads this entry.
+
+## C31 — where the frame goes, per layer, and the body costs twice what the plan assumed
+
+Completes the machine half of SOCIETY-PLAN SOC-1.A. C28 said WHAT the frame costs; nothing said
+WHERE, and nothing could: `parcelWorld.ts` composes a flat list of layers into one scene, and the
+names downstream do not say whose mesh is whose — `detailLayer` names its meshes
+`scatter:<class>:detail`, the slice names its props "campfire" and "cave_mouth", and the player is a
+tree of unnamed meshes under one named root.
+
+WHOEVER ADDED THE OBJECT IS THE ONE FACT THAT IS ALWAYS RIGHT, and the host is holding it. `?debug=layers`
+stamps each object with the layer whose code was running when it entered the scene, and brackets its
+draws with three's own `onBeforeRender`/`onAfterRender` and `onBeforeShadow`/`onAfterShadow` — CHAINING
+them, never replacing, because `scatterLayer` uses that same pair to zero its shadow twin in the main
+pass and an instrument that overwrote it would double the frame it was sent to measure.
+
+MEASURED at the spawn view, headless Chromium, 1280x720 at pixel ratio 1:
+
+  ordinary parcel — whole 559,380 tri / 103 calls   (main 488,189 · shadow 71,191)
+    layer         main tri   calls      shadow tri   calls
+    detail         205,466       9               0       0
+    meadow         171,600      22               0       0
+    terrain         82,391       5          20,439       1
+    player          15,856      23          15,856      23
+    scatter         10,668      15          34,896       4
+    sky              2,208       1               0       0
+    ATTRIBUTED     488,189                  71,191          <- equals the pass, exactly
+
+  demo cell — whole 516,106 tri / 104 calls   (main 434,859 · shadow 81,247)
+    meadow         171,600      22               0       0
+    detail         169,816       8               0       0
+    terrain         59,115       4          19,634       1
+    scatter         16,264      14          45,625       3
+    player          15,856      23          15,856      23
+    sky              2,208       1               0       0
+    slice                0       0             132       5
+    ATTRIBUTED     434,859                  81,247          <- equals the pass, exactly
+
+THE SPLIT IS EXACT AND THAT IS THE CHECK. Attributed equals the pass to the triangle on both routes,
+with nothing unattributed. It did not the first time: an "unattributed" row of 643,197 against a
+434,859 main pass, because `THREE.Scene` has `onBeforeRender` and `onAfterRender` of its own and
+three calls them at the top and bottom of `render()` — so hooking the root brackets the entire frame
+as one object and counts it twice. The hook is now installed on drawables only.
+
+THESE ARE NOT C28's NUMBERS AND MUST NOT BE QUOTED AS THEM. C28's 907,250 is the WORST of eight
+headings walked at the spawn; this is the spawn view alone, standing still, which is the cheapest
+frame either route ever draws. The two answer different questions and the smaller one is not an
+improvement.
+
+FOUR THINGS THIS SETTLES.
+
+1. **`detailLayer` is the largest single layer on an ordinary parcel** — 205,466 triangles, 42% of
+   the main pass, in NINE draw calls. It was already known to be expensive; it was not known to be
+   the biggest thing in the frame.
+2. **`meadowLayer` is the second largest, at 171,600.** SOCIETY-PLAN SOC-1.B called it a triangle win
+   with no fidelity cost; §3 item 7 records why that was wrong three ways over. What it actually is
+   is **31% of the main pass of every parcel and every landing preview**, and every one of those
+   blades is within 24 m of the player's feet. 171,600 is 22 patches x 7,800 — the disc cull and the
+   frustum are together holding 22 of the ring's 49 down, against 382,200 for all of them.
+3. **THE BODY COSTS TWICE WHAT THE PLAN ASSUMED.** SOCIETY-PLAN SOC-4.A costs a rig at 15,868
+   triangles and ~46 draw calls. Measured: **15,856 triangles and 23 calls in the main pass, AND
+   15,856 triangles and 23 calls again in the shadow pass** — every one of its 23 visible meshes is
+   `castShadow`. So one body is **31,712 triangles and 46 draw calls of WHOLE FRAME**, and the "~46
+   draw calls" figure the plan quotes is the main pass counted as if it were the frame. A second
+   body is not 46 calls of a 120 budget; it is 46 more on top of the 103 an empty parcel already
+   spends. **Two players standing together exceed C16's draw-call ceiling on their own.**
+4. **The demo's `slice` draws nothing in the main pass and 132 triangles of shadow.** The two
+   structures C15 froze to `DEMO_CELL` are not why the demo is expensive. The demo is CHEAPER than an
+   ordinary parcel — 516,106 against 559,380 — because its station clearings remove scatter that an
+   ordinary parcel keeps.
+
+WHAT IS STILL OWED: a phone reading. The gate is now a query parameter that works in a production
+build (`?debug=render` for the frame, `?debug=layers` for this table), and the readout is drawn on
+the page because a phone has no console — so the reading is now possible without a harness. Nobody
+has taken it.
+
+## C32 — trade access is distance to the nearest commons, and that is an ASSERTION
+
+Taken 2026-09-07 for SOC-6.B, and flagged as invented rather than measured.
+
+`SettlementGeography` takes six numbers. Five are read off the ground: `coastal` from `isLandHeight`,
+`wooded` from `VEGETATION_DENSITY`, `mountain` from `normalisedHeight` and relief, `arable` from an
+authored biome table, `habitability` from a composite whose cuts are the biome table's own bands.
+**The sixth has no source at all.** There is no road, no river, no port, no navigable-water graph and
+no economy — SOC-7 records that zero code exists.
+
+TWO PLAUSIBLE SOURCES WERE REFUSED, and the reasons are worth keeping.
+
+  Neighbouring settlements. `settlementAt` takes geography as an INPUT, so defining trade access from
+  the neighbours' settlements makes `geographyOf(cell)` depend on `geographyOf(neighbour).tradeAccess`
+  — unbounded mutual recursion across a planet, and an L2 violation on top, because the answer would
+  depend on how wide a neighbourhood the caller happened to expand.
+
+  `referral.ts`'s adjacency. `gridDisk` is safe at every radius; `gridDistance` is not — it throws
+  once a disk is wide enough to wrap pentagon distortion, measured at 85% of far resolution-4 pairs.
+  And a ring count is resolution-dependent anyway: one ring is 1.4 km at resolution 4 and 77 m at 7.
+  Adjacency gives a NEIGHBOURHOOD; it never gives a planetary distance.
+
+SO IT IS DISTANCE TO THE NEAREST OF THE TWELVE COMMONS, which are already a manifest column and cost
+0.0003 ms to search. Measured over 3,000 land resolution-4 cells: p05 25.3, median 85.0, p95 119.3,
+max 145.6 km, against a half-circumference of 628.3 km. `TRADE_RANGE_KM` is 150, just past the
+measured maximum, so nothing clamps to exactly zero.
+
+  tradeAccess = (1 − min(1, nearestCommonsKm / 150)) × (0.7 + 0.3 × coastal) × (1 − 0.4 × rugged)
+
+WHAT THIS ASSERTS, in one sentence: **the twelve public cells are where trade converges.** That is a
+claim about the world and not a measurement of it. It is defensible — the commons are the only twelve
+places anyone can reach without asking permission, which is what a market is — and it is the only
+planet-scale structure that exists today.
+
+WHY IT IS SAFE TO TAKE NOW, unlike C24: **it is reversible, and C25 is why.** A settlement holds zero
+rows, so trade access is recomputed from the seed on every visit. Changing this formula changes how
+big villages are and how many traders are in them; it changes no stored fact and no person's birthday.
+Contrast the world clock, where one stored timestamp makes the ratio unpayable. Recorded as a
+decision anyway, because a constant that shapes where the rich places are should not arrive as a
+literal inside a module.
+
+## C33 — the planet this produces, measured, and the density chosen deliberately
+
+`npm run census:planet -w @echo/planet` — a uniform, hash-ordered sample of the real 284,004-cell
+resolution-4 inventory, scaled. Seed `echo-capacity-1`, at world day 0.
+
+FIRST MEASUREMENT, at `SETTLEMENT_RATE` 1.0 — every liveable cell taken:
+
+  settled     33.8% of cells   ->    96,088 settlements
+  living      2,548,273 people      ·  7,236,327 graves
+  spacing     a village every ~2.2 km, about a 22-minute walk at the parcel's 1.65 m/s
+
+**That is one cell in three, and SOCIETY-PLAN §5 says this direction "does not go breadth-first" and
+that "a planet of shallow people reads as fake faster than an empty one".** One in three is not that
+world. So the number was not left where it fell.
+
+SHIPPED, at `SETTLEMENT_RATE` 0.3:
+
+  sampled     3,000 of 284,004 cells, 0.737 ms per cell
+  habitable   55.7% of cells        (unchanged: this is the GROUND, and the ground did not move)
+  settled      9.4% of cells   ->    26,602 settlements
+  living      619,413 people        ·  2,396,426 graves
+  village     min 0 · p25 14 · median 23 · p75 34 · max 65   (mean capacity 58.3)
+  spacing     a village every ~4.1 km, about a 41-minute walk
+  trades      farmer 19.2% · trader 10.9% · herder 9.0% · labourer 8.8% · carpenter 8.0% ·
+              smith 6.7% · forester 6.7% · carter 5.2% · miner 4.8% · weaver 4.2% · potter 3.4% ·
+              stonecutter 3.4% · teacher 3.3% · innkeeper 2.5% · healer 2.0% · fisher 1.9%
+
+WHAT THE DIAL IS, AND WHAT IT IS NOT. `SETTLEMENT_RATE` is **not** a fact about the ground —
+`MIN_HABITABILITY` and `geo.habitability` are that, and neither moved. It is a fact about the world's
+HISTORY: people are not spread as thinly as the land allows, they are spread as thinly as three
+hundred years of them managed. It multiplies the acceptance draw, so it thins the planet uniformly
+and leaves the shape intact: better ground is still likelier to hold a village, there are just fewer
+villages. `habitable` staying at 55.7% across both rows is the check that this is true.
+
+WHAT IS GOOD HERE. The trades vary with the ground rather than with a table — fishers are 1.9%
+because `coastal` needs water inside 3 km and most land does not have it, and miners are 4.8% because
+the planet is half of Earth's ruggedness by C1. A village's median is 23 people, which is Stanford's
+Smallville minus two, and it is the size the design argues for. **2.4 million graves exist at day 0
+without a single row**, which is what SOC-6.H needs to make mortality visible in a first session on a
+clock where nobody will ever watch someone die (C24).
+
+FREE TO MOVE, and this is the second half of why it could be chosen rather than agonised over: C25
+means **zero rows**, so the whole planet re-derives from the seed the moment the constant changes. Do
+re-measure with the script and put the number here, rather than in a commit message. The test that
+guards it derives its bound from `SETTLEMENT_RATE` itself — it was a hard-coded `> 60 && < 260` and
+went red the first time this dial moved, which is exactly how a bound gets re-typed to whatever the
+code now does.
 
 ## Still open
 
-C8 (echo-ml on a paid plan), C10 (provision DATABASE_URL and run the seed), C11 (freeze exception for
-the individuation harness), C13 (regenerate two legend plates).
+C8 (echo-ml on a paid plan), C13 (regenerate two legend plates).
 
-Those four are ACTIONS rather than decisions: three of them need an account or credits, and the
-fourth needs a call on whether one measurement script keeps an island world alive to stay
-comparable. They are not blocking any code that is being written now.
+Both are ACTIONS rather than decisions: they need an account or credits. They are not blocking any
+code that is being written now.
+
+C11 IS ANSWERED, by C27: the individuation harness keeps its world. `/play`, `ThreeWorld` and
+`/flow1` stay alive, frozen, as a measuring instrument.
+
+C10 IS STILL OPEN AND IS NOW BIGGER THAN IT WAS WRITTEN. "Provision `DATABASE_URL` and run the seed"
+is missing a fifth step nobody had scoped: `apps/web/src/lib/planet.ts` hardcodes `backend: "memory"`
+and always constructs `MemoryRegistry`, so the pg-backed `packages/planet/lib/registry.ts` — the one
+that has the `SKIP LOCKED` and the advisory locks a mutable society needs — IS NEVER INSTANTIATED IN
+THE APP. Closing C10 means building the two-backend seam and deciding pooling for `pg` on Vercel
+serverless. Tracked as SOC-2.A.
+
+C15 IS REOPENED, by C25. "What an ordinary parcel offers a person who walks it" was deferred
+because at launch the whole planet is unclaimed and an unscoped rule puts a cave and a campfire on
+all 284,004 parcels. Populating the planet IS that deferred decision arriving. Tracked as SOC-0.F.
+
+NEWLY OPEN, and owed before any society cue is written: which of kinship, bereavement, employment,
+transaction, being-known and inheritance already has a cue, which needs one, and which of those has
+a `W` direction (SOC-6.G) — and then whether that list consumes the ONE-TIME `W` re-anchor flag 20
+records, or ships unrouted like the thirteen manner scalars already riding on this (SOC-0.D).
