@@ -12,9 +12,75 @@ import { defineConfig, devices } from "@playwright/test";
 
 const all = process.env.E2E_ALL_ENGINES === "1";
 
+/** The five spec files that are red for a recorded reason. See the quarantine note below. */
+const QUARANTINE = [
+  "**/scatterSplit.spec.ts",
+  "**/scatterImpostor.spec.ts",
+  "**/globePick.spec.ts",
+  "**/slice.spec.ts",
+  "**/spawnSea.spec.ts",
+];
+
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 60_000,
+  globalSetup: "./tests/e2e/globalSetup.ts",
+  // THE QUARANTINE, and it is a list of REASONS rather than a list of nuisances (SOC-2.H).
+  //
+  // Ten tests across five files are red on this tree. Every one fails on an ASSERTION and not on a
+  // clock, and every one was verified pre-existing by stashing the day's render changes and
+  // re-running. Three of the five are measurement paths, so this is not cosmetic debt:
+  //
+  //   scatterSplit.spec.ts   DECISIONS C28. The whole frame at the ordinary parcel spawn is 907,250
+  //                          triangles against C16's 600,000 — worst of eight headings on an M4 Pro.
+  //                          The spec is the meter and the meter is right; the overage is SOC-1.A
+  //                          and SOC-4, measured in months.
+  //   scatterImpostor.spec.ts  C21's far band at 390 m and 448 m, both routes.
+  //   globePick.spec.ts      the parcel the landing names against the one it draws.
+  //   slice.spec.ts          the walk into the cave ends 1.57-1.86 tiles short of a 1.3 threshold —
+  //                          the demo's locomotion channel, which is a measurement path.
+  //   spawnSea.spec.ts       a parcel with no sea is left exactly as it shipped.
+  //
+  // NOTHING HERE MOVES A THRESHOLD. The point of a quarantine is to keep a number visible while the
+  // work happens, never to retune it until it passes — which is the failure mode SOCIETY-PLAN §3
+  // exists to catch, and §3 item 7 is that plan doing it to itself. Unset, everything runs, which is
+  // what a person at a terminal should see.
+  ...(process.env.E2E_QUARANTINE === "skip"
+    ? { testIgnore: QUARANTINE }
+    : process.env.E2E_QUARANTINE === "only"
+      ? { testMatch: QUARANTINE }
+      : {}),
+  // 120 s, and the reason is NOT that a world takes two minutes to build. Measured on an idle
+  // machine, one browser, these launch args: the demo parcel reaches data-phase="ready" 1,440 ms
+  // after goto, the ordinary parcel 1,745 ms, /dev/goldens 739 ms, and the landing's globe 3,780 ms.
+  // The old 60 s was already 16x the largest of those, so SOC-1.D's premise — "heavy WebGL specs
+  // exceed the 60 s default while the world builds" — is refuted by the world.
+  //
+  // The real reason is legibility. Six tests that rely on this default hold waits LONGER than the
+  // test holding them — minimap.spec.ts (120 s), chain-live.spec.ts (120 s), goldens.spec.ts (90 s),
+  // groundGrain.spec.ts (120 s) — and a wait that outlives its test can never print its own message:
+  // the runner kills the spec at 60 s and says "Test timeout of 60000ms exceeded" instead of the
+  // sentence the author wrote. That is how a starved dev server spent months looking like a slow
+  // world. 120 s is the smallest number that lets each of them finish and speak.
+  timeout: 120_000,
+  // THREE WORKERS, not the six Playwright picks on a 12-core machine, and this is the whole of the
+  // batch flakiness. Every spec here drives a REAL-GPU chromium (see use.launchOptions) against a
+  // `next dev` server on the same box, and at six the box loses. Measured, one full chromium run
+  // each, same tree, same 31 tests:
+  //
+  //   workers   wall     timed out   dev server's worst answer   its worst compile
+  //   6         15.3m    14 of 31    122,912 ms                  184.1 s  (/api/telemetry)
+  //   3          3.0m     0 of 31     10,126 ms                    3.0 s  (/api/telemetry)
+  //   1          3.3m     0 of 31      2,121 ms                    535 ms (/api/telemetry)
+  //
+  // At six the load average reached 102 on 12 cores and the dev server took 68,842 ms to return the
+  // landing page — which is why smoke.spec.ts, whose whole body is a goto and a title assertion,
+  // timed out, and why stations.spec.ts timed out twice on assertions its own header says land in
+  // the first paint. THE SUITE WAS NOT MEASURING THE WORLD; IT WAS MEASURING ITSELF. At three it is
+  // FASTER in wall time than at one, and nothing times out at all.
+  //
+  // Lower this on a machine with fewer cores. Do not raise it to "use the hardware": the hardware is
+  // already shared with the dev server every one of these specs is talking to.
+  workers: 3,
   fullyParallel: false,
   retries: 0,
   reporter: [["list"]],

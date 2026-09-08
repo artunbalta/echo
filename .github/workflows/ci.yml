@@ -1,0 +1,149 @@
+# The gate. `.github` did not exist before this file: every check in this repo was a command
+# someone remembered to run, and SOCIETY-PLAN SOC-2.H is the item that says so.
+#
+# Every number in a comment below was MEASURED on 2026-09-07, not estimated. Where a number could
+# not be measured it says so rather than guessing.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: gates (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    # node 20 is the floor `engines` declares and it has NEVER been run: the only interpreters on
+    # the author's machine are 24.x and 25.x. So 24 blocks and 20 reports, until 20 has a green run
+    # of its own to stand on.
+    continue-on-error: ${{ matrix.node != '24' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '20']
+    env:
+      # MEASURED: packages/planet/tests/scene.test.ts asserts a 400 ms wall-clock build budget.
+      # Alone the build is 201-217 ms (5/5 green); under the full 18-file parallel planet run it was
+      # 288, 293, 368, 575, 627 and 814 ms — three failures in seven runs on a 12-core M4 Pro. A
+      # four-core runner has never been measured. The correctness gate runs with budgets off; the
+      # `flaky` job below runs them armed and prints the number, so one finally exists.
+      ECHO_PERF_BUDGETS: '0'
+      PLANET_TEST_DATABASE_URL: postgres://echo@127.0.0.1:55432/echo_planet
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: install
+        run: npm ci
+
+      # First, because it is the cheapest gate in the repo and needs no build. It is the one that
+      # would have caught ⚑18 being cited from a file that did not contain it.
+      - name: register
+        run: npm run check:register
+
+      # LOAD-BEARING ORDERING, not tidiness. `npm run typecheck` does NOT build the shared packages
+      # — only `npm test` and `npm run build` do. MEASURED on a tree with packages/{shared,planet}/dist
+      # moved aside: typecheck exits 2 with 222 errors, 63 of them "Cannot find module '@echo/shared'".
+      # On a fresh clone, typecheck before build:shared is red on day one.
+      - name: build:shared
+        run: npm run build:shared
+
+      # Reaches all four workspaces. It also type-checks every spec under apps/web/tests/e2e, because
+      # apps/web/tsconfig.json includes "**/*.ts" — so the browser suite is compiled here even though
+      # nothing in this job runs it.
+      - name: typecheck
+        run: npm run typecheck
+
+      # NOT a `services:` block, and that is a measurement rather than a style choice.
+      # registry.test.ts opens `new pg.Pool({ max: 200 })` and fires 200 concurrent claims. MEASURED
+      # against postgres 16.15: at the default max_connections=100 the suite dies with SQLSTATE 53300
+      # "sorry, too many clients already" at Promise.all index 100; at max_connections=300 all four
+      # pass, "200 concurrent claims in 243 ms". A GitHub `services:` container cannot be given
+      # `-c max_connections=300`, so the container is started by hand.
+      - name: postgres
+        run: |
+          docker run -d --name echo-pg \
+            -e POSTGRES_USER=echo -e POSTGRES_DB=echo_planet \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
+            -p 55432:5432 postgres:16 -c max_connections=300
+          for i in $(seq 1 30); do
+            docker exec echo-pg pg_isready -U echo -q && break
+            sleep 2
+          done
+          docker exec -i echo-pg psql -q -U echo -d echo_planet \
+            < db/migrations/0009_planet_registry.sql
+
+      # planet + shared + web. NOT realtime: apps/realtime/package.json has no `test` key, so
+      # `--workspaces --if-present` skips it silently. Its suites are run explicitly below.
+      # With PLANET_TEST_DATABASE_URL set, the planet suite runs its four skipped registry tests —
+      # the SKIP LOCKED and single-fire-subdivision properties a shared mutable world depends on.
+      - name: test
+        run: npm test
+
+      # THE HOLE THIS CLOSES: apps/realtime is wired out of every aggregate gate. `test:copresence`
+      # is a real two-client WorldRoom integration test, MEASURED green, and it blocks.
+      - name: test (realtime, copresence)
+        run: npm run test:copresence -w @echo/realtime
+
+      # `test:race` is deliberately NOT here. It asserts wall-clock concurrency and MEASURED four
+      # failures in fourteen runs on an unloaded 12-core M4 Pro (49 to 987 ms). It runs in `flaky`,
+      # where a red is information rather than a merge block.
+
+      - name: postgres logs (on failure)
+        if: failure()
+        run: docker logs echo-pg || true
+
+  # The ML engine — SOCIETY-PLAN §2 calls it "the crown jewel". 135 tests, MEASURED 135 passed in
+  # 2.3 s, and until this file existed NOTHING ran them: services/ml has no package.json, is not in
+  # the root `workspaces` array, and no npm script anywhere in the repo mentions pytest.
+  ml:
+    name: ml (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # services/ml/Dockerfile is `FROM python:3.11-slim`, so this is what production runs.
+          # The local 135/135 was measured on the service's own venv, not on 3.11.
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/ml/requirements.txt
+      - run: pip install -r services/ml/requirements.txt
+      - run: python -m pytest -q
+        working-directory: services/ml
+
+  # Non-blocking. Everything here is a real signal that is too noisy to gate on, kept visible
+  # because this repo's standing rule is that a red is recorded rather than hidden.
+  flaky:
+    name: flaky + perf (reports, never blocks)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:shared
+
+      # The per-actor observation chain (known-gaps ⚑16). See the note in `gates`.
+      - name: test:race
+        run: npm run test:race -w @echo/realtime
+
+      # The planet suite WITH the 400 ms budget armed, so a CI-hardware number for scene.test.ts
+      # finally exists. NOBODY MAY CHANGE 400 UNTIL ONE DOES — retuning a budget to make it pass is
+      # how a measurement becomes decoration.
+      - name: planet perf budgets
+        env:
+          ECHO_PERF_BUDGETS: '1'
+        run: npm test -w @echo/planet

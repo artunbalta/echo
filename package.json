@@ -31,7 +31,8 @@
     "test:planet": "npm test -w @echo/planet",
     "test:web": "npm run build:shared && npm test -w @echo/web",
     "test:shared": "npm test -w @echo/shared",
-    "check:env": "node scripts/check-env.mjs"
+    "check:env": "node scripts/check-env.mjs",
+    "check:register": "node scripts/check-register.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

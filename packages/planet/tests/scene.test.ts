@@ -192,7 +192,18 @@ function demoScene(): RegionScene {
       `${ms.toFixed(0)} ms, ${demoRegion.triangleCount} triangles in ${demoRegion.chunks.length} chunks ` +
       `(${demoRegion.chunks.map((c) => c.triangleCount).join(", ")})`,
   );
-  assert.ok(ms < 400, `the region took ${ms.toFixed(0)} ms to build; the budget is 400`);
+  // A WALL-CLOCK BUDGET IS NOT A CORRECTNESS ASSERTION, and it does not belong in a blocking gate
+  // until somebody has measured it on the hardware that gate runs on (SOC-2.H). Measured on a
+  // 12-core M4 Pro: 201-217 ms when this file runs alone, 5 of 5 green; 288, 293, 368, 575, 627 and
+  // 814 ms when all 18 planet files run in parallel under `node --test tests/*.test.ts` — three
+  // failures in seven full-suite runs. A four-core CI runner has never been measured at all. So the
+  // budget is ARMED BY DEFAULT, where a person runs it and can see the number, and disarmed with
+  // ECHO_PERF_BUDGETS=0 in CI's correctness job — where a separate non-blocking job runs it armed
+  // and prints the milliseconds, so a CI-hardware number finally exists. Nobody may move 400 until
+  // one does: retuning a budget to make it pass is how a measurement becomes decoration.
+  if (process.env.ECHO_PERF_BUDGETS !== "0") {
+    assert.ok(ms < 400, `the region took ${ms.toFixed(0)} ms to build; the budget is 400`);
+  }
   return demoRegion;
 }
 
