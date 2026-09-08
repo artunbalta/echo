@@ -41,6 +41,13 @@ export interface WorldRow extends PlanetParams {
   peakElevation: number;
   commons: string[];
   reserved: string[];
+  /**
+   * The world's epoch, ISO 8601 (DECISIONS C24). Every hour and every birth day is measured from it.
+   *
+   * Written explicitly rather than left to `world_manifest.created_at`'s `default now()`, because a
+   * world seeded twice would otherwise be two worlds whose people are different ages.
+   */
+  createdAt: string;
 }
 
 /** A cell about to enter the registry, with the land measurement that decides what it may become. */
@@ -92,13 +99,13 @@ export async function createWorld(db: SqlClient, world: WorldRow): Promise<void>
     `insert into world_manifest (
        id, seed, terrain_version, radius_km, start_resolution, floor_resolution,
        trigger_fraction, land_fraction_target, min_land_fraction, commons_resolution,
-       sea_level, peak_elevation, commons, reserved
-     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+       sea_level, peak_elevation, commons, reserved, created_at
+     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
     [
       world.id, world.seed, world.terrainVersion, world.radiusKm,
       world.startResolution, world.floorResolution, world.triggerFraction,
       world.landFractionTarget, world.minLandFraction, world.commonsResolution ?? world.startResolution,
-      world.seaLevel, world.peakElevation, world.commons, world.reserved,
+      world.seaLevel, world.peakElevation, world.commons, world.reserved, world.createdAt,
     ],
   );
 }

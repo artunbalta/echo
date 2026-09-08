@@ -98,6 +98,23 @@ export const PLANET_PARAMS: PlanetParams = {
 export const PUBLISHED_CAPACITY = 1_074_942;
 
 /**
+ * THE WORLD'S EPOCH (DECISIONS C24). Every hour on the planet is measured from this instant.
+ *
+ * It is a FIXED CONSTANT and not `new Date()`, for exactly the reason C24 exists. The bug it
+ * replaces was `skyLayer` accumulating `dt` from dusk per mount, so two people on the same ground
+ * saw two different mornings; an epoch stamped when a process boots is the same bug one level up,
+ * because a serverless deployment is many processes and each of them would found its own world.
+ *
+ * A world's epoch is a property of the world, like its {@link PLANET_PARAMS} and its seed. It goes
+ * into `world_manifest.created_at` when a registry is seeded, and it is read back from there by the
+ * Postgres backend — so the day the memory backend is retired (SOC-2.A) the two paths must still
+ * agree, and the seed script writes THIS value rather than letting the column default to `now()`.
+ *
+ * Changing it rewrites every birth day and every death day on the planet. Treat it like the seed.
+ */
+export const WORLD_EPOCH = "2026-09-07T00:00:00.000Z";
+
+/**
  * Section 3 exactly as written, kept so the capacity report can still run the comparison that
  * produced the decision above. Do not build on it.
  */
