@@ -532,7 +532,26 @@ const CARDED = new Set<AssetClassId>(["vine-tangle", "bromeliad", "canopy-palm",
 export const SCATTER_MATERIAL: Record<AssetClassId, () => THREE.MeshLambertMaterial> = {};
 for (const id of Object.keys(SCATTER_GEOMETRY)) {
   const side = CARDED.has(id) ? THREE.DoubleSide : THREE.FrontSide;
-  SCATTER_MATERIAL[id] = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side });
+  SCATTER_MATERIAL[id] = () => {
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false, side });
+    // Five narrow blades in each inexpensive card; a single taper read as a solid pyramid.
+    if (id === "grass-tuft") {
+      material.onBeforeCompile = shader => {
+        shader.vertexShader = 'varying vec3 vBladePosition;\n' + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vBladePosition = position;');
+        shader.fragmentShader = 'varying vec3 vBladePosition;\n' + shader.fragmentShader;
+        shader.fragmentShader = shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
+          #include <clipping_planes_fragment>
+          float across = (vBladePosition.x + vBladePosition.z + .3) / .12;
+          float bladeTop = .38 + .17 * fract(sin(floor(across) * 13.7 + 1.) * 4375.);
+          float height = vBladePosition.y / bladeTop;
+          if (height > 1. || abs(fract(across) - .5) > .24 * (1. - height) + .025) discard;
+        `);
+      };
+      material.customProgramCacheKey = () => 'distant-grass-blades-v2';
+    }
+    return material;
+  };
 }
 
 /** Does this class have a form? A registry class with no builder is drawn by nobody, loudly. */

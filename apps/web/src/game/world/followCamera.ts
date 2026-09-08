@@ -192,7 +192,9 @@ function allowedBoom(
   ground: (x: number, z: number) => number,
   floorM: number,
   spacing: number,
+  obstacleLimit?: BoomObstacleLimit,
 ): number {
+  wanted = Math.min(wanted, obstacleLimit?.(anchor, dir, wanted) ?? wanted);
   const margin = (len: number) => {
     const x = anchor[0] + dir[0] * len;
     const y = anchor[1] + dir[1] * len;
@@ -220,6 +222,8 @@ function allowedBoom(
   return wanted;
 }
 
+export type BoomObstacleLimit = (anchor: Vec3, direction: Vec3, wanted: number) => number;
+
 /**
  * One step. Pure: returns the new state along with the camera position and look target in scene
  * metres. `heightAtTile` is THE ground, whatever the caller wants the camera to stay above; the
@@ -233,6 +237,7 @@ export function stepFollowCamera(
   dt: number,
   heightAtTile: HeightAtTile,
   opts: Partial<FollowCameraOptions> = {},
+  obstacleLimit?: BoomObstacleLimit,
 ): FollowResult {
   const o = { ...FOLLOW_CAMERA, ...opts };
   const step = clamp(dt, 0, 0.1);
@@ -265,6 +270,7 @@ export function stepFollowCamera(
   } else {
     anchor = chest;
   }
+  if (obstacleLimit && obstacleLimit(anchor, [0, 1, 0], .01) === 0) anchor = chest;
   anchor[1] = Math.max(anchor[1], ground(anchor[0], anchor[2]) + floorM);
 
   // 3. Collision. First at the pitch the player asked for; if that leaves the boom inside the
@@ -275,14 +281,14 @@ export function stepFollowCamera(
   let allowed = 0;
   const maxLift = Math.max(0, o.pitchMax + 0.2 - pitch);
   for (;;) {
-    allowed = allowedBoom(anchor, boomDirection(yaw, pitch + needLift), distance, ground, floorM, o.sampleSpacingM);
+    allowed = allowedBoom(anchor, boomDirection(yaw, pitch + needLift), distance, ground, floorM, o.sampleSpacingM, obstacleLimit);
     if (allowed >= o.minBoomM || needLift >= maxLift) break;
     needLift = Math.min(maxLift, needLift + 0.15);
   }
   let lift = needLift;
   if (state.lift > needLift) {
     const relaxed = Math.max(needLift, state.lift - o.liftRelaxRate * step);
-    const relaxedAllowed = allowedBoom(anchor, boomDirection(yaw, pitch + relaxed), distance, ground, floorM, o.sampleSpacingM);
+    const relaxedAllowed = allowedBoom(anchor, boomDirection(yaw, pitch + relaxed), distance, ground, floorM, o.sampleSpacingM, obstacleLimit);
     if (relaxedAllowed >= o.minBoomM) {
       lift = relaxed;
       allowed = relaxedAllowed;

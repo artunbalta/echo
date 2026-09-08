@@ -16,6 +16,14 @@
  * the person who typed it, so the reason goes to the server log where whoever is running the thing
  * will find it.
  *
+ * IT IS 100dvh AND NOT 100vh (DECISIONS C23), and on a phone that was the difference between a
+ * playable route and a dead one. On iOS Safari 100vh is the LARGE viewport, the one with the bars
+ * hidden, and globals.css locks this page's overflow — so the bars never retract, 180 px of an
+ * iPhone's box are permanently off screen, and everything anchored to the bottom is under the tab
+ * bar. That included both of the consent card's buttons, which is the FIRST thing this route asks
+ * and the gate everything else waits behind: a person could reach their parcel and never get past
+ * the question. The landing hero (app/page.tsx) already had this right; this route was the outlier.
+ *
  * `k` is passed rather than left to the host. It moves no ground today, because PlanetWorld's own
  * default is already 1, and that is the reason to name it: a route that leans on a host default
  * for the size of the world it builds is a route that silently builds a different world the day
@@ -48,7 +56,7 @@ export default async function ParcelPage({
     // covers the viewport, so this is only ever seen in the moments without a world: the paint
     // before the renderer exists, and, for a cell with no dry ground to spawn on, permanently
     // behind the failure message. The blue that was here said noon under a sky that opens at dusk.
-    <main className="relative h-screen w-screen overflow-hidden bg-[#1c1326]">
+    <main className="relative h-[100dvh] w-screen overflow-hidden bg-[#1c1326]">
       <ParcelCanvas
         cell={cell}
         k={PARCEL_REGION_K}
@@ -58,11 +66,17 @@ export default async function ParcelPage({
         peakElevation={calibration.peakElevation}
         radiusKm={world.radiusKm}
       />
+      {/* z-30 because it is the only way off this page and it shares the top of the screen with a
+          meter that sits at z-20. In the same stacking context the meter simply won, and at 390 px
+          wide it covered all but four pixels of this link: you could walk into a parcel and have no
+          way out but the browser's back button. The short label is the same link on a narrow
+          screen, where "Back to the planet" would wrap into two lines beside the minimap. */}
       <Link
-        href="/claim"
-        className="absolute right-6 top-6 rounded border border-[#1c1326]/25 bg-[#f4e9d0]/85 px-3 py-2 font-pixel text-xs text-[#1c1326] hover:bg-[#f4e9d0]"
+        href="/"
+        className="absolute right-6 top-6 z-30 rounded-full border border-white/25 bg-[#f4f2e4]/90 px-5 py-3 text-xs text-[#26392b] backdrop-blur-lg hover:bg-white max-sm:right-3 max-sm:top-3 max-sm:px-4 max-sm:py-2 max-sm:text-[11px]"
       >
-        Back to the planet
+        <span className="max-sm:hidden">Back to the planet</span>
+        <span className="hidden max-sm:inline">← Planet</span>
       </Link>
     </main>
   );

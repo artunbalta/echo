@@ -78,8 +78,8 @@ test("a parcel and the demo build one list, in one order, differing only in the 
   const parcel = parcelLayers({ chain, slice: sliceOptionsFor(undefined, {}) }).map((l) => l.name);
   const demo = parcelLayers({ chain, slice: sliceOptionsFor("slice", {}) }).map((l) => l.name);
 
-  assert.deepEqual(parcel, ["sky", "terrain", "scatter", "canopy-closure", "player", "walk"]);
-  assert.deepEqual(demo, ["sky", "terrain", "scatter", "canopy-closure", "player", "walk", "slice"]);
+  assert.deepEqual(parcel, ["sky", "terrain", "scatter", "canopy-closure", "detail", "player", "meadow", "walk"]);
+  assert.deepEqual(demo, ["sky", "terrain", "scatter", "canopy-closure", "detail", "player", "meadow", "walk", "slice"]);
 
   // The rationales that are load-bearing, stated as the relations they are, so that a reordering
   // fails here with the reason and not merely with a different array.

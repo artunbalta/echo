@@ -94,14 +94,19 @@
  * 15,581 to 17,664 instances in the band the whole way. The frustum-only control reads 0 on the
  * same frames, so what moved was the switch and not a bucket entering the cone.
  *
- * WHAT IT DOES NOT DO. It never casts a shadow. Measured, no instance of any class that casts is
- * ever past its own `farM` inside the 240 m shadow box, because the shortest `farM` among the
- * casters is 700 m and a caster inside the box stands at most 591 m from the lens at a 16 degree
- * sun; so the shadow pass keeps the full form and DECISIONS C20's numbers stand untouched, which
- * was checked rather than hoped: the shadow pass is IDENTICAL, triangle for triangle, with the far
- * band and without it at all 84 views measured across five routes on the real GPU.
- * `tests/scatterImpostor.test.mts` holds both halves, so a future class that casts and stands close
- * is caught here rather than drawn twice.
+ * WHAT IT DOES NOT DO. It never casts a shadow, and DECISIONS C22 changed why. It used to be that
+ * no caster could reach the far band at all: the shortest casting `farM` was 700 m against the
+ * 591 m a caster inside the 240 m shadow box can stand from the lens at a 16 degree sun, so the
+ * case did not exist. C22 re-derived those distances against the 500 m disk the scatter fills and
+ * the shortest casting `farM` is now cactus at 350 m, so a caster IS in the far band, and what it
+ * casts is the shadow of its own FULL FORM, out of the twin the layer packs against the shadow
+ * camera. That is deliberate: a card is two triangles seen edge-on from the sun, and the ground its
+ * shadow lands on is at least 350 m away, further than any ground pixel the lens reaches. The
+ * shadow pass never reads `farM`, so DECISIONS C20's numbers stand untouched whatever this file
+ * does, which is checked rather than hoped: `tests/scatterImpostor.test.mts` culls one cell under
+ * two `farM` tables three hundred metres apart and holds the shadow pass identical, triangle for
+ * triangle, and separately holds it identical with the far band and without it at all 84 views
+ * across five routes.
  */
 
 import * as THREE from "three";

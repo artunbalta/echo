@@ -91,6 +91,15 @@ export const MOVER = {
   JUMP_HEIGHT_M: 0.6,
 } as const;
 
+/** Speeds are tile units here; the parcel host converts its metre-scale locomotion once. */
+export interface MovementProfile { walk: number; run: number; accel: number; decel: number }
+const LEGACY_MOVEMENT: MovementProfile = { walk: MOVER.WALK, run: MOVER.RUN, accel: MOVER.ACCEL, decel: MOVER.DECEL };
+/** A comfortable walk and a light sprint for a 1.7 m body. Legacy/networked hosts keep their profile. */
+export function parcelMovement(tileM: number): MovementProfile {
+  if (!(tileM > 0)) throw new RangeError('tileM must be positive');
+  return { walk: 1.65 / tileM, run: 4.2 / tileM, accel: 7 / tileM, decel: 10 / tileM };
+}
+
 export function initialMover(x: number, y: number, heading = Math.PI / 2): MoverState {
   return {
     x,
@@ -138,15 +147,16 @@ export function stepMover(
   dt: number,
   walkable: (x: number, y: number) => boolean,
   blocked?: (x: number, y: number) => boolean,
+  profile: MovementProfile = LEGACY_MOVEMENT,
 ): MoverState {
   const step = Math.max(0, Math.min(0.1, dt));
   const len = Math.hypot(input.dx, input.dy);
-  const wantSpeed = len > 0 && !input.activity ? (input.run ? MOVER.RUN : MOVER.WALK) : 0;
+  const wantSpeed = len > 0 && !input.activity ? (input.run ? profile.run : profile.walk) : 0;
   const ux = len > 0 ? input.dx / len : 0;
   const uy = len > 0 ? input.dy / len : 0;
 
   // Accelerate toward the wanted velocity, or brake toward rest.
-  const rate = wantSpeed > 0 ? MOVER.ACCEL : MOVER.DECEL;
+  const rate = wantSpeed > 0 ? profile.accel : profile.decel;
   let vx = s.vx;
   let vy = s.vy;
   const tx = ux * wantSpeed;
@@ -201,7 +211,7 @@ export function stepMover(
   }
   if (!input.jump) jumpHeld = false;
 
-  const state = nextState({ moving, running: input.run && moving && speed > MOVER.WALK + 0.01, jumping: jumpT >= 0, activity: input.activity, turned });
+  const state = nextState({ moving, running: input.run && moving && speed > profile.walk + 0.01, jumping: jumpT >= 0, activity: input.activity, turned });
 
   return {
     x,

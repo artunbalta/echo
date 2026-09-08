@@ -23,6 +23,7 @@ import type { PickedParcel } from "@/game/planet/PlanetGlobe";
 
 // Sampling terrain for the inset pulls in the whole planet package, which the hero already loads,
 // but it is only ever needed once somebody points at something.
+const ParcelPreview = dynamic(() => import("@/components/planet/ParcelPreview"), { ssr: false });
 const ParcelInset = dynamic(() => import("@/components/planet/ParcelInset"), { ssr: false });
 
 interface Status {
@@ -219,91 +220,37 @@ export default function HeroPlanet() {
         </>
       ) : null}
 
-      {selected && world ? <DemoPrompt parcel={selected} status={status} minLand={world.minLandFraction} onDismiss={dismiss} /> : null}
+      {selected && world ? <DemoPrompt parcel={selected} world={world} onDismiss={dismiss} /> : null}
     </>
   );
 }
 
-/** The question a click earns: you pointed at a place, do you want to stand in it. */
-function DemoPrompt({
-  parcel,
-  status,
-  minLand,
-  onDismiss,
-}: {
-  parcel: PickedParcel;
-  status: Status | null;
-  minLand: number;
-  onDismiss: () => void;
+/** Selection opens a window onto this exact coordinate, using the same layers as the route. */
+function DemoPrompt({ parcel, world, onDismiss }: {
+  parcel: PickedParcel; world: World; onDismiss: () => void;
 }) {
+  const canEnter = parcel.assignable || !!parcel.commonsName;
   return (
-    <div className="absolute bottom-8 left-1/2 z-30 w-[min(92vw,420px)] -translate-x-1/2 rounded-lg border border-echo/30 bg-ink/92 p-5 backdrop-blur-sm sm:bottom-12">
-      {parcel.commonsName ? (
-        <>
-          <p className="font-pixel text-sm text-[#e2c67a]">{parcel.commonsName}</p>
-          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
-            One of twelve public commons. Their number is fixed by the geometry of the sphere, so
-            there can never be a thirteenth, and no one will ever own this one.
-          </p>
-        </>
-      ) : parcel.assignable ? (
-        <>
-          <p className="font-pixel text-sm text-echo">
-            A parcel, at {parcel.lat.toFixed(2)}, {parcel.lng.toFixed(2)}
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
-            Marked is the region around it, roughly ten kilometres across. The parcel itself is
-            1.4 km, which is too small to see and the right size to stand in.
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
-            {Math.round(parcel.landFraction * 100)}% of it is dry land.{" "}
-            {status
-              ? `${status.remaining.toLocaleString()} parcels are still unclaimed, and each one has exactly one owner, permanently.`
-              : "Each parcel has exactly one owner, permanently."}
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="font-pixel text-sm text-[#7a9cbe]">
-            Open water, at {parcel.lat.toFixed(2)}, {parcel.lng.toFixed(2)}
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
-            This is not a parcel and never will be. Land is assigned at random, so anything under{" "}
-            {Math.round(minLand * 100)}% dry ground is held out of the pool entirely: nobody is ever
-            given a rectangle of sea and told it is theirs.
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-parchment/70">
-            This one is {Math.round(parcel.landFraction * 100)}% land. Point at somewhere greener.
-          </p>
-        </>
-      )}
-
-      {parcel.assignable || parcel.commonsName ? (
-        <p className="mt-4 font-pixel text-sm text-parchment">Want to see it from the ground?</p>
+    <section aria-label="Selected parcel" className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-white/25 bg-[#16241f]/95 text-[#f7f5e9] shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
+      {canEnter ? (
+        <div className="relative h-[230px] sm:h-[300px]" data-preview-cell={parcel.cell}>
+          <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#16241f] via-transparent to-transparent" />
+          <span className="absolute left-5 top-4 rounded-full bg-[#16241f]/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">Live world · arrival view</span>
+        </div>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-3">
-        {parcel.assignable || parcel.commonsName ? (
-          // It said "Show me the demo", and it does not go to the demo: it goes to the parcel under
-          // the pointer, which has terrain, weather, a body and a measurement and no cave and no
-          // campfire, because those stand on one cell and nowhere else (DECISIONS.md C15). A button
-          // promising a demo and delivering ground is the landing telling a small lie about the
-          // world every time somebody presses it, so it now says the thing it actually does. The
-          // door to the demo is the one place on this page that is called Demo, in DemoEntry.
-          <a
-            href={`/parcel/${parcel.cell}`}
-            className="rounded bg-echo px-4 py-2 font-pixel text-xs text-ink transition-opacity hover:opacity-90"
-          >
-            Stand on it
-          </a>
-        ) : null}
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded border border-parchment/20 px-4 py-2 font-pixel text-xs text-parchment/75 transition-colors hover:border-parchment/40"
-        >
-          {parcel.assignable || parcel.commonsName ? "Keep looking" : "Point somewhere else"}
-        </button>
+      <button type="button" aria-label="Close parcel preview" onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-[#16241f]/80 text-xl hover:bg-[#324638]">×</button>
+      <div className="relative px-6 pb-6 pt-4">
+        <p className="text-[10px] uppercase tracking-[.24em] text-[#bdd0ae]">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
+        <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? (canEnter ? 'A place in the world.' : 'The open ocean.')}</h2>
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-white/65">
+          {canEnter ? 'Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.' : 'Choose a patch of land to begin exploring.'}
+        </p>
+        <div className="mt-5 flex items-center gap-4">
+          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="rounded-full bg-[#e2edc8] px-6 py-3 text-sm font-medium text-[#213522] hover:bg-white">Explore this place <span aria-hidden>↗</span></a> : null}
+          <button type="button" onClick={onDismiss} className="py-3 text-sm text-white/65 hover:text-white">Keep exploring</button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

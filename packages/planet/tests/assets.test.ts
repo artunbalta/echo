@@ -251,6 +251,36 @@ test("the layout is a pure function of mask, registry, seed and exclusions", () 
   assert.notDeepEqual(a.placed.slice(0, 20), other.placed.slice(0, 20));
 });
 
+test("lod moves no instance: two farM tables three kilometres apart, one placement, bit for bit", () => {
+  // DECISIONS C22's first constraint, and the one that decides whether it is a renderer change or a
+  // world change. `lod` says which of two geometries is DRAWN; it must never reach the placer. If
+  // it did, moving farM would relay the scatter under people's feet and the change would need a
+  // terrainVersion rather than ASSET_REGISTRY_VERSION.
+  const near = DEMO_ASSET_CLASSES.map((c) => ({ ...c, lod: { nearM: 1, farM: 2 } }));
+  const far = DEMO_ASSET_CLASSES.map((c) => ({ ...c, lod: { nearM: 2999, farM: 3000 } }));
+  const a = placeAssets(mask, near, SEED, exclusions, options);
+  const b = placeAssets(mask, far, SEED, exclusions, options);
+  assert.equal(a.placed.length, b.placed.length, `${a.placed.length} instances against ${b.placed.length}: lod moved the placement`);
+  assert.deepEqual(a.byClass, b.byClass, "lod changed how many instances a class received");
+  // Field by field rather than deepEqual on the whole array, so a failure names the instance and
+  // the field instead of printing forty thousand objects.
+  for (let i = 0; i < a.placed.length; i++) {
+    const x = a.placed[i]!;
+    const y = b.placed[i]!;
+    for (const key of ["classId", "x", "y", "z", "biome", "scale", "rotation", "cluster"] as const) {
+      assert.equal(
+        x[key],
+        y[key],
+        `instance ${i} of ${a.placed.length}: ${key} is ${String(x[key])} with farM 2 m and ${String(y[key])} with ` +
+          `farM 3,000 m. The placer has started reading lod, so a level-of-detail edit is now a world edit.`,
+      );
+    }
+  }
+  // The control: the two tables really are different objects, or this compares a thing with itself.
+  assert.notDeepEqual(near[0]!.lod, far[0]!.lod);
+  console.log(`  ${a.placed.length} instances placed identically under farM 2 m and farM 3,000 m`);
+});
+
 test("every land biome of the demo disk receives at least three classes", () => {
   const { placed } = place(exclusions);
   const classesByBiome = new Map<Biome, Set<string>>();

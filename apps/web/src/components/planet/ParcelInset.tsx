@@ -47,7 +47,7 @@ export default function ParcelInset({
   radiusKm,
   commonsName,
   assignable,
-  resolution = 112,
+  resolution = 192,
 }: ParcelInsetProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [summary, setSummary] = useState<{ widthM: number; areaKm2: number; biome: string } | null>(null);

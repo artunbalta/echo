@@ -7,8 +7,10 @@
  * still looks right, every other test still passes, and the frame is back to what it was. So the
  * guard in (d) is a TRIANGLE COUNT at a named camera, not a count of meshes and not a count of
  * instances, and it is bounded on both sides by two populations measured in the same process: the
- * far band as two triangles an instance, and the same instances at their full forms. A mesh count
- * would read 8 of 8 with every far mesh drawing nothing.
+ * far band as the GEOMETRY EACH FAR MESH IS BOUND TO, walked off the scene, and the same instances
+ * at their full forms. A mesh count would read 8 of 8 with every far mesh drawing nothing, and a
+ * far-band count taken from the constant would read two triangles an instance with every far mesh
+ * bound to the class's own full form.
  *
  * IT ENGAGES TOO NEAR. That is the one failure a person would actually see, and it is the one
  * requirement 1 of the task is about. (c) measures it at the instance level over sixteen cameras on
@@ -93,7 +95,7 @@ interface Built {
   spawnTile: [number, number];
 }
 
-async function build(cell: string, withSlice: boolean, impostors?: boolean): Promise<Built> {
+async function build(cell: string, withSlice: boolean, impostors?: boolean, classes?: readonly AssetClass[]): Promise<Built> {
   const seed = golden.seed;
   const calibration = golden.calibration;
   const field = createTerrain(seed);
@@ -146,7 +148,7 @@ async function build(cell: string, withSlice: boolean, impostors?: boolean): Pro
   const layer =
     impostors === undefined
       ? (parcelLayers({ chain, slice: sliceOptionsFor(withSlice ? "slice" : null, {}) }).find((l) => l.name === "scatter") as ScatterLayer)
-      : scatterLayer({ ...(withSlice ? DEMO_SCATTER : {}), impostors });
+      : scatterLayer({ ...(withSlice ? DEMO_SCATTER : {}), impostors, ...(classes ? { classes } : {}) });
   await layer.build(ctx, new AbortController().signal);
   return { cell, ctx, layer, frame, spawn, spawnTile };
 }
@@ -219,6 +221,45 @@ function packedKeys(mesh: THREE.InstancedMesh): Set<string> {
   const out = new Set<string>();
   for (let i = 0; i < mesh.count; i++) out.add(`${a[i * 16 + 12]!.toFixed(3)},${a[i * 16 + 13]!.toFixed(3)},${a[i * 16 + 14]!.toFixed(3)}`);
   return out;
+}
+
+/**
+ * Triangles one instance of a geometry costs, counted off its buffers the way a renderer counts.
+ *
+ * Written here rather than imported from the layer ON PURPOSE. This file's job is to check what the
+ * layer reports against something that is not the layer, and a shared helper would make both sides
+ * one statement again.
+ */
+function trianglesOf(geometry: THREE.BufferGeometry): number {
+  return (geometry.index ? geometry.index.count : geometry.getAttribute("position").count) / 3;
+}
+
+/**
+ * What the far band is about to draw, read off the SCENE: the geometry each far mesh is bound to,
+ * times the instances the last cull left standing in it.
+ *
+ * WHY THIS EXISTS, and it is the defect it was written to close. The guard below used to compare
+ * `impostorTriangles` against `impostorInstances * IMPOSTOR_TRIANGLES`, and the layer accumulated
+ * both of those from one `far` count and that same constant. No input could break it. Point every
+ * far mesh at its class's own full merged form and the frame triples while the report, and the
+ * assertion, and the saving bound beside it, all read exactly what they read before; only the e2e,
+ * which asks `renderer.info`, ever noticed. So this walks the meshes instead, and the numbers it
+ * returns are the ones the GPU will be asked for.
+ */
+function farBandDrawn(layer: ScatterLayer): { triangles: number; instances: number; meshes: number; widest: { id: string; triangles: number } } {
+  let triangles = 0;
+  let instances = 0;
+  let meshes = 0;
+  let widest = { id: "none", triangles: 0 };
+  for (const [id, mesh] of layer.impostorMeshes) {
+    const per = trianglesOf(mesh.geometry);
+    if (per > widest.triangles) widest = { id, triangles: per };
+    if (mesh.count === 0) continue;
+    meshes++;
+    instances += mesh.count;
+    triangles += mesh.count * per;
+  }
+  return { triangles, instances, meshes, widest };
 }
 
 // ── (a) the card is the form's own silhouette ──────────────────────────────────
@@ -513,12 +554,16 @@ const RIM_DEG = 60;
  * What the far band must be worth at that camera, as a SHARE of what those same instances would
  * have cost at their full forms.
  *
- * Both sides are measured in this process on the same frame: `farBandFullTriangles` is what the
- * layer would have submitted for exactly the instances it turned into cards, and
- * `impostorTriangles` is what it submitted instead. The ratio is bounded rather than the absolute,
- * because the absolute is a number about this seed and this cell and would have to be rewritten
- * every time the ecology moved; the ratio is two triangles against the class's own form and is the
- * thing C21 promises. Measured at 3.9x on the parcel and 4.2x on the demo.
+ * Both sides are measured in this process on the same frame and BOTH ARE READ OFF A GEOMETRY:
+ * `farBandFullTriangles` counts the class's own full merged form, `impostorTriangles` counts the
+ * form the far mesh is actually bound to. That second half is the correction; while it was
+ * `instances * IMPOSTOR_TRIANGLES` this bound could not fall below `trianglesPerInstance / 2` no
+ * matter what the far mesh was drawing, so it measured the class table and never the impostor.
+ *
+ * The ratio is bounded rather than the absolute, because the absolute is a number about this seed
+ * and this cell and would have to be rewritten every time the ecology moved; the ratio is two
+ * triangles against the class's own form and is the thing C21 promises. Measured, off the meshes,
+ * at 4.75x on the parcel and 4.48x on the demo.
  */
 const IMPOSTOR_SAVING = 3;
 
@@ -537,13 +582,30 @@ test("at the rim the far band is drawn as cards, and the triangles say so", () =
       `${b.cell}: standing ${RIM_M} m out at ${RIM_DEG} degrees and looking back, the far band submitted no triangles ` +
         `at all. DECISIONS C21 has stopped engaging: every instance in the cone is being drawn at its full form.`,
     );
+    // What the far band IS, off the meshes, before anything the report says is believed.
+    const drawn = farBandDrawn(b.layer);
+    assert.ok(b.layer.impostorMeshes.size > 0, `${b.cell}: the layer built no far meshes at all, so there is nothing to read`);
+    assert.equal(
+      drawn.widest.triangles,
+      IMPOSTOR_TRIANGLES,
+      `${b.cell}: the far mesh of ${drawn.widest.id} is bound to a geometry of ${drawn.widest.triangles} triangles where a ` +
+        `card is ${IMPOSTOR_TRIANGLES}. The far band is drawing something that is not the card, which is the whole of what ` +
+        `C21 buys; a far mesh pointed at the class's own full form costs a draw call and saves nothing.`,
+    );
     assert.equal(
       r.impostorTriangles,
-      r.impostorInstances * IMPOSTOR_TRIANGLES,
-      `${b.cell}: the far band submitted ${r.impostorTriangles} triangles for ${r.impostorInstances} instances, which is ` +
-        `not ${IMPOSTOR_TRIANGLES} each`,
+      drawn.triangles,
+      `${b.cell}: the cull reports ${r.impostorTriangles.toLocaleString()} far-band triangles where the far meshes are ` +
+        `holding ${drawn.triangles.toLocaleString()}, over ${drawn.instances.toLocaleString()} instances in ${drawn.meshes} ` +
+        `meshes. The report is arithmetic on a constant and the meshes are what the GPU is handed; when they disagree the ` +
+        `report is wrong and every triangle number in DECISIONS C21 was taken from the report.`,
     );
-    const saving = r.farBandFullTriangles / r.impostorTriangles;
+    assert.equal(
+      r.impostorInstances,
+      drawn.instances,
+      `${b.cell}: the cull reports ${r.impostorInstances} far-band instances and the far meshes hold ${drawn.instances}`,
+    );
+    const saving = r.farBandFullTriangles / drawn.triangles;
     assert.ok(
       saving >= IMPOSTOR_SAVING,
       `${b.cell}: the far band cost ${r.impostorTriangles.toLocaleString()} triangles where the same instances at their ` +
@@ -597,30 +659,99 @@ test("the far band never casts, and DECISIONS C20's shadow pass reads the same w
   }
 });
 
-test("no class that casts a shadow is ever past its own farM inside the shadow box", () => {
-  // WHY IT CANNOT BE, and then the measurement rather than the argument. The shadow box is 240 m
-  // wide and follows the lens, so nothing in it is more than about 435 m from the lens at a 16
-  // degree sun; the shortest farM among the classes C20 still lets cast is 700 m. So a caster in
-  // the box is never in the far band, the twin keeps the full form, and the card never has to cast.
+test("farM never reaches the shadow pass: two tables three hundred metres apart, one shadow pass", async () => {
+  // WHAT THIS REPLACED AND WHY. It used to assert that no caster could ever be past its own farM
+  // inside the shadow box, which held because the shortest casting farM was 700 m against the
+  // 591 m a caster in the 240 m box can stand from the lens. DECISIONS C22 re-derived every farM
+  // against the 500 m disk the scatter actually fills and the shortest casting one is now cactus
+  // at 350 m, so a caster IS in the far band. That is not the defect the old test feared: the
+  // instance is drawn as a card and casts the shadow of its own full form, which is the right way
+  // round. The property worth guarding is the one underneath it, and it was never guarded at all:
+  // farM is a MAIN PASS number, so moving it must not move the shadow pass by a single triangle.
+  const near = ASSET_CLASSES.map((c) => ({ ...c, lod: { ...c.lod, farM: 120 } }));
+  const far = ASSET_CLASSES.map((c) => ({ ...c, lod: { ...c.lod, farM: 5000 } }));
+  const a = await build(PARCEL_CELL, false, true, near);
+  const b = await build(PARCEL_CELL, false, true, far);
+  try {
+    let moved = 0;
+    for (const v of viewsFor(a)) {
+      const shadow = shadowCameraFor(a, v.x, v.y);
+      const ra = a.layer.cull(v.camera, shadow);
+      const rb = b.layer.cull(v.camera, shadow);
+      moved += Math.abs(ra.impostorInstances - rb.impostorInstances);
+      assert.equal(
+        ra.shadowTriangles,
+        rb.shadowTriangles,
+        `${v.label}: with every farM at 120 m the shadow pass submits ${ra.shadowTriangles.toLocaleString()} triangles ` +
+          `and with every farM at 5,000 m it submits ${rb.shadowTriangles.toLocaleString()}. farM has reached the ` +
+          `shadow pass, so DECISIONS C22 is no longer a main-pass change and C20's numbers move with it.`,
+      );
+      assert.equal(ra.shadowInstances, rb.shadowInstances, `${v.label}: the shadow pass instance count moved with farM`);
+      assert.equal(ra.shadowMeshes, rb.shadowMeshes, `${v.label}: the shadow pass draw calls moved with farM`);
+    }
+    // And the control, on the same frames: the two tables really are two different worlds in the
+    // main pass, or the equality above is a comparison of a thing with itself.
+    assert.ok(
+      moved > 100_000,
+      `the two farM tables moved only ${moved.toLocaleString()} instances between the near band and the far one across ` +
+        `${viewsFor(a).length} views, so the shadow equality above proves nothing`,
+    );
+    console.log(`  farM 120 m against farM 5,000 m: ${moved.toLocaleString()} instances change band and the shadow pass never moves`);
+  } finally {
+    a.layer.dispose!();
+    b.layer.dispose!();
+  }
+});
+
+test("the twin that casts is bound to the class's own form, never to the card", () => {
+  // The other half of the same fact. A caster in the far band is only sound while the thing casting
+  // is the form; point the shadow twin at the card and every tree in the box would throw the
+  // shadow of a two-triangle sliver.
+  for (const b of [demo, parcel]) {
+    let checked = 0;
+    for (const [id, shadow] of b.layer.shadowMeshes) {
+      const main = b.layer.meshes.get(id)!;
+      assert.equal(
+        shadow.geometry,
+        main.geometry,
+        `${b.cell.slice(0, 7)} ${id}: the shadow twin is bound to a geometry of ${trianglesOf(shadow.geometry)} ` +
+          `triangles where the class's own form is ${trianglesOf(main.geometry)}`,
+      );
+      const far = b.layer.impostorMeshes.get(id);
+      if (far) assert.notEqual(shadow.geometry, far.geometry, `${id}: the shadow twin is drawing the card`);
+      checked++;
+    }
+    assert.ok(checked > 0, `${b.cell} has no casting class at all, so this proves nothing`);
+  }
+});
+
+test("casters now reach the far band, and the count is measured rather than assumed", () => {
+  // Not an assertion about a number the ecology owns: the point is to make the new situation
+  // visible, and to fail if the shortest casting farM ever climbs back past the reach of the
+  // shadow box without this file being told, because then the two tests above are guarding a case
+  // that no longer occurs and the comment in scatterImpostor.ts would be wrong the other way.
   const casting = ASSET_CLASSES.filter((c) => c.castsShadow && c.collider !== null && c.collider.heightM >= SHOULDER_HEIGHT_M);
   assert.ok(casting.length > 0, "no class casts at all, so this proves nothing");
   const shortest = Math.min(...casting.map((c) => c.lod.farM));
-  // The furthest a caster inside the box can be from the lens: the box's own diagonal from a centre
-  // 12 m ahead of the lens, at the elevation the key stands at.
   const from = skyState(DUSK).keyFrom;
   const elevation = Math.asin(Math.max(1e-6, from.y));
   const reach = 12 + DEFAULT_SHADOW_HALF_M * Math.sqrt(2) + DEFAULT_SHADOW_HALF_M / Math.tan(elevation);
   assert.ok(
-    shortest > reach,
-    `the shortest farM among the classes that still cast is ${shortest} m (${casting.filter((c) => c.lod.farM === shortest).map((c) => c.id).join(", ")}), ` +
-      `and a caster inside the ${2 * DEFAULT_SHADOW_HALF_M} m shadow box can stand ${reach.toFixed(0)} m from the lens at a ` +
-      `${((elevation * 180) / Math.PI).toFixed(0)} degree sun. So a caster CAN be in the far band, its shadow would be cast ` +
-      `by the full form while its silhouette is a card, and scatterImpostor.ts's header says that cannot happen. ` +
-      `Correct the header, or give the far band a shadow of its own.`,
+    shortest < reach,
+    `the shortest farM among the classes that still cast is ${shortest} m and a caster inside the ` +
+      `${2 * DEFAULT_SHADOW_HALF_M} m shadow box reaches ${reach.toFixed(0)} m, so no caster can be in the far band ` +
+      `any more. DECISIONS C22 measured those distances INSIDE the disk; a table that has drifted back outside it is ` +
+      `a table that has stopped being a measurement.`,
   );
+  let inBand = 0;
+  const castingIds = new Set(casting.map((c) => c.id));
+  for (const v of viewsFor(parcel)) {
+    parcel.layer.cull(v.camera, shadowCameraFor(parcel, v.x, v.y));
+    for (const [id, far] of parcel.layer.impostorMeshes) if (castingIds.has(id)) inBand += far.count;
+  }
   console.log(
-    `  the shortest casting farM is ${shortest} m against the ${reach.toFixed(0)} m a caster inside the shadow box can ` +
-      `reach: the far band never casts, and never has to`,
+    `  the shortest casting farM is ${shortest} m inside the ${reach.toFixed(0)} m the shadow box reaches, and over ` +
+      `${viewsFor(parcel).length} views ${inBand.toLocaleString()} casting instances stood in the far band`,
   );
 });
 

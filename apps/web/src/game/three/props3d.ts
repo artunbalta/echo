@@ -15,7 +15,7 @@ import * as THREE from "three";
 import { PALETTE, hashStr } from "./palette";
 import type { PropKind } from "../props";
 
-const lam = (c: number) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+const lam = (c: number) => new THREE.MeshLambertMaterial({ color: c, flatShading: false });
 
 // Materials are shared across every instance of a kind — 100 islands of trees would otherwise mean
 // thousands of identical materials and a shader recompile for each.
@@ -228,7 +228,7 @@ const BUILDERS: Record<PropKind, () => THREE.Group> = {
 
   berry_bush: () => {
     const g = new THREE.Group();
-    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 0), M.bush);
+    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 2), M.bush);
     b.position.y = 0.36;
     b.castShadow = true;
     g.add(b);
@@ -309,7 +309,7 @@ const BUILDERS: Record<PropKind, () => THREE.Group> = {
     const g = new THREE.Group();
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2;
-      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34 + (i % 2) * 0.1, 0), i % 2 ? M.leafDark : M.bush);
+      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34 + (i % 2) * 0.1, 2), i % 2 ? M.leafDark : M.bush);
       b.position.set(Math.cos(a) * 0.34, 0.3 + (i % 3) * 0.08, Math.sin(a) * 0.34);
       b.castShadow = true;
       g.add(b);

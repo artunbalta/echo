@@ -104,12 +104,23 @@ const blend = (a: number, b: number, k: number) => new THREE.Color(a).lerp(new T
 /** The top of the dome. */
 const ZENITH_NIGHT = blend(PALETTE.shadow, PALETTE.skyDusk, 0.55); // ink with the dusk violet in it
 const ZENITH_TWILIGHT = new THREE.Color(PALETTE.skyDusk); // the bible's own dusk zenith, untouched
-const ZENITH_DAY = blend(PALETTE.duskFill, PALETTE.seaShallow, 0.35); // cool and muted, never cheerful
+const ZENITH_DAY = new THREE.Color(0x4e91cb);
+
+/**
+ * Where the fog starts and where it has taken everything, metres of VIEW DEPTH.
+ *
+ * Exported because they are read outside this file now: DECISIONS C22 derives every class's
+ * `lod.farM` against the contrast the fog leaves at a distance, and a fog band that moved without
+ * that derivation moving with it would leave twenty-six distances measured against a camera nobody
+ * has. The reasons the two numbers are what they are live on `SkyLayerOptions.fogNearM`.
+ */
+export const FOG_NEAR_M = 150;
+export const FOG_FAR_M = 420;
 
 /** The bottom of the dome, and therefore the fog. */
 const HORIZON_NIGHT = blend(PALETTE.skyDusk, PALETTE.duskFill, 0.42); // lighter than the night zenith
 const HORIZON_TWILIGHT = new THREE.Color(PALETTE.skyHorizon); // the bible's own dusk horizon
-const HORIZON_DAY = blend(PALETTE.duskFill, PALETTE.seaFoam, 0.48); // pale haze, flat, cold
+const HORIZON_DAY = new THREE.Color(0xc5dce5);
 
 /** The one light. The sun while it is up, the moon while it is not; never two suns. */
 const KEY_NIGHT = blend(PALETTE.duskFill, PALETTE.seaFoam, 0.3); // moonlight: pale, cold, weak
@@ -369,6 +380,17 @@ uniform vec3 uHorizon;
 uniform vec3 uGlow;
 uniform vec3 uSun;
 uniform float uGlowAmount;
+uniform float uCloudTime;
+float cloudHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float cloudNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
+  return mix(mix(cloudHash(i), cloudHash(i+vec2(1,0)),f.x),mix(cloudHash(i+vec2(0,1)),cloudHash(i+vec2(1,1)),f.x),f.y);
+}
+float clouds(vec2 p) {
+  float n = 0., a = .55;
+  for (int i=0; i<5; i++) { n += cloudNoise(p) * a; p = p*2.03 + vec2(13.2, 7.1); a *= .48; }
+  return n;
+}
 varying vec3 vDir;
 
 void main() {
@@ -383,6 +405,15 @@ void main() {
   float band = smoothstep(0.0, 0.05, dir.y) * (1.0 - smoothstep(0.05, 0.42, dir.y));
   col = mix(col, uGlow, uGlowAmount * band * pow(toward, 2.5));
 
+  if (dir.y > .015) {
+    vec2 uv = dir.xz / (dir.y + .12) * 1.8 + vec2(uCloudTime * .006, 0.);
+    float density = clouds(uv);
+    float cloud = smoothstep(.43, .65, density) * smoothstep(.015, .12, dir.y);
+    float edge = clouds(uv + vec2(.12, .09)) - density;
+    vec3 cloudColour = mix(uHorizon * .68, vec3(1., .98, .91), clamp(.62 + edge * 3., 0., 1.));
+    float daylight = smoothstep(-.08, .25, uSun.y);
+    col = mix(col, cloudColour, cloud * daylight * .94);
+  }
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -442,8 +473,8 @@ export interface SkyLayer extends WorldLayer {
 
 export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
   const radius = options.radiusM ?? 3000;
-  const fogNear = options.fogNearM ?? 150;
-  const fogFar = options.fogFarM ?? 420;
+  const fogNear = options.fogNearM ?? FOG_NEAR_M;
+  const fogFar = options.fogFarM ?? FOG_FAR_M;
   let rate = options.rate ?? 1 / DEFAULT_CYCLE_S;
   let time = wrapTime(options.timeOfDay ?? DUSK);
 
@@ -461,6 +492,7 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
     uGlow: { value: new THREE.Color() },
     uSun: { value: new THREE.Vector3() },
     uGlowAmount: { value: 0 },
+    uCloudTime: { value: 0 },
   };
 
   /**
@@ -574,6 +606,7 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
   };
 
   const update = (dt: number, ctx: LayerContext) => {
+    uniforms.uCloudTime.value += dt;
     if (rate !== 0) {
       time = wrapTime(time + rate * dt);
       apply();

@@ -27,6 +27,15 @@
  * takes the walk tally instead and says plainly that nothing has moved the posterior, which is the
  * truth on ground with no bounded act in it; see Inspector.tsx and DECISIONS.md C15.
  *
+ * IT IS PLAYABLE WITH A THUMB (task C23). Looking around always worked on a phone, because the
+ * canvas takes pointer events and refuses `touch-action`; everything else was a key nobody has on a
+ * phone. So this mount makes one TouchControlHandle, hands it to the world (where game/world/input.ts
+ * merges it with the keys into the single InputFrame the mover reads) and to the HUD (where
+ * TouchControls draws the thumbstick and the buttons). It is made HERE and not inside either of them
+ * because it is the one thing both halves have to be holding the same instance of. It is drawn only
+ * on a coarse pointer, and only once the consent question has been answered — the card is a gate
+ * standing in the bottom band of a phone screen, which is exactly where a thumb goes.
+ *
  * The player layer drives the camera (orbit, terrain collision) from its own update, so no `follow`
  * is passed: PlanetWorld's provisional boom runs after the layers whenever one is set and would
  * overwrite the orbit camera every frame.
@@ -49,12 +58,15 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import ConsentCard from "@/components/world/ConsentCard";
+import TouchControls from "@/components/world/TouchControls";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
 import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import WorldCanvas from "@/components/world/WorldCanvas";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "@/game/world/parcelWorld";
+import { createTouchControls } from "@/game/world/touchInput";
+import { useCoarsePointer } from "@/lib/pointerKind";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
@@ -87,6 +99,13 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
   const chain = useMemo<MeasureChain>(() => createMeasureChain(), []);
   const { posterior, log, consent } = useMeasureChain(chain);
 
+  // One handle for the life of the page, for the same reason the chain is: the world is built with
+  // it once, and a new instance would leave the HUD writing into something nothing reads.
+  const touch = useMemo(() => createTouchControls(), []);
+  const coarse = useCoarsePointer();
+  // The inspector's open state lives here now, so a backtick and a thumb reach ONE piece of state.
+  const [inspecting, setInspecting] = useState(false);
+
   // Both of these stay empty for the life of an ordinary parcel: only the slice emits them, and
   // there is no slice unless the server said there could be one.
   const [reactions, setReactions] = useState<ReactionReading[]>([]);
@@ -103,7 +122,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
 
   const layers = useCallback(
     (built: PlanetWorld): WorldLayer[] => {
-      const list = parcelLayers({ chain, slice: sliceOptionsFor(stations, { onReaction, onBeat: setBeat }) });
+      const list = parcelLayers({ chain, touch, slice: sliceOptionsFor(stations, { onReaction, onBeat: setBeat }) });
       // A handle for the browser tests, and for anyone debugging in a console. Never in a
       // production bundle: the demo must not carry a way to move the player it did not earn.
       // The two layers are read out of the world's own registry, so this cannot go on naming
@@ -123,7 +142,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       }
       return list;
     },
-    [chain, stations, onReaction],
+    [chain, touch, stations, onReaction],
   );
 
   return (
@@ -140,19 +159,33 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
           absent attribute cannot tell a parcel with no stations apart from a HUD that has not
           rendered yet, and the thing worth testing is precisely that a refused parameter left
           this saying "none". */}
+      {/* On a narrow screen this moves OUT of the bottom-left corner, because that corner is where
+          a left thumb goes and a 366 px card there is 94% of the width. It stacks into the top-left
+          column instead, under the meter, and the whole card is `max-sm:` — a WIDTH question, which
+          CSS can answer on its own, and deliberately not the coarse-pointer question, which decides
+          something else (whether the controls exist at all) and is asked in JavaScript. */}
       <div
         data-stations={stations ?? "none"}
-        className="pointer-events-none absolute bottom-6 left-6 rounded border border-[#a06cd5]/30 bg-[#1c1326]/85 px-4 py-3 text-xs text-[#f4e9d0]/80 backdrop-blur-sm"
+        className="pointer-events-none absolute bottom-6 left-6 rounded-2xl border border-white/15 bg-[#192a20]/75 px-5 py-4 text-xs text-[#f4f2e4]/80 backdrop-blur-xl max-sm:bottom-auto max-sm:left-3 max-sm:top-[5.5rem] max-sm:w-[58vw] max-sm:rounded-xl max-sm:px-3 max-sm:py-2"
       >
-        <p className="font-pixel text-[#a06cd5]">Your land</p>
-        <p className="mt-2 text-[#f4e9d0]/45">W A S D to walk, shift to run, space to jump, drag to look</p>
-        <p className="mt-1 text-[#f4e9d0]/30">` opens the inspector</p>
+        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">Your corner of the world</p>
+        <p className="mt-1 text-[10px] tracking-widest text-white/40">{manifest.cell}</p>
+        {/* The legend has to be true on the device reading it. It said Shift and Space to people
+            holding a phone, which is the one instruction on the route. */}
+        <p className="mt-2 text-[#f4e9d0]/45 max-sm:text-[10px] max-sm:leading-relaxed">
+          {coarse
+            ? "Stick · Walk　 Push far · Run　 Drag · Look　 Pinch · Zoom"
+            : "W A S D · Walk　 Shift · Run　 Space · Jump　 Drag · Look"}
+        </p>
+        <p className="mt-1 text-[#f4e9d0]/30 max-sm:text-[10px]">
+          {coarse ? "` opens the inspector, and so does the button" : "` opens the inspector"}
+        </p>
       </div>
 
       {/* The beat's line, and nothing that names what to look for: the slice is judged on whether
           a person notices the consequence unprompted. */}
       {beat ? (
-        <p className="pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2 font-pixel text-sm text-[#f4e9d0]/80 [text-shadow:0_1px_12px_rgba(18,12,25,0.9)]">
+        <p className="pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2 font-pixel text-sm text-[#f4e9d0]/80 max-sm:bottom-[13rem] max-sm:w-[80vw] max-sm:text-center [text-shadow:0_1px_12px_rgba(18,12,25,0.9)]">
           {beat}
         </p>
       ) : null}
@@ -177,7 +210,19 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
         consent={consent}
         reactions={stations ? reactions : undefined}
         walk={stations ? undefined : walk}
+        open={inspecting}
+        onOpenChange={setInspecting}
       />
+
+      {/* Last, so it paints over the HUD it shares a screen with, and only where there is a thumb to
+          use it. The consent card is answered first: see the header. */}
+      {coarse && consent !== "unset" ? (
+        <TouchControls
+          handle={touch}
+          inspecting={inspecting}
+          onToggleInspector={() => setInspecting((v) => !v)}
+        />
+      ) : null}
     </WorldCanvas>
   );
 }

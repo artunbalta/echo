@@ -726,29 +726,35 @@ band of two, against ONE. What stays bad is the near-flat litter, fallen-log at 
 because a thing lying on the ground faces the sky and an upright card cannot.
 
 WHAT IT BOUGHT, whole frame, both passes, on the real GPU with vsync off, at eighteen stand points
-per route, each rim point looking back across the disk:
+per route, each rim point looking back across the disk. THE SPAWN COLUMN IS THE CORRECTED ONE, read
+off `renderer.info` on the shipped page standing where the game puts you; what this section first
+recorded there was not reproducible and the subsection below says what it was:
 
                      at the spawn        worst stand point       views over 600,000
-  8482589ffffffff    496,615 -> 470,655  704,644 -> 544,164       4 of 18 -> 0
-  8477057ffffffff    527,555 -> 500,035  744,331 -> 587,271       5 of 18 -> 0
-  8496a91ffffffff    538,179 -> 513,191  772,275 -> 616,355      12 of 18 -> 2
-  847b949ffffffff    304,535 -> 302,527  597,464 -> 495,062       0 of 16 -> 0
-  847b959ffffffff    359,789 -> 334,163  359,789 -> 334,163       0 of 14 -> 0
+  8482589ffffffff    326,414 -> 326,414  704,644 -> 544,164       4 of 18 -> 0
+  8477057ffffffff    567,139 -> 537,459  744,331 -> 587,271       5 of 18 -> 0
+  8496a91ffffffff    549,849 -> 523,249  772,275 -> 616,355      12 of 18 -> 2
+  847b949ffffffff    283,578 -> 281,748  597,464 -> 495,062       0 of 16 -> 0
+  847b959ffffffff    202,499 -> 202,499  359,789 -> 334,163       0 of 14 -> 0
 
 Both columns of every row are one session on one machine, the far band put back to its full form by
 appending what the cull packed into each class's far mesh onto the end of that class's own mesh.
 
 IT BUYS LITTLE AT THE SPAWN AND MUCH AT THE RIM, which is exactly what it was for and is worth saying
-plainly: 5.2% off the parcel's spawn frame against 22.8% off its worst, 0.7% off the demo's spawn
-against 20.4% off its worst. Nineteen of the twenty-one views that were over C16's ceiling now fit.
-The two that do not are on 8496a91ffffffff at 616,355 and 601,080, 2.7% and 0.2% past a ceiling they
-were 28.7% and 25.6% past; what is left there is the ground, and the terrain's own split is where the
-next hundred thousand is.
+plainly: nothing at all off the parcel's spawn frame against 22.8% off its worst, 0.6% off the demo's
+spawn against 20.4% off its worst. Across the five routes the spawn runs 0.0% to 5.2%, and the two
+routes at 0.0%, the parcel and 847b959ffffffff, are the two whose spawn heading has no far band in it
+at all: the impostor cannot help a camera that is not looking at anything past a `farM`. Nineteen of
+the twenty-one views that were over C16's ceiling now fit. The two that do not are on
+8496a91ffffffff at 616,355 and 601,080, 2.7% and 0.2% past a ceiling they were 28.7% and 25.6% past;
+what is left there is the ground, and the terrain's own split is where the next hundred thousand is.
 
-IT SPENDS DRAW CALLS RATHER THAN GIVING THEM BACK, unlike C20: one more per class with a far band, 37
-to 41 at the parcel's spawn and 57 to 64 at the demo's rim, against C16's 120. And it does not touch
-the shadow pass at all, checked rather than hoped: identical triangle for triangle at all 84 views
-across the five routes, because no class that casts is ever past its own `farM` inside the 240 m box.
+IT SPENDS DRAW CALLS RATHER THAN GIVING THEM BACK, unlike C20: one more per class with a far band,
+which at the spawn is 37 to 37 on the parcel because no class has one there, 37 to 42 on
+8477057ffffffff, 49 to 51 on the demo, and 57 to 64 at the demo's rim, against C16's 120. And it
+does not touch the shadow pass at all, checked rather than hoped: identical triangle for triangle at
+all 84 views across the five routes, because no class that casts is ever past its own `farM` inside
+the 240 m box.
 The shortest casting `farM` is dead-tree's 700 m and a caster inside the box stands at most 591 m
 from the lens at a 16 degree sun.
 
@@ -794,6 +800,65 @@ would go bare in front of a walker. What ships is two bands, the full form withi
 cheap stand-in past it, never culled. `nearM` is still read by nobody and is kept as what it is: a
 fact about the class, not a promise the renderer keeps.
 
+### C21, the spawn column corrected
+
+"496,615 -> 470,655 at the parcel's spawn" could not be reproduced by anyone, and the reason is that
+it was never a frame. Standing where the game puts you on /parcel/8482589ffffffff, real GPU, vsync
+off, dusk, `renderer.info` reads 326,414 triangles and 37 draw calls with C21, and 326,414 and 37
+with the far band appended back onto each class's own mesh in the same session. The far band at that
+camera holds ZERO instances, spends zero draw calls and saves zero triangles. There is nothing there
+for the impostor to buy.
+
+WHAT THE OLD PAIR ACTUALLY MEASURED, recovered to the triangle. Every row of the old spawn column is
+the SCATTER LAYER's own cull report, main plus shadow, at the spawn POSITION at one heading, plus a
+per-route constant standing in for everything in the frame that is not the scatter:
+
+  cell             the heading used         scatter, full -> C21   constant added
+  8482589ffffffff  yaw 0, 180 deg off       312,525 -> 286,565     184,090
+  847b949ffffffff  yaw 0, 21 deg off        123,859 -> 121,851     180,676
+  8477057ffffffff  yaw PI, the shipped one  316,901 -> 289,381     210,654
+  8496a91ffffffff  yaw PI, the shipped one  301,311 -> 276,323     236,868
+  847b959ffffffff  yaw PI, 179 deg off      172,964 -> 147,338     186,825
+
+The constant is IDENTICAL on both sides of every arrow, to the triangle, and that is what gives it
+away: the "before" column was never rendered. It is the "after" plus the layer's own
+`farBandFullTriangles - impostorTriangles` at that camera, with the rest of the frame carried across
+unchanged. Sweeping all 360 headings at each spawn and asking which of them produce exactly the
+saving the old table prints, three routes answer with one heading each, 8477057ffffffff with two and
+8496a91ffffffff with three, and in every case the shipped-or-not heading named below is among them.
+The camera each number came from is recovered, not guessed.
+
+THREE OF THE FIVE HEADINGS ARE NOT THE ONE THE GAME GIVES YOU, which is why the error was invisible
+from inside the numbers. C4's spawn rule turns you toward the sea when there is one inside the fog
+and leaves you at yaw PI when there is not, so on 8482589ffffffff the shipped heading is PI and the
+old row was measured at 0, which is the opposite way round; on 847b959ffffffff the shipped heading is
+1.4 degrees, out to sea, and the old row was measured at PI, inland. Looking the way the game
+actually points you on the parcel, the scatter submits 15,356 triangles of main pass in 8 draw calls
+and not one bucket in the cone is past any class's own `farM`.
+
+WHY THE PARCEL'S WRONG HEADING LOOKED RIGHT: yaw 0 is the WORST of the twenty-four headings there,
+and tests/e2e/scatterSplit.spec.ts reads it in its own session at 483,074 triangles and 41 draw
+calls against the spawn's 326,414 and 37. A number taken at the frame that costs most on the route
+reads like a headline; it is just not the one a person is given. On the demo the same wrong heading
+is the CHEAPEST of the four cardinals and the row came out accidentally close, 0.7% where the shipped
+heading gives 0.6%. Against the corrected spawn column the five old "before" numbers are wrong by
++52.1% on the parcel, +77.7% on 847b959ffffffff, +7.4% on the demo, -7.0% on 8477057ffffffff and
+-2.1% on 8496a91ffffffff. Three of them sit inside the 1 to 3% this section already allows between
+sessions, or near enough to read as it, which is the other half of why nobody caught this.
+
+AND ONE ROW IS ONE MEASUREMENT WRITTEN TWICE. 847b959ffffffff's two columns are the same pair,
+359,789 -> 334,163, because both are that spawn at yaw PI; the row never carried a rim reading at
+all. Its spawn cell is corrected above and its rim cell is left as recorded rather than invented.
+
+THE RIM COLUMN IS NOT RE-MEASURED HERE and its "views over 600,000" is already superseded: C22 below
+records that the guards and this section sampled the rim at 390 m on a disk the scatter fills to 500,
+and that 603 of 3,450 stand-and-aim views over 25 cells are still over the ceiling.
+
+THE LESSON, which is the reason this subsection exists rather than a quiet edit. A number labelled
+"at the spawn" was taken at a camera nobody stands at, and a "before" column was arithmetic rather
+than a second render, and both survived review because the arithmetic was self-consistent. A recorded
+measurement nobody can reproduce is worse than no measurement: it is spent as evidence.
+
 ### C20, corrected after review
 
 The rule was "1.7 m and taller casts" and the reasoning was that a short thing's shadow disappears
@@ -834,6 +899,272 @@ size.
 
 Under C5 this is a registry-version change. It moves no instance: farM decides which form is drawn
 and nothing else.
+
+### C22, built and measured
+
+THE METHOD, and the first thing to say is that the one this decision asked for does not exist. "The
+distance at which its own form falls to a few pixels" is an ANGULAR rule, and an angular rule scales
+with the form: a fern's form is 0.99 m tall and a buttress-tree's is 15.30 m, so one shared
+threshold puts their answers 15.4 to 1 apart. Both ends of that cannot be had. At the threshold that
+cards a buttress-tree at 450 m, inside the disk, a fern is carded at 29 m, where it is 39 pixels
+tall and unmistakably a rectangle; at the threshold that leaves the fern where it shipped, 5.2
+pixels of form height, a buttress-tree is not carded until 3.4 km, three times past anything the
+disk contains. The arithmetic is one line in each direction and it is why the shipped table could
+never have been written that way.
+
+WHAT WAS MEASURED INSTEAD is not the form's size but the SWITCH: the class's own form and the card
+`scatterImpostor.ts` derives from it, both rasterised at the shipped lens's own scale (fov 50, at
+1280x800 and again at 1920x1080, the larger taken), from the same twelve horizontal azimuths, at the
+class's largest instance scale, counting the pixels one covers and the other does not, and weighting
+those pixels by the contrast the shipped fog has left at that distance. `farM` is the NEAREST
+distance at which that cost falls to two pixels of the frame, because every metre past it is a full
+form drawn where two triangles are indistinguishable. Two pixels is "a few", and the table is
+derived at 1, 2 and 4 so the choice is shown rather than hidden: between a 1 px budget and a 4 px
+one, buttress-tree moves by 1.02x, from 412 m to 404, and shell by 1.98x, from 212 m to 107. That
+split is the whole finding in one line. The tall classes are pinned by the fog and barely notice the
+budget; the litter is decided by its own form and moves with it.
+
+The fog is in the criterion rather than beside it because the shipped camera has fog in it: three's
+`THREE.Fog` is `smoothstep(150, 420, viewDepth)`, exactly 1 at 420 m, and the sky layer pins the fog
+colour to the dome's own horizon stop, so past 420 m a form, its card and the sky behind both are
+one flat colour. A measurement that ignored that would be measuring a picture nobody is shown. It is
+also why the answers close up: the range is 160 m to 410 m, 2.6 to 1 and not 15.4 to 1, and the
+reason is that a tall form only becomes cheap once the air has taken it. The same effect is visible
+in the budget sweep: the table spans 1.94 to 1 at a 1 px budget, 2.62 at 2 and 3.77 at 4, widening
+as the budget lets the answers come nearer and the fog stops deciding them. It is still not the single
+shared ceiling this decision rejected, and the spread from a shell's 160 m to a buttress-tree's
+410 m is the form's own size doing the work.
+
+THE TABLE, metres, at 1280x800 and 1920x1080 with the larger rounded up to the next 10 m:
+
+  class          was  1280  1920  now    class          was  1280  1920  now
+  buttress-tree  900   405   409  410    dune-ripple    250   341   360  370
+  broadleaf      900   397   403  410    tidepool       400   345   362  370
+  conifer        900   391   398  400    fallen-log     500   346   364  370
+  canopy-palm    900   381   391  400    shore-rock     450   332   352  360
+  acacia         900   388   396  400    reeds          500   334   354  360
+  boulder        900   384   393  400    dead-tree      700   336   355  360
+  vine-tangle    380   362   377  380    cactus         700   328   349  350
+  thicket        450   362   376  380    driftwood      400   319   343  350
+  snow-drift     400   358   372  380    fern           220   307   332  340
+  berry-bush     380   314   339  340    dead-shrub     400   283   314  320
+  lichen-rock    300   273   304  310    bromeliad      200   261   291  300
+  grass-tuft     220   239   287  290    moss-patch     200   219   258  260
+  scree          300   175   209  210    shell          120   116   156  160
+
+`nearM` DID NOT MOVE, and the question was asked rather than skipped. The two are different facts:
+`farM` is where the form stops being DISTINGUISHABLE from two triangles, `nearM` is where it stops
+being worth its detail, which is nearer by construction and is where a third band would begin.
+Nothing reads `nearM`, so moving it would move nothing on screen; what it must not do is overtake
+`farM`, and after C22 the narrowest gap left is shell's 40 m inside 160 m. Held by a test.
+
+THE CONSEQUENCE, whole frame, both passes, real GPU, vsync off, dusk, at the spawn the game gives
+you and at sixty-one WALKABLE stands 448 m from it looking back across the disk, twelve bearings per
+route. Both columns are one session: the "was" column is recomputed from the same session's own
+bucket dump under the old table, and the recomputation was checked against the layer's own cull
+report at every view, matching to the instance and to the triangle.
+
+  route              at the spawn        worst walkable stand at 448 m     views over 600,000
+  8482589ffffffff    325,308 -> 325,308  606,798 -> 446,386  (-26.4%)       3 of 13 -> 0 of 13
+  8496a91ffffffff    513,191 -> 508,260  664,310 -> 505,991  (-23.8%)       9 of 13 -> 0 of 13
+  8477057ffffffff    500,035 -> 493,751  639,324 -> 481,250  (-24.7%)       2 of 13 -> 0 of 13
+  842cd0dffffffff    164,816 -> 161,944  290,750 -> 271,086  (-6.8%)        0 of 13 -> 0 of 13
+  847b949ffffffff    279,005 -> 279,445  510,017 -> 430,079  (-15.7%)       0 of  9 -> 0 of  9
+
+Fourteen of sixty-one views were over C16's ceiling and none is now; the worst view anywhere goes
+664,310 to 508,260, which is 15.3% of headroom where there was 10.7% of overshoot. Draw calls go up
+rather than down, as C21's did: 44 at the parcel's rim and 73 at the demo's, against 120.
+
+WHAT ACTUALLY CHANGED HANDS, per class, at the parcel's worst stand:
+
+  buttress-tree     24 instances in the far band ->  2,664     76,560 triangles removed
+  canopy-palm       65                           ->  4,122     73,026
+  thicket        7,300                           ->  8,407     19,926
+  boulder            4                           ->    118      2,964
+  fallen-log       124                           ->    153        986
+  fern          22,813                           -> 19,883    -11,720
+  bromeliad      1,252                           ->  1,157     -1,330
+                                                              -------
+                                                               160,412
+
+Two classes went the other way and it is worth saying plainly: fern's and bromeliad's authored
+`farM` were NEARER than the measurement, 220 and 200 against 340 and 300, so C22 gives triangles
+back on the two densest classes on a rainforest parcel. The net at that view is still 160,412.
+
+THE DERIVATION'S OWN BRACKET WAS OPEN AT THE NEAR END, found by breaking the guard rather than by
+reading it. `deriveFarM` asserted that the switch cost falls under the budget by the FAR end of
+[1, 1200] m and assumed the near end; it does not hold when the card is not a card. Bind
+`impostorFor` to the class's own full form, which is the one substitution the far band's guards
+exist to catch, and the cost is 0 at every distance, so the bisection never raises its floor and
+walks `high` down toward 1 m while the raster it builds grows as 1/d^2: 27 ms at 200 m, 2.3 s at
+20 m, and past 600 s before the twenty-two steps are done. The guard did not fail on that sabotage,
+it HUNG, which to whoever is waiting is indistinguishable from a slow test. The file's own
+break-it test missed it because it calls `switchPixelsRaw` at a fixed 100 m, which returns
+instantly and correctly reads 0; nothing exercised the bisection itself. Both ends are now asserted
+and the bracket starts at 10 m, nearer than the nearest `nearM` in the registry. The same sabotage
+now throws in 4.8 s with the class named, and not one of the twenty-six derived values moves.
+
+HOW MUCH OF EACH ANSWER IS THE FOG, since the paragraph above says the tall classes are pinned by it
+and that is worth a number rather than an adjective. The same derivation with the fog weighting
+removed, 1920x1080, 2 px:
+
+  buttress-tree  409 m with fog, 5,911 m without: the fog decides 93.1% of the answer
+  broadleaf      403 / 3,676  89.0%      conifer   398 / 2,874  86.1%
+  acacia         396 / 2,590  84.7%      boulder   393 / 2,367  83.4%
+  canopy-palm    391 / 2,351  83.4%      fern      332 /   709  53.1%
+  grass-tuft     287 /   398  28.0%      scree     209 /   221   5.3%
+  shell          156 /   156   0.0%
+
+The table spans 37.77x unfogged and 2.61x fogged. So the six classes C22 was opened for are decided
+between 83% and 93% by the air rather than by their own silhouettes, and the shortest class is not
+decided by it at all. The spread that remains is still the forms', in the sense that identical forms
+would land on one distance; but "the form's own size doing the work" above describes the ORDERING
+and not the magnitude, and at the top of the table the magnitude is the fog's.
+
+IT DOES NOT POP, measured the way C21 measured it: the lens held exactly still and only the
+classification stepped, 10.7 cm a frame over a 32 m walk begun 470 m out, the frame drawn twice from
+the same camera, once classified here and once where the walk was a frame ago.
+
+  842cd0dffffffff, open grassland   worst frame 214 pixels of 1,024,000, 90 by more than 8 levels;
+                                    253 of 299 frames move nothing
+  847b949ffffffff, the demo         worst frame 206 pixels, 0 by more than 8; 235 of 299 move nothing
+  8496a91ffffffff                   worst frame  40 pixels, 11 by more than 8; 285 of 299
+  8482589ffffffff, the parcel       worst frame  37 pixels, 21 by more than 8; 296 of 299
+  8477057ffffffff                   worst frame   4 pixels,  0 by more than 8; 297 of 299
+
+The frustum-only control on the same frames, the same substitution with the far band drawn in full,
+reads 0 on every route, so what moved was the switch and not a bucket entering the cone. Against
+C21's own numbers at the old distances, 76 and 106 pixels worst with 70 and 96 of them past 8
+levels, the pop has roughly doubled in pixels touched and is unchanged in pixels a person could see.
+
+AND IT WAS LOOKED AT, not only counted. Standing still, cards against full forms at the worst
+walkable stand on each route: 0 pixels differ on 8477057ffffffff, 32 on the parcel, 41 on
+8496a91ffffffff, 2,235 on the demo and 4,475 on the open grassland, 888 of those by more than 8
+levels. Amplified sixteen times, the whole difference is a strip in the top sixty rows of eight
+hundred, the far treeline against the dusk, and nothing below it moves at all; at three times
+magnification the two crops are not tellable apart. For scale C20 moved 1.3% of a frame by more than
+8 levels and C17's canopy closure moved 56.7%; this is 0.087%.
+
+A CASTER CAN NOW BE IN THE FAR BAND, which C21 recorded as impossible, and this is the one claim C22
+invalidated rather than moved. The shortest casting `farM` was 700 m against the 591 m a caster
+inside the 240 m shadow box can stand from the lens; it is now cactus at 350 m. The instance is
+drawn as a card and casts the shadow of its own full form, which is the right way round: a card is
+two triangles seen edge-on from the sun, and the ground its shadow falls on is at least 350 m away,
+five times further than the farthest ground pixel any ray reaches. The shadow pass never reads
+`farM` at all. The test that asserted the old impossibility is replaced by one that culls a cell
+under two `farM` tables three hundred metres apart and holds the shadow pass identical, triangle for
+triangle, which is the property that was actually load bearing and was never guarded.
+
+UNDER C5 THE REGISTRY VERSION IS BUMPED, 1 to 2, as `ASSET_REGISTRY_VERSION` in
+`packages/planet/lib/assets.ts`, which is where C5's constant lands for the first time. Not one
+instance moved: the demo cell still places 43,018 instances over the disk and 5,905 within 120 m,
+identical under both tables, and `packages/planet/tests/assets.test.ts` places the whole disk twice
+under `farM` 2 m and `farM` 3,000 m and compares every field of every one of 37,133 instances.
+
+## C23 — the parcel is playable with a thumb, and the phone's blockers were not the controls
+
+Someone opening /parcel on a phone could look around and do nothing else. Walking is WASD, running
+is Shift, jumping is Space and the inspector is a backtick, so four of the five verbs were keys
+nobody was holding. Looking worked by accident of the drag path already being pointer events.
+
+WHAT ACTUALLY STOPPED A PHONE, in the order it stopped it, because only one of the three is about
+controls at all:
+
+  1. `h-screen` on the route. On iOS Safari 100vh is the LARGE viewport, and globals.css locks this
+     page's overflow, so the bars never retract and about 180 px of an iPhone's box sit permanently
+     off screen. Both of the consent card's buttons were in that strip. Consent is unset-means-OFF
+     on this path, so a person could reach their parcel and never get past the first question. The
+     route is `h-[100dvh]` now; the landing hero already was.
+  2. The recognition meter at `w-[min(340px,86vw)]` and z-20 over a "Back to the planet" link at
+     z-auto. At 390 px wide the meter covered all but four pixels of the link, and the page cannot
+     scroll, so the only way off a parcel was the browser's back button. The meter takes the
+     top-left column below `sm` and the link takes z-30.
+  3. Then the controls.
+
+A WIDTH QUESTION AND A POINTER QUESTION ARE NOT THE SAME QUESTION, and this HUD asks both. Whether
+a panel fits beside another panel is width, and it is answered in CSS with `max-sm:` — no
+JavaScript, no hydration, correct in a narrow desktop window too. Whether the world can be driven
+at all is about fingers, because a tablet is coarse and wide while a small window is fine and
+narrow, and that is `(pointer: coarse)` read in `lib/pointerKind.ts` — which exists because the
+query had been written out by hand three times already and was about to be written a fourth.
+
+TWO SOURCES, ONE FRAME. The canvas keeps the gestures that are gestures: one finger looks, two
+fingers pinch. The thumbstick and the buttons are DOM, because a canvas cannot hold an element with
+an accessible name and a second `<canvas>` on this page breaks minimap.spec.ts by name. They state
+a demand into one handle; `game/world/input.ts` drains it once a frame and merges it with the keys
+into the single InputFrame `playerLayer` already read. Nothing downstream can tell a thumb from a
+keyboard, which is the point: every rule controller.test.mts and followCamera.test.mts pin covers
+the phone for free, and the merge lives in the input rather than in the layer that says in its own
+header that it decides nothing about movement.
+
+THE STICK CANNOT BE ANALOG. stepMover normalises the direction it is given and picks its speed from
+the boolean `run`, and MOVER.WALK is frozen for parity with WorldRoom.integrate. So deflection buys
+exactly one thing, the run flag, with hysteresis at 0.85 on and 0.70 off — the mover crosses the
+walk-to-run gap in 86 ms and poseCharacter drives leg swing off that speed, so a single threshold
+under a resting thumb is a visible flicker on the body. Anyone who later "fixes" the stick by making
+the mover speed-proportional drifts the client off the authority on the first step and silently
+rescales the sampler's speedVar, which the frozen model was fitted on.
+
+THE PINCH CONSTANT IS COMPUTED, NEVER WRITTEN DOWN. FollowInput.zoom is in wheel pixels spent as
+`distance * zoomPerNotch^(zoom/100)`, so a pinch is worth `100/ln(zoomPerNotch) * ln(before/after)`
+— 715.5 at the shipped 1.15, and derived at module scope so it follows the camera if that constant
+moves. tests/touchInput.test.mts asserts the round trip through the camera's own formula at three
+different zoomPerNotch values rather than against the number, which is the same lesson as the layer
+list built twice, one level down. The whole 2.5–18 m range is a separation ratio of 7.2: two
+comfortable pinches, and stepFollowCamera already clamps, so the input needs no clamp of its own.
+
+YAW IS GAINED 1.7x AND PITCH IS NOT. At orbitRadPerPx 0.006 a quarter turn costs 262 px, 67% of a
+390 px phone — you could not turn around in one swipe. At 1.7 it is 154 px. Pitch keeps the mouse's
+gain because its whole range is already only a 258 px sweep, and gaining it up would turn the 20 px
+of vertical wobble in a horizontal swipe into 12 degrees of unasked-for pitch instead of 7.
+
+THE POINTER BOOKKEEPING WAS THE BUG UNDER THE FEATURE. input.ts held ONE pointerId, so a second
+finger silently stole the drag and lifting that second finger killed a drag the first finger was
+still holding. There was no state in which a pinch could be expressed. It is a map of fingers now,
+with the two oldest owning the gesture and a third inert, and the centroid derived rather than
+stored — exactly one finger moves per event, so the midpoint moves by half that finger's delta, and
+lifting one leaves the other's own reference already correct. A stored centroid is what puts a
+60–150 px jump in the camera when a pinch ends.
+
+setPointerCapture IS BEST EFFORT NOW, and that is a harness fact, not a nicety: it throws
+NotFoundError for a pointer id the browser does not own, which is exactly a dispatched PointerEvent.
+Measured here in chromium. Playwright's touch API is `tap(x, y)` and nothing else — no swipe, no
+second finger — so a spec must dispatch its own move phase, and an unguarded throw inside a listener
+would surface as a page error that fails specs about something else entirely.
+
+NOTHING IN THE HUD IS A `<button>`, and the cost is stated rather than hidden. RecognitionMeter had
+already recorded the reason for itself; C23 makes it the rule: Space is jump in this world, so a
+focused button eats the spacebar, and a click that moved focus off the canvas takes WASD with it.
+The three touch controls are therefore not keyboard reachable. What makes that acceptable is that
+every one of them exists to replace a key that still works — a keyboard user has W, Shift, Space and
+the backtick and needs none of them — and the inspector's key was kept rather than replaced: the
+panel's `open` moved up to the mount so a backtick and a thumb reach ONE piece of state. That was
+not a convenience. ConsentCard promises "you can stop it at any time from the inspector", and on a
+phone that sentence was false: consent could be given and never withdrawn.
+
+TWO RENDERER SETTINGS ARE TURNED DOWN ON A COARSE POINTER, and only the two that are purely about
+fragments. A 393 x 852 iPhone at dpr 3 clamps to 2 and draws 786 x 1704 = 1.34 MPix against the
+1280 x 800 = 1.02 MPix every table in C20–C22 was measured at: 31% MORE fragments, on a part with
+roughly half the bandwidth. So the ratio caps at 1.5 (1.78x fewer fragments, still past what an eye
+resolves at arm's length on a 3x display) and multisampling goes off, which on a tile-based mobile
+GPU is paid in tile memory and is the setting most likely to cost a whole extra pass. WHAT IS DRAWN
+DOES NOT CHANGE: no instance moves and no density is second-guessed, which is the line
+scatterLayer's header draws and this stays on the safe side of.
+
+AND THE FRAME IS STILL NOT MEASURED ON A PHONE. It has to be said plainly, because C21's own
+corrected column is a section about what happens when a recorded number turns out to be arithmetic
+rather than a second render. There is not one millisecond anywhere in this file: the whole budget is
+triangles and draw calls, all taken on an M4 Pro. Arithmetic over this repo's own cull and geometry
+code puts the frame at the spawn near C16's 600,000 ceiling before a phone is considered, and the
+two layers that are not in any table here — detailLayer and meadowLayer — are most of what closed
+that gap. Two things follow, and neither is done: RenderInfo already carries fps, calls and
+triangles and WorldCanvas already writes them to data attributes, gated to NODE_ENV != production,
+so ungating that behind a query parameter is the cheapest way to turn "a phone probably struggles"
+into a row in this file; and the meadow ring places 63,700 blades while its own shader discards
+everything past 24 m, 42% of them provably invisible on every route measured. That is a triangle
+win with no fidelity cost at all, on every device, and it is left here as a named next step rather
+than taken in a change about controls.
+
 
 ## Still open
 
