@@ -208,6 +208,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
         posterior={posterior}
         log={log}
         consent={consent}
+        onRevoke={() => chain.revoke()}
         reactions={stations ? reactions : undefined}
         walk={stations ? undefined : walk}
         open={inspecting}
