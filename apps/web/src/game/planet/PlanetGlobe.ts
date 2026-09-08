@@ -209,7 +209,7 @@ export class PlanetGlobe {
     host.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.display = "block";
 
-    this.scene.background = new THREE.Color("#120c19");
+    this.scene.background = new THREE.Color("#101c19");
     this.scene.add(this.planet);
     this.camera.position.set(0, 0.22, this.idleDistance);
 
@@ -289,6 +289,18 @@ export class PlanetGlobe {
     // Named so a guard can find the ground the GPU drew without guessing which child is which.
     mesh.name = "globe:terrain";
     this.planet.add(mesh);
+    // A translucent atmospheric limb gives the same airy daylight as the ground-level sky.
+    // Terrain and parcel picking still use the original, shared spherical field.
+    const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(1.065, 64, 32), new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.BackSide,
+      vertexShader: `varying vec3 vNormal; varying vec3 vEye;
+        void main() { vec4 mv = modelViewMatrix * vec4(position,1.); vNormal = normalize(normalMatrix * normal); vEye = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: `varying vec3 vNormal; varying vec3 vEye;
+        void main() { float rim = pow(1.-abs(dot(normalize(vNormal),normalize(vEye))), 3.);
+        gl_FragColor=vec4(.38,.67,.83,rim*.32); }`,
+    }));
+    atmosphere.name = "globe:atmosphere";
+    this.planet.add(atmosphere);
   }
 
   /** Draw the parcels that have owners. Capped, because a million hexagons is not a picture. */

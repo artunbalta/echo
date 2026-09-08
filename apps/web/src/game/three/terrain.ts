@@ -106,7 +106,7 @@ function buildIsland(cx: number, cy: number, seed: number): THREE.Group {
   bg.computeVertexNormals();
   const mesh = new THREE.Mesh(
     bg,
-    new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
+    new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false }),
   );
   mesh.receiveShadow = true;
   g.add(mesh);
@@ -121,9 +121,9 @@ function buildFlora(cx: number, cy: number, seed: number): { group: THREE.Group;
   group.position.set(cx, 0, cy);
   const bushes: THREE.Mesh[] = [];
 
-  const trunkMat = new THREE.MeshLambertMaterial({ color: PALETTE.trunk, flatShading: true });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: PALETTE.trunk, flatShading: false });
   const leafMats = [PALETTE.leafDark, PALETTE.leaf, PALETTE.leafLight].map(
-    (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true }),
+    (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: false }),
   );
 
   const N_TREE = 14;
@@ -169,7 +169,7 @@ function buildFlora(cx: number, cy: number, seed: number): { group: THREE.Group;
     // The bushes are the visible larder: scarcity thins them (WorldCore.bushVisible).
     const b = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.34 + hash01(seed + i * 41) * 0.16, 0),
-      new THREE.MeshLambertMaterial({ color: PALETTE.bush, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: PALETTE.bush, flatShading: false }),
     );
     b.position.set(x, y + 0.28, z);
     b.castShadow = true;
@@ -177,7 +177,7 @@ function buildFlora(cx: number, cy: number, seed: number): { group: THREE.Group;
     bushes.push(b);
   }
 
-  const rockMat = new THREE.MeshLambertMaterial({ color: PALETTE.rock, flatShading: true });
+  const rockMat = new THREE.MeshLambertMaterial({ color: PALETTE.rock, flatShading: false });
   for (let i = 0; i < N_ROCK; i++) {
     const { x, z } = place(i, 53, OCEAN_ISLAND_R - 1);
     const y = groundHeight(cx + x, cy + z);
@@ -231,7 +231,7 @@ export function buildTerrain(centerX: number, centerY: number, radius = 90): Ter
     new THREE.PlaneGeometry(WORLD.MAP_WIDTH * 1.5, WORLD.MAP_HEIGHT * 1.5, 1, 1),
     new THREE.MeshLambertMaterial({
       color: PALETTE.seaShallow,
-      flatShading: true,
+      flatShading: false,
       polygonOffset: true,
       polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,

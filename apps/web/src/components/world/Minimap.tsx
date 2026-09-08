@@ -586,7 +586,11 @@ export default function Minimap({ world }: MinimapProps) {
       data-minimap={built ? "ready" : "building"}
       role="img"
       aria-label="Your parcel from above, north at the top, with the planet below it"
-      className="panel pointer-events-none absolute right-6 top-[4.5rem] z-10 select-none p-2.5"
+      // 218 x 290 is 56% of a phone's width and 44% of its visible height, so on a narrow screen it
+      // is scaled rather than re-laid-out. A transform is the right tool precisely because it moves
+      // NOTHING inside: every pixel of map arithmetic here, and the frame tests/e2e/minimap.spec.ts
+      // measures, is derived from the element's own box, which scales with it.
+      className="panel pointer-events-none absolute right-6 top-[4.5rem] z-10 select-none p-2.5 max-sm:right-1 max-sm:top-[3.25rem] max-sm:origin-top-right max-sm:scale-[.62]"
     >
       {/* data-minimap-map and data-minimap-marker are how tests/e2e/minimap.spec.ts finds the
           two boxes it measures the frame between. They carry no behaviour and they ship, because a

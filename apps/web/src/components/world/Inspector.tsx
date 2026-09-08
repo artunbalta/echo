@@ -25,9 +25,17 @@
  * It takes keyboard focus from nothing. The toggle is a window keydown listener that ignores text
  * fields and does not stop propagation; the panel is inert to focus (tabIndex -1, and mousedown is
  * cancelled so a click on it cannot move focus off the world). The world's own keys are untouched.
+ *
+ * AND SINCE C23 THERE IS A SECOND DOOR, because the first one is a key no phone has. `open` and
+ * `onOpenChange` are optional: given neither, this behaves exactly as it did, holding its own state
+ * and answering only the backtick. Given both, the MOUNT owns whether the panel is showing and the
+ * keydown here just calls the setter — so a touch control and a keystroke are two ways to reach one
+ * piece of state rather than two pieces of state that can disagree about whether a panel is up.
+ * That mattered more than a convenience: ConsentCard promises "you can stop it at any time from the
+ * inspector", and on a phone that sentence was false — consent could be given and never withdrawn.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AXIS_POLES, PERSONA_AXIS_KEYS } from "@echo/shared";
 
@@ -61,6 +69,12 @@ export interface InspectorProps {
   walk?: () => WalkTally | null;
   /** The toggle key. Backtick by default. */
   toggleKey?: string;
+  /**
+   * Whether the panel is showing, when the mount wants to own that (see the header). Pass both this
+   * and `onOpenChange` or neither: half of a controlled pair is the disagreement it exists to stop.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Subscribe a component to a chain: re-renders on every log, posterior or consent change. */
@@ -70,11 +84,15 @@ export function useMeasureChain(chain: MeasureChain | null): {
   consent: ConsentState;
 } {
   const [, bump] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
+    setHydrated(true);
     if (!chain) return;
     return chain.subscribe(() => bump((n) => n + 1));
   }, [chain]);
-  return { posterior: chain?.posterior() ?? null, log: chain?.log() ?? [], consent: chain?.consent() ?? "unset" };
+  return hydrated
+    ? { posterior: chain?.posterior() ?? null, log: chain?.log() ?? [], consent: chain?.consent() ?? "unset" }
+    : { posterior: null, log: [], consent: "unset" };
 }
 
 // ── the palette, in one place ───────────────────────────────────────────────────
@@ -89,9 +107,13 @@ const panel: React.CSSProperties = {
   position: "fixed",
   top: 12,
   right: 12,
-  width: 360,
-  maxHeight: "calc(100vh - 24px)",
+  width: "min(360px, calc(100vw - 24px))",
+  maxHeight: "calc(100dvh - 24px)",
   overflowY: "auto",
+  // The canvas below carries touch-action: none, so without this a finger on the panel drags the
+  // world instead of scrolling the twenty-five events the panel is showing.
+  touchAction: "pan-y",
+  overscrollBehavior: "contain",
   zIndex: 40,
   padding: "10px 12px",
   background: "rgba(28, 19, 38, 0.92)",
@@ -121,9 +143,32 @@ const amount = (v: number, digits = 0) => v.toLocaleString(undefined, { minimumF
 /** How often the tally is read while the panel is open. Nothing polls while it is shut. */
 const TALLY_MS = 500;
 
-export default function Inspector({ posterior, log, reactions = [], consent = "unset", userId, walk, toggleKey = "`" }: InspectorProps) {
-  const [open, setOpen] = useState(false);
+export default function Inspector({
+  posterior,
+  log,
+  reactions = [],
+  consent = "unset",
+  userId,
+  walk,
+  toggleKey = "`",
+  open: controlledOpen,
+  onOpenChange,
+}: InspectorProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = controlledOpen !== undefined;
+  const open = controlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!controlled) setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [controlled, onOpenChange],
+  );
   const [tally, setTally] = useState<WalkTally | null>(null);
+  // The keydown reads the current value through a ref rather than depending on it, so the listener
+  // is subscribed once for the life of the panel instead of torn down and rebuilt on every toggle.
+  const openNow = useRef(open);
+  openNow.current = open;
 
   // Before the early return, because a hook is not allowed to depend on whether the panel is open;
   // `open` is a dependency instead, so a shut panel holds no timer.
@@ -141,16 +186,37 @@ export default function Inspector({ posterior, log, reactions = [], consent = "u
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       e.preventDefault();
-      setOpen((v) => !v);
+      setOpen(!openNow.current);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [toggleKey]);
+  }, [toggleKey, setOpen]);
 
   if (!open) return null;
 
   return (
     <aside style={panel} tabIndex={-1} aria-label="measurement inspector" onMouseDown={(e) => e.preventDefault()}>
+      {/* Not a <button>, for the reason C23 records for the whole HUD: a focused button eats the
+          spacebar, which is jump in this world. It shows only where the mount owns `open`, because
+          an uncontrolled panel has nowhere to put the answer. */}
+      {controlled ? (
+        <div
+          role="button"
+          aria-label="Close the inspector"
+          data-inspector-close
+          onPointerDown={(e) => {
+            e.preventDefault();
+            setOpen(false);
+          }}
+          style={{
+            position: "absolute", top: 6, right: 8, width: 30, height: 30, display: "grid",
+            placeItems: "center", borderRadius: 15, color: DIM, cursor: "pointer",
+            font: "15px/1 ui-monospace, monospace", touchAction: "manipulation",
+          }}
+        >
+          ×
+        </div>
+      ) : null}
       <Header consent={consent} userId={userId} posterior={posterior} />
       {walk ? (
         <WalkSection tally={tally} consent={consent} log={log} posterior={posterior} />

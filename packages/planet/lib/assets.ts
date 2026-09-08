@@ -54,8 +54,25 @@ export interface AssetClass {
    * kept because it is the distance at which a class stops being worth its detail, which is a fact
    * about the class that a future third band would want; it is not a promise the renderer keeps.
    *
+   * AND `farM` IS NOW MEASURED RATHER THAN AUTHORED (DECISIONS C22). The values under
+   * ASSET_CLASSES were chosen before anything read them, for a world bigger than the one that
+   * ships, and six classes carried 900 m against a scatter disk `SCATTER_FALLOFF` cuts dead at
+   * 500 m: not one instance of those six was ever past its own far distance from any camera a
+   * person can reach. Each value is now the nearest distance at which the switch to the class's own
+   * card costs no more than two pixels of the shipped frame, bisected off the form's own geometry;
+   * `apps/web/tests/farBand.test.mts` re-derives the whole table and fails if a number here drifts
+   * from the form it was measured against.
+   *
+   * `nearM` DID NOT MOVE WITH IT, and the question was asked rather than skipped. It is a different
+   * fact: `farM` is where the form stops being DISTINGUISHABLE from two triangles, `nearM` is where
+   * it stops being worth its detail, which is nearer by construction and is where a third band
+   * would begin. Nothing reads it, so moving it would move nothing; what it must not do is overtake
+   * `farM`, and after C22 the narrowest gap left is shell's 40 m inside 160 m.
+   *
    * Neither number moves an instance: `placeAssets` does not read them, so an edit here is a
-   * renderer change and not a placement one, and it needs no version bump.
+   * renderer change and not a placement one. It is still a REGISTRY-VERSION change under DECISIONS
+   * C5, because ASSET_CLASSES is shared with the server by contract and a client and a server that
+   * disagree about which form is drawn disagree about the registry; see ASSET_REGISTRY_VERSION.
    */
   lod: { nearM: number; farM: number };
   /**
@@ -440,6 +457,29 @@ export class ColliderIndex {
 // ── content: the asset classes (plan W2-2, cut per B4 to what a cell needs) ─────
 
 /**
+ * The registry's own version, separate from `WorldManifest.terrainVersion` (DECISIONS C5).
+ *
+ * WHAT IT IS FOR. `ASSET_CLASSES` is shared with the server by contract: the same table, the same
+ * seed and the same position give the same instance on both sides of the wire, and the same form
+ * drawn for it. A change to the table is therefore a change both sides have to agree on, and it is
+ * NOT a change to the planet: no elevation moves, no biome boundary moves, no parcel changes hands.
+ * Bumping this rather than `terrainVersion` is what keeps those two facts apart, so an ecology edit
+ * never has to argue with a deed.
+ *
+ * WHAT COUNTS AS A BUMP. Anything that changes what a client draws from this file: `densityPerKm2`,
+ * a biome weight, a band, a cluster, an exclusion, a class id, a `scale`, a `collider`, `lod`.
+ * DECISIONS C5's rule is that a batch of ecology work lands behind ONE bump rather than a dozen, so
+ * the scatter re-lays under people's feet once.
+ *
+ *   1  the table as it shipped through W2 and DECISIONS C17 to C21.
+ *   2  DECISIONS C22: every `lod.farM` re-derived by measurement against the 500 m disk the scatter
+ *      actually fills. Twenty-six values moved and not one instance did; `placeAssets` never reads
+ *      `lod`, and `apps/web/tests/scatterSplit.test.mts` holds the placement against the matrices
+ *      the placer produced.
+ */
+export const ASSET_REGISTRY_VERSION = 2;
+
+/**
  * Every class the planet has words for, across all ten land biomes.
  *
  * `densityPerKm2` is the NEAR FIELD density, the ground within sight of the player, and it is set
@@ -449,38 +489,71 @@ export class ColliderIndex {
  *
  * A cell needs only the classes its own biomes call for; `classesForBiomes` selects them, so
  * changing the demo cell changes which classes ship without touching this table.
+ *
+ * EVERY `lod.farM` HERE IS A MEASUREMENT (DECISIONS C22), and this is where the numbers came from.
+ * The value is the NEAREST distance at which swapping the class's own form for the two-triangle
+ * card scatterImpostor.ts derives from it costs no more than two pixels of the shipped frame:
+ * both silhouettes rasterised at the shipped lens's own scale (fov 50, at 1280x800 and again at
+ * 1920x1080, the larger taken), from twelve horizontal azimuths, at the class's LARGEST instance
+ * scale, weighted by the contrast the shipped fog has left at that distance. Nearest, because every
+ * metre past it is a full form drawn where two triangles are indistinguishable. The old numbers
+ * were authored, and six of them said 900 m over a disk that ends at 500.
+ *
+ *   class            was    now   class            was    now   class            was    now
+ *   buttress-tree    900    410   thicket          450    380   snow-drift       400    380
+ *   broadleaf        900    410   vine-tangle      380    380   dune-ripple      250    370
+ *   conifer          900    400   fern             220    340   tidepool         400    370
+ *   canopy-palm      900    400   berry-bush       380    340   fallen-log       500    370
+ *   acacia           900    400   grass-tuft       220    290   driftwood        400    350
+ *   boulder          900    400   dead-shrub       400    320   cactus           700    350
+ *   dead-tree        700    360   lichen-rock      300    310   reeds            500    360
+ *   shore-rock       450    360   bromeliad        200    300   moss-patch       200    260
+ *   scree            300    210   shell            120    160
+ *
+ * WHY THE ANSWERS ARE NOT IN THE RATIO OF THE FORMS' HEIGHTS, which is what a pure angular-size
+ * rule would give and is worth writing down because it is the first thing anyone will check. A
+ * fern's form is 0.99 m tall and a buttress-tree's is 15.30 m, so at one shared angular threshold
+ * their distances would stand 15.4 to 1 apart. They cannot: at the threshold that cards a
+ * buttress-tree at 450 m a fern is carded at 29 m, where it is 39 pixels tall and plainly a card,
+ * and at the threshold that leaves the fern where it shipped, 5.2 pixels of form height, a
+ * buttress-tree is not carded until 3.4 km, three times past anything the disk contains. The rule
+ * that survives both ends is not
+ * angular size but VISIBLE DIFFERENCE, and past 350 m the fog has taken 83% of every form's own
+ * colour, so the tall classes come cheap at 400 m rather than at 5,900 and the range closes to
+ * 2.6 to 1. The fog is why a shared ceiling looked tempting; it is still not one, and the spread
+ * from a shell's 160 m to a buttress-tree's 410 m is the form's own size doing the work.
  */
 export const ASSET_CLASSES: readonly AssetClass[] = [
   // ── canopy: the thing that makes a place read as somewhere ──
-  { id: "conifer", biomes: { taiga: 0.9, forest: 0.5, tundra: 0.15 }, densityPerKm2: 7000, waterDistanceM: { min: 8, max: Infinity }, cluster: { radiusM: 9, count: 3 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 900 }, collider: { radiusM: 0.7, heightM: 9 }, scale: [0.7, 1.5], castsShadow: true },
-  { id: "broadleaf", biomes: { forest: 0.9, grassland: 0.2, taiga: 0.2 }, densityPerKm2: 6500, waterDistanceM: { min: 8, max: Infinity }, cluster: { radiusM: 11, count: 3 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 900 }, collider: { radiusM: 0.9, heightM: 8 }, scale: [0.7, 1.5], castsShadow: true },
-  { id: "buttress-tree", biomes: { rainforest: 0.85 }, densityPerKm2: 4500, cluster: { radiusM: 14, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.6, heightM: 14 }, scale: [0.8, 1.6], castsShadow: true },
+  { id: "conifer", biomes: { taiga: 0.9, forest: 0.5, tundra: 0.15 }, densityPerKm2: 7000, waterDistanceM: { min: 8, max: Infinity }, cluster: { radiusM: 9, count: 3 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 400 }, collider: { radiusM: 0.7, heightM: 9 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "broadleaf", biomes: { forest: 0.9, grassland: 0.2, taiga: 0.2 }, densityPerKm2: 6500, waterDistanceM: { min: 8, max: Infinity }, cluster: { radiusM: 11, count: 3 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 410 }, collider: { radiusM: 0.9, heightM: 8 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "buttress-tree", biomes: { rainforest: 0.85 }, densityPerKm2: 4500, cluster: { radiusM: 14, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 410 }, collider: { radiusM: 1.6, heightM: 14 }, scale: [0.8, 1.6], castsShadow: true },
   { id: "vine-tangle", biomes: { rainforest: 0.6, forest: 0.2 }, densityPerKm2: 5000, cluster: { radiusM: 8, count: 3 }, excludes: ["water", "path", "footprint"], lod: { nearM: 110, farM: 380 }, collider: null, scale: [0.7, 1.6], castsShadow: false },
-  { id: "fallen-log", biomes: { rainforest: 0.45, forest: 0.4, taiga: 0.35 }, densityPerKm2: 1100, excludes: ["water", "path", "footprint"], lod: { nearM: 140, farM: 500 }, collider: { radiusM: 1.1, heightM: 0.9 }, scale: [0.7, 1.5], castsShadow: true },
-  { id: "bromeliad", biomes: { rainforest: 0.55 }, densityPerKm2: 6000, excludes: ["water", "path"], lod: { nearM: 60, farM: 200 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
-  { id: "canopy-palm", biomes: { rainforest: 0.9, beach: 0.25 }, densityPerKm2: 6000, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 900 }, collider: { radiusM: 0.6, heightM: 11 }, scale: [0.8, 1.4], castsShadow: true },
-  { id: "acacia", biomes: { savanna: 0.7, grassland: 0.15 }, densityPerKm2: 900, waterDistanceM: { min: 15, max: Infinity }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.1, heightM: 6 }, scale: [0.8, 1.6], castsShadow: true },
-  { id: "dead-tree", biomes: { tundra: 0.3, taiga: 0.2, desert: 0.1 }, densityPerKm2: 700, excludes: ["water", "path", "footprint"], lod: { nearM: 160, farM: 700 }, collider: { radiusM: 0.5, heightM: 5 }, scale: [0.6, 1.2], castsShadow: true },
+  { id: "fallen-log", biomes: { rainforest: 0.45, forest: 0.4, taiga: 0.35 }, densityPerKm2: 1100, excludes: ["water", "path", "footprint"], lod: { nearM: 140, farM: 370 }, collider: { radiusM: 1.1, heightM: 0.9 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "bromeliad", biomes: { rainforest: 0.55 }, densityPerKm2: 6000, excludes: ["water", "path"], lod: { nearM: 60, farM: 300 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
+  { id: "canopy-palm", biomes: { rainforest: 0.9, beach: 0.25 }, densityPerKm2: 6000, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 180, farM: 400 }, collider: { radiusM: 0.6, heightM: 11 }, scale: [0.8, 1.4], castsShadow: true },
+  { id: "acacia", biomes: { savanna: 0.7, grassland: 0.15 }, densityPerKm2: 900, waterDistanceM: { min: 15, max: Infinity }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 400 }, collider: { radiusM: 1.1, heightM: 6 }, scale: [0.8, 1.6], castsShadow: true },
+  { id: "dead-tree", biomes: { tundra: 0.3, taiga: 0.2, desert: 0.1 }, densityPerKm2: 700, excludes: ["water", "path", "footprint"], lod: { nearM: 160, farM: 360 }, collider: { radiusM: 0.5, heightM: 5 }, scale: [0.6, 1.2], castsShadow: true },
   // ── understorey ──
-  { id: "thicket", biomes: { forest: 0.8, rainforest: 0.8, taiga: 0.6, grassland: 0.3 }, densityPerKm2: 9000, cluster: { radiusM: 7, count: 4 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 450 }, collider: { radiusM: 1.2, heightM: 1.6 }, scale: [0.7, 1.5], castsShadow: true },
-  { id: "fern", biomes: { rainforest: 0.9, forest: 0.7, taiga: 0.4 }, densityPerKm2: 14000, cluster: { radiusM: 5, count: 5 }, excludes: ["water", "path"], lod: { nearM: 70, farM: 220 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
-  { id: "berry-bush", biomes: { forest: 0.5, taiga: 0.5, grassland: 0.4, tundra: 0.2 }, densityPerKm2: 2200, excludes: ["water", "path", "footprint"], lod: { nearM: 110, farM: 380 }, collider: { radiusM: 0.8, heightM: 1.1 }, scale: [0.7, 1.3], castsShadow: true },
-  { id: "grass-tuft", biomes: { grassland: 0.95, savanna: 0.8, tundra: 0.5, beach: 0.25, forest: 0.4, taiga: 0.35 }, densityPerKm2: 18000, excludes: ["water", "path"], lod: { nearM: 70, farM: 220 }, collider: null, scale: [0.7, 1.4], castsShadow: false },
-  { id: "dead-shrub", biomes: { desert: 0.8, tundra: 0.45, savanna: 0.3, grassland: 0.15 }, densityPerKm2: 3200, excludes: ["water", "path", "footprint"], lod: { nearM: 100, farM: 400 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
-  { id: "cactus", biomes: { desert: 0.7 }, densityPerKm2: 900, waterDistanceM: { min: 40, max: Infinity }, cluster: { radiusM: 12, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 150, farM: 700 }, collider: { radiusM: 0.5, heightM: 2.4 }, scale: [0.7, 1.4], castsShadow: true },
-  { id: "reeds", biomes: { beach: 0.8, grassland: 0.35, rainforest: 0.3 }, densityPerKm2: 3000, waterDistanceM: { min: 0, max: 90 }, cluster: { radiusM: 6, count: 7 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 500 }, collider: null, scale: [0.8, 1.4], castsShadow: false },
-  { id: "moss-patch", biomes: { tundra: 0.8, taiga: 0.6, snow: 0.15 }, densityPerKm2: 9000, excludes: ["water", "path"], lod: { nearM: 60, farM: 200 }, collider: null, scale: [0.7, 1.6], castsShadow: false },
+  { id: "thicket", biomes: { forest: 0.8, rainforest: 0.8, taiga: 0.6, grassland: 0.3 }, densityPerKm2: 9000, cluster: { radiusM: 7, count: 4 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 380 }, collider: { radiusM: 1.2, heightM: 1.6 }, scale: [0.7, 1.5], castsShadow: true },
+  { id: "fern", biomes: { rainforest: 0.9, forest: 0.7, taiga: 0.4 }, densityPerKm2: 14000, cluster: { radiusM: 5, count: 5 }, excludes: ["water", "path"], lod: { nearM: 70, farM: 340 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
+  { id: "berry-bush", biomes: { forest: 0.5, taiga: 0.5, grassland: 0.4, tundra: 0.2 }, densityPerKm2: 2200, excludes: ["water", "path", "footprint"], lod: { nearM: 110, farM: 340 }, collider: { radiusM: 0.8, heightM: 1.1 }, scale: [0.7, 1.3], castsShadow: true },
+  { id: "grass-tuft", biomes: { grassland: 0.95, savanna: 0.8, tundra: 0.5, beach: 0.25, forest: 0.4, taiga: 0.35 }, densityPerKm2: 18000, excludes: ["water", "path"], lod: { nearM: 70, farM: 290 }, collider: null, scale: [0.7, 1.4], castsShadow: false },
+  { id: "dead-shrub", biomes: { desert: 0.8, tundra: 0.45, savanna: 0.3, grassland: 0.15 }, densityPerKm2: 3200, excludes: ["water", "path", "footprint"], lod: { nearM: 100, farM: 320 }, collider: null, scale: [0.6, 1.3], castsShadow: false },
+  { id: "cactus", biomes: { desert: 0.7 }, densityPerKm2: 900, waterDistanceM: { min: 40, max: Infinity }, cluster: { radiusM: 12, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 150, farM: 350 }, collider: { radiusM: 0.5, heightM: 2.4 }, scale: [0.7, 1.4], castsShadow: true },
+  { id: "reeds", biomes: { beach: 0.8, grassland: 0.35, rainforest: 0.3 }, densityPerKm2: 3000, waterDistanceM: { min: 0, max: 90 }, cluster: { radiusM: 6, count: 7 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 120, farM: 360 }, collider: null, scale: [0.8, 1.4], castsShadow: false },
+  { id: "moss-patch", biomes: { tundra: 0.8, taiga: 0.6, snow: 0.15 }, densityPerKm2: 9000, excludes: ["water", "path"], lod: { nearM: 60, farM: 260 }, collider: null, scale: [0.7, 1.6], castsShadow: false },
   // ── stone and ground ──
-  { id: "boulder", biomes: { tundra: 0.7, "bare-rock": 0.9, desert: 0.35, grassland: 0.25, taiga: 0.4, forest: 0.25, rainforest: 0.2 }, densityPerKm2: 1600, waterDistanceM: { min: 6, max: Infinity }, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 900 }, collider: { radiusM: 1.4, heightM: 1.8 }, scale: [0.6, 2.4], castsShadow: true },
-  { id: "scree", biomes: { "bare-rock": 0.9, snow: 0.4, tundra: 0.3 }, densityPerKm2: 12000, altitude: { min: 0.03, max: 1 }, cluster: { radiusM: 8, count: 6 }, excludes: ["water", "path"], lod: { nearM: 80, farM: 300 }, collider: null, scale: [0.5, 1.2], castsShadow: false },
-  { id: "lichen-rock", biomes: { tundra: 0.9, taiga: 0.5, "bare-rock": 0.6 }, densityPerKm2: 5000, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 300 }, collider: { radiusM: 0.6, heightM: 0.6 }, scale: [0.5, 1.3], castsShadow: false },
-  { id: "snow-drift", biomes: { snow: 0.9, tundra: 0.2 }, densityPerKm2: 5000, excludes: ["water", "path"], lod: { nearM: 100, farM: 400 }, collider: null, scale: [0.9, 2.2], castsShadow: false },
-  { id: "dune-ripple", biomes: { desert: 0.9, beach: 0.35 }, densityPerKm2: 4000, excludes: ["water", "path"], lod: { nearM: 60, farM: 250 }, collider: null, scale: [1, 2.2], castsShadow: false },
+  { id: "boulder", biomes: { tundra: 0.7, "bare-rock": 0.9, desert: 0.35, grassland: 0.25, taiga: 0.4, forest: 0.25, rainforest: 0.2 }, densityPerKm2: 1600, waterDistanceM: { min: 6, max: Infinity }, cluster: { radiusM: 10, count: 2 }, excludes: ["water", "path", "footprint", "sightline"], lod: { nearM: 200, farM: 400 }, collider: { radiusM: 1.4, heightM: 1.8 }, scale: [0.6, 2.4], castsShadow: true },
+  { id: "scree", biomes: { "bare-rock": 0.9, snow: 0.4, tundra: 0.3 }, densityPerKm2: 12000, altitude: { min: 0.03, max: 1 }, cluster: { radiusM: 8, count: 6 }, excludes: ["water", "path"], lod: { nearM: 80, farM: 210 }, collider: null, scale: [0.5, 1.2], castsShadow: false },
+  { id: "lichen-rock", biomes: { tundra: 0.9, taiga: 0.5, "bare-rock": 0.6 }, densityPerKm2: 5000, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 310 }, collider: { radiusM: 0.6, heightM: 0.6 }, scale: [0.5, 1.3], castsShadow: false },
+  { id: "snow-drift", biomes: { snow: 0.9, tundra: 0.2 }, densityPerKm2: 5000, excludes: ["water", "path"], lod: { nearM: 100, farM: 380 }, collider: null, scale: [0.9, 2.2], castsShadow: false },
+  { id: "dune-ripple", biomes: { desert: 0.9, beach: 0.35 }, densityPerKm2: 4000, excludes: ["water", "path"], lod: { nearM: 60, farM: 370 }, collider: null, scale: [1, 2.2], castsShadow: false },
   // ── the shoreline ──
-  { id: "driftwood", biomes: { beach: 0.6 }, densityPerKm2: 1400, waterDistanceM: { min: 0, max: 160 }, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 400 }, collider: { radiusM: 0.9, heightM: 0.5 }, scale: [0.7, 1.3], castsShadow: true },
-  { id: "shell", biomes: { beach: 0.9 }, densityPerKm2: 4500, waterDistanceM: { min: 0, max: 120 }, excludes: ["water", "path"], lod: { nearM: 40, farM: 120 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
-  { id: "tidepool", biomes: { beach: 0.4 }, densityPerKm2: 250, waterDistanceM: { min: 0, max: 60 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 400 }, collider: null, scale: [1, 1.6], castsShadow: false },
-  { id: "shore-rock", biomes: { beach: 0.5 }, densityPerKm2: 1800, waterDistanceM: { min: 0, max: 70 }, cluster: { radiusM: 7, count: 3 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 450 }, collider: { radiusM: 0.7, heightM: 0.8 }, scale: [0.5, 1.4], castsShadow: true },
+  { id: "driftwood", biomes: { beach: 0.6 }, densityPerKm2: 1400, waterDistanceM: { min: 0, max: 160 }, excludes: ["water", "path", "footprint"], lod: { nearM: 80, farM: 350 }, collider: { radiusM: 0.9, heightM: 0.5 }, scale: [0.7, 1.3], castsShadow: true },
+  { id: "shell", biomes: { beach: 0.9 }, densityPerKm2: 4500, waterDistanceM: { min: 0, max: 120 }, excludes: ["water", "path"], lod: { nearM: 40, farM: 160 }, collider: null, scale: [0.6, 1.2], castsShadow: false },
+  { id: "tidepool", biomes: { beach: 0.4 }, densityPerKm2: 250, waterDistanceM: { min: 0, max: 60 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 370 }, collider: null, scale: [1, 1.6], castsShadow: false },
+  { id: "shore-rock", biomes: { beach: 0.5 }, densityPerKm2: 1800, waterDistanceM: { min: 0, max: 70 }, cluster: { radiusM: 7, count: 3 }, excludes: ["water", "path", "footprint"], lod: { nearM: 120, farM: 360 }, collider: { radiusM: 0.7, heightM: 0.8 }, scale: [0.5, 1.4], castsShadow: true },
 ];
 
 /** The classes a set of biomes calls for: everything with a non-zero weight in any of them. */

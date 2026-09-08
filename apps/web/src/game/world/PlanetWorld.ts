@@ -37,6 +37,9 @@ import {
 import { TILE_M } from "@echo/shared";
 
 import { localMToTile, tileToLocalM } from "./controller";
+// Relative, not the "@/" alias: everything in this directory reaches outside it for TYPES only, and
+// tsx (which runs the node tests) does not honour the alias for a runtime import.
+import { coarsePointer } from "../../lib/pointerKind";
 
 // ── the shared renderer ─────────────────────────────────────────────────────────
 
@@ -57,10 +60,25 @@ export interface RendererHandle {
   dispose(): void;
 }
 
+/**
+ * A phone draws MORE pixels than the laptop every number in DECISIONS.md was measured on, not fewer
+ * (DECISIONS C23). A 393 x 852 iPhone at device pixel ratio 3 hits the cap of 2 and comes out at
+ * 786 x 1704 = 1.34 MPix, against the 1280 x 800 = 1.02 MPix the C22 tables were derived at — 31%
+ * more fragments on a part with roughly half the bandwidth. So the two settings that are purely
+ * about fragments, and about nothing this world's geometry or placement decides, are turned down on
+ * a coarse pointer: the ratio to 1.5, which is 1.78x fewer fragments and still past what an eye
+ * resolves at arm's length on a 3x display, and multisampling off, which on a tile-based mobile GPU
+ * is paid for in tile memory rather than in time and is the setting most likely to cost a whole
+ * extra pass. Nothing about WHAT is drawn changes — no instance moves, no density is second-guessed
+ * — which is the line scatterLayer's header draws and this stays on the safe side of.
+ */
 export function createRendererHandle(host: HTMLElement): RendererHandle {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  const lean = coarsePointer();
+  const renderer = new THREE.WebGLRenderer({ antialias: !lean, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(lean ? 1.5 : 2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.85;
   renderer.domElement.style.display = "block";
   host.appendChild(renderer.domElement);
   const owners: string[] = [];
@@ -210,9 +228,18 @@ export type BuildPhase = "idle" | "building" | "ready" | "aborted" | "failed";
 
 const HOST_OWNER = "planet-world";
 
+/**
+ * The lens, in degrees of VERTICAL field of view, which is what three's PerspectiveCamera takes.
+ *
+ * Exported because DECISIONS C22 measures against it: every class's `lod.farM` is the distance at
+ * which its own form falls to a few pixels through this camera, so a change here is a change to
+ * twenty-six distances in packages/planet/lib/assets.ts and tests/farBand.test.mts will say so.
+ */
+export const CAMERA_FOV_DEG = 50;
+
 export class PlanetWorld {
   readonly scene = new THREE.Scene();
-  readonly camera = new THREE.PerspectiveCamera(50, 1, 0.1, 6000);
+  readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV_DEG, 1, 0.1, 6000);
   readonly frame: WorldFrame;
   readonly region: RegionInfo;
   readonly field: TerrainField;
@@ -475,6 +502,7 @@ export class PlanetWorld {
     const doomed: THREE.Object3D[] = [];
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).skeleton.dispose();
       if (m.geometry) m.geometry.dispose();
       const mat = m.material as THREE.Material | THREE.Material[] | undefined;
       if (Array.isArray(mat)) mat.forEach((x) => x.dispose());

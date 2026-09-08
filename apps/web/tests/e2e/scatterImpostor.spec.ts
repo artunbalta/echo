@@ -36,11 +36,17 @@ const TRIANGLE_CEILING = 600_000;
 const DRAW_CALL_CEILING = 120;
 
 /**
- * Where the guard stands. 390 m from the spawn looking back across the disk is the view DECISIONS
- * C21 was decided on: the grid culls almost nothing there, because from out at the rim almost the
- * whole disk is inside the cone.
+ * Where the guard stands, and THE SECOND DISTANCE IS THE LESSON OF DECISIONS C22.
+ *
+ * 390 m looking back across the disk is the view C21 was decided on: the grid culls almost nothing
+ * there, because from out at the rim almost the whole disk is inside the cone. It is also where the
+ * sampling stopped, and that is how six classes kept a `farM` of 900 m over a disk that ends at
+ * 500 without any guard noticing. The disk is 500 m, a person can walk past it, and the frame gets
+ * worse the further out the stand is: measured by radius, looking back, the share of views over
+ * C16's ceiling ran 12.0% at 320 m, 42.2% at 440 m and 46.4% at 495 m. So the guard now stands at
+ * 448 m as well, which is where the worst frame in the world was found.
  */
-const RIM_M = 390;
+const RIM_M = [390, 448] as const;
 const RIM_DEG = 60;
 
 /** The hour every frame measurement in this project is taken at: the bible's dusk, 16 degrees. */
@@ -257,11 +263,11 @@ async function ready(page: Page, href: string) {
 }
 
 /** Stand at the rim looking back across the disk, and let the follow camera settle before pausing. */
-async function standAtRim(page: Page) {
+async function standAtRim(page: Page, rimM: number) {
   const home = await page.evaluate(() => (window as any).__c21.home());
   const a = (RIM_DEG * Math.PI) / 180;
-  const x = home.spawn[0] + (RIM_M * Math.cos(a)) / home.tileM;
-  const y = home.spawn[1] + (RIM_M * Math.sin(a)) / home.tileM;
+  const x = home.spawn[0] + (rimM * Math.cos(a)) / home.tileM;
+  const y = home.spawn[1] + (rimM * Math.sin(a)) / home.tileM;
   // `cameraForward(yaw)` is [-sin yaw, -cos yaw] in tiles, so this is the yaw that looks home.
   const yaw = Math.atan2(-(home.spawn[0] - x), -(home.spawn[1] - y));
   await page.evaluate(([X, Y, Z]) => {
@@ -278,10 +284,11 @@ for (const [name, href] of [
   ["the ordinary parcel", PARCEL],
   ["the demo", DEMO],
 ] as const) {
-  test(`${name} draws its far band as two triangles an instance, and the near field does not move`, async ({ page }) => {
+ for (const rimM of RIM_M) {
+  test(`${name} at ${rimM} m draws its far band as two triangles an instance, and the near field does not move`, async ({ page }) => {
     test.setTimeout(240_000);
     await ready(page, href);
-    await standAtRim(page);
+    await standAtRim(page, rimM);
 
     // ── the guard: TRIANGLES SUBMITTED at a named camera, both configurations, one session ──
     const on = await page.evaluate(() => (window as any).__c21.counts(true));
@@ -289,7 +296,7 @@ for (const [name, href] of [
 
     expect(
       on.cull.impostorTriangles,
-      `standing ${RIM_M} m from the spawn at ${RIM_DEG} degrees and looking back, the far band submitted no triangles ` +
+      `standing ${rimM} m from the spawn at ${RIM_DEG} degrees and looking back, the far band submitted no triangles ` +
         `at all. DECISIONS C21 is not engaging on the page: every instance in the cone is drawn at its full form. ` +
         `Whole frame ${on.whole.triangles.toLocaleString()} triangles in ${on.whole.calls} draw calls.`,
     ).toBeGreaterThan(0);
@@ -399,7 +406,7 @@ for (const [name, href] of [
     ).toBeGreaterThan(band!.fixed * 1.15);
 
     console.log(
-      `${name} at ${RIM_M} m, ${RIM_DEG} deg looking back: whole frame ${on.whole.triangles.toLocaleString()} tri / ` +
+      `${name} at ${rimM} m, ${RIM_DEG} deg looking back: whole frame ${on.whole.triangles.toLocaleString()} tri / ` +
         `${on.whole.calls} calls against ${off.whole.triangles.toLocaleString()} / ${off.whole.calls} with the far band ` +
         `drawn in full, ${(100 * (1 - on.whole.triangles / off.whole.triangles)).toFixed(1)}% off the whole frame. ` +
         `Far band ${on.cull.impostorInstances.toLocaleString()} instances, ${on.cull.impostorTriangles.toLocaleString()} ` +
@@ -409,4 +416,5 @@ for (const [name, href] of [
         `than 8 levels, worst ${near.whole.worst}). Far band paints ${band!.turning} px turning, ${band!.fixed} fixed.`,
     );
   });
+ }
 }

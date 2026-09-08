@@ -26,9 +26,18 @@
  * focused button would eat the spacebar, and a click that moved focus off the canvas would take WASD
  * with it. It is a div whose mousedown is cancelled, exactly as the inspector does it. Clicking
  * toggles the detail for touch, where there is no hover.
+ *
+ * THE HOVER HANDLERS ARE NOT ATTACHED ON A COARSE POINTER, and that is a fix rather than a tidy-up.
+ * A browser synthesises mouseenter from a tap BEFORE the click it also synthesises, so on a phone
+ * the first tap opened the detail through mouseenter and the click immediately shut it again: the
+ * sentence above ("clicking toggles the detail for touch") was false for the one tap a person
+ * actually makes. Traced on the shipped page, tap 1 left the panel at its collapsed height and tap 2
+ * opened it. With no hover handlers on a finger, the click is the only thing that runs.
  */
 
 import { useEffect, useRef, useState } from "react";
+
+import { useCoarsePointer } from "@/lib/pointerKind";
 
 import { PERSONA_AXIS_KEYS } from "@echo/shared";
 
@@ -60,6 +69,7 @@ export default function RecognitionMeter({ posterior, log, consent }: Recognitio
   const measured = reading.kind === "measured" ? reading : null;
   const certainty = measured?.certainty01 ?? 0;
 
+  const coarse = useCoarsePointer();
   const [expanded, setExpanded] = useState(false);
   const [rising, setRising] = useState(false);
   const prev = useRef(certainty);
@@ -89,10 +99,14 @@ export default function RecognitionMeter({ posterior, log, consent }: Recognitio
       // because its tests import it directly and never render the page. The minimap does not have
       // that hole, and the difference is exactly this attribute.
       data-recognition={reading.kind}
-      className="pointer-events-auto absolute left-1/2 top-3 z-20 w-[min(340px,86vw)] -translate-x-1/2 select-none font-mono"
+      // On a narrow screen it stops being a centred banner: at 86vw it covered 141 of the 145
+      // pixels of the "Back to the planet" link, so the only way off a parcel could not be tapped.
+      // It takes the top-left column instead and leaves the right-hand corner to the link and the
+      // minimap. A width question, answered in CSS.
+      className="pointer-events-auto absolute left-1/2 top-3 z-20 w-[min(340px,86vw)] -translate-x-1/2 select-none font-mono max-sm:left-3 max-sm:w-[58vw] max-sm:translate-x-0"
       aria-label={`Your echo knows you: ${line}`}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseEnter={coarse ? undefined : () => setExpanded(true)}
+      onMouseLeave={coarse ? undefined : () => setExpanded(false)}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => setExpanded((v) => !v)}
     >
@@ -136,7 +150,7 @@ export default function RecognitionMeter({ posterior, log, consent }: Recognitio
       {expanded && (
         <div className="panel mt-1.5 rounded-lg px-3 py-2 text-[10px] leading-snug text-parchment/70">
           {measured ? <MeasuredDetail r={measured} /> : <PlainDetail line={line} />}
-          <p className="mt-1.5 text-parchment/35">` opens the inspector</p>
+          <p className="mt-1.5 text-parchment/35">{coarse ? "the ` button opens the inspector" : "` opens the inspector"}</p>
         </div>
       )}
     </div>

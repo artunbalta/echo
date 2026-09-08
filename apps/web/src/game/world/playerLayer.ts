@@ -20,16 +20,20 @@
  */
 
 import * as THREE from "three";
+import type { ColliderIndex } from "@echo/planet";
+import { cylinderBoomLimit } from "./cameraObstacles";
 
-import { buildCharacter, poseCharacter, type CharacterParts } from "../three/character";
-import { initialMover, jumpHeightM, MOVER, stepMover, type MoveInput, type MoverState } from "./controller";
+import { buildCharacter, gaitFootTarget, poseCharacter, reachCharacter, type CharacterParts } from "../three/character";
+import { initialMover, jumpHeightM, parcelMovement, stepMover, type MoveInput, type MoverState } from "./controller";
 import {
   initialFollowCamera,
   stepFollowCamera,
   type FollowCameraOptions,
   type FollowCameraState,
+  type BoomObstacleLimit,
 } from "./followCamera";
 import { createInput, type WorldInput } from "./input";
+import type { TouchControlHandle } from "./touchInput";
 import { SPAWN_HORIZON_MARGIN_DEG, spawnView } from "./spawnView";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 
@@ -45,6 +49,13 @@ export interface PlayerLayerOptions {
    * the spine; the rig is authored to TILE_M so this is in the same metres the colliders are.
    */
   bodyRadiusM?: number;
+  /**
+   * The HUD's thumbstick and jump button, where the mount has drawn them (DECISIONS C23). Passed
+   * straight to createInput and never read here: this layer decides nothing about movement, and
+   * choosing between a thumb and a keyboard is a decision. Absent is a world with no touch HUD,
+   * which is every desktop mount and the landing preview.
+   */
+  touch?: TouchControlHandle;
 }
 
 /**
@@ -55,6 +66,7 @@ export interface PlayerLayerOptions {
  */
 interface ObstacleSource extends WorldLayer {
   blockedTile(x: number, y: number, radiusM: number): boolean;
+  colliders?(): ColliderIndex | null;
 }
 
 export interface PlayerLayer extends WorldLayer {
@@ -90,8 +102,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
   let parts: CharacterParts | null = null;
   let input: WorldInput | null = null;
   let animTime = 0;
+  let movement = parcelMovement(1.6);
   /** The prop gate, or null in a world with no scatter layer. Resolved once, at build. */
   let blocked: ((x: number, y: number) => boolean) | null = null;
+  let cameraObstacles: BoomObstacleLimit | undefined;
+  let colliders: ColliderIndex | null = null;
+  let contactWeight = 0;
+  const contactTarget = new THREE.Vector3();
+  let contactSide: -1 | 1 = 1;
   const tmp = new THREE.Vector3();
   const look = new THREE.Vector3();
 
@@ -107,13 +125,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         ctx.calibration.seaLevel,
         ctx.region.spawn.x,
         ctx.region.spawn.y,
-        initialFollowCamera(options.camera),
+        { ...initialFollowCamera(options.camera), pitch: 0.14, distance: 5.8, boom: 5.8 },
         { fovDegrees: ctx.camera.fov, horizonMarginDeg: SPAWN_HORIZON_MARGIN_DEG },
       );
       state = initialMover(ctx.region.spawnTile[0], ctx.region.spawnTile[1], view.heading);
       cam = view.camera;
-      camOpts = { ...options.camera, tileM: ctx.frame.tileM, nearM: ctx.camera.near };
+      camOpts = { chestM: 1.6, ...options.camera, tileM: ctx.frame.tileM, nearM: ctx.camera.near };
       animTime = 0;
+      movement = parcelMovement(ctx.frame.tileM);
 
       // The scatter layer builds before this one, so its colliders are ready. A world without it
       // keeps the old gate exactly: walkable ground, and nothing else.
@@ -122,6 +141,18 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         obstacles && typeof obstacles.blockedTile === "function"
           ? (x, y) => obstacles.blockedTile(x, y, bodyRadiusM)
           : null;
+
+      const colliderIndex = obstacles?.colliders?.();
+      colliders = colliderIndex ?? null;
+      contactWeight = 0;
+      cameraObstacles = colliderIndex ? (anchor, direction, wanted) => {
+        const endX = anchor[0] + direction[0] * wanted, endZ = anchor[2] + direction[2] * wanted;
+        const nearby = colliderIndex.querySegment([anchor[0], -anchor[2]], [endX, -endZ], .18);
+        return cylinderBoomLimit(anchor, direction, wanted, nearby.map(c => ({
+          x: c.x, z: -c.y, y: ctx.frame.heightAtTile(c.x / ctx.frame.tileM, -c.y / ctx.frame.tileM),
+          radius: c.radiusM, height: c.heightM,
+        })));
+      } : undefined;
 
       const built = buildCharacter(id, true);
       built.root.name = "player";
@@ -138,7 +169,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       }
       ctx.scene.add(built.root);
       parts = built;
-      input = createInput(ctx.renderer.domElement);
+      input = createInput(ctx.renderer.domElement, { touch: options.touch });
       input.setEnabled(inputEnabled);
     },
 
@@ -146,16 +177,50 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       if (!parts) return;
       const frame = input?.read(cam.yaw);
       const move = inputEnabled && frame ? frame.move : NEUTRAL;
-      state = stepMover(state, move, dt, ctx.frame.walkableTile, blocked ?? undefined);
+      state = stepMover(state, move, dt, ctx.frame.walkableTile, blocked ?? undefined, movement);
 
-      // The pose. A run must look like a run, not a walk played over more ground: the cycle
-      // accumulates at the speed ratio, so legs at MOVER.RUN swing 1.6 times as fast.
       const moving = state.state === "walk" || state.state === "run";
-      if (moving) animTime += dt * (Math.hypot(state.vx, state.vy) / MOVER.WALK);
+      const velocity = Math.hypot(state.vx, state.vy);
+      const speed = velocity / movement.walk;
+      const runBlend = THREE.MathUtils.clamp((velocity - movement.walk) / (movement.run - movement.walk), 0, 1);
+      // Cadence and stride are paired: the stance foot retreats at the body's forward speed.
+      if (moving) animTime += dt * (1 + runBlend * .7);
       ctx.frame.toScene(state.x, state.y, jumpHeightM(state), tmp);
       parts.root.position.copy(tmp);
-      poseCharacter(parts, { facing: state.facing, moving, animTime, bob: 0, lean: 0, carrying: false, activity: null });
+      const yaw = yawFromHeading(state.heading);
+      const footGround = (side: number) => {
+        const foot = gaitFootTarget(animTime * 9 + (side > 0 ? Math.PI : 0), speed, runBlend);
+        const x = state.x + Math.cos(yaw) * side * .087 + Math.sin(yaw) * foot.forward;
+        const y = state.y - Math.sin(yaw) * side * .087 + Math.cos(yaw) * foot.forward;
+        return (ctx.frame.heightAtTile(x, y) - ctx.frame.heightAtTile(state.x, state.y)) / ctx.frame.tileM;
+      };
+      poseCharacter(parts, { facing: state.facing, moving, animTime, bob: 0, lean: 0, carrying: false,
+        activity: state.activity, speed, runBlend,
+        airborne: state.jumpT >= 0, groundL: footGround(-1), groundR: footGround(1) });
       parts.root.rotation.y = yawFromHeading(state.heading);
+
+      // A hand braces against a reachable solid when movement meets it. The target is on the
+      // collider surface; the arm solver preserves both segment lengths through the contact.
+      let contact = false;
+      if (colliders && blocked && state.jumpT < 0 && Math.hypot(move.dx, move.dy) > 0 &&
+          blocked(state.x + move.dx * .25, state.y + move.dy * .25)) {
+        const [xm, ym] = ctx.frame.toLocalM(state.x, state.y);
+        let best = Infinity;
+        for (const c of colliders.queryCircle(xm, ym, .62)) {
+          if (c.heightM < .6) continue;
+          const dx=xm-c.x, dy=ym-c.y, d=Math.hypot(dx,dy), gap=d-c.radiusM;
+          if (gap >= best || d < 1e-6) continue;
+          const x=c.x+dx/d*(c.radiusM+.025), z=-c.y-dy/d*(c.radiusM+.025);
+          const ground=ctx.frame.heightAtTile(c.x/ctx.frame.tileM,-c.y/ctx.frame.tileM);
+          look.set(x,ground+Math.min(c.heightM*.8,.705*ctx.frame.tileM),z);
+          const side: -1 | 1 = (x-tmp.x)*Math.cos(yaw)-(z-tmp.z)*Math.sin(yaw)<0 ? -1 : 1;
+          if (reachCharacter(parts,side,look,0)) {
+            best=gap; contactTarget.copy(look); contactSide=side; contact=true;
+          }
+        }
+      }
+      contactWeight += ((contact ? 1 : 0)-contactWeight)*(1-Math.exp(-12*dt));
+      if (contactWeight > .01) reachCharacter(parts,contactSide,contactTarget,contactWeight);
 
       // The camera. The ground it must stay above is the ground the feet stand on: the sea sheet
       // counts, exactly as toScene clamps the feet to it.
@@ -168,6 +233,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         dt,
         ground,
         camOpts,
+        cameraObstacles,
       );
       cam = result.state;
       ctx.camera.position.set(result.position[0], result.position[1], result.position[2]);
@@ -178,6 +244,8 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       input?.dispose();
       input = null;
       blocked = null;
+      cameraObstacles = undefined;
+      colliders = null;
       if (parts) {
         disposeParts(parts);
         parts = null;
@@ -212,6 +280,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
 function disposeParts(p: CharacterParts) {
   p.root.traverse((o) => {
     const m = o as THREE.Mesh;
+    if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).skeleton.dispose();
     if (m.geometry) m.geometry.dispose();
     const mat = m.material as THREE.Material | THREE.Material[] | undefined;
     if (Array.isArray(mat)) mat.forEach((x) => x.dispose());

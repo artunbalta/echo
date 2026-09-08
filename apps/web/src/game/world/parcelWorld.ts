@@ -43,6 +43,8 @@
  * never will be.
  */
 
+import { detailLayer } from "./detailLayer";
+import { meadowLayer } from "./meadowLayer";
 import { canopyClosureLayer } from "./canopyClosure";
 import { DEMO_SCATTER } from "./demoStations";
 import type { MeasureChain } from "./measure";
@@ -53,6 +55,7 @@ import { skyLayer } from "./skyLayer";
 import { sliceLayer } from "./sliceLayer";
 import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
+import type { TouchControlHandle } from "./touchInput";
 import type { ReactionReading } from "@/components/world/Inspector";
 
 /** What the slice needs from whoever mounted it: somewhere to put its readings and its beats. */
@@ -64,6 +67,15 @@ export interface ParcelSliceOptions {
 export interface ParcelWorldOptions {
   /** The page's measurement chain. The walk layer feeds it; the slice, where there is one, emits. */
   chain: MeasureChain;
+  /** Landing previews render the same world with movement disabled. */
+  inputEnabled?: boolean;
+  /**
+   * The phone's thumbstick and jump button (DECISIONS C23), where the mount has drawn them. It
+   * rides here for the same reason `inputEnabled` does: this is the one place the world is
+   * composed, so a mount states what it has once and the list hands it to the layer that wants it.
+   * A landing preview passes none, which is correct — a passive preview has nothing to drive.
+   */
+  touch?: TouchControlHandle;
   /** Present only where the demo's two structures stand. Absent: an ordinary parcel, no stations. */
   slice?: ParcelSliceOptions;
 }
@@ -87,23 +99,24 @@ export function sliceOptionsFor(
   return stations === SLICE_STATIONS_FLAG ? callbacks : undefined;
 }
 
-export function parcelLayers({ chain, slice }: ParcelWorldOptions): WorldLayer[] {
-  const player = playerLayer();
-  const playerTile = () => {
-    const at = player.position();
-    return { x: at.x, y: at.y };
-  };
-
-  const layers: WorldLayer[] = [
-    skyLayer(),
+/** Shared geography and art for landing previews and playable parcels. */
+export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch }: Pick<ParcelWorldOptions, "slice" | "inputEnabled" | "touch"> = {}): WorldLayer[] {
+  return [
+    skyLayer({ timeOfDay: 0.38 }),
     terrainLayer(),
-    // DEMO_SCATTER is a value, not a shape repeated at each call site, so this line and the test
-    // cannot drift apart again. The bare call is what an ordinary parcel ships with.
     slice ? scatterLayer(DEMO_SCATTER) : scatterLayer(),
     canopyClosureLayer(),
-    player,
-    walkLayer({ chain, playerTile }),
+    detailLayer(),
+    playerLayer({ inputEnabled, touch }),
+    meadowLayer(),
   ];
+}
+
+export function parcelLayers({ chain, slice, inputEnabled = true, touch }: ParcelWorldOptions): WorldLayer[] {
+  const layers = parcelEnvironmentLayers({ slice, inputEnabled, touch });
+  const player = layers.find(layer => layer.name === "player") as ReturnType<typeof playerLayer>;
+  const playerTile = () => { const at = player.position(); return { x: at.x, y: at.y }; };
+  layers.push(walkLayer({ chain, playerTile }));
   if (slice) layers.push(sliceLayer({ chain, playerTile, onReaction: slice.onReaction, onBeat: slice.onBeat }));
   return layers;
 }

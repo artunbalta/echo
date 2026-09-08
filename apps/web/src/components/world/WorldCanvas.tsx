@@ -36,6 +36,7 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
     if (!host.current) return;
     let world: PlanetWorld | null = null;
     let live = true;
+    let diagnostics: ReturnType<typeof setInterval> | undefined;
     const fail = (e: unknown) => {
       setPhase("failed");
       setError(message(e));
@@ -46,7 +47,16 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
     void import("@/game/world/PlanetWorld").then(({ PlanetWorld }) => {
       if (!live || !host.current) return;
       try {
-        world = new PlanetWorld(host.current, options);
+        world = new PlanetWorld(host.current, { ...options, devInfo: options.devInfo ?? process.env.NODE_ENV !== "production" });
+        if (process.env.NODE_ENV !== "production") {
+          diagnostics = setInterval(() => {
+            if (host.current && world?.info) {
+              host.current.dataset.worldFps = world.info.fps.toFixed(1);
+              host.current.dataset.worldTriangles = String(world.info.triangles);
+              host.current.dataset.worldCalls = String(world.info.calls);
+            }
+          }, 1000);
+        }
         world.onPhase = (p, err) => {
           setPhase(p);
           if (p === "failed") setError(message(err));
@@ -62,6 +72,7 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
     });
     return () => {
       live = false;
+      clearInterval(diagnostics);
       world?.dispose();
       onWorld?.(null);
     };

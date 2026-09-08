@@ -233,9 +233,9 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
     // The shadow box, on the one key light, found by name rather than added to.
     tuneLights(ctx);
 
-    // Flat shading, per the bible: carved clay. Vertex colours still interpolate, so the biome
-    // blend along a boundary survives it; only the lighting is per facet.
-    ground = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+    // Interpolate the shared height lattice normals: rolling ground has continuous light,
+    // while its geometry, coast and collision surface remain the same planet data.
+    ground = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
     // The metre-scale grain (task A28). It is a patch on this material rather than a material of
     // its own because everything else about the ground - the shadow map, the fog, the two lights,
     // the vertex colours - is three's and none of it is worth reimplementing to add twelve hashes.

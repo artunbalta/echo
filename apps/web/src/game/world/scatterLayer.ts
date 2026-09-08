@@ -135,22 +135,61 @@
  * becomes:
  *
  *                    at the spawn        worst of eighteen stand points   of those views over 600,000
- *   8482589ffffffff  496,615 -> 470,655  704,644 -> 544,164                4 -> 0
- *   8477057ffffffff  527,555 -> 500,035  744,331 -> 587,271                5 -> 0
- *   8496a91ffffffff  538,179 -> 513,191  772,275 -> 616,355               12 -> 2
- *   847b949ffffffff  304,535 -> 302,527  597,464 -> 495,062                0 -> 0
- *   847b959ffffffff  359,789 -> 334,163  359,789 -> 334,163                0 -> 0
+ *   8482589ffffffff  326,414 -> 326,414  704,644 -> 544,164                4 -> 0
+ *   8477057ffffffff  567,139 -> 537,459  744,331 -> 587,271                5 -> 0
+ *   8496a91ffffffff  549,849 -> 523,249  772,275 -> 616,355               12 -> 2
+ *   847b949ffffffff  283,578 -> 281,748  597,464 -> 495,062                0 -> 0
+ *   847b959ffffffff  202,499 -> 202,499  359,789 -> 334,163                0 -> 0
  *
- * IT BUYS LITTLE AT THE SPAWN AND MUCH AT THE RIM, and that is exactly what it is for: 5.2% off the
- * parcel's spawn frame against 22.8% off its worst, and 0.7% off the demo's spawn against 20.4%.
- * The two views on 8496a91ffffffff that are still over are 616,355 and 601,080, 2.7% and 0.2% past
- * the ceiling where they were 28.7% and 25.6% past it; what is left there is the ground, and the
- * terrain's own split is where the next hundred thousand is.
+ * THE SPAWN COLUMN IS THE CORRECTED ONE. It first read 496,615 -> 470,655 on the parcel and four
+ * more like it, and not one of those was a frame: each was this layer's own cull report at the
+ * spawn POSITION at a heading nobody is put at, plus a per-route constant for everything in the
+ * frame that is not the scatter, with the "before" column computed as the "after" plus
+ * `farBandFullTriangles - impostorTriangles` rather than rendered a second time. On the parcel that
+ * heading was yaw 0 and C4's spawn rule leaves you at yaw PI. DECISIONS "C21, the spawn column
+ * corrected" carries the recovery, heading by heading.
+ *
+ * IT BUYS LITTLE AT THE SPAWN AND MUCH AT THE RIM, and that is exactly what it is for: NOTHING off
+ * the parcel's spawn frame against 22.8% off its worst, and 0.6% off the demo's spawn against
+ * 20.4%. At the parcel's spawn the far band holds zero instances, because looking the way the game
+ * points you the scatter is 15,356 triangles of main pass in 8 draw calls and no bucket in the cone
+ * is past any class's own `farM`. The two views on 8496a91ffffffff that are still over are 616,355
+ * and 601,080, 2.7% and 0.2% past the ceiling where they were 28.7% and 25.6% past it; what is left
+ * there is the ground, and the terrain's own split is where the next hundred thousand is.
  *
  * IT SPENDS DRAW CALLS RATHER THAN GIVING THEM BACK, which C20 did not: one more per class that has
- * a far band, 37 to 41 at the parcel's spawn and 57 to 64 at the demo's rim, against the 120 of
- * C16. And it does not touch the shadow pass at all: identical, triangle for triangle, at all 84
- * views measured, because no class that casts is ever past its own `farM` inside the 240 m box.
+ * a far band, which at the spawn is 37 to 37 on the parcel because no class has one there, 37 to 42
+ * on 8477057ffffffff, 49 to 51 on the demo, and 57 to 64 at the demo's rim, against the 120 of C16.
+ * And it does not touch the shadow pass at all: identical, triangle for triangle, at all 84 views
+ * measured, because no class that casts is ever past its own `farM` inside the 240 m box.
+ *
+ * DECISIONS C22 THEN MOVED THE THRESHOLD, and the two paragraphs above are what it was measured
+ * against. C21 shipped `farM` as it had been authored, and six classes carried 900 m over a disk
+ * that ends at 500, so no tree on a rainforest parcel could ever enter the band; the row above that
+ * reads 326,414 -> 326,414 at the parcel's spawn is that fact showing. C22 re-derived all
+ * twenty-six distances by measuring where each form falls to two pixels of the shipped frame, the
+ * six landed at 400 to 410 m, and measured again on the real GPU at sixty-one WALKABLE stands 448 m
+ * out across the five shipped routes:
+ *
+ *   over C16's 600,000        14 of 61 views -> 0 of 61
+ *   the worst view anywhere   664,310 -> 508,260
+ *   the parcel at 448 m       606,798 -> 446,386, 26.4% of the frame
+ *   8477057 at 448 m          639,324 -> 481,250, 24.7%
+ *   the demo at 448 m         509,644 -> 416,127, 18.3%
+ *
+ * The class that changed most is the one C21 could not reach: at the parcel's worst stand,
+ * buttress-tree goes from 24 instances in the far band to 2,664 and canopy-palm from 65 to 4,122,
+ * worth 76,560 and 73,026 triangles. Two classes went the other way, because their old `farM` was
+ * NEARER than the measurement: fern 220 -> 340 m and bromeliad 200 -> 300 give back 11,720 and
+ * 1,330 triangles at the same view, and the net is still 160,412. The draw calls it spends grew
+ * with it, 44 at the parcel's rim and 73 at the demo's, still against 120.
+ *
+ * AND A CASTER CAN NOW BE IN THE FAR BAND, which C21 recorded as impossible and C22 made possible:
+ * the shortest casting `farM` is cactus at 350 m against the 591 m a caster inside the 240 m shadow
+ * box reaches. It still does not touch the shadow pass, for a different reason: the twin is packed
+ * by `visibleRuns` against the shadow camera and never sees `farM` at all, so an instance drawn as
+ * a card casts the shadow of its own full form. tests/scatterImpostor.test.mts culls one cell under
+ * two `farM` tables three hundred metres apart and holds the shadow pass identical.
  *
  * THE SHADOW PASS IS STILL THE LARGER HALF AT REST, 226,693 of the parcel's 325,308, because the
  * terrain still has the shape the scatter had before A7: seven meshes over a 4 km disk with a
@@ -190,7 +229,7 @@ import {
 
 import { footprintToLocalM } from "./controller";
 import { hasScatterGeometry, SCATTER_GEOMETRY, SCATTER_MATERIAL } from "./scatterGeometry";
-import { impostorFor, impostorMaterial, sweptRadius, IMPOSTOR_TRIANGLES } from "./scatterImpostor";
+import { impostorFor, impostorMaterial, sweptRadius } from "./scatterImpostor";
 import {
   bucketise,
   frustumHas,
@@ -361,8 +400,14 @@ export interface CullReport {
   shadowTriangles: number;
   /**
    * The far band, which is inside the three main-pass numbers above and broken out here.
-   * `impostorTriangles` is two per instance; `farBandFullTriangles` is what those same instances
-   * would have cost drawn in full, so the difference is exactly what DECISIONS C21 bought.
+   *
+   * BOTH SIDES ARE READ OFF A GEOMETRY, which is the whole point of reporting them:
+   * `impostorTriangles` is what the far MESH draws, counted from the geometry that mesh is holding,
+   * and `farBandFullTriangles` is what those same instances would have cost through the class's own
+   * full form. The difference is exactly what DECISIONS C21 bought. It used to be
+   * `instances * IMPOSTOR_TRIANGLES`, a constant, which made the two numbers say the impostor was
+   * cheap whatever geometry the far mesh had been pointed at: aim it at the class's own merged form
+   * and the report still claimed two triangles an instance while the GPU drew ninety.
    */
   impostorMeshes: number;
   impostorInstances: number;
@@ -431,6 +476,19 @@ export interface ScatterLayer extends WorldLayer {
 
 /** A macrotask, so the browser can paint and an abort can land between two pieces of work. */
 const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+/**
+ * How many triangles one instance of this geometry costs the renderer, counted off the buffers it
+ * is holding.
+ *
+ * Every triangle number this layer reports goes through here, the far band's included, so a report
+ * is a statement about the geometry that is actually bound and not about which constant the author
+ * believed was bound. Indexed and non-indexed both, because the answer must not depend on which
+ * one a future form is built as; nothing in SCATTER_GEOMETRY or scatterImpostor is indexed today.
+ */
+function trianglesOf(geometry: THREE.BufferGeometry): number {
+  return (geometry.index ? geometry.index.count : geometry.getAttribute("position").count) / 3;
+}
 
 /** Props stand upright and turn about the world's up axis, and only about that. */
 const UP = new THREE.Vector3(0, 1, 0);
@@ -557,6 +615,11 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
   const splits: Array<{
     id: AssetClassId;
     trianglesPerInstance: number;
+    /**
+     * What ONE far-band instance costs, counted off `farMesh.geometry` rather than assumed. Zero
+     * when there is no far mesh. See {@link CullReport} for why this is not a constant.
+     */
+    farTrianglesPerInstance: number;
     /** This class's own `lod.farM`, or Infinity when the far band is switched off. */
     farM: number;
     buckets: ScatterBuckets;
@@ -763,10 +826,18 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
     // `shadows` off) the main mesh is the only mesh and casts nothing either, as before.
     const mesh = make("", false);
     const shadowMesh = casts ? make(":shadow", true) : null;
-    // The far band never casts. Measured on both shipped routes, no instance of any class that
-    // casts is ever past its own `farM` inside the 240 m shadow box, because the shortest `farM`
-    // among the casters is 700 m; tests/scatterImpostor.test.mts holds that rather than assuming
-    // it, so a future class that casts and stands close is caught rather than drawn twice.
+    // The far band never casts, and after DECISIONS C22 that is a decision rather than an accident.
+    // It used to be neither: the shortest casting `farM` was 700 m against the 591 m a caster
+    // inside the 240 m shadow box can stand from the lens, so no caster could reach the far band
+    // and the question never arose. C22 measured those distances against the disk the scatter
+    // actually fills and the shortest casting `farM` is now cactus at 350 m, well inside 591, so a
+    // caster IS in the far band and its shadow is cast by the twin below, out of the class's own
+    // full form. That is the right way round: a two-triangle card casts a two-triangle sliver, and
+    // the ground it would fall on stands at least 350 m away, past everything the lens can see of
+    // it. What must stay true is that `farM` never reaches the shadow pass at all, which is why the
+    // twin is packed by `visibleRuns` and not by `visibleRunsByRange`; tests/scatterImpostor.test.mts
+    // culls the same cell under two `farM` tables three hundred metres apart and holds the shadow
+    // pass identical.
     let farMesh: THREE.InstancedMesh | null = null;
     if (card) {
       farMaterial ??= impostorMaterial();
@@ -784,7 +855,8 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       split,
       entry: {
         id: cls.id,
-        trianglesPerInstance: geometry.getAttribute("position").count / 3,
+        trianglesPerInstance: trianglesOf(geometry),
+        farTrianglesPerInstance: farMesh ? trianglesOf(farMesh.geometry) : 0,
         farM: card ? cls.lod.farM : Infinity,
         buckets: split,
         mesh,
@@ -880,10 +952,10 @@ export function scatterLayer(options: ScatterLayerOptions = {}): ScatterLayer {
       if (far > 0) {
         out.mainMeshes++;
         out.mainInstances += far;
-        out.mainTriangles += far * IMPOSTOR_TRIANGLES;
+        out.mainTriangles += far * s.farTrianglesPerInstance;
         out.impostorMeshes++;
         out.impostorInstances += far;
-        out.impostorTriangles += far * IMPOSTOR_TRIANGLES;
+        out.impostorTriangles += far * s.farTrianglesPerInstance;
         out.farBandFullTriangles += far * s.trianglesPerInstance;
       }
 

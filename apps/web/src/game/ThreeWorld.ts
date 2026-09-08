@@ -297,6 +297,7 @@ export class ThreeWorld {
     this.scene.remove(v.group);
     v.group.traverse((o) => {
       const m = o as THREE.Mesh;
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).skeleton.dispose();
       if (m.geometry) m.geometry.dispose();
     });
     v.label.remove();

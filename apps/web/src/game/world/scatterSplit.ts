@@ -48,12 +48,17 @@
  *   past the FOG, which is the band that is actually invisible            0 to 7.4%, 13,993 tri
  *
  * and concluded that fourteen to twenty-six thousand triangles was not worth a second geometry
- * path. AT THE SPAWN it still is not: DECISIONS C21 measured on the real GPU takes the parcel's
- * spawn frame from 496,615 to 470,655, 5.2%. FROM THE RIM the same band is half the frame: standing
- * 390 m out and looking back, 279,490 of the 576,774 instanced triangles in the cone stand past
- * their own `lod.farM`, and the whole frame goes 704,644 to 544,164, from over C16's ceiling to
- * under it. The band the old measurement called small is the same band; the camera it was measured
- * from was the one the split already works at.
+ * path. AT THE SPAWN it still is not, and the honest number is smaller than the one that used to
+ * stand here: measured on the real GPU standing where the game puts you, the parcel's spawn frame
+ * is 326,414 triangles with C21 and 326,414 with the far band restored, because at that heading the
+ * far band holds no instances at all. The 496,615 to 470,655 this paragraph used to quote was the
+ * spawn POSITION at yaw 0, which is 180 degrees off the heading C4's spawn rule gives you there;
+ * see DECISIONS "C21, the spawn column corrected".
+ *
+ * FROM THE RIM the same band is half the frame: standing 390 m out and looking back, 279,490 of the
+ * 576,774 instanced triangles in the cone stand past their own `lod.farM`, and the whole frame goes
+ * 704,644 to 544,164, from over C16's ceiling to under it. The band the old measurement called
+ * small is the same band; the camera it was measured from was the one the split already works at.
  *
  * The other half of that paragraph stands and is now load bearing for a different reason. Three's
  * linear fog is `smoothstep(near, far, viewDepth)`, exactly 1 at and beyond `far`, and the sky
@@ -63,13 +68,22 @@
  * 0 or 1 pixels of 1,024,000, because between the fog and the near forest standing in front of it
  * the whole band is invisible. scatterImpostor.ts has the numbers and the routes where it is not.
  *
- * The plan's own reading of the far band is still emptier than either, and this is still true.
- * `buttress-tree`, `canopy-palm`, `boulder`, `conifer`, `broadleaf` and `acacia` all carry `farM`
- * 900 while `spawnFalloff`'s `cutoffM` is 500, so from a camera anywhere near the spawn not one
- * instance of the six is ever past its own far distance, and even from the rim the furthest
- * instance on the disk is 890 m away. On the parcel that is 303,451 triangles, 35.9% of the
- * scatter, structurally outside any band those two constants can describe: C21 does not touch a
- * single tree on this route, and everything it buys it buys from the understorey.
+ * AND THE BAND WAS EMPTY OF TREES UNTIL DECISIONS C22, which is the third correction this header
+ * has had to record and the largest. What used to stand here was true and is worth keeping as the
+ * observation that opened C22: `buttress-tree`, `canopy-palm`, `boulder`, `conifer`, `broadleaf`
+ * and `acacia` all carried `farM` 900 while `spawnFalloff`'s `cutoffM` is 500, so from a camera
+ * anywhere near the spawn not one instance of the six was ever past its own far distance, and even
+ * from the rim the furthest instance on the disk is 890 m away. On the parcel that was 303,451
+ * triangles, 35.9% of the scatter, structurally outside any band those two constants could
+ * describe: C21 did not touch a single tree on this route, and everything it bought it bought from
+ * the understorey.
+ *
+ * C22 re-derived all twenty-six distances by measuring where each form falls to two pixels of the
+ * shipped frame, and the six now stand at 400 to 410 m. Measured on the real GPU at the walkable
+ * stand 448 m out that the old numbers were worst at, on the ordinary parcel: buttress-tree goes
+ * from 24 instances in the far band to 2,664 and canopy-palm from 65 to 4,122, the whole view goes
+ * from 606,798 triangles to 446,386, and across sixty-one walkable stands on the five shipped
+ * routes the count over DECISIONS C16's ceiling goes from fourteen to none.
  */
 
 import * as THREE from "three";
