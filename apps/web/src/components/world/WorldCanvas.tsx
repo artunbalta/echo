@@ -12,7 +12,8 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import type { BuildPhase, PlanetWorld, PlanetWorldOptions, WorldLayer } from "@/game/world/PlanetWorld";
+import type { BuildPhase, PlanetWorld, PlanetWorldOptions, RenderInfo, WorldLayer } from "@/game/world/PlanetWorld";
+import { renderDebugEnabled } from "@/lib/renderDebug";
 
 export interface WorldCanvasProps extends Omit<PlanetWorldOptions, "handle"> {
   /** Layers to add, in build order. Called once per world instance. */
@@ -31,6 +32,9 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
   const host = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<BuildPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  // The last reading, for the readout below. It is state and not a ref because the readout is the
+  // only way to see these numbers on a phone, which has no console to print them to.
+  const [reading, setReading] = useState<RenderInfo | null>(null);
 
   useEffect(() => {
     if (!host.current) return;
@@ -47,14 +51,37 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
     void import("@/game/world/PlanetWorld").then(({ PlanetWorld }) => {
       if (!live || !host.current) return;
       try {
-        world = new PlanetWorld(host.current, { ...options, devInfo: options.devInfo ?? process.env.NODE_ENV !== "production" });
-        if (process.env.NODE_ENV !== "production") {
+        // ONE PREDICATE, TWO GATES. These used to be two independent `NODE_ENV` checks, so a change
+        // to either one alone gave a world that samples and never reports, or a report of nothing.
+        // What decides is lib/renderDebug.ts: development as before, production only when the URL
+        // asks (?debug=render, ?debug=layers). See DECISIONS C23 for why a URL and not a flag.
+        const level = options.devInfo === undefined ? renderDebugEnabled() : options.devInfo ? "frame" : "off";
+        world = new PlanetWorld(host.current, {
+          ...options,
+          devInfo: level !== "off",
+          devLayers: options.devLayers ?? level === "layers",
+        });
+        if (level !== "off") {
           diagnostics = setInterval(() => {
-            if (host.current && world?.info) {
-              host.current.dataset.worldFps = world.info.fps.toFixed(1);
-              host.current.dataset.worldTriangles = String(world.info.triangles);
-              host.current.dataset.worldCalls = String(world.info.calls);
-            }
+            const info = world?.info;
+            if (!host.current || !info) return;
+            // `dataset.worldFps` is the attribute `data-world-fps` on the page, not `data-worldFps`:
+            // the DOM hyphenates a dataset key. Every selector that reads these uses the hyphens,
+            // and DECISIONS C23 and SOCIETY-PLAN both wrote the camel-case form, which matches
+            // nothing in a real browser.
+            host.current.dataset.worldFps = info.fps.toFixed(1);
+            host.current.dataset.worldTriangles = String(info.triangles);
+            host.current.dataset.worldCalls = String(info.calls);
+            host.current.dataset.worldWorstTriangles = String(info.worstTriangles);
+            host.current.dataset.worldWorstCalls = String(info.worstCalls);
+            host.current.dataset.worldMainTriangles = String(info.mainTriangles);
+            host.current.dataset.worldMainCalls = String(info.mainCalls);
+            host.current.dataset.worldShadowTriangles = String(info.shadowTriangles);
+            host.current.dataset.worldShadowCalls = String(info.shadowCalls);
+            host.current.dataset.worldPixelRatio = String(info.pixelRatio);
+            host.current.dataset.worldBuffer = `${info.width}x${info.height}`;
+            host.current.dataset.worldLayers = JSON.stringify(info.layers);
+            setReading(info);
           }, 1000);
         }
         world.onPhase = (p, err) => {
@@ -90,6 +117,23 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
             {phase === "failed" ? `The ground could not be built: ${error ?? "unknown error"}` : "Building the ground"}
           </p>
         </div>
+      ) : null}
+      {/* The readout, which exists for exactly one reason: a phone has no devtools, and DECISIONS
+          C23 ends on the fact that this frame has never been measured on one. Rendered only when a
+          reading exists, which is only when the gate above opened. */}
+      {reading ? (
+        <pre
+          data-world-readout
+          className="pointer-events-none absolute right-3 top-16 z-40 whitespace-pre rounded bg-[#120c19]/85 px-2 py-1 font-mono text-[10px] leading-tight text-[#f4e9d0]/85"
+        >
+{`${reading.fps.toFixed(1)} fps   ${reading.width}x${reading.height} @${reading.pixelRatio}
+whole  ${reading.triangles.toLocaleString()} tri / ${reading.calls} calls   worst ${reading.worstTriangles.toLocaleString()} / ${reading.worstCalls}
+main   ${reading.mainTriangles.toLocaleString()} / ${reading.mainCalls}
+shadow ${reading.shadowTriangles.toLocaleString()} / ${reading.shadowCalls}
+${Object.entries(reading.layers)
+  .map(([name, c]) => `${name.padEnd(14)}${String(c.triangles).padStart(9)} /${String(c.calls).padStart(3)}   +sh${String(c.shadowTriangles).padStart(9)} /${String(c.shadowCalls).padStart(3)}`)
+  .join("\n")}`}
+        </pre>
       ) : null}
       {children}
     </div>

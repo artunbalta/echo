@@ -211,17 +211,75 @@ export interface PlanetWorldOptions {
   handle?: RendererHandle;
   heightScaleM?: number;
   tileM?: number;
-  /** Sample renderer.info every second into `info`. Costs nothing when off. */
+  /** Sample renderer.info every second into `info`, whole frame, both passes. Costs nothing when off. */
   devInfo?: boolean;
+  /**
+   * Also attribute every draw to the layer that added the object. Implies `devInfo`.
+   *
+   * A separate flag because it is not free: it walks the scene once a frame and brackets every
+   * object's draws with four closures. The frame it measures is a frame with an instrument in it,
+   * so the fps beside a per-layer table is worth less than the fps beside a bare one.
+   */
+  devLayers?: boolean;
+}
+
+/** What one layer cost in the frame that was sampled, split by pass. */
+export interface LayerCost {
+  calls: number;
+  triangles: number;
+  shadowCalls: number;
+  shadowTriangles: number;
 }
 
 export interface RenderInfo {
+  /**
+   * Draw calls and triangles, WHOLE FRAME: the shadow pass and the main pass together.
+   *
+   * They were the main pass alone until SOC-1.A, and not by anyone's choice. three draws the whole
+   * shadow map and THEN calls `info.reset()`, so a plain read after `render()` reports only what was
+   * drawn since that reset. `tests/e2e/scatterSplit.spec.ts` had already found this from the
+   * outside, and DECISIONS C28 is the number: the ordinary parcel's whole frame is 907,250 triangles
+   * where a plain read says 664,805. Every number this host has ever put in a data attribute —
+   * including the 628,415 in `living-world-rendering.md` — is a frame minus its shadow map. The
+   * instrument that separates them now lives here rather than only in a spec, because the question
+   * C23 ends on is about the page a person opens, not about a page with a harness attached.
+   */
   calls: number;
   triangles: number;
+  /** The main pass alone: what `calls` and `triangles` used to mean. */
+  mainCalls: number;
+  mainTriangles: number;
+  shadowCalls: number;
+  shadowTriangles: number;
+  /** The WORST whole frame of the sampling window, which is what DECISIONS C16 is read against. */
+  worstCalls: number;
+  worstTriangles: number;
   geometries: number;
   textures: number;
   /** Frames per second over the last sampling window. */
   fps: number;
+  /**
+   * What the reading was taken at. A phone caps its ratio at 1.5 and turns multisampling off
+   * (`createRendererHandle`, DECISIONS C23) and the e2e helpers force a ratio of 1, so a row that
+   * does not carry these three numbers cannot be compared with any table in DECISIONS.
+   */
+  pixelRatio: number;
+  width: number;
+  height: number;
+  /**
+   * Per layer, by the name the layer gave itself; empty unless the "layers" level was asked for.
+   *
+   * IT CANNOT BE DERIVED. `parcelWorld.ts` composes a FLAT list of layers into ONE scene, so nothing
+   * downstream knows whose mesh is whose, and the names do not settle it either: `detailLayer` names
+   * its meshes `scatter:<class>:detail`, the slice names its props "campfire" and "cave_mouth", and
+   * the player's body is a tree of unnamed meshes under one named root. Whoever ADDED the object is
+   * the one fact that is always right, and the host is the one holding it. See `instrument`.
+   *
+   * A layer that adds nothing to the scene has no row here, and that is correct rather than a gap:
+   * `canopyClosure` edits the terrain's colours in place and `walk` allocates nothing at all, so
+   * neither draws, and a zero row for them would imply they were measured and found free.
+   */
+  layers: Record<string, LayerCost>;
 }
 
 export type BuildPhase = "idle" | "building" | "ready" | "aborted" | "failed";
@@ -260,6 +318,15 @@ export class PlanetWorld {
   private readonly tmp = new THREE.Vector3();
   private infoSamples = 0;
   private infoAt = 0;
+  /** The layer whose code is running right now, so `scene.add` can stamp whatever it adds. */
+  private attributing: string | null = null;
+  private readonly cost = new Map<string, LayerCost>();
+  private shadowPass = { calls: 0, triangles: 0 };
+  private worstFrame = { calls: 0, triangles: 0 };
+  private readonly reporting: boolean;
+  private readonly attributingLayers: boolean;
+  private restoreInstrument: (() => void) | null = null;
+  private readonly bufferSize = new THREE.Vector2();
   phase: BuildPhase = "idle";
   info: RenderInfo | null = null;
   /** Called on every phase change of the CURRENT build; a superseded build never reports. */
@@ -318,6 +385,9 @@ export class PlanetWorld {
     this.ownsRenderer = !options.handle;
     this.handle = options.handle ?? createRendererHandle(host);
     this.acquire();
+    this.attributingLayers = options.devLayers === true;
+    this.reporting = options.devInfo === true || this.attributingLayers;
+    if (this.reporting) this.instrument();
 
     // Provisional light: one low western key and a cool fill, per the art bible's one rule. The
     // sky layer takes both over by name, "key" and "fill", and drives them with the hour.
@@ -393,7 +463,9 @@ export class PlanetWorld {
     try {
       for (const layer of this.layers) {
         if (controller.signal.aborted) break;
+        this.attributing = layer.name;
         await layer.build(ctx, controller.signal);
+        this.attributing = null;
       }
       if (controller.signal.aborted || generation !== this.generation) {
         // A superseded or disposed build: clean up whatever it managed to add, say nothing.
@@ -436,13 +508,25 @@ export class PlanetWorld {
     const dt = this.lastT === 0 ? 1 / 60 : Math.min(0.1, (now - this.lastT) / 1000);
     this.lastT = now;
     const ctx = this.context();
-    for (const layer of this.layers) layer.update?.(dt, ctx);
+    // The layer's name is set around its own code, not only around its build: the meadow adds a
+    // patch from inside `update` for the life of the page, and an attribution that stopped at build
+    // would leave every blade of grass in an "unattributed" row.
+    for (const layer of this.layers) {
+      this.attributing = layer.name;
+      layer.update?.(dt, ctx);
+    }
+    this.attributing = null;
     this.stepCamera(dt);
     // After the camera, before the renderer: see WorldLayer.beforeRender for why the scatter's
     // frustum cull cannot live in `update`.
-    for (const layer of this.layers) layer.beforeRender?.(ctx);
+    for (const layer of this.layers) {
+      this.attributing = layer.name;
+      layer.beforeRender?.(ctx);
+    }
+    this.attributing = null;
+    if (this.reporting) this.beginFrame();
     this.handle.renderer.render(this.scene, this.camera);
-    if (this.options.devInfo) this.sampleInfo(now);
+    if (this.reporting) this.sampleInfo(now);
   };
 
   /**
@@ -470,19 +554,158 @@ export class PlanetWorld {
     this.camera.lookAt(target);
   }
 
+  /**
+   * Turn the host into an instrument, ONCE, and only where a reading was asked for.
+   *
+   * Three wrappers, and each is a fact about three rather than a preference:
+   *
+   *   `autoReset` off, because three resets the counters between the shadow pass and the main pass,
+   *   and the shadow map is the half nobody has been reading.
+   *
+   *   `shadowMap.render` wrapped, because that is where the shadow subtotal can be read: with the
+   *   reset off, the counters at the moment that call returns ARE the shadow pass.
+   *
+   *   `scene.add` wrapped, because `parcelWorld.ts` composes a flat list into one scene and the
+   *   object names cannot be trusted to say whose they are. This is the same instrument
+   *   `tests/e2e/scatterSplit.spec.ts` installs from the outside, moved inside so the page a person
+   *   opens can answer without a harness attached.
+   */
+  private instrument() {
+    if (this.restoreInstrument) return;
+    const renderer = this.handle.renderer;
+    const autoReset = renderer.info.autoReset;
+    renderer.info.autoReset = false;
+    const shadowMap = renderer.shadowMap;
+    const shadowRender = shadowMap.render.bind(shadowMap);
+    shadowMap.render = (lights, scene, camera) => {
+      shadowRender(lights, scene, camera);
+      this.shadowPass = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+    };
+    const scene = this.scene as THREE.Object3D;
+    const add = scene.add.bind(scene);
+    scene.add = ((...objects: THREE.Object3D[]) => {
+      if (this.attributing) for (const object of objects) object.userData.echoLayer ??= this.attributing;
+      return add(...objects);
+    }) as THREE.Object3D["add"];
+    this.restoreInstrument = () => {
+      renderer.info.autoReset = autoReset;
+      shadowMap.render = shadowRender;
+      scene.add = add;
+      this.restoreInstrument = null;
+    };
+  }
+
+  /**
+   * Bracket one object's draws with three's own hooks, CHAINING whatever is already there.
+   *
+   * Never replacing. `scatterLayer` zeroes its shadow twin's count in `onBeforeRender` and puts it
+   * back in `onAfterRender`, and that pair is the whole reason the twin does not draw in the main
+   * pass; an instrument that overwrote it would double the frame it was sent to measure. The shadow
+   * pass has its own pair, `onBeforeShadow` / `onAfterShadow`, which is how a twin's cost is told
+   * from the mesh a person sees.
+   */
+  private hook(object: THREE.Object3D) {
+    if (object.userData.echoHooked) return;
+    // ONLY THINGS THAT DRAW. three calls `scene.onBeforeRender` at the top of `render()` and
+    // `scene.onAfterRender` at the bottom, so hooking the root brackets the ENTIRE FRAME as one
+    // object — measured, before this line existed: an "unattributed" row of 643,197 triangles
+    // against a 434,859 main pass, which is the whole frame plus the shadow map, counted twice.
+    // Groups, lights and cameras are the same class of mistake more quietly. A drawable is a mesh,
+    // a line, a point cloud or a sprite, and nothing else has a cost to attribute.
+    const drawable = object as THREE.Object3D & {
+      isMesh?: boolean; isLine?: boolean; isPoints?: boolean; isSprite?: boolean;
+    };
+    if (!(drawable.isMesh || drawable.isLine || drawable.isPoints || drawable.isSprite)) return;
+    object.userData.echoHooked = true;
+    const render = this.handle.renderer.info.render;
+    const before = object.onBeforeRender;
+    const after = object.onAfterRender;
+    const beforeShadow = object.onBeforeShadow;
+    const afterShadow = object.onAfterShadow;
+    let calls = 0;
+    let triangles = 0;
+    const bucket = (): LayerCost => {
+      let name = "unattributed";
+      for (let at: THREE.Object3D | null = object; at; at = at.parent) {
+        if (typeof at.userData.echoLayer === "string") {
+          name = at.userData.echoLayer;
+          break;
+        }
+      }
+      let cost = this.cost.get(name);
+      if (!cost) this.cost.set(name, (cost = { calls: 0, triangles: 0, shadowCalls: 0, shadowTriangles: 0 }));
+      return cost;
+    };
+    object.onBeforeRender = (...args: Parameters<THREE.Object3D["onBeforeRender"]>) => {
+      before.apply(object, args);
+      calls = render.calls;
+      triangles = render.triangles;
+    };
+    object.onAfterRender = (...args: Parameters<THREE.Object3D["onAfterRender"]>) => {
+      const cost = bucket();
+      cost.calls += render.calls - calls;
+      cost.triangles += render.triangles - triangles;
+      after.apply(object, args);
+    };
+    object.onBeforeShadow = (...args: Parameters<THREE.Object3D["onBeforeShadow"]>) => {
+      beforeShadow.apply(object, args);
+      calls = render.calls;
+      triangles = render.triangles;
+    };
+    object.onAfterShadow = (...args: Parameters<THREE.Object3D["onAfterShadow"]>) => {
+      const cost = bucket();
+      cost.shadowCalls += render.calls - calls;
+      cost.shadowTriangles += render.triangles - triangles;
+      afterShadow.apply(object, args);
+    };
+  }
+
+  /** Zero the counters for the frame about to be drawn, and hook whatever has appeared since. */
+  private beginFrame() {
+    this.handle.renderer.info.reset();
+    this.shadowPass = { calls: 0, triangles: 0 };
+    if (!this.attributingLayers) return;
+    for (const cost of this.cost.values()) {
+      cost.calls = 0;
+      cost.triangles = 0;
+      cost.shadowCalls = 0;
+      cost.shadowTriangles = 0;
+    }
+    this.scene.traverse((object) => this.hook(object));
+  }
+
   private sampleInfo(now: number) {
-    this.infoSamples++;
-    if (now - this.infoAt < 1000) return;
     const r = this.handle.renderer.info;
+    this.infoSamples++;
+    // The worst frame of the window, kept every frame, because the budget of DECISIONS C16 is a
+    // bound on the worst view and a mean would hide the heading that breaks it.
+    if (r.render.triangles > this.worstFrame.triangles) {
+      this.worstFrame = { calls: r.render.calls, triangles: r.render.triangles };
+    }
+    if (now - this.infoAt < 1000) return;
+    const size = this.handle.renderer.getSize(this.bufferSize);
+    const layers: Record<string, LayerCost> = {};
+    for (const [name, cost] of this.cost) layers[name] = { ...cost };
     this.info = {
       calls: r.render.calls,
       triangles: r.render.triangles,
+      mainCalls: r.render.calls - this.shadowPass.calls,
+      mainTriangles: r.render.triangles - this.shadowPass.triangles,
+      shadowCalls: this.shadowPass.calls,
+      shadowTriangles: this.shadowPass.triangles,
+      worstCalls: this.worstFrame.calls,
+      worstTriangles: this.worstFrame.triangles,
       geometries: r.memory.geometries,
       textures: r.memory.textures,
       fps: this.infoAt === 0 ? 0 : (this.infoSamples * 1000) / (now - this.infoAt),
+      pixelRatio: this.handle.renderer.getPixelRatio(),
+      width: size.x,
+      height: size.y,
+      layers,
     };
     this.infoAt = now;
     this.infoSamples = 0;
+    this.worstFrame = { calls: 0, triangles: 0 };
   }
 
   private resize = () => {
@@ -519,6 +742,7 @@ export class PlanetWorld {
     cancelAnimationFrame(this.raf);
     window.removeEventListener("resize", this.resize);
     this.observer?.disconnect();
+    this.restoreInstrument?.();
     this.disposeLayers();
     this.scene.clear();
     this.handle.release(HOST_OWNER);
