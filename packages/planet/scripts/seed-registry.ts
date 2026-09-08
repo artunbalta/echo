@@ -17,7 +17,7 @@ import pg from "pg";
 import { chooseCommons } from "../lib/commons.js";
 import { cellAreaKm2, sphereAreaKm2 } from "../lib/geo.js";
 import { landFractionSampler } from "../lib/land.js";
-import { PLANET_PARAMS } from "../lib/manifest.js";
+import { PLANET_PARAMS, WORLD_EPOCH } from "../lib/manifest.js";
 import {
   createWorld,
   insertCells,
@@ -97,6 +97,8 @@ try {
     peakElevation: calibration.peakElevation,
     commons: commons.cells,
     reserved: commons.reserved,
+    // C24: the world's epoch is written, never defaulted to now().
+    createdAt: WORLD_EPOCH,
   };
   await createWorld(db, world);
 

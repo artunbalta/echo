@@ -13,7 +13,7 @@
 import { cellToChildren } from "h3-js";
 
 import { cellAreaKm2 } from "./geo.js";
-import type { PlanetParams } from "./manifest.js";
+import { WORLD_EPOCH, type PlanetParams } from "./manifest.js";
 import { classify, type ClaimedParcel, type SqlClient, type WorldRow } from "./registry.js";
 import {
   claimParcel as claimInPostgres,
@@ -311,5 +311,8 @@ export function memoryWorld(
     peakElevation,
     commons,
     reserved,
+    // Not `new Date()`. C24: the epoch is a property of the world, and a memory world rebuilt on
+    // every cold start would otherwise hand each serverless instance its own morning.
+    createdAt: WORLD_EPOCH,
   };
 }
