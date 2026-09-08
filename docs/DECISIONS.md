@@ -1503,6 +1503,22 @@ with nothing unattributed. It did not the first time: an "unattributed" row of 6
 three calls them at the top and bottom of `render()` — so hooking the root brackets the entire frame
 as one object and counts it twice. The hook is now installed on drawables only.
 
+⚠️ THE SHADOW HALF MOVES NOW, AND C24 IS WHY. The sun's elevation is derived from the world clock,
+so the SAME camera on the SAME ground casts a different shadow pass at a different world hour —
+measured on an identical demo view: shadow 81,247 at one hour and 193,777 at another, with terrain's
+share going 19,634 -> 99,117 and scatter's 45,625 -> 78,079. The MAIN pass is camera-bound and does
+not move; it reproduced to the triangle across every run. So **a per-layer row is only comparable to
+another row taken at the same `timeOfDay`**, and the table above is one hour of one day. Stamp the
+hour on any future reading. `renderDebug.spec.ts` therefore asserts the accounting IDENTITY and
+prints the numbers; it pins neither total, because pinning one would make an honest clock look like a
+regression.
+
+A SECOND-ORDER LESSON FROM THE SAME PLACE. The first version of that spec read the eleven data
+attributes with eleven separate round-trips, and the host rewrites all of them on a one-second
+interval — so a run came back with `whole` 628,043 against `main + shadow` 628,636. That is not an
+instrument disagreeing with itself, it is two frames read as one. The reader takes `dataset` in a
+single synchronous evaluation now, which the interval's own write cannot interleave with.
+
 THESE ARE NOT C28's NUMBERS AND MUST NOT BE QUOTED AS THEM. C28's 907,250 is the WORST of eight
 headings walked at the spawn; this is the spawn view alone, standing still, which is the cheapest
 frame either route ever draws. The two answer different questions and the smaller one is not an

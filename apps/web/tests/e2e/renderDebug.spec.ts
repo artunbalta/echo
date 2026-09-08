@@ -38,18 +38,23 @@ async function readFrame(page: import("@playwright/test").Page, href: string) {
   // Two windows: the first can straddle the build, where a half-built scene is not the frame.
   await page.waitForTimeout(2_500);
 
-  const read = async (name: string) => Number(await host.getAttribute(`data-world-${name}`));
-  const layers = JSON.parse((await host.getAttribute("data-world-layers")) ?? "{}") as Record<string, LayerCost>;
+  // ONE EVALUATION, and it has to be one. The host rewrites every attribute on a one-second
+  // interval, so reading them with eleven separate `getAttribute` round-trips straddles a sample:
+  // measured, `whole` came back 628,043 while `main + shadow` came back 628,636, which is not an
+  // instrument that disagrees with itself, it is two frames read as one. `dataset` is snapshotted
+  // inside a single synchronous callback, which the interval's own write cannot interleave with.
+  const raw = await host.evaluate((el) => ({ ...(el as HTMLElement).dataset }));
+  const n = (name: string) => Number(raw[name]);
   return {
-    layers,
-    triangles: await read("triangles"),
-    calls: await read("calls"),
-    mainTriangles: await read("main-triangles"),
-    shadowTriangles: await read("shadow-triangles"),
-    worstTriangles: await read("worst-triangles"),
-    fps: await read("fps"),
-    ratio: await read("pixel-ratio"),
-    buffer: await host.getAttribute("data-world-buffer"),
+    layers: JSON.parse(raw.worldLayers ?? "{}") as Record<string, LayerCost>,
+    triangles: n("worldTriangles"),
+    calls: n("worldCalls"),
+    mainTriangles: n("worldMainTriangles"),
+    shadowTriangles: n("worldShadowTriangles"),
+    worstTriangles: n("worldWorstTriangles"),
+    fps: n("worldFps"),
+    ratio: n("worldPixelRatio"),
+    buffer: raw.worldBuffer ?? "",
   };
 }
 
@@ -99,6 +104,11 @@ for (const [label, href] of [
     ).toBeGreaterThan(0.8);
 
     // The whole frame really is both passes, which is the half C28 found nobody was reading.
+    // NOTE the shadow half is no longer stable between runs, and that is C24 working as intended:
+    // the sun's elevation is derived from the world clock now, so the same camera at a different
+    // world hour casts a different shadow pass — measured 81,247 at one hour and 193,777 at
+    // another, on an identical view. The MAIN pass is camera-bound and does not move. So this file
+    // asserts the identity and prints the numbers; it does not pin either total.
     expect(f.triangles).toBe(f.mainTriangles + f.shadowTriangles);
     expect(f.shadowTriangles, "a world with no shadow pass is a world with the wrong lights").toBeGreaterThan(0);
   });
