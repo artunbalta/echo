@@ -33,6 +33,13 @@
  * piece of state rather than two pieces of state that can disagree about whether a panel is up.
  * That mattered more than a convenience: ConsentCard promises "you can stop it at any time from the
  * inspector", and on a phone that sentence was false — consent could be given and never withdrawn.
+ *
+ * AND SINCE SOC-1.E THE PANEL ACTUALLY STOPS IT. C23 fixed the half of that sentence about getting
+ * the panel open; the other half was still false on EVERY device, because the panel had no control
+ * at all and `chain.revoke()` had a test and no caller. `onRevoke` is that caller. The mount hands
+ * it down because the mount owns the chain; this panel neither knows the chain nor imports it.
+ * `tests/e2e/consentRevoke.spec.ts` asserts the wire in a browser, because a component test cannot
+ * see whether the mount connected it — which is exactly how the promise stayed false for months.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -59,6 +66,18 @@ export interface InspectorProps {
   log: readonly MeasureLogEntry[];
   reactions?: readonly ReactionReading[];
   consent?: ConsentState;
+  /**
+   * Withdraw consent from inside the panel (SOC-1.E).
+   *
+   * ConsentCard promises "you can stop it at any time from the inspector". Until this prop existed
+   * `chain.revoke()` had a test and NO CALLER, so that sentence was false on every device and not
+   * only on a phone — C23 fixed the half about getting the panel open, and this is the other half.
+   * It is threaded from the mount that owns the chain straight to `chain.revoke()`.
+   *
+   * Given none, the control is NOT DRAWN. A button that stops nothing would be a second false
+   * promise in the same panel.
+   */
+  onRevoke?: () => void;
   userId?: string;
   /**
    * The walk layer's tally, which puts this panel in its station-less mode (see the header). It is
@@ -148,6 +167,7 @@ export default function Inspector({
   log,
   reactions = [],
   consent = "unset",
+  onRevoke,
   userId,
   walk,
   toggleKey = "`",
@@ -195,7 +215,7 @@ export default function Inspector({
   if (!open) return null;
 
   return (
-    <aside style={panel} tabIndex={-1} aria-label="measurement inspector" onMouseDown={(e) => e.preventDefault()}>
+    <aside style={panel} tabIndex={-1} aria-label="measurement inspector" data-consent={consent} onMouseDown={(e) => e.preventDefault()}>
       {/* Not a <button>, for the reason C23 records for the whole HUD: a focused button eats the
           spacebar, which is jump in this world. It shows only where the mount owns `open`, because
           an uncontrolled panel has nowhere to put the answer. */}
@@ -217,7 +237,7 @@ export default function Inspector({
           ×
         </div>
       ) : null}
-      <Header consent={consent} userId={userId} posterior={posterior} />
+      <Header consent={consent} userId={userId} posterior={posterior} onRevoke={onRevoke} />
       {walk ? (
         <WalkSection tally={tally} consent={consent} log={log} posterior={posterior} />
       ) : (
@@ -236,16 +256,57 @@ export default function Inspector({
 
 // ── header ──────────────────────────────────────────────────────────────────────
 
-function Header({ consent, userId, posterior }: { consent: ConsentState; userId?: string; posterior: Posterior | null }) {
+function Header({ consent, userId, posterior, onRevoke }: { consent: ConsentState; userId?: string; posterior: Posterior | null; onRevoke?: () => void }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-      <span style={{ color: ECHO, fontWeight: 700, letterSpacing: "0.04em" }}>inspector</span>
-      <span style={{ color: DIM }}>
-        consent {consent}
-        {userId ? ` · ${userId.slice(0, 8)}` : ""}
-        {posterior && !posterior.mocked ? ` · v${posterior.version ?? "?"}` : ""}
-      </span>
-    </div>
+    <>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ color: ECHO, fontWeight: 700, letterSpacing: "0.04em" }}>inspector</span>
+        <span style={{ color: DIM }}>
+          consent {consent}
+          {userId ? ` · ${userId.slice(0, 8)}` : ""}
+          {posterior && !posterior.mocked ? ` · v${posterior.version ?? "?"}` : ""}
+        </span>
+      </div>
+      {/* THE PROMISE, KEPT (SOC-1.E). Not a <button>, for the reason the close control gives above:
+          a focused button eats the spacebar, which is jump in this world. Drawn only while there is
+          something to stop AND the mount handed down a way to stop it. The right margin clears the
+          absolutely positioned × above it. */}
+      {onRevoke && consent === "accepted" ? (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8, marginRight: 34 }}>
+          <div
+            role="button"
+            aria-label="Stop the measurement"
+            data-consent-revoke
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onRevoke();
+            }}
+            style={{
+              padding: "3px 8px",
+              border: `1px solid ${RULE}`,
+              borderRadius: 4,
+              color: PARCHMENT,
+              cursor: "pointer",
+              touchAction: "manipulation",
+              font: "inherit",
+            }}
+          >
+            Stop measuring me
+          </div>
+        </div>
+      ) : null}
+      {/* WHAT A STOP DID AND, AS PLAINLY, WHAT IT DID NOT. `revoke()` drops the buffer, the sampler,
+          the collector and this panel's log, and writes telemetry:false to the shared key so /play's
+          gate reads it too. It does NOT recall rows already stored — the telemetry route records
+          before it forwards — and it does not remove the local id. Saying "erased" here would be the
+          next false sentence in a panel that has just finished paying for one. */}
+      {consent === "declined" ? (
+        <div data-consent-stopped style={{ color: DIM, marginBottom: 8 }}>
+          Stopped. Nothing is sampled, nothing is buffered, and what this panel was holding was
+          dropped. What was already sent is not recalled by this — erase it at /account.
+        </div>
+      ) : null}
+    </>
   );
 }
 
