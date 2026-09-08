@@ -57,6 +57,21 @@ import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
 import type { TouchControlHandle } from "./touchInput";
 import type { ReactionReading } from "@/components/world/Inspector";
+import { WORLD_EPOCH, worldClock, type WorldClock } from "@echo/planet";
+
+/**
+ * The one clock every mount of this world reads (DECISIONS C24).
+ *
+ * NO FETCH, AND THAT IS THE POINT. The epoch is a constant of the world in the same way the seed
+ * is, so the client derives the hour from `WORLD_EPOCH` directly and the registry writes the SAME
+ * value into `world_manifest.created_at` when it is seeded. `/api/planet/world` reports it so a
+ * disagreement between the two is visible rather than silent; nothing on the render path waits for
+ * it, because an hour that arrives one round-trip late is an hour two people did not share.
+ *
+ * This replaces `skyLayer({ timeOfDay: 0.38 })`. `0.38` was never a decision — it was a screenshot
+ * of 09:07 pinned into a constructor, and every mount of every parcel started its own morning there.
+ */
+const WORLD_CLOCK = worldClock(WORLD_EPOCH);
 
 /** What the slice needs from whoever mounted it: somewhere to put its readings and its beats. */
 export interface ParcelSliceOptions {
@@ -78,6 +93,11 @@ export interface ParcelWorldOptions {
   touch?: TouchControlHandle;
   /** Present only where the demo's two structures stand. Absent: an ordinary parcel, no stations. */
   slice?: ParcelSliceOptions;
+  /**
+   * The world's clock (DECISIONS C24). Defaults to the planet's own epoch, which is what every
+   * mount should use; a test passes its own to hold an hour still.
+   */
+  clock?: WorldClock;
 }
 
 /** The name of the only station set there is. A flag naming a SET, not a mood, so a URL is readable. */
@@ -100,9 +120,9 @@ export function sliceOptionsFor(
 }
 
 /** Shared geography and art for landing previews and playable parcels. */
-export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch }: Pick<ParcelWorldOptions, "slice" | "inputEnabled" | "touch"> = {}): WorldLayer[] {
+export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch, clock = WORLD_CLOCK }: Pick<ParcelWorldOptions, "slice" | "inputEnabled" | "touch" | "clock"> = {}): WorldLayer[] {
   return [
-    skyLayer({ timeOfDay: 0.38 }),
+    skyLayer({ clock }),
     terrainLayer(),
     slice ? scatterLayer(DEMO_SCATTER) : scatterLayer(),
     canopyClosureLayer(),
@@ -112,8 +132,8 @@ export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch }: P
   ];
 }
 
-export function parcelLayers({ chain, slice, inputEnabled = true, touch }: ParcelWorldOptions): WorldLayer[] {
-  const layers = parcelEnvironmentLayers({ slice, inputEnabled, touch });
+export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock = WORLD_CLOCK }: ParcelWorldOptions): WorldLayer[] {
+  const layers = parcelEnvironmentLayers({ slice, inputEnabled, touch, clock });
   const player = layers.find(layer => layer.name === "player") as ReturnType<typeof playerLayer>;
   const playerTile = () => { const at = player.position(); return { x: at.x, y: at.y }; };
   layers.push(walkLayer({ chain, playerTile }));

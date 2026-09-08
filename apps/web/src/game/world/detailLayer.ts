@@ -49,6 +49,33 @@ function installDetailFade(material: THREE.Material, radius: number, transition:
   return () => { material.onBeforeCompile = compile; material.customProgramCacheKey = cacheKey; material.needsUpdate = true; };
 }
 
+/**
+ * Upload the prefix that will be DRAWN, never the whole class — scatterSplit's `packInto` idiom.
+ *
+ * `needsUpdate = true` with no update range means "send the whole array" (three's WebGLAttributes),
+ * and this layer flagged three buffers that way every frame, so a class of 3.91 MiB of matrices was
+ * re-sent 60 times a second to draw a few hundred of them. Measured over a 19-frame walk: 89.43 MiB
+ * handed to the GPU to draw 7.73 MiB, 11.6x — and 99.3x standing perfectly still, because
+ * `packInto`'s unchanged path writes nothing at all and the stale unranged flag re-sent everything
+ * anyway.
+ *
+ * THE ZERO GUARD IS LOAD-BEARING and it sits BEFORE the clear, which is the opposite of `packInto`.
+ * `packInto` owns its attribute; this layer does NOT own `pair.source`. Clearing a range `packInto`
+ * has just added, while its version bump stands, leaves the attribute dirty with an EMPTY range
+ * list — which is exactly the "send everything" case. That costs 0.74 MiB on the spawn frame, where
+ * buttress-tree and canopy-palm both partition to far == 0. And it may not be replaced by an
+ * unconditional `addUpdateRange(0, 0)` either: three passes the count through to `bufferSubData`,
+ * where a length of 0 on that overload means "the remainder of the source".
+ *
+ * The unit is FLOATS, not instances and not bytes — sixteen per matrix, same as `packInto`.
+ */
+function uploadPrefix(attribute: THREE.InstancedBufferAttribute, instances: number) {
+  if (instances === 0) return;
+  attribute.clearUpdateRanges();
+  attribute.addUpdateRange(0, instances * 16);
+  attribute.needsUpdate = true;
+}
+
 export function detailLayer(): WorldLayer {
   const pairs: Pair[] = [];
   const time = { value: 0 };
@@ -97,7 +124,12 @@ export function detailLayer(): WorldLayer {
       for (const pair of pairs) if (pair.count >= 0) {
         (pair.source.instanceMatrix.array as Float32Array).set(pair.saved.subarray(0, pair.count * 16));
         pair.source.count = pair.count;
-        pair.source.instanceMatrix.needsUpdate = true;
+        // NO DIRTY FLAG HERE, and this is not a tidy-up. PlanetWorld runs every layer's `update`,
+        // then every layer's `beforeRender`, then renders — nothing draws in between — and this
+        // layer's own `beforeRender` always shortens `source.count` again and re-ranges that prefix,
+        // so the full restored array is never what the GPU is asked for. Flagging it here would also
+        // make the ranges below a no-op on a still frame, because the leftover unranged flag would
+        // re-send the whole class anyway. Anyone reordering that frame loop owes this comment a look.
         pair.count = -1;
       }
     },
@@ -108,7 +140,7 @@ export function detailLayer(): WorldLayer {
         pair.saved.set(low.subarray(0, pair.count * 16));
         const { near, far } = partitionDetail(pair.saved, pair.count, low, pair.detail.instanceMatrix.array as Float32Array, ctx.camera.position, pair.radius, pair.transition);
         pair.source.count = far; pair.detail.count = near;
-        pair.source.instanceMatrix.needsUpdate = true; pair.detail.instanceMatrix.needsUpdate = true;
+        uploadPrefix(pair.source.instanceMatrix, far); uploadPrefix(pair.detail.instanceMatrix, near);
       }
     },
     dispose() {
