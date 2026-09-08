@@ -15,6 +15,7 @@ import {
   localMToTile,
   MOVER,
   nextState,
+  parcelMovement,
   stepMover,
   tileToLocalM,
   type MoveInput,
@@ -144,4 +145,44 @@ test("the frame flips y and scales by TILE_M, and round-trips", () => {
   const [x, y] = localMToTile(16, -8);
   assert.ok(Math.abs(x - 10) < 1e-12 && Math.abs(y - 5) < 1e-12);
   assert.equal(TILE_M, 1.6);
+});
+
+test("the parcel's walk-to-run ramp comes from the profile the parcel passes, not from MOVER", () => {
+  // DECISIONS C23 and touchInput.ts both once quoted 86 ms, which is MOVER.ACCEL's arithmetic for
+  // the LEGACY profile. playerLayer.ts:105,135 installs parcelMovement and :180 passes it to
+  // stepMover, so the ramp those comments are about is this one. The tile scale cancels out of the
+  // ratio, so it is one number at every tileM — pinned across four of them, because a number
+  // re-pinned to a single constant can drift with that constant.
+  const RAMP_S = 2.55 / 7;
+  for (const tileM of [1, 1.6, 2, 3.2]) {
+    const p = parcelMovement(tileM);
+    assert.ok(
+      Math.abs((p.run - p.walk) / p.accel - RAMP_S) < 1e-12,
+      `the ramp is scale free; tileM ${tileM}`,
+    );
+  }
+  const profile = parcelMovement(TILE_M);
+  assert.ok(Math.abs(profile.walk - 1.03125) < 1e-12);
+  assert.ok(Math.abs(profile.run - 2.625) < 1e-12);
+  assert.ok(Math.abs(profile.accel - 4.375) < 1e-12);
+
+  // And the mover really takes that long. Settle at the walk speed, then hold run and time the gap.
+  // Deliberately NOT through this file's `run()` helper, which takes no profile — that is exactly
+  // how the record drifted from the code in the first place.
+  const dt = 1 / 600;
+  let s = initialMover(0, 0);
+  for (let i = 0; i < 1200; i++) s = stepMover(s, east, dt, open, undefined, profile);
+  assert.ok(Math.abs(Math.hypot(s.vx, s.vy) - profile.walk) < 1e-9, "settled at the walk speed");
+  let t = 0;
+  while (Math.hypot(s.vx, s.vy) < profile.run - 1e-9 && t < 2) {
+    s = stepMover(s, { ...east, run: true }, dt, open, undefined, profile);
+    t += dt;
+  }
+  assert.ok(Math.abs(t - RAMP_S) <= dt + 1e-9, `crossed the gap in ${(t * 1000).toFixed(1)} ms`);
+  assert.equal(s.state, "run");
+
+  // The number the record used to carry is MOVER's, and MOVER's speeds are not on this route.
+  const legacy = (MOVER.RUN - MOVER.WALK) / MOVER.ACCEL;
+  assert.ok(Math.abs(legacy - 2.4 / 28) < 1e-12, "86 ms was MOVER.ACCEL's arithmetic");
+  assert.ok(Math.abs(RAMP_S / legacy - 4.25) < 1e-12, "the parcel's ramp is 4.25x the old figure");
 });

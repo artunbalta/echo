@@ -33,9 +33,30 @@ export const TICK_MS = 1000 / WORLD.TICK_HZ;
 /**
  * The tile quantum (contract, plan §4 / F7). Gameplay is (x, y) in TILES; the planet is in metres.
  * One tile is this many metres, everywhere the two meet: the mover, the terrain sampler, the
- * locomotion sampler's inputs. The value is not aesthetic: the avatar is 1.05 units tall, a
- * person is about 1.7 m, and every locomotion scalar W was anchored on (speedVar over MOVE_SPEED,
- * novel_tile_ratio over rounded tiles) keeps its meaning only if a tile stays a tile.
+ * locomotion sampler's inputs. The value is not aesthetic; two things are pinned to it.
+ *
+ * THE BODY. The rig is authored in tile units (UNITS_PER_TILE = 1, BODY_H = 1.05 —
+ * game/three/character.ts) and the world it stands in is metres, so a person is
+ * 1.05 * TILE_M = 1.68 m. Move the quantum and the planet is peopled by giants or by children.
+ *
+ * THE MEASUREMENT, and this is the half this comment used to argue WRONGLY (SOCIETY-PLAN §3 item 4,
+ * corrected under SOC-0.C). `novel_tile_ratio` is tiles new to the day over the distinct ROUNDED
+ * tile cells touched in one 1.5 s window — game/telemetry.ts's LocomotionSampler, which BOTH the
+ * parcel (world/measure.ts) and /play (WorldClient) feed. Its denominator is therefore a speed in
+ * TILES PER SECOND: `WORLD.MOVE_SPEED` on the networked route, and 1.65 / tileM on the parcel route
+ * (`parcelMovement`), where tileM is this constant. The frozen W loads that scalar 0.40 on openness,
+ * the fourth largest of its 66 loadings, behind `path_tortuosity` at 0.47 — which is computed over
+ * the same time-boxed window and is speed-coupled for the same reason. Measured: the SAME
+ * dead-straight 12 s walk emits mean `novel_tile_ratio` 0.625 at TILE_M 1.6, 0.825 at 0.8 and 0.417
+ * at 3.2 — one walk read as three different people. That is why both constants are frozen: moving
+ * either re-scales a feature the frozen model was fitted on while the player does nothing
+ * differently. Pinned by apps/web/tests/locomotionQuantum.test.mts.
+ *
+ * NOT the reason, whatever this comment said before: `speedVar`. It is computed (WorldCore.ts) and
+ * shipped in `movement_sample`'s raw signals, but `ingest.py` leaves it "UNMAPPED here on purpose"
+ * and no speed feature exists in the persona feature list. NO W COLUMN WAS EVER ANCHORED ON IT, so
+ * the old sentence defended two frozen constants with a mechanism that does not exist — which made
+ * the real constraint look weaker than it is.
  */
 export const TILE_M = 1.6;
 

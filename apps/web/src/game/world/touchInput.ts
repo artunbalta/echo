@@ -25,11 +25,16 @@
  * follow camera and the controller are already tested under covers the phone for free.
  *
  * THE STICK CANNOT BE ANALOG, and it is worth saying why here rather than discovering it later.
- * stepMover normalises the direction it is given and picks its speed from the boolean `run`, and
- * MOVER.WALK is frozen for parity with WorldRoom.integrate on the server. So deflection can buy
- * exactly one thing — the run flag — and a later change that makes the mover speed-proportional
- * would drift the client off the authority on the first step. Hence `runFrom`, with hysteresis,
- * rather than a fourth button.
+ * stepMover normalises the direction it is given — `ux = dx/len`, `uy = dy/len` — and then picks
+ * its speed from the boolean `run` alone, out of exactly two numbers in the profile. Deflection
+ * magnitude is discarded before it reaches the integrator, so a half-deflected thumb walks at
+ * precisely the speed a fully deflected one does. That is the whole reason, and it is a fact about
+ * the mover rather than about the wire. It is NOT a parity argument: this comment used to say
+ * MOVER.WALK was frozen for parity with WorldRoom.integrate, and that was already false here when
+ * it was written — playerLayer installs parcelMovement(ctx.frame.tileM), not MOVER, so the parcel
+ * walks at 1.031 tiles/s against the server's WORLD.MOVE_SPEED of 4, and the parcel route never
+ * joins a WorldRoom at all. So deflection can buy exactly one thing, the run flag. Hence `runFrom`,
+ * with hysteresis, rather than a fourth button.
  *
  * THE PINCH CONSTANT IS COMPUTED, NEVER WRITTEN DOWN. FollowInput.zoom is in WHEEL pixels and
  * stepFollowCamera spends them as `distance * zoomPerNotch^(zoom/100)`. For the boom to track the
@@ -77,11 +82,19 @@ export interface TouchOptions {
  * pitchMax 1.35, is already only a 258 px sweep, and gaining it up would turn the 20 px of vertical
  * wobble in a horizontal swipe into 12 degrees of unasked-for pitch instead of 7.
  *
- * RUN HYSTERESIS IS NOT DECORATION. MOVER.ACCEL is 28 tiles/s² and the walk-to-run gap is 2.4
- * tiles/s, so the mover crosses it in 86 ms; a thumb resting on the rim of a single threshold would
- * flip the state several times a second, and poseCharacter drives leg swing off that speed, so the
- * flicker is visible on the body. The 0.15 band is about 7 px of thumb travel, twice a capacitive
- * screen's resting jitter.
+ * RUN HYSTERESIS IS NOT DECORATION, AND THE PROFILE IT COMES FROM IS THE PARCEL'S. playerLayer
+ * installs parcelMovement(ctx.frame.tileM) and hands it to stepMover, so MOVER is the LEGACY
+ * profile on this route and its ACCEL of 28 is not the number to reason with. parcelMovement is
+ * 1.65 m/s walk, 4.2 m/s run, 7 m/s² accel, so the walk-to-run gap is 2.55 m/s and the mover takes
+ * 2.55 / 7 = 364 ms to cross it. The tile scale cancels out of that ratio, so it is 364 ms at every
+ * tileM. This comment used to claim 86 ms from MOVER.ACCEL; the true figure is 4.25x longer, which
+ * makes the argument stronger rather than weaker. What flickers is not the state — nextState flips
+ * to "run" as soon as speed passes profile.walk + 0.01, about 2 ms in — it is playerLayer's
+ * runBlend, `(velocity - walk) / (run - walk)`, which poseCharacter drives leg swing and cadence
+ * off and which needs the full 364 ms to travel. A thumb resting on the rim of a single threshold
+ * would restart that third of a second several times a second, and it is visible on the body. The
+ * 0.15 band is about 7 px of thumb travel, twice a capacitive screen's resting jitter.
+ * tests/controller.test.mts pins the 364 ms against parcelMovement so it cannot drift again.
  */
 export const TOUCH: TouchOptions = {
   stickRadiusPx: 56,

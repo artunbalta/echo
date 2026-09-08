@@ -73,7 +73,9 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
 
   // ── FLOW 3 — the clearing (stage 3) ──────────────────────────────────────────────────────────
   courtesy_warm_server: { channel: "G", cue: "G11", stage: 3, polarity: "take", axisPrior: "warmth(HIGH) — to one who cannot repay" },
-  transact_neutral: { channel: "G", cue: "G12", stage: 3, polarity: "take", axisPrior: "neutral transaction" },
+  // G15, not G12: the catalogue's G12 is "reciprocity tracking" over repeated exchange, which this
+  // is not (SOC-6.G). G15 is the neutral pole of G11's courtesy gradient, which is what it reads.
+  transact_neutral: { channel: "G", cue: "G15", stage: 3, polarity: "take", axisPrior: "neutral transaction" },
   curt_to_server: { channel: "G", cue: "G11", stage: 3, polarity: "refuse", axisPrior: "low warmth to low-status" },
   // the SAME courtesy act toward a high-status figure — the gradient vs the server isolates warmth
   // from status-management (dilemma a). Same channel/cue, different counterpart_status in context.
@@ -109,14 +111,28 @@ export const SOCIAL_CUES: Record<string, SocialCueDef> = {
   prepare_before_travel: { channel: "C", cue: "C7", stage: 2, polarity: "take", axisPrior: "planning/conscientiousness" },
 
   // ── STAND cues — the food/dining stand (F3 clearing, reused F4/F6 community: eat / treat / host) ──
+  // G13/G14 shipped ahead of the catalogue and had no rows in it at all until SOC-6.G wrote them.
+  // They are RATIFIED at the ids they already carry rather than renumbered — never renumber.
   eat_meal: { channel: "G", cue: "G13", stage: 3, polarity: "take", axisPrior: "self-feeding (low social)" },
   treat_other: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "generosity (treat vs self) → warmth" },
   host_table: { channel: "G", cue: "G14", stage: 3, polarity: "take", axisPrior: "hosting → warmth/dominance/energy" },
 
   // ── STAND cues — the workplace/business stand (F1/F5: labour / vocation / time-allocation) ──
-  work_shift: { channel: "C", cue: "C8", stage: 1, polarity: "take", axisPrior: "industriousness → energy/formality" },
-  take_vocation: { channel: "C", cue: "C9", stage: 1, polarity: "take", axisPrior: "commit to a craft → persistence/formality/intellect" },
-  shirk_work: { channel: "C", cue: "C8", stage: 1, polarity: "refuse", axisPrior: "avoidance / low-industriousness" },
+  // C11/C12, NOT C8/C9 (SOC-6.G). The catalogue's C8 is "deliberation under pressure" and C9 is
+  // "tempo consistency" (cue-catalog.md), and coverage-matrix.md builds axis claims on those
+  // meanings — so these three were squatting on two other people's cues, which is the one thing
+  // cue-catalog.md:3 forbids: "never renumber; deprecate by striking through and appending a
+  // successor, never reuse." Renumbered HERE onto new catalogue rows, never there.
+  //
+  // SAFE TO MOVE, and the reason is narrower than "ingest ignores cue ids" — it does not. These
+  // four actions (with transact_neutral below) are each dispatched by ACTION NAME in ingest.py's
+  // `_social_features` and its embodied twin, which return handled and skip the generic block. The
+  // generic block DOES read cue-id prefixes, but only F1/F3/F7/F9, D11, G11, H1 and K1/K11 — and
+  // C8, C9, C11, C12, G12 and G15 are none of them. So no posterior moves.
+  // cueCatalog.test.ts is what stops the squatting happening again.
+  work_shift: { channel: "C", cue: "C11", stage: 1, polarity: "take", axisPrior: "industriousness → energy/formality" },
+  take_vocation: { channel: "C", cue: "C12", stage: 1, polarity: "take", axisPrior: "commit to a craft → persistence/formality/intellect" },
+  shirk_work: { channel: "C", cue: "C11", stage: 1, polarity: "refuse", axisPrior: "avoidance / low-industriousness" },
   bargain_hard: { channel: "F", cue: "F9", stage: 3, polarity: "take", axisPrior: "dominance/economic-aggression" },
   fairness_split_fair: { channel: "F", cue: "F7", stage: 3, polarity: "take", axisPrior: "fairness/warmth" },
   // grabbing the larger share is an AFFIRMATIVE self-interested act — "take", not a refusal twin.
