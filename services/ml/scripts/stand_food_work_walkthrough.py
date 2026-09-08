@@ -35,9 +35,12 @@ CUES = {
     "treat_other":   ("F", "F7",  3, "take",   "peer", "generosity → warmth"),
     "host_table":    ("G", "G14", 3, "take",   "peer", "hosting → warmth/dominance/energy"),
     "eat_meal":      ("G", "G13", 3, "take",   "peer", "self-feeding (low social)"),
-    "work_shift":    ("C", "C8",  1, "take",   "none", "industriousness → energy/formality"),
-    "take_vocation": ("C", "C9",  1, "take",   "none", "commit to a craft → persistence/formality"),
-    "shirk_work":    ("C", "C8",  1, "refuse", "none", "avoidance / low-industriousness"),
+    # C11/C12, not C8/C9 — these three were squatting on "deliberation under pressure" and "tempo
+    # consistency" (SOC-6.G). The ingest dispatches on the action string, never the cue id, so the
+    # posteriors this script prints are unchanged by the move; that is asserted, not assumed.
+    "work_shift":    ("C", "C11", 1, "take",   "none", "industriousness → energy/formality"),
+    "take_vocation": ("C", "C12", 1, "take",   "none", "commit to a craft → persistence/formality"),
+    "shirk_work":    ("C", "C11", 1, "refuse", "none", "avoidance / low-industriousness"),
 }
 
 

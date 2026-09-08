@@ -65,14 +65,20 @@ export const MOVER = {
    * crossed in exactly the same time and there is no "slower uphill" for a number here to express.
    * And MOVE_SPEED is not this file's to spend: WorldRoom.integrate runs the same constant on the
    * authority, so a client walking at a different one drifts from the server on the first step, and
-   * the locomotion sampler normalises speedVar by it, so changing it silently rescales a feature the
-   * frozen model was fitted on.
+   * the passive locomotion sampler counts distinct TILES per 1.5 s window, so changing it rescales
+   * `novel_tile_ratio` — a feature the frozen W loads 0.40 on openness. (This comment used to say
+   * "the sampler normalises speedVar by it". It does not; `speedVar` is routed nowhere and no W
+   * column was ever anchored on it. SOCIETY-PLAN §3 item 4, corrected under SOC-0.C. The real
+   * coupling is in TILE_M's own comment in @echo/shared.)
    */
   WALK: WORLD.MOVE_SPEED,
   /**
-   * Tiles per second when running. Above MOVE_SPEED on purpose, and flagged ⚑: the sampler's
-   * speedVar is normalised by MOVE_SPEED and clips at 1, so a run is a different locomotion regime
-   * from the one W was anchored on. Recorded in known-gaps by W5-5, not hidden here.
+   * Tiles per second when running. Above MOVE_SPEED on purpose, and flagged ⚑, but not for the
+   * reason first given here: `speedVar` is normalised by nothing, because it is routed nowhere.
+   * What a run really moves is the tile count per 1.5 s window — measured 2.5 tiles/window at the
+   * parcel profile's walk against 4.5 at its run — and that is `novel_tile_ratio`'s denominator, so
+   * running IS a different locomotion regime from the one W was anchored on, by a mechanism that
+   * exists. Recorded in known-gaps by W5-5, not hidden here.
    */
   RUN: WORLD.MOVE_SPEED * 1.6,
   /** Tiles per second per second, toward the desired velocity. */
