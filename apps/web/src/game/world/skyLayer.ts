@@ -52,6 +52,8 @@
 
 import * as THREE from "three";
 
+import { WORLD_DAY_S, timeOfDay as hourAt, type WorldClock } from "@echo/planet";
+
 import { PALETTE } from "../three/palette";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 
@@ -89,8 +91,15 @@ export const MIDNIGHT = 0;
  */
 export const KEY_DISTANCE_M = 420;
 
-/** A full turn of the sky, in seconds, at the default rate. Twelve minutes. */
-const DEFAULT_CYCLE_S = 12 * 60;
+/**
+ * A full turn of the sky, in seconds, at the default rate. Twelve minutes.
+ *
+ * IT IS THE WORLD'S DAY, and it is imported rather than written here (DECISIONS C24, L5). The number
+ * lived in this file for as long as the sky was the only thing that had an hour; a society that ages
+ * measures its lifespans in the same day, so there is one constant and it is in @echo/planet with
+ * the rest of the world's arithmetic. Moving it now rewrites every birth day on the planet.
+ */
+const DEFAULT_CYCLE_S = WORLD_DAY_S;
 
 // ── colour, and only colour that the bible already owns ─────────────────────────
 
@@ -423,8 +432,21 @@ void main() {
 // ── the layer ───────────────────────────────────────────────────────────────────
 
 export interface SkyLayerOptions {
-  /** The hour to start at, in [0, 1). Defaults to the bible's dusk. */
+  /** The hour to start at, in [0, 1). Defaults to the bible's dusk. Ignored when `clock` is given. */
   timeOfDay?: number;
+  /**
+   * The world's clock (DECISIONS C24). Given one, the hour is DERIVED from the epoch every frame
+   * rather than accumulated from a starting value.
+   *
+   * This is the difference between a sky and a shared sky. Accumulation is per mount: two people
+   * standing on the same ground each start their own morning and drift apart from there, which was
+   * survivable while a parcel held one person and is a fork the moment it holds two. Derivation has
+   * nothing to drift — the hour is a fact about the difference between two instants.
+   *
+   * `rate: 0` still freezes the sky, clock or no clock, because a screenshot has to be comparable
+   * to another screenshot and a test has to be able to hold an hour still.
+   */
+  clock?: WorldClock;
   /**
    * Cycles per second. The default is a full turn in twelve minutes, which is slow enough not to
    * strobe and fast enough that two minutes of play visibly moves the sun. Zero freezes the sky,
@@ -476,7 +498,9 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
   const fogNear = options.fogNearM ?? FOG_NEAR_M;
   const fogFar = options.fogFarM ?? FOG_FAR_M;
   let rate = options.rate ?? 1 / DEFAULT_CYCLE_S;
-  let time = wrapTime(options.timeOfDay ?? DUSK);
+  const clock = options.clock ?? null;
+  const derived = () => hourAt(clock as WorldClock, Date.now());
+  let time = wrapTime(clock !== null ? derived() : options.timeOfDay ?? DUSK);
 
   const current = createSkyState();
   let dome: THREE.Mesh | null = null;
@@ -608,7 +632,9 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
   const update = (dt: number, ctx: LayerContext) => {
     uniforms.uCloudTime.value += dt;
     if (rate !== 0) {
-      time = wrapTime(time + rate * dt);
+      // With a clock, READ the hour; without one, advance it. `dt` never touches `time` on the
+      // shared path, so a dropped frame, a backgrounded tab and a slow phone all agree on the hour.
+      time = clock !== null ? wrapTime(derived()) : wrapTime(time + rate * dt);
       apply();
     }
     // The dome rides the camera, so a player who walks two kilometres never reaches the edge of the

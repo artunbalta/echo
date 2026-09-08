@@ -23,6 +23,9 @@ export async function GET() {
     triggerFraction: world.triggerFraction,
     minLandFraction: world.minLandFraction,
     commonsResolution: world.commonsResolution ?? world.startResolution,
+    // The world's epoch (DECISIONS C24). Reported so that a client deriving the hour from
+    // @echo/planet's WORLD_EPOCH and a registry row written by the seed script can be SEEN to agree.
+    epoch: world.createdAt,
     seaLevel: calibration.seaLevel,
     peakElevation: calibration.peakElevation,
     commons: Object.fromEntries(commons.choices.map((c) => [c.cell, c.name])),
