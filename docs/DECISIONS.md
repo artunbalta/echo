@@ -1339,8 +1339,8 @@ simply red, and had been.
 MEASURED, Apple M4 Pro, macOS 15.6, headless Chromium via Playwright 1.62.1, at the real parcel
 spawn, worst of eight headings:
 
-  route              whole frame      main pass     shadow pass    ceiling (C16)
-  ordinary parcel      907,250         664,805        242,445        600,000
+  route                     whole frame   main pass   shadow pass   ceiling (C16)
+  ordinary 8482589            907,250      664,805       242,445       600,000
   demo cell            695,457         489,459        205,998        600,000
 
   after the two changes taken in the same pass (SOC-1.B's patch cull and SOC-1.C's ranged upload):
@@ -1478,7 +1478,7 @@ pass and an instrument that overwrote it would double the frame it was sent to m
 
 MEASURED at the spawn view, headless Chromium, 1280x720 at pixel ratio 1:
 
-  ordinary parcel — whole 559,380 tri / 103 calls   (main 488,189 · shadow 71,191)
+  ordinary 8482589 — whole 559,380 tri / 103 calls   (main 488,189 · shadow 71,191)
     layer         main tri   calls      shadow tri   calls
     detail         205,466       9               0       0
     meadow         171,600      22               0       0
@@ -1519,6 +1519,10 @@ attributes with eleven separate round-trips, and the host rewrites all of them o
 interval — so a run came back with `whole` 628,043 against `main + shadow` 628,636. That is not an
 instrument disagreeing with itself, it is two frames read as one. The reader takes `dataset` in a
 single synchronous evaluation now, which the interval's own write cannot interleave with.
+
+⚠️ AND THE CELL IS NAMED, WHICH THIS ENTRY ORIGINALLY DID NOT DO. "The ordinary parcel" is two
+different cells in this suite and they differ by a factor of 1.7 at their worst headings — C36.
+Everything here is `8482589ffffffff`.
 
 THESE ARE NOT C28's NUMBERS AND MUST NOT BE QUOTED AS THEM. C28's 907,250 is the WORST of eight
 headings walked at the spawn; this is the spawn view alone, standing still, which is the cheapest
@@ -1812,6 +1816,78 @@ NOT DECIDED HERE, and flagged where a reader will meet it: `messages.text` is th
 content of a conversation and the most sensitive row in the schema. It is swept on the same clock as
 everything else, which is the conservative option available today — but whether it should exist at
 all, given ConsentCard's promise to read "never what you type", is SOC-5.D's question and is open.
+
+## C36 — the frame that breaks the budget, per layer, and it is not the layer anyone was aiming at
+
+Completes SOC-1.A's machine half. `C28` measured WHAT the worst frame costs and `C31` measured WHERE
+a frame goes — but C31's split was taken at the SPAWN VIEW, standing still, which is the cheapest
+frame either route ever draws. So the attribution existed for a frame that fits and did not exist
+for the frame that does not. This is the second one.
+
+Measured over a full 24-heading turn, sky frozen at DUSK, pixel ratio 1, headless Chromium.
+
+  ordinary 8482589 — worst of 24 at -75 deg: 921,050 tri / 103 calls  (main 679,229 · shadow 241,821)
+    layer            main tri  calls     shadow tri  calls
+    detail            255,481      6              0      0
+    meadow            171,600     22              0      0
+    scatter           153,678     16        125,662      3
+    terrain            80,406      4        100,303      5
+    player             15,856     23         15,856     23
+
+  ordinary 847db45 — worst of 24 at +56 deg: 1,580,189 tri / 109 calls  (main 1,471,548 · shadow 108,641)
+    detail          1,077,608      8              0      0
+    meadow            163,800     21              0      0
+    scatter           129,850     23         72,346      4
+    terrain            82,226      5         20,439      1
+    player             15,856     23         15,856     23
+
+  demo             — worst of 24 at -171 deg: 867,015 tri / 119 calls  (main 658,277 · shadow 208,738)
+    detail            254,092      6              0      0
+    meadow            156,000     20              0      0
+    scatter           150,381     16         93,633      3
+    terrain            79,382      5         99,117      5
+    player             15,856     23         15,856     23
+    slice                 358     12            132      5
+
+FIVE THINGS, AND THE FIRST ONE MAKES C28 AND C31 IMPRECISE.
+
+1. **"THE ORDINARY PARCEL" IS TWO DIFFERENT CELLS.** `scatterSplit.spec.ts` measures
+   `8482589ffffffff`; `demoUrl.ORDINARY_CELL` is `847db45ffffffff`. At their worst headings they are
+   **921,050 and 1,580,189** — a factor of 1.7 between two parcels the suite calls by the same name.
+   C28's 907,250 is the FIRST cell. Both entries say "the ordinary parcel" as though it were
+   singular, and a frame budget quoted without its cell is a budget about one parcel of 284,004.
+
+2. **`detailLayer` IS THE WHOLE PROBLEM ON THE WORSE CELL: 1,077,608 triangles in EIGHT DRAW CALLS,
+   68% of the entire frame.** That is 4.2x what the same layer costs on the other cell (255,481) and
+   5.2x what C31 measured at the spawn (205,466). Nothing else is close: meadow, scatter, terrain and
+   the rig together are 259,788 of that frame. **Every plan for making the frame fit was aimed at
+   the spawn view's biggest layers, and on the frame that actually breaks the ceiling the answer is
+   one layer.**
+
+3. **THE SHADOW PASS IS NOT THE PROBLEM**, which was the standing hypothesis and is refuted:
+   241,821 / 108,641 / 208,738 across the three. On the worst frame of all it is 7% of the total.
+   C20's "only things 1.7 m and taller cast a shadow" is doing its job — `detail` and `meadow` cast
+   nothing at all.
+
+4. **ONE PARCEL IS NOT ONE NUMBER.** On `847db45` the best heading is **596,810** — under C16's
+   ceiling — and the worst is 1,580,189. **A 2.6x swing on the same ground without moving.** Any
+   figure quoted for "the frame" that does not say which heading is quoting one twenty-fourth of the
+   answer.
+
+5. **THE DEMO IS ONE DRAW CALL FROM THE CEILING: 119 of 120.** Not triangles — calls. So the
+   draw-call budget is already spent before a second body is drawn, and C31's finding that a body
+   costs 46 calls of whole frame is not a future problem on that route.
+
+THE INSTRUMENT WAS CHECKED AGAINST ITSELF before any of this was written down. The per-object
+attribution hooks every drawable, so the obvious worry is that it perturbs the frame it measures.
+Measured: the same sweep at `?debug=render` (frame only, no per-object hooks) and `?debug=layers`
+returns **1,580,189 at both**, identical to the triangle. The tool is not in the reading.
+
+WHAT THIS CHANGES FOR SOC-4. The question was "cut detail or cut meadow"; the answer is that on the
+frame that fails, **`detailLayer` is 68% of it and everything else is rounding**. That makes SOC-4's
+blocker one layer's LOD behaviour rather than a general fidelity negotiation — and `detailLayer`
+already sizes its mesh at the full class count and partitions every frame, which is where to look
+first. **This entry does not take that decision**; it removes the guesswork from it.
 
 
 ## Still open
