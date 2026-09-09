@@ -1889,6 +1889,69 @@ blocker one layer's LOD behaviour rather than a general fidelity negotiation —
 already sizes its mesh at the full class count and partitions every frame, which is where to look
 first. **This entry does not take that decision**; it removes the guesswork from it.
 
+## C37 — the detail radius is NOT the lever, and the reason is a missing LOD
+
+C36 found `detailLayer` is 68% of the frame that breaks the budget, so the obvious next move was to
+cut its radius. **The measurement says the opposite of what was expected, and the expectation is
+recorded because being wrong is the finding.**
+
+THE NUMBER HAD NO DERIVATION. `detailLayer` picks 180 m for six tree classes, 75 m for larger rocks
+and shrubs, 34 m for everything else, from a bare ternary over two hardcoded id lists. The only
+record of those numbers anywhere is a descriptive sentence — "Trees retain detail to 180 m" — which
+says what the code does, not why. Meanwhile C22 derived `lod.farM` for every class against a measured
+pixel budget, and `tests/helpers/farBand.mts` exists as "the measurement DECISIONS C22 asks for", kept
+so the shipped table is falsifiable rather than remembered. **One LOD boundary in this renderer was
+measured and the other was a literal.**
+
+SO IT WAS DERIVED, BY C22'S METHOD, UNCHANGED. Same rasteriser, same twelve azimuths, same fog
+weighting, same bisection, same 2-pixel budget — only the pair differs: `farBand` asks where a form
+and its impostor CARD stop differing, this asks where a class's DETAIL form and its ORDINARY form do.
+At 2 px over the 800 and 1080 viewports:
+
+  broadleaf     ships  180 m   derived  404 m    1,376 tri vs 22   (62.5x)
+  buttress-tree ships  180 m   derived  404 m      361 tri vs 31   (11.6x)
+  conifer       ships  180 m   derived  392 m      236 tri vs 20   (11.8x)
+  acacia        ships  180 m   derived  384 m      276 tri vs 30   ( 9.2x)
+  canopy-palm   ships  180 m   derived  379 m      100 tri vs 20   ( 5.0x)
+  boulder       ships   75 m   derived  383 m      348 tri vs 28   (12.4x)
+  thicket       ships   75 m   derived  377 m      416 tri vs 20   (20.8x)
+  grass-tuft    ships   34 m   derived  296 m      410 tri vs  4   (102.5x)
+  fern          ships   34 m   derived  363 m       70 tri vs  6   (11.7x)
+
+**EVERY SHIPPED RADIUS IS FAR INSIDE ITS DERIVED ONE — 0.1x to 0.7x.** The radii are conservative,
+not generous. **Trimming them is visibly lossy by this repo's own measure**, and the screen-door
+crossfade at 180 m is already masking a switch that the method says is well above the budget there.
+
+THE REAL FINDING IS THE RATIO IN THE LAST COLUMN. The ordinary forms are 4 to 36 triangles and the
+detail forms are 38 to 1,376 — **up to 62x for a broadleaf and 102x for a grass tuft. There is no
+middle form.** A class is either a 22-triangle blob or a 1,376-triangle tree, so the switch is
+enormous wherever it is put, which is exactly why the derivation pushes it out past 400 m. C22 gave
+every class a far-band impostor and nobody gave any class a mid-band.
+
+**So the lever for C36's 1,077,608 triangles is the GAP, not the radius.** A middle form would be
+invisible where it mattered and cheap where it counted; moving 180 m is neither.
+
+⚠️ THE CAVEAT, because the numbers above are precise and the question is not the one they were built
+for. `switchPixels` was written to compare a form against its own impostor card — a flat billboard
+made to match it. Detail-versus-ordinary is a different comparison, and the derived distances should
+be read as "these two shapes are very different" rather than as certified LOD boundaries. The
+conclusion that the shipped radii are conservative survives that caveat by a wide margin; a proposal
+to set a radius TO 404 m would not.
+
+AND ONE THING THAT WAS SIMPLY WASTE. Two classes came back "already within 2 px at 10 m", which is not
+a marginal LOD: `dead-tree` and `driftwood` are **byte-identical** between `scatterDetail.ts` and
+`scatterGeometry.ts` — the same `merge` entries, 22 and 24 triangles, the same bounding box. The layer
+was allocating a second InstancedMesh at full class count for them, compiling two extra crossfade
+shader variants, partitioning every instance into it every frame, and drawing it to produce the same
+pixels — while installing the crossfade on the ordinary mesh too, so the pair dithered one form
+against itself. `dead-tree` is one of the six on the 180 m band.
+
+**MEASURED HONESTLY: removing them changed nothing outside the noise floor** — 1,580,189 triangles and
+109 calls before and after on `847db45`, with an intermediate run showing 106 that did not reproduce.
+At 22 and 24 triangles a win was never available. The fix is right because the work is pointless, not
+because it was expensive, and the comparison is by BYTES rather than by a list of ids, because a list
+is what goes stale the day someone gives `dead-tree` a real detail form.
+
 
 ## Still open
 
