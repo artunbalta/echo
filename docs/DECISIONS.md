@@ -1757,6 +1757,62 @@ laptop writing into production. Renamed to ML-owned names behind an explicit `EC
 before any write exists, because **a default that only fires once the feature lands is a default
 nobody tests.**
 
+## C35 — behavioural data lives 90 days; the profile lives while the account does
+
+Answers SOCIETY-PLAN SOC-2.G, taken 2026-09-09. `⚑22` had it as "OPEN, for a human and probably for
+a lawyer", and it is the human half that is answered here.
+
+WHAT THERE WAS BEFORE: **nothing.** Thirteen identity-keyed tables, no TTL, no expiry column, no
+pruning job anywhere in the schema, and no default in the code. `0011_behavioral_events` shipped a
+durable personal-data log and said so in its own header; SOC-2.D then gave four more tables rows.
+**"We keep everything forever because nobody chose" is a choice, and it was being made daily.**
+
+  RAW — what you did, when, with whom, in what words          **90 days**, then swept
+      behavioral_events · telemetry_events · interactions · messages · narrations
+  DERIVED — what was concluded about you                       kept while the account lives
+      persona_state · behavior_index · reward_model_state · autonomy_buckets ·
+      preference_pairs · meeting_outcomes
+
+THE SPLIT IS THE DECISION, not the number. The sensitive surface is the log; the eight axes are the
+product. An echo that forgets you every quarter is not an echo, and a world that keeps a
+minute-by-minute record of a named person forever is not defensible — so one expires on a clock and
+the other does not.
+
+WHAT IT COSTS, and it is a real price rather than a free win. `⚑21` measured a 240-row corpus with
+variance in only **7 of its 66 features**, so the second `W` re-anchor needs volume, and a rolling
+90-day window may never accumulate it. That is paid deliberately: `⚑21` also records that the
+re-anchor "is not schedulable until labels exist", so this trades a corpus for an event with no date
+against an exposure that is real every day. **If a date ever appears, this is the number to revisit
+first**, and revisiting it is a config change rather than a rebuild.
+
+THE LAWFUL BASIS IS CONSENT, which is what the card already asks for — and consent is what decides
+the next line rather than a label on top of it.
+
+ON WITHDRAWAL: `revoke()` stops all new sampling immediately, and rows already collected age out on
+the clock above. **It does not erase.** `/account` does that, on demand, and SOC-1.E was careful that
+the inspector's copy says so rather than implying a toggle undoes what was already sent. The
+alternative — withdrawal triggering the full cascade — would make a one-click control irreversible,
+which is a different kind of thing from a toggle and should not wear a toggle's clothes.
+
+A SUBJECT-ACCESS REQUEST RETURNS BOTH, CLEARLY SEPARATED: the derived profile and the raw events it
+was folded from, labelled as two different things. That is also what the inspector already shows a
+person live — the panel exists so the measurement is not a black box, and an access request should
+not be a worse view than the product's own.
+
+MECHANISM. `lib/retention.ts` holds the window, the two table sets and the sweep;
+`0016_retention_indexes.sql` indexes the five timestamp columns, because there is no TTL in Postgres
+(0007 wrote that sentence first) and a sweep without indexes is five sequential scans a day over the
+fastest-growing tables. **It is NOT its own cron entry**, and that is a constraint: Vercel's Hobby
+plan permits at most one cron run per day and rejects the WHOLE DEPLOYMENT if a schedule is more
+frequent — the twelve-hour outage `api/cron/waitlist-sweep` records in its own header. So the sweep
+rides the existing daily cron, and runs first, before the portrait path's several early returns,
+because a sweep that only happens on the quiet branch is a sweep that mostly does not happen.
+
+NOT DECIDED HERE, and flagged where a reader will meet it: `messages.text` is the actual typed
+content of a conversation and the most sensitive row in the schema. It is swept on the same clock as
+everything else, which is the conservative option available today — but whether it should exist at
+all, given ConsentCard's promise to read "never what you type", is SOC-5.D's question and is open.
+
 
 ## Still open
 

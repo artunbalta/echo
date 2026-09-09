@@ -936,7 +936,7 @@ and server-stamped vs client-asserted. **Neither is invented here, because nothi
 The first needs the interaction path to say who was watching; the second needs `WorldRoom` to mark
 what it stamped itself. The field is a dict so that day is an added key rather than a migration.
 
-### SOC-2.G — Retention window and profiling posture ☐ · *days — and SOC-2.D just widened it*
+### SOC-2.G — Retention window and profiling posture ✅ · *taken as C35; one question deferred to SOC-5.D*
 
 **⚑25, closed the same day it was created.** SOC-2.D started writing four tables that had **no row
 level security**, because all sixteen of `0001`'s tables predate `0007` — the migration that
@@ -947,9 +947,33 @@ default grant simulated: RLS off, anon reads the row; RLS on, anon reads nothing
 have it, zero policies, and nothing breaks because every table access in the repo uses the service
 role, which bypasses RLS.
 
-**That closes the exposure and NOT this item.** `0011`'s "no TTL, no expiry column, no pruning job"
-is now true of five more tables, and the rows SOC-2.D writes are exactly the derived profile a
-subject-access request would be about.
+**That closed the exposure and not the window. The window is now taken too — `C35`.**
+
+**RAW behavioural data lives 90 days; the DERIVED profile lives while the account does.** The split
+is the decision rather than the number: the sensitive surface is the log — what you did, when, with
+whom, in what words — and the eight axes are the product. An echo that forgets you every quarter is
+not an echo; a minute-by-minute record of a named person kept forever is not defensible.
+
+**The price is real and is paid deliberately.** `⚑21` measured a 240-row corpus with variance in
+only 7 of its 66 features, so the second `W` re-anchor needs volume and a rolling 90-day window may
+never accumulate it — traded against an exposure that is real every day, for an event `⚑21` says is
+"not schedulable until labels exist". If a date ever appears, this is the first number to revisit.
+
+**Basis: consent** — which is what the card already asks. So withdrawal stops sampling immediately
+and existing rows age out on the clock; it does not erase, because `/account` does that on demand
+and SOC-1.E was careful not to let a toggle imply otherwise. **A subject-access request returns
+both**, derived and raw, labelled as two different things — the inspector already shows a person
+that much live, and an access request should not be a worse view than the product's own.
+
+**Mechanism:** `lib/retention.ts` and `0016_retention_indexes.sql`, riding the EXISTING daily cron
+rather than adding one — Vercel's Hobby plan rejects the whole deployment for a second, which cost
+this repo twelve hours once. Eight tests, pinning the shape rather than the number, because a test
+asserting `=== 90` would fail the day someone legitimately changes it and teach them to edit the test.
+
+**☐ Still open, and named where a reader meets it:** `messages.text` is the typed content of a
+conversation and the most sensitive row in the schema. It is swept on the same clock as everything
+else, which is the conservative option available today — but whether it should exist at all, given
+ConsentCard's "never what you type", is SOC-5.D's question.
 
 `0011_behavioral_events.sql` ships a durable, identity-keyed log with `created_at`, **no TTL, no
 expiry column, no pruning job, RLS on with zero policies.** Erasure works; retention does not exist

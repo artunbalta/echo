@@ -1043,8 +1043,16 @@ posteriors is circular by construction: those posteriors were produced BY the co
   own retention gap SOC-2.G owns.* Choosing one is a legal decision with a
   product cost attached — a shorter window is safer and shrinks the corpus the re-anchor needs — and
   it is not an engineering default to pick quietly.
-- **Status:** OPEN, for a human and probably for a lawyer. **A retention policy is now an open
-  decision with no default.**
+- **Status:** the human half is ANSWERED — `DECISIONS.md` C35, 2026-09-09. Raw behavioural data
+  lives **90 days**; the derived profile lives while the account does; the basis is **consent**;
+  withdrawal stops sampling and lets existing rows age out rather than erasing (`/account` erases on
+  demand); a subject-access request returns **both**, labelled as two different things. Mechanism in
+  `apps/web/src/lib/retention.ts` + `0016_retention_indexes.sql`, riding the existing daily cron.
+  **The trade this entry named was priced and paid:** a rolling 90-day window may never reach the
+  corpus volume ⚑21 measured as necessary, and that is accepted against an exposure that is real
+  every day. If a re-anchor ever gets a date, this is the first number to revisit.
+  **Still OPEN, and genuinely for a lawyer:** whether 90 days is the right number for this
+  jurisdiction and this basis. The mechanism makes it a config change.
 
 ## ⚑ 23. `consistency` is an EXACT ZERO column, and the Ring of Gyges routes to nothing else (2026-09-07)
 
