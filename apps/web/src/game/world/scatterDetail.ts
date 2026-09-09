@@ -69,18 +69,39 @@ function merge(parts: readonly Part[]): THREE.BufferGeometry {
   return geometry;
 }
 
+/**
+ * Segment budget for the form being built right now: 1 is the close-range form, below 1 the mid
+ * band. Every primitive below is formula-driven — `card` bends by its own y, `stone` displaces by
+ * position — so a coarser segment count is the SAME SHAPE with fewer vertices, and none of the 26
+ * builders has to know, or be edited to say, which band it is being built for.
+ */
+let COARSE = 1;
+
+/** A segment count at the current budget, never below the floor that keeps a solid closed. */
+const seg = (n: number, floor: number) => Math.max(floor, Math.round(n * COARSE));
+
+/** Build at a reduced budget. Geometry construction is synchronous, so the knob cannot straddle. */
+export function coarsened(quality: number, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  COARSE = quality;
+  try {
+    return make();
+  } finally {
+    COARSE = 1;
+  }
+}
+
 const stem = (top: number, bottom: number, height: number, sides = 10) =>
-  new THREE.CylinderGeometry(top, bottom, height, sides, 1, true);
+  new THREE.CylinderGeometry(top, bottom, height, seg(sides, 3), 1, true);
 
 const flare = (radius: number, height: number, sides = 5) =>
-  new THREE.ConeGeometry(radius, height, sides, 1, true);
+  new THREE.ConeGeometry(radius, height, seg(sides, 3), 1, true);
 
-const blob = () => new THREE.SphereGeometry(1, 12, 8);
+const blob = () => new THREE.SphereGeometry(1, seg(12, 4), seg(8, 3));
 
-const nub = () => new THREE.SphereGeometry(1, 8, 6);
+const nub = () => new THREE.SphereGeometry(1, seg(8, 4), seg(6, 3));
 
 const stone = () => {
-  const g = new THREE.IcosahedronGeometry(1, 2);
+  const g = new THREE.IcosahedronGeometry(1, COARSE < 1 ? 1 : 2);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
@@ -91,7 +112,7 @@ const stone = () => {
 };
 
 const card = (w: number, h: number) => {
-  const g = new THREE.PlaneGeometry(w, h, 2, 4);
+  const g = new THREE.PlaneGeometry(w, h, seg(2, 1), seg(4, 2));
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const t = (p.getY(i) + h / 2) / h;
@@ -102,7 +123,7 @@ const card = (w: number, h: number) => {
 };
 
 const disc = (radius: number, sides = 8) => {
-  const g = new THREE.CircleGeometry(radius, sides);
+  const g = new THREE.CircleGeometry(radius, seg(sides, 4));
   g.rotateX(-Math.PI / 2);
   return g;
 };
@@ -357,6 +378,22 @@ export const DETAIL_GEOMETRY: Record<AssetClassId, () => THREE.BufferGeometry> =
   "lichen-rock": lichenRock,
   "snow-drift": snowDrift,
 };
+
+/**
+ * The mid band: every detail form rebuilt at half its segment budget (DECISIONS C37).
+ *
+ * C36 measured the gap this fills — ordinary forms are 4-36 triangles and detail forms 38-1,376,
+ * so `detailLayer` had nothing to draw between "as cheap as a distant impostor" and "as expensive
+ * as arm's reach", and picked the expensive one for the whole 180 m. These are not new art: the
+ * same 26 builders run against coarser primitives, which is why the mid form cannot drift from the
+ * detail form it stands in for.
+ */
+export const MID_COARSENING = 0.5;
+
+export const MID_GEOMETRY: Record<AssetClassId, () => THREE.BufferGeometry> = {};
+for (const [id, build] of Object.entries(DETAIL_GEOMETRY)) {
+  MID_GEOMETRY[id] = () => coarsened(MID_COARSENING, build);
+}
 
 const CARDED = new Set<AssetClassId>(["vine-tangle", "bromeliad", "canopy-palm", "fern", "grass-tuft", "reeds", "tidepool", "dead-shrub"]);
 
