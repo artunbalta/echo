@@ -1143,9 +1143,18 @@ one term in it.
 
 **And `C36` says which term matters, which is not the one `C31`'s spawn view suggested.** On the
 frame that actually breaks the ceiling, `detailLayer` is **1,077,608 triangles in eight draw calls —
-68% of everything** — while meadow, scatter, terrain and the rig together are 259,788. The blocker is
-one layer's LOD behaviour, not a general fidelity negotiation. `detailLayer` already sizes its mesh
-at the full class count and re-partitions every frame; that is where to look first.
+68% of everything** — while meadow, scatter, terrain and the rig together are 259,788.
+
+**`C37` then asked whether its radius could simply be cut, and the answer is NO — measured, and the
+opposite of what was expected.** The 180/75/34 m bands were a bare ternary with no derivation
+anywhere, while C22 derived every far-band distance against a pixel budget. Running C22's own method
+on the detail pair puts every shipped radius at **0.1×–0.7× of where the two forms stop differing**:
+they are conservative, and trimming them is visibly lossy by this repo's own measure.
+
+**The real finding is the gap.** Ordinary forms are 4–36 triangles, detail forms 38–1,376 — **62×
+for a broadleaf, 102× for a grass tuft, with no middle form.** A class is either a blob or a tree, so
+the switch is enormous wherever it is put. Every class got a far-band impostor under C22; no class
+ever got a mid-band. **That is the lever for SOC-4, not the radius.**
 
 **The draw-call half is separately urgent:** the demo's worst heading spends **119 of C16's 120
 calls** before a second body exists, and a body is 46.

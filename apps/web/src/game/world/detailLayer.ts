@@ -26,6 +26,21 @@ export function partitionDetail(source: Float32Array, count: number, low: Float3
   }
   return { near, far };
 }
+/**
+ * Whether two geometries are the same shape, to the byte.
+ *
+ * Positions only, and that is enough: two forms with identical vertex positions draw the same
+ * silhouette and the same triangles, which is the whole question here. Colour differences would
+ * matter for a fade and there are none — the duplicates are the same `merge` call.
+ */
+function sameForm(a: THREE.BufferGeometry, b: THREE.BufferGeometry): boolean {
+  const pa = a.getAttribute('position')?.array as Float32Array | undefined;
+  const pb = b.getAttribute('position')?.array as Float32Array | undefined;
+  if (!pa || !pb || pa.length !== pb.length) return false;
+  for (let i = 0; i < pa.length; i++) if (pa[i] !== pb[i]) return false;
+  return true;
+}
+
 /** Complementary screen-door coverage makes two opaque LODs dissolve without alpha sorting. */
 function installDetailFade(material: THREE.Material, radius: number, transition: number, high: boolean): () => void {
   const compile = material.onBeforeCompile, cacheKey = material.customProgramCacheKey;
@@ -86,6 +101,27 @@ export function detailLayer(): WorldLayer {
       if (!scatter || signal.aborted) return;
       for (const [id, source] of scatter.meshes) {
         const geometry = DETAIL_GEOMETRY[id]!();
+        // A CLASS WHOSE "DETAIL" FORM IS ITS ORDINARY FORM GETS NO PAIR AT ALL.
+        //
+        // `dead-tree` and `driftwood` are byte-identical between scatterDetail.ts and
+        // scatterGeometry.ts — the same four `merge` entries, the same 22 and 24 triangles, the same
+        // bounding box. Building a pair for them allocated a second InstancedMesh at the full class
+        // count, compiled TWO extra shader variants (the screen-door crossfade, high and low),
+        // partitioned every instance into it every frame, uploaded it, and drew it — to produce
+        // EXACTLY THE SAME PIXELS. Worse than free: the crossfade also gets installed on the
+        // ORDINARY mesh, so the pair dithers one form against itself.
+        //
+        // Found by deriving the detail band the way C22 derived the far band
+        // (tests/detailBand.test.mts): both classes came back "the two forms are already within 2 px
+        // at 10 m", which is not a marginal LOD, it is the same geometry twice. `dead-tree` is one of
+        // the six classes on the 180 m band, so it was doing this for every dead tree in sight.
+        //
+        // Compared by BYTES rather than by a hardcoded list of ids, because a list is the thing that
+        // goes stale the day someone gives dead-tree a real detail form and nobody edits the list.
+        if (sameForm(geometry, source.geometry)) {
+          geometry.dispose();
+          continue;
+        }
         const material = DETAIL_MATERIAL[id]!();
         // Slow branch/leaf sway, rooted in the same instance transform used for collision.
         if (['broadleaf','buttress-tree','conifer','acacia','fern','grass-tuft','bromeliad','reeds','canopy-palm','thicket','berry-bush'].includes(id)) {
