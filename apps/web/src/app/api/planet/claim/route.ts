@@ -7,20 +7,26 @@
 import { NextResponse } from "next/server";
 import { biomeAt, cellCentre } from "@echo/planet";
 
+import { claimRequestFrom, type ClaimBody } from "@/lib/claimRequest";
 import { planet } from "@/lib/planet";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { name?: string; referrer?: string };
-  const name = (body.name ?? "").trim();
-  if (name.length < 2) {
-    return NextResponse.json({ error: "Enter a name of at least two characters." }, { status: 400 });
-  }
+  const body = (await request.json().catch(() => ({}))) as ClaimBody;
+
+  // THE KEY IS THE ID, AND IT USED TO BE THE NAME (SOC-2.B). The branch lives in lib/claimRequest.ts
+  // so a test drives the same code this route does; that file carries the whole argument.
+  const claim = claimRequestFrom(body);
+  if (!claim.ok) return NextResponse.json({ error: claim.error }, { status: 400 });
+  const { ownerId, displayName: name } = claim;
 
   const { registry, field, calibration } = planet();
   const store = registry();
-  const result = await store.claim(name, body.referrer?.trim() || undefined);
+  const result = await store.claim(ownerId, {
+    displayName: name,
+    referrerParcel: claim.referrer,
+  });
 
   if (result.status === "waitlisted" || !result.parcel) {
     return NextResponse.json({
@@ -40,7 +46,7 @@ export async function POST(request: Request) {
     placedAdjacent: Boolean(result.placedAdjacent),
     // Section 7.2: when nothing was free near their friend, say so rather than letting them wonder.
     referralNote:
-      body.referrer && !result.placedAdjacent
+      claim.referrer && !result.placedAdjacent
         ? "No land was free near the person who invited you, so your parcel was drawn at random."
         : null,
     statusAfter: await store.status(),

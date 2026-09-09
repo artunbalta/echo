@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useReducedMotion, type GlobePhase } from "@/components/planet/motion";
+import { resolveUserId } from "@/lib/identity";
 
 const GlobeCanvas = dynamic(() => import("@/components/planet/GlobeCanvas"), {
   ssr: false,
@@ -110,7 +111,12 @@ export function ClaimClient() {
       const response = await fetch("/api/planet/claim", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+        // The NAME is what to call them; the OWNER ID is who they are (SOC-2.B). Sending only the
+        // name made two people called Sam one owner. `resolveUserId` mints on first use, which is
+        // correct here and only here: this page already promises "that identifier is permanent",
+        // and unlike the parcel routes it asks no consent question that a stamped key would answer
+        // early — see lib/identity.ts, which reserves minting for exactly this kind of act.
+        body: JSON.stringify({ name: name.trim(), ownerId: resolveUserId() }),
       });
       const data = await response.json();
       if (!response.ok) {
