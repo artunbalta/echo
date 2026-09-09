@@ -936,7 +936,20 @@ and server-stamped vs client-asserted. **Neither is invented here, because nothi
 The first needs the interaction path to say who was watching; the second needs `WorldRoom` to mark
 what it stamped itself. The field is a dict so that day is an added key rather than a migration.
 
-### SOC-2.G — Retention window and profiling posture ☐ · *days*
+### SOC-2.G — Retention window and profiling posture ☐ · *days — and SOC-2.D just widened it*
+
+**⚑25, closed the same day it was created.** SOC-2.D started writing four tables that had **no row
+level security**, because all sixteen of `0001`'s tables predate `0007` — the migration that
+introduced RLS to this repo and framed itself as the exception, on the grounds that everything else
+was "survivable for game state". `persona_state` is an eight-axis personality measurement of a named
+person; it was never game state, and until this week it was also empty. Measured with Supabase's
+default grant simulated: RLS off, anon reads the row; RLS on, anon reads nothing. All sixteen now
+have it, zero policies, and nothing breaks because every table access in the repo uses the service
+role, which bypasses RLS.
+
+**That closes the exposure and NOT this item.** `0011`'s "no TTL, no expiry column, no pruning job"
+is now true of five more tables, and the rows SOC-2.D writes are exactly the derived profile a
+subject-access request would be about.
 
 `0011_behavioral_events.sql` ships a durable, identity-keyed log with `created_at`, **no TTL, no
 expiry column, no pruning job, RLS on with zero policies.** Erasure works; retention does not exist

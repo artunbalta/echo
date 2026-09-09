@@ -1118,3 +1118,41 @@ posteriors is circular by construction: those posteriors were produced BY the co
 - **Status:** CLOSED as a hazard. The absence it exposes — no durable store at all — is SOC-2.D and
   is open.
 
+## ⚑ 25. Sixteen tables had no RLS, and SOC-2.D started writing four of them (2026-09-09)
+
+- **Opened and closed:** 2026-09-09, immediately after SOC-2.D's durable store landed. Recorded
+  because the *reason* it was safe before and unsafe now is the part worth keeping.
+- **`0007_waitlist.sql` wrote the rule and framed itself as the exception:** *"This is the FIRST
+  table in the repo to enable row level security, and the departure is deliberate. Every other table
+  relies on an implicit boundary ('the anon client never touches tables'), which is **survivable for
+  game state** but not for a public list of real names and email addresses: with RLS disabled,
+  PostgREST exposes the table to anyone holding the anon key, **which ships in the browser bundle by
+  definition**."*
+- **That premise changed when SOC-2.D started writing `persona_state`, `behavior_index`,
+  `reward_model_state` and `autonomy_buckets`** — declared since June with zero writers, and never
+  game state: `persona_state` is an eight-axis personality measurement of a named person, and
+  `behavior_index` is what they did, embedded, with SOC-2.F's evidentiary class attached. A durable
+  store is also an *exposure*, and the exposure arrives in the same commit as the feature.
+- **MEASURED, on Postgres 16.15 with Supabase's default grant simulated exactly**
+  (`grant select on all tables in schema public to anon`):
+
+  | | owner | anon, WITH the grant |
+  | --- | --- | --- |
+  | RLS on (this migration) | 1 row | **0 rows** |
+  | RLS off (the counterfactual) | 1 row | **1 row** |
+
+  So RLS is the thing that stops it, not the absence of a grant — which is what makes this worth a
+  migration rather than a note.
+- **All sixteen, not the four I touched.** The four would have been arbitrary: `messages`,
+  `telemetry_events`, `interactions`, `users` and `characters` hold more obviously personal data
+  than `autonomy_buckets` does. One line each, zero policies.
+- **Nothing that works today breaks, and that was checked rather than assumed.** Every table access
+  in the repo goes through the service role, which bypasses RLS: `supabaseAdmin.adminClient`,
+  `apps/realtime/src/{npcs,persistence}.ts`, and `services/ml`'s new `persistence.py`. The one
+  browser-side client is used only for `auth.*` and Storage and **never reads a table** — precisely
+  the implicit boundary 0007 named, now made explicit.
+- **What this is NOT.** Not a retention window and not erasure. SOC-2.G is still open, and 0011's
+  "no TTL, no expiry column, no pruning job" is now true of five more tables. This makes the rows
+  unreadable by the public; it does not make them go away.
+- **Status:** CLOSED. `db/migrations/0015_rls_on_0001.sql`.
+
