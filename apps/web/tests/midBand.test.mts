@@ -26,7 +26,7 @@ import { ASSET_CLASSES } from "@echo/planet";
 
 import { DETAIL_GEOMETRY, MID_GEOMETRY, MID_COARSENING, coarsened } from "../src/game/world/scatterDetail";
 import { SCATTER_GEOMETRY } from "../src/game/world/scatterGeometry";
-import { CLASS_SWITCH_PIXELS, VIEWPORTS, deriveFarMForPair, switchPixels, type FormPair } from "./helpers/farBand.mjs";
+import { CLASS_SWITCH_PIXELS, VIEWPORTS, deriveFarMForPair, signedSwitchPixels, switchPixels, type FormPair } from "./helpers/farBand.mjs";
 
 /** The radii `detailLayer` ships today, restated so a drift shows up here (as in `detailBand`). */
 const TREES = ["broadleaf", "buttress-tree", "conifer", "acacia", "canopy-palm", "dead-tree"];
@@ -115,9 +115,13 @@ test("2 px is unreachable for a coarsening, so the mid band cannot be derived th
   // THE RENDERER ALREADY SHIPS FAR INSIDE THIS BUDGET, deliberately. Re-deriving against it would
   // only re-discover that.
   //
-  // I also had this wrong once. The first hypothesis was that coarsening SHRANK the forms, because
-  // three's primitives inscribe their radius. Measured and refuted: mid/detail envelope ratios are
-  // 0.93-1.00, so the envelope is intact and the difference is rim, not size.
+  // I had the reason wrong, and the correction is the test below. The first hypothesis WAS that
+  // coarsening shrinks the forms, and I talked myself out of it with bounding boxes: mid/detail
+  // envelope ratios are 0.93-1.00, so I wrote that the envelope was intact and the difference was
+  // rim rather than size. A BOUNDING BOX CANNOT SEE A COARSENING. three puts a primitive's vertices
+  // on the circumscribing radius and cuts the chord between them, so the extremes that set the box
+  // are exactly the points that survive. Measured by covered area instead, the mid form loses 1-22%
+  // of its silhouette, one-sided, at every distance. The shrink was real and my instrument was not.
   const scale = ASSET_CLASSES.find((c) => c.id === "broadleaf")!.scale[1];
   const toMid = handoffM(DETAIL_GEOMETRY.broadleaf!, MID_GEOMETRY.broadleaf!, "broadleaf", scale);
   const toPlain = handoffM(DETAIL_GEOMETRY.broadleaf!, SCATTER_GEOMETRY.broadleaf!, "broadleaf", scale);
@@ -211,6 +215,50 @@ test("which classes a coarsening actually gives a middle for, measured rather th
     assert.ok(useful.some((r) => r.startsWith(`  ${id.padEnd(15)}`)), `${id} is on the 180 m band but a coarsening is no middle for it`);
   }
   assert.ok(harmful.length > 0, "the harmful case is the reason this is measured per class; if it is empty the measurement stopped working");
+});
+
+test("a coarsening ERODES, and k is only a like-for-like ratio where the ordinary form erodes too", () => {
+  // WHY THIS EXISTS: the quotient k compares two error magnitudes, and a magnitude has no sign. If
+  // the mid form loses area while the ordinary form GAINS it, k divides unlike quantities and the
+  // number is not a comparison at all, however stable it looks. That is not hypothetical here — the
+  // ordinary forms of seven classes are dilations, `fern`'s covering nearly nine times the detail
+  // form's silhouette, because a hand-made low-poly stand-in is under no obligation to be inscribed.
+  //
+  // It is also how the bounding-box mistake above gets caught: area sees what an envelope cannot.
+  const eroding: string[] = [], mismatched: string[] = [];
+
+  for (const cls of ASSET_CLASSES) {
+    if (!DETAIL_GEOMETRY[cls.id] || !SCATTER_GEOMETRY[cls.id]) continue;
+    if (identical(MID_GEOMETRY[cls.id]!, DETAIL_GEOMETRY[cls.id]!)) continue;
+    const R = shipped(cls.id), scale = cls.scale[1];
+    const m = signedSwitchPixels(pairOf(DETAIL_GEOMETRY[cls.id]!, MID_GEOMETRY[cls.id]!, scale), VIEWPORTS[1], R);
+    const o = signedSwitchPixels(pairOf(DETAIL_GEOMETRY[cls.id]!, SCATTER_GEOMETRY[cls.id]!, scale), VIEWPORTS[1], R);
+    if (m.eroded + m.dilated === 0) continue;
+
+    // Every coarsening is an erosion. Not a style rule — it is what inscribing a primitive DOES,
+    // and if a mid form ever comes back dilating, the knob has stopped meaning what it means.
+    assert.ok(m.cardArea <= m.formArea, `${cls.id}: the mid form covers MORE than the detail form (${(m.cardArea / m.formArea).toFixed(3)})`);
+    assert.ok(m.eroded > m.dilated, `${cls.id}: the mid form's error is not an erosion (${m.eroded.toFixed(0)} vs ${m.dilated.toFixed(0)})`);
+
+    const line = `  ${cls.id.padEnd(15)} mid keeps ${(m.cardArea / m.formArea).toFixed(3)} of the silhouette, ordinary keeps ${(o.cardArea / o.formArea).toFixed(3)}`;
+    (o.dilated > o.eroded ? mismatched : eroding).push(line);
+  }
+
+  console.log(
+    `\n  SIGNED ERROR at each class's shipped radius.\n` +
+      `\n  COMPARABLE -- both forms erode, so k divides like with like:\n${eroding.join("\n")}\n` +
+      `\n  NOT COMPARABLE -- the ORDINARY form dilates while the mid form erodes, so k is a ratio of\n` +
+      `  unlike errors and a band for these classes needs a picture, not arithmetic:\n${mismatched.join("\n")}\n`,
+  );
+
+  // The claim the whole scheme rests on, stated where it can fail: a coarsening is a middle because
+  // it erodes LESS than the purpose-built low-poly form does, not because it erodes little.
+  const R = 180, scale = ASSET_CLASSES.find((c) => c.id === "broadleaf")!.scale[1];
+  const m = signedSwitchPixels(pairOf(DETAIL_GEOMETRY.broadleaf!, MID_GEOMETRY.broadleaf!, scale), VIEWPORTS[1], R);
+  const o = signedSwitchPixels(pairOf(DETAIL_GEOMETRY.broadleaf!, SCATTER_GEOMETRY.broadleaf!, scale), VIEWPORTS[1], R);
+  assert.ok(m.cardArea / m.formArea > 0.9 && o.cardArea / o.formArea < 0.7,
+    `broadleaf: mid keeps ${(m.cardArea / m.formArea).toFixed(3)} and ordinary ${(o.cardArea / o.formArea).toFixed(3)}`);
+  assert.ok(mismatched.length > 0, "the sign check found nothing; if every ordinary form now erodes, this test has stopped working");
 });
 
 test("the mid form is derived from the detail form, not authored beside it", () => {
