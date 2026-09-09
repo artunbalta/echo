@@ -8,10 +8,21 @@
  * Selfies are never stored (discarded after attribute extraction, §6), so there is no
  * biometric image to erase. Auth-uuid-keyed tables (characters/world_entities) cascade
  * via the FK when Supabase Auth is wired; the local-dev string userId path is covered here.
+ *
+ * `ok` MEANS IT. Three separate ways it used to be true over surviving data, all fixed together
+ * because SOC-2.D made the tables non-empty and turned each of them from theory into a lie:
+ *   1. No service key returned `{wiped: [], failed: []}` — success, without ever looking.
+ *   2. The ML result was not part of `ok` at all, so a service that was down erased the posterior
+ *      from nowhere and the route answered 200.
+ *   3. A three-element `Promise.all` was destructured into two bindings, so island state's result
+ *      was discarded.
+ * The route's own rule, from the comment below: "A silent failure here is the difference between
+ * 'your data is gone' and a sentence that only sounds like it."
  */
 import { NextResponse } from "next/server";
 import { deleteUser } from "@/lib/ml";
 import { deleteIslandState } from "@/lib/island-state";
+import { erasureVerdict, type MlDeleteResult } from "@/lib/erasureResult";
 
 export const runtime = "nodejs";
 
@@ -37,7 +48,15 @@ const USER_KEYED: [string, string][] = [
 ];
 
 async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: string[] }> {
-  if (!SUPABASE_URL || !SERVICE_KEY) return { wiped: [], failed: [] };
+  // NO KEY IS A FAILURE, NOT A CLEAN SLATE. This returned `{wiped: [], failed: []}`, which made
+  // `ok` true and the status 200: a deployment without the service key told a person their data was
+  // gone WITHOUT EVER LOOKING. That was nearly harmless while these tables were empty. SOC-2.D has
+  // just started writing four of them — persona_state among them — using the ML service's OWN key,
+  // so the two halves can now be configured independently and this half can be blind while the
+  // other half is full.
+  if (!SUPABASE_URL || !SERVICE_KEY) {
+    return { wiped: [], failed: ["supabase (no service key in this runtime — nothing was checked)"] };
+  }
   const wiped: string[] = [];
   const failed: string[] = [];
   for (const [table, col] of USER_KEYED) {
@@ -64,11 +83,32 @@ export async function POST(req: Request) {
   const uid = body.userId;
   if (!uid) return NextResponse.json({ error: "userId required" }, { status: 400 });
 
-  const [ml, supabase] = await Promise.all([deleteUser(uid), supabaseDelete(uid), deleteIslandState(uid)]);
-  // `ok` is the erasure's own claim about itself, so it has to mean it: false the moment any table
-  // refused, with the list, rather than a cheerful 200 over rows that are still there.
+  // ALL THREE, DESTRUCTURED. This was a three-element `Promise.all` read into two bindings, so
+  // `deleteIslandState`'s result was silently discarded and could never reach `ok`.
+  const [ml, supabase, island] = await Promise.all([
+    deleteUser(uid),
+    supabaseDelete(uid),
+    deleteIslandState(uid).then(() => null).catch((e: Error) => e.message),
+  ]);
+
+  // THE ML SERVICE HOLDS THE POSTERIOR, and its result was not part of `ok` at all — so a service
+  // that was down or unset erased nothing and the route still answered 200. `deleted: false` is NOT
+  // the failure signal: `STORE.delete` reports whether the user was in MEMORY, and after a restart
+  // that is false for everyone while the durable rows are removed regardless. What means failure is
+  // `mocked`, which `lib/ml.ts` sets on the fallback whenever the call did not reach the service.
+  const verdict = erasureVerdict({
+    wiped: supabase.wiped,
+    supabaseFailed: supabase.failed,
+    ml: ml as MlDeleteResult,
+    islandError: island,
+  });
+
+  // `ok` is the erasure's own claim about itself, so it has to mean it: false the moment ANY half
+  // refused or was never attempted, with the list, rather than a cheerful 200 over rows that are
+  // still there. The field name stays `supabaseTablesFailed` because /account reads it by name and
+  // shows it to the person; what changed is that it now carries every kind of failure, not one.
   return NextResponse.json(
-    { ok: supabase.failed.length === 0, ml, supabaseTablesWiped: supabase.wiped, supabaseTablesFailed: supabase.failed },
-    { status: supabase.failed.length === 0 ? 200 : 500 },
+    { ok: verdict.ok, ml, supabaseTablesWiped: supabase.wiped, supabaseTablesFailed: verdict.failed },
+    { status: verdict.status },
   );
 }

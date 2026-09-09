@@ -1156,3 +1156,32 @@ posteriors is circular by construction: those posteriors were produced BY the co
   unreadable by the public; it does not make them go away.
 - **Status:** CLOSED. `db/migrations/0015_rls_on_0001.sql`.
 
+## ⚑ 26. Erasure said "your data is gone" three different ways it could not know (2026-09-09)
+
+- **Opened and closed:** 2026-09-09, in the SOC-2.G pass, immediately after SOC-2.D gave the ML
+  state tables rows.
+- **`api/account/delete` answered `ok: true` and HTTP 200 in three cases where data survived**, and
+  `/account` then cleared the local id and showed "Erased.":
+  1. **No service key** returned `{wiped: [], failed: []}` — an empty failure list read as success,
+     so a deployment without `SUPABASE_SERVICE_ROLE_KEY` reported a clean erasure **without ever
+     looking at a table.**
+  2. **The ML service's result was not part of `ok` at all.** The ML service is the thing that holds
+     the posterior. A service that was down or unset erased nothing and the route still said 200.
+  3. **A three-element `Promise.all` destructured into two bindings**, so `deleteIslandState`'s
+     outcome was discarded and could never reach `ok`.
+- **All three were harmless for three months and stopped being harmless in one commit.** The ML
+  state tables had ZERO WRITERS until SOC-2.D; erasure over an empty table cannot lie about much.
+  **A promise that is only true because a feature is missing is not a promise**, and this is the
+  general form of the failure this register keeps recording: the defect is written long before it
+  becomes reachable, and it becomes reachable in a commit that is about something else.
+- **The one that reads wrong at first glance**, pinned in a test so nobody "fixes" it: `deleted:
+  false` from the ML service is NOT a failure. `Store.delete` reports whether the user was in
+  MEMORY, and after a restart that is false for everyone while the durable rows are removed anyway.
+  The failure signal is `mocked`, which `lib/ml.ts` sets when the call never reached the service.
+- **Acted on:** the verdict moved to `lib/erasureResult.ts` so a test drives the same branch the
+  route does, and every failure kind now lands in `supabaseTablesFailed` — the field `/account`
+  already reads by name and shows to the person, so the fix reaches the screen without a second
+  change. Eight tests.
+- **Status:** CLOSED. Erasure now reports what it knows and nothing more. The RETENTION question —
+  how long the rows should have lived in the first place — is SOC-2.G and is open.
+
