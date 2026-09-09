@@ -969,7 +969,9 @@ have been. See ⚑20.
   - `services/ml/echo_ml/corpus.py`, a recorder at the ingress covering `/observe`,
     `/observe/behavioral` and `/telemetry`. Supabase-backed when keyed, in-memory otherwise, exactly
     as `Store` and `island_state` already degrade.
-  - `db/migrations/0009_measurement_corpus.sql`. (0006 was used twice in this repo's history, so
+  - `db/migrations/0009_measurement_corpus.sql` — **to be renamed `0013_` before this branch merges;
+    0009 collided with `0009_planet_registry.sql`, which took the number 26 days LATER. See
+    `db/migrations/README.md`.** (0006 was used twice in this repo's history, so
     0009 was checked against both the tree and `git log --all --diff-filter=A`.)
   - Replay hydration: a first-seen user is rebuilt from their corpus through the **real endpoint
     functions**, so the rebuild cannot drift from the live fold. Bit-identical, `cond` buckets
@@ -1030,8 +1032,15 @@ posteriors is circular by construction: those posteriors were produced BY the co
     ML service is down.
   - Proven end to end rather than asserted: write 5 rows, delete the account, `corpus_rows_deleted`
     comes back 5 and the read returns empty (`tests/test_corpus_hydration.py`).
-- **What is NOT built, deliberately: any retention window.** Migration 0009 has no TTL, no pruning
-  job and no expiry column, and the code has no default. Choosing one is a legal decision with a
+- **What is NOT built, deliberately: any retention window.** The corpus migration has no TTL, no
+  pruning job and no expiry column, and the code has no default.
+  ⚠️ *This bullet said "Migration 0009" until SOC-2.C. It meant `0009_measurement_corpus.sql`, which
+  exists only on `feat/measurement-corpus` — and SOC-0.E merged this entry onto a branch where 0009
+  is `0009_planet_registry.sql`, a table of land parcels with no personal data and no retention
+  question at all. The merge imported a number that is wrong in its new home. The corpus migration
+  is to be renamed `0013_measurement_corpus.sql` before that branch merges (see
+  `db/migrations/README.md`), and the analogue that IS here is `0011_behavioral_events.sql`, whose
+  own retention gap SOC-2.G owns.* Choosing one is a legal decision with a
   product cost attached — a shorter window is safer and shrinks the corpus the re-anchor needs — and
   it is not an engineering default to pick quietly.
 - **Status:** OPEN, for a human and probably for a lawyer. **A retention policy is now an open

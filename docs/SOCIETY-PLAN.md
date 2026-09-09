@@ -227,6 +227,17 @@ fixed in the same pass. Items 5 and 6 are owned by SOC-2.A/2.B and SOC-1.E and a
    caller of `chain.revoke()`.** C23 fixed the phone-shaped half of that sentence (the panel could
    not be opened without a backtick); the other half is still false. **SOC-1.E.**
 
+**And an eighth, created BY this plan's own SOC-0.E and found by its SOC-2.C:**
+
+8. **⚑22 on this branch pointed "Migration 0009" at the wrong file.** ✅ *corrected.* SOC-0.E merged
+   ⚑22's prose off `feat/measurement-corpus`, where 0009 is `0009_measurement_corpus.sql` — and on
+   this branch 0009 is `0009_planet_registry.sql`, a table of land parcels with **no personal data
+   and no retention question at all.** So a reader on the only branch anyone reads followed a
+   retention warning to a parcel registry. **The merge was verified byte-identical to its source and
+   that is exactly what made it wrong**: a reference that was true in its old home was imported
+   unchanged into one where it is false. Byte-identical is the right check for *whether the text
+   survived* and no check at all for *whether it still means what it said.*
+
 **And a seventh, found by the pass that fixed the first four — in THIS DOCUMENT:**
 
 7. **SOC-1.B below was wrong in all three of its claims, and its remedy was a bug.** ✅ *corrected.*
@@ -767,16 +778,57 @@ table nothing writes. **This item removed a collision; it did not add proof.** A
 happens to claims already made under a name as the key, which is a data question for whenever the
 memory registry becomes durable (SOC-2.A).
 
-### SOC-2.C — Migration discipline ☐ · *days*
+### SOC-2.C — Migration discipline ✅ · *done, and verified against a real Postgres*
 
-Verified: `db/migrations` runs 0001–0009 then 0011 — **no 0010 was ever committed on any branch**;
-there is no `schema_migrations` table, no down migrations, no runner, no CI. `0008`'s own header says
-"Not yet applied anywhere". `feat/measurement-corpus` numbers its table 0009 while main's 0009 is
-the planet registry. **Nobody can query which migrations production has.**
+Every claim here was confirmed — and the 0010 search went further than "no branch has it": zero hits
+across all nine refs' trees, `git log --all --diff-filter=A`, every reflog-reachable commit, every
+dangling object from `git fsck --lost-found`, and **every tree in the object database**. The gap is
+permanent, no commit or doc anywhere explains it, and `db/migrations/README.md` says that rather than
+inventing a reason.
 
-*Do:* a `schema_migrations` table, an idempotent apply script that reports and applies only what is
-missing against a given `DATABASE_URL`, and a stated reversibility rule. A generational society is
-many tables over many months; "psql it by hand and hope" will not survive that.
+**Shipped:** `schema_migrations` (as migration `0012`, so the ledger is reviewable in the same folder
+as everything else), and `scripts/migrate.mjs` — root, plain `.mjs`, beside `check-env.mjs` and
+`check-register.mjs`, because `db/migrations` is a root concern and only one of the eleven files
+belongs to `@echo/planet`. `npm run db:migrate` reports and changes nothing; `db:migrate:apply`
+applies. **The default is report, so a typo cannot write to a database.**
+
+**Verified by running it against Postgres 16.15, not by reading it.** Clean apply: 30 tables. Every
+guard exercised and every exit code checked, because a guard that reports and exits 0 is not a guard:
+
+| behaviour | result |
+| --- | --- |
+| duplicate version, before any connection | `COLLISION: 0009 is claimed by …`, **exit 2** |
+| an applied file edited afterwards | `DRIFT`, refuses to apply, **exit 1** |
+| a ledger row with no file | `ORPHAN`, **exit 1** |
+| no `DATABASE_URL` | **exit 2** |
+| clean tree, nothing pending | `nothing to apply`, **exit 0** |
+| `--baseline 0008` on a fresh database | 8 rows recorded, **1 table created** — it records without running |
+
+**THREE THINGS SOC-2.C DID NOT SAY.**
+
+1. **There are TWO collisions, not one.** 0006 was also used twice, resolved by `2db6375`, which is
+   the precedent *and* states the licence it used: "no runner, no `schema_migrations` table, nothing
+   recorded the old name". **This item closes that escape hatch** — once a version is in the ledger,
+   renaming its file is an ORPHAN plus a PENDING.
+2. **The implied blame is backwards.** This reads as though the unmerged branch took a number main
+   already had. The corpus took 0009 on 2026-08-07, documenting that it checked
+   `git log --all --diff-filter=A` first; the planet registry took it **twenty-six days later**,
+   without. The branch that broke the rule is this one. The resolution is to rename the corpus
+   migration to `0013_` **before it merges**, while nothing has recorded the old name — it breaks
+   four prose references and, verified, no code.
+3. **THE COLLISION HAD ALREADY CORRUPTED THE RECORD HERE**, via this plan's own SOC-0.E. See §3
+   item 8; corrected.
+
+**AND A MEASURED FINDING THAT CHANGES SOC-2.A AND SOC-2.H:** the migration set is **not portable to a
+plain Postgres.** `0007_waitlist.sql` fails with `role "anon" does not exist` — 0007 and 0008
+hard-depend on Supabase's `anon`/`authenticated` roles. Anything standing up a bare Postgres has to
+create those two roles first or skip those two files, and must say which. *(The failure also proved
+the transaction boundary: six files applied, 0007 left nothing behind in the schema or the ledger,
+and a resume after creating the roles picked up exactly where it stopped.)*
+
+**One dependency the repo was hiding:** `pg` was not declared in the root `package.json`. It resolved
+only because npm hoisted `@echo/planet`'s devDependency. Now declared at the same 8.23.0 the lock
+already had.
 
 ### SOC-2.D — Give the ML store a shared, durable backing ☐ · *weeks*
 
