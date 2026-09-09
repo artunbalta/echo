@@ -125,24 +125,62 @@ export function formPair(id: string, scale: number): FormPair {
  * the sky and the ground behind it, so a silhouette out there differs from its stand-in by nothing
  * at all; counting those pixels whole would be measuring a picture nobody is shown.
  */
-export function switchPixelsRaw(pair: FormPair, heightPx: number, d: number): number {
+/** The switch split by DIRECTION, and the two silhouettes it is a difference of. */
+export interface SignedSwitch {
+  /** Pixels `form` covers and `card` does not — what substituting the cheap form ERODES. */
+  eroded: number;
+  /** Pixels `card` covers and `form` does not — what it DILATES. */
+  dilated: number;
+  /** Mean covered pixels of each form, so `cardArea / formArea` says how much silhouette is lost. */
+  formArea: number;
+  cardArea: number;
+}
+
+/**
+ * The same raster as {@link switchPixelsRaw}, keeping the SIGN it throws away.
+ *
+ * An unsigned XOR count cannot tell a form that has shrunk from one that has merely wobbled, and
+ * the difference decides whether a substitution is a stand-in or a bias. A coarsened solid loses
+ * area on EVERY instance in the same direction — three's primitives put their vertices on the
+ * circumscribing radius and cut the chord between, so the bounding box is untouched while the area
+ * between the vertices goes. A BOUNDING BOX THEREFORE CANNOT SEE A COARSENING, and reading one as
+ * evidence that a form kept its size is a mistake this function exists to stop repeating.
+ */
+export function signedSwitchPixels(pair: FormPair, heightPx: number, d: number): SignedSwitch {
   const p = pixelsPerMetre(heightPx, d);
   const w = Math.ceil(2 * pair.reachM * p * SS) + 4;
   const h = Math.ceil((pair.yHighM - pair.yLowM) * p * SS) + 4;
   const a = new Uint8Array(w * h);
   const b = new Uint8Array(w * h);
-  let total = 0;
+  const out: SignedSwitch = { eroded: 0, dilated: 0, formArea: 0, cardArea: 0 };
   for (let k = 0; k < AZIMUTHS; k++) {
     const phi = (k / AZIMUTHS) * Math.PI * 2;
     a.fill(0);
     b.fill(0);
     raster(pair.form, phi, p, w, h, -pair.reachM, pair.yLowM, a);
     raster(pair.card, phi, p, w, h, -pair.reachM, pair.yLowM, b);
-    let diff = 0;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) diff++;
-    total += diff / (SS * SS);
+    let eroded = 0, dilated = 0, fa = 0, ca = 0;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i]) fa++;
+      if (b[i]) ca++;
+      if (a[i] && !b[i]) eroded++;
+      else if (b[i] && !a[i]) dilated++;
+    }
+    out.eroded += eroded / (SS * SS);
+    out.dilated += dilated / (SS * SS);
+    out.formArea += fa / (SS * SS);
+    out.cardArea += ca / (SS * SS);
   }
-  return total / AZIMUTHS;
+  out.eroded /= AZIMUTHS;
+  out.dilated /= AZIMUTHS;
+  out.formArea /= AZIMUTHS;
+  out.cardArea /= AZIMUTHS;
+  return out;
+}
+
+export function switchPixelsRaw(pair: FormPair, heightPx: number, d: number): number {
+  const { eroded, dilated } = signedSwitchPixels(pair, heightPx, d);
+  return eroded + dilated;
 }
 
 /** The same, weighted by the contrast the fog has left at the view depth a prop at `d` gets. */
