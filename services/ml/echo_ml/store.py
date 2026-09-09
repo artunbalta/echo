@@ -133,11 +133,39 @@ class Store:
         self._lock = threading.Lock()
         # One write lock per user. Re-entrant so a caller already holding it can nest safely.
         self._user_locks: dict[str, threading.RLock] = {}
+        #: The durable backing, or None (SOC-2.D). Attached after construction because
+        #: `persistence` imports this module — and left None everywhere until ⚑24's gate opens.
+        self._persist = None
+
+    def attach(self, persistence) -> None:
+        """Give this store a durable backing. Idempotent; safe to call with None."""
+        self._persist = persistence
 
     def get(self, user_id: str) -> UserState:
+        """This user's state, hydrating it from the durable store the first time it is asked for.
+
+        THE HYDRATE HAPPENS OUTSIDE `self._lock`, and that is the whole shape of this method. That
+        lock protects the `_users` DICT and is held by every user's every access; a network read
+        inside it would serialise all of them behind one Supabase latency, which is precisely the
+        cost the per-user keying below exists to avoid. So: look under the lock, read outside it,
+        then take the lock again to install.
+
+        A second thread may have installed a state while this one was reading. FIRST WRITER WINS and
+        the hydrated copy is dropped — never merged. Merging two views of one posterior is how the
+        race ⚑16 records gets reintroduced through the back door.
+        """
         with self._lock:
-            if user_id not in self._users:
-                self._users[user_id] = UserState(user_id)
+            state = self._users.get(user_id)
+        if state is not None:
+            return state
+
+        hydrated = self._persist.hydrate(user_id) if self._persist is not None else None
+
+        with self._lock:
+            existing = self._users.get(user_id)
+            if existing is not None:
+                return existing
+            self._users[user_id] = hydrated if hydrated is not None else UserState(user_id)
             return self._users[user_id]
 
     def lock_for(self, user_id: str) -> threading.RLock:
@@ -151,19 +179,41 @@ class Store:
 
     @contextmanager
     def updating(self, user_id: str) -> Iterator[UserState]:
-        """Exclusive read-modify-write on one user's state.
+        """Exclusive read-modify-write on one user's state, and the durable snapshot that follows.
 
         Every endpoint that MUTATES a user must hold this for the whole read-modify-write, not just
         for the assignment: the read and the write are what have to be atomic together.
+
+        THE SNAPSHOT IS MARKED HERE RATHER THAN AT THE FIVE CALL SITES, deliberately. A sixth
+        endpoint will be written one day, and a convention that has to be remembered at every
+        mutation is a convention that will be missed at one of them — the resulting bug being a user
+        whose posterior is durable on four paths and amnesiac on the fifth, which is the kind of
+        thing nobody finds. `record` only enqueues an id, so it costs nothing here and never
+        performs I/O under this lock; the daemon thread takes the lock again when it actually writes.
+
+        On an exception nothing is marked: a half-applied update is not a state worth persisting,
+        and the in-memory copy is already the more truthful of the two.
         """
         with self.lock_for(user_id):
             yield self.get(user_id)
+            if self._persist is not None:
+                self._persist.record(user_id)
 
     def delete(self, user_id: str) -> bool:
-        """Hard delete all derived state for a user (§13 erasure)."""
-        # Under the user's own lock, so erasure cannot land in the middle of an update and leave a
-        # half-applied posterior behind for a user who asked to be forgotten.
+        """Hard delete all derived state for a user (§13 erasure), in memory AND durably.
+
+        Under the user's own lock, so erasure cannot land in the middle of an update and leave a
+        half-applied posterior behind for a user who asked to be forgotten — but the durable delete
+        is deliberately NOT inside `self._lock`, the global dict lock, because holding that across a
+        network call serialises every unrelated user.
+
+        The durable delete goes FIRST and is allowed to raise. Erasure is a promise to a person: if
+        the rows cannot be removed, the honest outcome is a failed request, not a cleared cache and
+        a surviving row that the next hydrate would bring back.
+        """
         with self.lock_for(user_id):
+            if self._persist is not None:
+                self._persist.forget(user_id)
             with self._lock:
                 self._user_locks.pop(user_id, None)
                 return self._users.pop(user_id, None) is not None
