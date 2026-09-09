@@ -25,8 +25,9 @@ taken, plus a finding worse than the thirteen it covers)* · SOC-0.E *(the regis
 that fails on a dangling ⚑)* · SOC-1.A *(machine and per-layer; only the phone is owed)* · SOC-1.B
 *(not the item it was written as — §3 item 7)* · SOC-1.C *(89.43 MiB → 7.81 MiB)* · SOC-1.D *(the
 stated cause refuted; the real one was the test runner)* · SOC-1.E *(the promise is true, pinned in a
-browser)* · SOC-2.B *(the collision, not the foreign key)* · SOC-2.F *(the class that exists is
-carried)* · SOC-2.H *(eight holes, not one)* · SOC-6.A · SOC-6.B · SOC-6.G.
+browser)* · SOC-2.B *(the collision, not the foreign key)* · SOC-2.C *(a ledger, verified against a
+real Postgres)* · SOC-2.F *(the class that exists is carried)* · SOC-2.H *(eight holes, not one, and
+the registry suite now actually runs)* · SOC-6.A · SOC-6.B · SOC-6.G.
 
 **Seven things found while doing it, each worse than the plan assumed.**
 1. `C28`/`C31` — the shipped frame is **907,250 triangles against a 600,000 ceiling**, the ORDINARY
@@ -47,7 +48,7 @@ carried)* · SOC-2.H *(eight holes, not one)* · SOC-6.A · SOC-6.B · SOC-6.G.
    carried forward without re-measuring. Three workers is 6 failed in 27.8 m; one is 21 passed in
    1.1. The §3 error, committed inside the change that closed §3's own workstream.
 
-**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-2.C, SOC-2.D, SOC-2.E, SOC-2.G, SOC-3, SOC-4, SOC-5,
+**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-2.D, SOC-2.E, SOC-2.G, SOC-3, SOC-4, SOC-5,
 SOC-6.C–F/H/I, SOC-7.
 
 **The two ordering deadlines the plan names have both been met.** `feat/f4-trust` was merged before
@@ -60,8 +61,9 @@ reclassified by anyone.
 rather than retired (SOC-0.G).
 
 **Gates, measured 2026-09-08:** `check:register` ✅ · `build:shared` + `typecheck` ✅ (4 workspaces,
-and in that order — SOC-2.H hole 6) · `@echo/planet` 155/159, 4 skipped *(they need
-`PLANET_TEST_DATABASE_URL`; they PASS against a Postgres with `max_connections=300`)* ·
+and in that order — SOC-2.H hole 6) · `@echo/planet` **164/164, 0 skipped, against a real Postgres
+migrated by `db:migrate:apply`** *(160/164 with 4 skipped when no `PLANET_TEST_DATABASE_URL` is set,
+which is what a bare `npm test` still does)* ·
 `@echo/shared` 31/31 · `@echo/web` 219/219 · `@echo/realtime` copresence ✅ · `services/ml` 135/135 ·
 e2e gate **21/21 in 1.1 m**, at `workers: 1` — see SOC-1.D, where that constant was wrong the first
 time and is now measured on this tree. **Red, all ten pre-existing and all verified so by stashing the day's
