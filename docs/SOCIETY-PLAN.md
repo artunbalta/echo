@@ -839,7 +839,7 @@ and a resume after creating the roles picked up exactly where it stopped.)*
 only because npm hoisted `@echo/planet`'s devDependency. Now declared at the same 8.23.0 the lock
 already had.
 
-### SOC-2.D — Give the ML store a shared, durable backing ☐ · *weeks*
+### SOC-2.D — Give the ML store a shared, durable backing ◑ · *design taken (C34), precondition done (⚑24), build next*
 
 `services/ml/echo_ml/store.py` is a **process-local dict** with a per-user `RLock` held at five call
 sites. `config.py:76-77` declares `supabase_url`/`supabase_key` and nothing in `services/ml` reads
@@ -848,8 +848,40 @@ states the binding sentence: the lock is exactly as complete as the store, so an
 has to fix the store first.
 
 `UserState` carries posterior, reward, behaviors, buckets, cond, temperature, calib, baseline_mu and
-locomotion — including a full-covariance matrix and a vector index. **This is a hard ceiling below
-every other line of this plan.**
+locomotion — including a full-covariance matrix and a vector index.
+
+**◑ THE DESIGN IS TAKEN — `C34`. The precondition is DONE. Nothing durable is built yet.**
+
+**"A hard ceiling below every other line of this plan" is OVERSTATED, checked against this document's
+own blocker lines.** Exactly one workstream names SOC-2.D: SOC-3. SOC-4 does not and says it is
+"buildable against a fake snapshot source"; SOC-5 reaches it only through SOC-3.A; SOC-6 and SOC-7 do
+not name it at all. **And SOC-6.A and SOC-6.B are both ✅ shipped, under the ceiling.** The real
+dependency is one edge and it is specific: SOC-3.A's fix is Redis presence so matchmaking spans
+instances and SOC-3.E asks where a sim tick runs — every answer is *a second process that measures*,
+and a second process cannot share a posterior with the first.
+
+**The item has ONE NAME AND TWO PROBLEMS.** *Amnesia* is ~300 lines; *one process, forever* is the
+weeks. `C34` takes the first and leaves the second, and says so — because the shared half needs the
+read-modify-write inside Postgres (`registry.ts`'s `pg_advisory_xact_lock`), which is expressible
+through the `pg` client and **not** through PostgREST, so it is coupled to SOC-2.A and the durable
+half is not.
+
+**Measured, so the cost of the amnesia is a number:** `render.yaml` has `autoDeploy: true` and no
+`buildFilter`, so 143 commits over 90 days on `main` across 17 active days redeploy both services —
+**and only 38 of them touch `services/ml`. A docs commit resets everyone.** *(And a record corrected
+in passing: `⚑21`'s "Render's starter plan spins down" is contradicted twice in this repo. Starter
+does not. The resets correlate with the team shipping, not with users being away.)*
+
+**✅ THE PRECONDITION IS DONE — `⚑24`, and it was a live hazard rather than a design question.**
+`config.py` read the repo-wide `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`, which
+`run.sh` sources from a gitignored `.env` holding a URL **byte-identical to production** and a live
+service-role key. Every candidate design begins by reading exactly those. Now ML-owned names behind
+an explicit `ECHO_ML_PERSIST=1`, with `persist_enabled` as the single gate, pinned by twelve tests —
+three of which go red if the old shape returns.
+
+**Three false persistence records fixed with it**, all claiming a durability that has never existed:
+`store.py`'s header, `config.py`'s declarations, and — the damaging one, because an operator can
+follow it — `render.yaml`'s "with both set, learning state hydrates/persists to Supabase".
 
 ### SOC-2.E — Authenticate the ingress, the persona read and the room join ☐ · *days*
 

@@ -46,12 +46,24 @@ services:
         value: voyage
       - key: VOYAGE_API_KEY
         sync: false
-      # Persistence: with both set, learning state hydrates/persists to Supabase; absent → in-memory
-      # (per-process, lost on restart — fine for a demo, but the posterior resets on every redeploy).
-      - key: NEXT_PUBLIC_SUPABASE_URL
-        value: https://ibinblpqcbrgbndeqtsc.supabase.co
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      # NO PERSISTENCE. This block used to say "with both set, learning state hydrates/persists to
+      # Supabase" — a deployment instruction that did NOTHING, and the most damaging of the three
+      # places that claim was made, because an operator can follow it. Nothing in services/ml has
+      # ever read a database. Learning state is per-process and lost on every restart, and with
+      # autoDeploy on and no buildFilter, that is every push to the connected branch. SOC-2.D.
+      #
+      # THE NAMES ARE ML-OWNED ON PURPOSE (⚑24). They were NEXT_PUBLIC_SUPABASE_URL and
+      # SUPABASE_SERVICE_ROLE_KEY, which services/ml/run.sh sources from the gitignored repo-root
+      # .env — where, on a developer machine, they are the production project and a live
+      # service-role key. Distinct names mean enabling persistence is a deliberate act per
+      # environment rather than a side effect of having a .env. ECHO_ML_PERSIST=1 is required too:
+      # credentials alone must never be enough.
+      - key: ECHO_ML_SUPABASE_URL
         sync: false
+      - key: ECHO_ML_SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ECHO_ML_PERSIST
+        value: "0" 
 
   # ── the shared world (Node / Colyseus) ──────────────────────────────────────────────────────
   - type: web

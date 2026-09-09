@@ -73,9 +73,44 @@ class Settings:
     voyage_key: str = os.getenv("VOYAGE_API_KEY", "") or os.getenv("EMBEDDINGS_API_KEY", "")
     voyage_model: str = os.getenv("VOYAGE_MODEL", "") or os.getenv("EMBEDDINGS_MODEL", "") or "voyage-3.5"
     embed_dim: int = int(os.getenv("EMBEDDINGS_DIM", "256"))
-    supabase_url: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
-    supabase_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    # ── the durable store's credentials, and why they are NOT the repo-wide names ────────────
+    #
+    # These were `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` and NOTHING read them, so
+    # the loaded gun never fired. It was loaded, though: `run.sh:14` sources the gitignored repo-root
+    # `.env` into this service's environment, and on a developer machine that file holds a URL
+    # BYTE-IDENTICAL to `render.yaml`'s production project plus a live service-role key — which
+    # bypasses RLS. So the first line of SOC-2.D that reads `SETTINGS.supabase_*` turns
+    # `npm run dev:ml` into a laptop writing personas into production. `identity.ts` honours
+    # `?u=<id>` verbatim (SOC-2.E), so it would write into a REAL PERSON'S row.
+    #
+    # Distinct, ML-owned names close it at zero cost: the shared `.env` no longer reaches this
+    # service, and enabling persistence becomes something someone has to do ON PURPOSE, per
+    # environment. Renamed BEFORE the first durable write exists, because a default that only fires
+    # once the feature lands is a default nobody tests.
+    #
+    # ⚑24. See also `persist_enabled` below: having the keys is necessary and not sufficient.
+    supabase_url: str = os.getenv("ECHO_ML_SUPABASE_URL", "")
+    supabase_key: str = os.getenv("ECHO_ML_SUPABASE_SERVICE_KEY", "")
+    # An explicit, per-environment opt-in. Credentials alone must never be enough: a key pasted into
+    # a shell to run one script would otherwise silently arm every write for the life of that shell.
+    persist: bool = os.getenv("ECHO_ML_PERSIST", "") == "1"
     best_of_n: int = int(os.getenv("POLICY_BEST_OF_N", "4"))
+
+
+    @property
+    def persist_enabled(self) -> bool:
+        """Whether the durable store may write. THE ONE GATE — no caller reads the keys directly.
+
+        All three, and the opt-in is not redundant with the keys (⚑24): `run.sh` sources the
+        repo-root `.env`, so a developer machine can have production credentials in this process
+        without anybody choosing that. Requiring `ECHO_ML_PERSIST=1` as well makes durability a
+        deliberate act per environment rather than a side effect of having a `.env`.
+
+        Returns False today for everyone, because nothing writes yet — SOC-2.D. When something does,
+        it reads THIS and never `supabase_url`/`supabase_key`, so the gate cannot be routed around
+        by a later author who only needed a URL.
+        """
+        return self.persist and bool(self.supabase_url) and bool(self.supabase_key)
 
 
 SETTINGS = Settings()
