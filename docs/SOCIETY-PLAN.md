@@ -25,9 +25,10 @@ taken, plus a finding worse than the thirteen it covers)* · SOC-0.E *(the regis
 that fails on a dangling ⚑)* · SOC-1.A *(machine and per-layer; only the phone is owed)* · SOC-1.B
 *(not the item it was written as — §3 item 7)* · SOC-1.C *(89.43 MiB → 7.81 MiB)* · SOC-1.D *(the
 stated cause refuted; the real one was the test runner)* · SOC-1.E *(the promise is true, pinned in a
-browser)* · SOC-2.H *(eight holes, not one)* · SOC-6.A · SOC-6.B · SOC-6.G.
+browser)* · SOC-2.B *(the collision, not the foreign key)* · SOC-2.F *(the class that exists is
+carried)* · SOC-2.H *(eight holes, not one)* · SOC-6.A · SOC-6.B · SOC-6.G.
 
-**Five things found while doing it, each worse than the plan assumed.**
+**Seven things found while doing it, each worse than the plan assumed.**
 1. `C28`/`C31` — the shipped frame is **907,250 triangles against a 600,000 ceiling**, the ORDINARY
    parcel is the expensive route, and **a body costs 46 draw calls of WHOLE frame, not 46 of main**.
    SOC-4 is not blocked *by* SOC-1.A; it is blocked by what SOC-1.A found.
@@ -39,9 +40,20 @@ browser)* · SOC-2.H *(eight holes, not one)* · SOC-6.A · SOC-6.B · SOC-6.G.
    cue: three actions squatting on two other cues' IDs, and two more shipped with no catalogue row.
 5. SOC-2.H — **eight gate holes, not one**, including a `typecheck` that is red on a clean checkout
    and a registry suite that is red *behind* its skip.
+6. SOC-2.B — the claim route keyed on the typed NAME, so **two people who both typed "Sam" were one
+   owner** on a page promising "exactly one owner, permanently". `parcels` had carried an unwritten
+   `display_name` column since 0009: the schema had the split and the code had collapsed it.
+7. SOC-1.D — **fixed twice**, because the first fix's constant was measured on the pre-merge tree and
+   carried forward without re-measuring. Three workers is 6 failed in 27.8 m; one is 21 passed in
+   1.1. The §3 error, committed inside the change that closed §3's own workstream.
 
-**Open and unchanged:** SOC-0.F, SOC-0.G's `feat/f4-trust` half, SOC-2.A–G, SOC-3, SOC-4, SOC-5,
+**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-2.C, SOC-2.D, SOC-2.E, SOC-2.G, SOC-3, SOC-4, SOC-5,
 SOC-6.C–F/H/I, SOC-7.
+
+**The two ordering deadlines the plan names have both been met.** `feat/f4-trust` was merged before
+a society cue touched `ingest.py` (SOC-0.G), and `session_mode` reaches the store before a society
+event reaches a posterior (SOC-2.F, L7) — rows written in the interim could never have been
+reclassified by anyone.
 
 **Both of the things owed to a person were answered, 2026-09-08.** The density is `SETTLEMENT_RATE`
 0.3 — 26,602 settlements and a 41-minute walk between them (`C33`) — and `feat/f4-trust` is merged
