@@ -931,6 +931,14 @@ holes, not the one this item names** — each re-established by execution, not b
    block gets a red that has nothing to do with the code. The workflow starts the container by hand
    with `-c max_connections=300` and says why.
 
+**AND CI NOW APPLIES THE WHOLE MIGRATION SET THROUGH THE RUNNER**, not one hand-picked file
+(SOC-2.C). Verified locally with the exact CI sequence — fresh Postgres 16, `create role anon` +
+`authenticated`, `npm run db:migrate:apply`: **11 migrations, 30 tables**, and then the planet suite
+at **164 pass / 0 fail / 0 SKIPPED**. The four registry tests that have never run in this repo's
+history — the `SKIP LOCKED` and single-fire-subdivision properties a shared mutable world depends on
+— pass, at "200 concurrent claims in 886 ms". Hole 4 and hole 8 are closed together, because the
+thing that unskipped them is the same thing that made the database real.
+
 **The browser suite is manual-dispatch on macOS, not `pull_request`, and that is a measurement.**
 `playwright.config.ts` launches chromium with `--use-angle=metal --enable-gpu` and records why: on
 software rendering a frame costs 568 ms against 8.3 ms, and Playwright's actionability check needs a
