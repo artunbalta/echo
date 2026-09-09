@@ -395,6 +395,27 @@ for (const [id, build] of Object.entries(DETAIL_GEOMETRY)) {
   MID_GEOMETRY[id] = () => coarsened(MID_COARSENING, build);
 }
 
+/**
+ * Where the mid form takes over from the detail form, metres — the inner edge of the third band.
+ *
+ * ONE ENTRY, and the emptiness of this table is the measurement, not an oversight. A mid mesh costs
+ * ONE UNAVOIDABLE DRAW CALL per class with instances: `detailLayer` gives it the source's whole-disk
+ * bounding sphere, which is never frustum-culled. C16's ceiling is 600,000 triangles AND 120 calls,
+ * and the demo parcel measures 119 of 120 (DECISIONS C16, and the reading at DECISIONS.md:1844), so
+ * the call budget is the binding half and there is room for almost nothing.
+ *
+ * `broadleaf` is the one class that is free: it is the most expensive form in the registry at 1,376
+ * triangles, it holds the 180 m band, and it does not grow on the demo parcel at all — that cell is
+ * rainforest and beach, whose largest tree is `buttress-tree` at 361. So this band adds a call only
+ * on the forest parcel, which measures 109. `buttress-tree` is the next candidate and would put the
+ * demo at exactly 120, which is a budget decision and not a derivation.
+ *
+ * THE NUMBER IS DERIVED, by `tests/midBand.test.mts`, from the error the renderer already accepts at
+ * the outer edge: R * sqrt(k / (1 - fog(R))) where k is the mid form's silhouette error as a
+ * fraction of the ordinary form's. That test re-measures k and fails if this number drifts from it.
+ */
+export const MID_BAND_INNER_M: Partial<Record<AssetClassId, number>> = { broadleaf: 79 };
+
 const CARDED = new Set<AssetClassId>(["vine-tangle", "bromeliad", "canopy-palm", "fern", "grass-tuft", "reeds", "tidepool", "dead-shrub"]);
 
 /** Local-space grain stays attached to a swaying branch, without image/UV seams. */

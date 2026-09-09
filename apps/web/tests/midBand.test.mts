@@ -24,9 +24,9 @@ import * as THREE from "three";
 
 import { ASSET_CLASSES } from "@echo/planet";
 
-import { DETAIL_GEOMETRY, MID_GEOMETRY, MID_COARSENING, coarsened } from "../src/game/world/scatterDetail";
+import { DETAIL_GEOMETRY, MID_BAND_INNER_M, MID_GEOMETRY, MID_COARSENING, coarsened } from "../src/game/world/scatterDetail";
 import { SCATTER_GEOMETRY } from "../src/game/world/scatterGeometry";
-import { CLASS_SWITCH_PIXELS, VIEWPORTS, deriveFarMForPair, signedSwitchPixels, switchPixels, type FormPair } from "./helpers/farBand.mjs";
+import { CLASS_SWITCH_PIXELS, VIEWPORTS, deriveFarMForPair, fog, signedSwitchPixels, switchPixels, type FormPair } from "./helpers/farBand.mjs";
 
 /** The radii `detailLayer` ships today, restated so a drift shows up here (as in `detailBand`). */
 const TREES = ["broadleaf", "buttress-tree", "conifer", "acacia", "canopy-palm", "dead-tree"];
@@ -285,4 +285,55 @@ test("the coarsening knob never leaks into a detail form", () => {
   for (const id of Object.keys(DETAIL_GEOMETRY)) {
     assert.equal(triangles(DETAIL_GEOMETRY[id]), before.get(id), `${id} came back coarse after a builder threw`);
   }
+});
+
+test("the shipped inner radius is what the measurement says it is", () => {
+  // THE ONE NUMBER THE LAYER SHIPS, checked against the live measurement rather than remembered —
+  // the far band's arrangement, and the reason `detailBand` exists at all.
+  //
+  //   Rin = R * sqrt( k / (1 - fog(R)) )
+  //
+  // The premise is that the renderer ALREADY accepts E_ord(R) differing pixels at the outer edge,
+  // because that is the substitution it makes there today. Error falls as 1/d^2 and the mid form's
+  // is k times the ordinary form's, so the nearest distance at which the mid form is no worse than
+  // what is already accepted at R is R*sqrt(k). The fog term is the correction for the fact that
+  // the accepted error at R is fog-weighted and the mid band sits nearer, where less fog hides it;
+  // it is worth 1.75% at 180 m, and it is in the formula because it is cheap to be right.
+  //
+  // THE CURRENCY IS DIFFERING PIXEL AREA, which is what `switchPixels` returns and what C22's far
+  // band and C37's detail band are both denominated in. Read as a proportion the same premise would
+  // say 0 m and read as a mean edge displacement it would say R*k = 33.5 m; the exponent is a choice
+  // and this is the one every other band in this renderer already makes.
+  const R = 180;
+  const scale = ASSET_CLASSES.find((c) => c.id === "broadleaf")!.scale[1];
+  const mid = pairOf(DETAIL_GEOMETRY.broadleaf!, MID_GEOMETRY.broadleaf!, scale);
+  const ord = pairOf(DETAIL_GEOMETRY.broadleaf!, SCATTER_GEOMETRY.broadleaf!, scale);
+  const k = switchPixels(mid, VIEWPORTS[1], R / 4) / switchPixels(ord, VIEWPORTS[1], R / 4);
+  const derived = R * Math.sqrt(k / (1 - fog(R)));
+
+  console.log(`\n  broadleaf: k = ${k.toFixed(4)}, fog(${R}) = ${fog(R).toFixed(4)}, derived inner edge ${derived.toFixed(1)} m, ships ${MID_BAND_INNER_M.broadleaf} m\n`);
+  assert.ok(Math.abs(derived - MID_BAND_INNER_M.broadleaf!) < 1.5,
+    `the shipped inner radius ${MID_BAND_INNER_M.broadleaf} m has drifted from the derived ${derived.toFixed(1)} m`);
+
+  // The band must have room to exist, and its dither must clear the outer one — two smoothsteps
+  // that overlap are not complementary, so fragments in the overlap are discarded by every mesh.
+  const inner = { r: MID_BAND_INNER_M.broadleaf!, t: Math.max(3, MID_BAND_INNER_M.broadleaf! * 0.08) };
+  const outer = { r: R, t: Math.max(3, R * 0.08) };
+  assert.ok(inner.r + inner.t <= outer.r - outer.t, `the dither bands overlap: ${inner.r + inner.t} > ${outer.r - outer.t}`);
+});
+
+test("the mid band is exactly the classes the draw-call budget can pay for", () => {
+  // C16's ceiling is 600,000 triangles AND 120 DRAW CALLS, and the demo parcel measures 119 of 120.
+  // A mid mesh is +1 unavoidable call for any class with instances — detailLayer hands it the
+  // source's whole-disk bounding sphere, which is never frustum-culled — so the call budget, not
+  // the triangle budget, is what decides how many classes may have one.
+  //
+  // `broadleaf` is the class that is free: the most expensive form in the registry, on the 180 m
+  // band, and absent from the demo parcel entirely (rainforest and beach, whose largest tree is
+  // buttress-tree at 361 triangles). If a second class is ever added here, the demo's worst-heading
+  // call count has to be re-measured first, because it has room for exactly one.
+  assert.deepEqual(Object.keys(MID_BAND_INNER_M), ["broadleaf"]);
+  const detail = triangles(DETAIL_GEOMETRY.broadleaf), mid = triangles(MID_GEOMETRY.broadleaf), plain = triangles(SCATTER_GEOMETRY.broadleaf);
+  assert.ok(mid <= 0.6 * detail, `the mid form saves too little to be worth a draw call: ${mid} of ${detail}`);
+  assert.ok(mid > plain, `the mid form is not dearer than the ordinary form (${mid} vs ${plain}), so it would be a coarser form drawn NEARER than a finer one`);
 });

@@ -5,9 +5,14 @@
 import * as THREE from 'three';
 import type { WorldLayer } from './PlanetWorld';
 import type { ScatterLayer } from './scatterLayer';
-import { DETAIL_GEOMETRY, DETAIL_MATERIAL } from './scatterDetail';
+import { DETAIL_GEOMETRY, DETAIL_MATERIAL, MID_BAND_INNER_M, MID_GEOMETRY } from './scatterDetail';
 export const DETAIL_DISTANCE_M = 34;
-interface Pair { source: THREE.InstancedMesh; detail: THREE.InstancedMesh; saved: Float32Array; count: number; radius: number; transition: number; restoreMaterial: () => void }
+/** One LOD boundary: the distance it sits at and the half-width of its screen-door dither. */
+interface Edge { r: number; t: number }
+interface Pair {
+  source: THREE.InstancedMesh; detail: THREE.InstancedMesh; mid?: THREE.InstancedMesh;
+  saved: Float32Array; count: number; outer: Edge; inner?: Edge; restoreMaterial: () => void;
+}
 /** Partition matrices without moving, scaling or reseeding a single asset. */
 export function partitionDetail(source: Float32Array, count: number, low: Float32Array, high: Float32Array, eye: THREE.Vector3, radius = DETAIL_DISTANCE_M, transition = 0) {
   let near = 0, far = 0;
@@ -26,6 +31,40 @@ export function partitionDetail(source: Float32Array, count: number, low: Float3
   }
   return { near, far };
 }
+
+/**
+ * The same, for a class that has a third form between the two.
+ *
+ * An instance lands in every band whose dither it is inside, which is how the crossfade works and
+ * also what it costs: across a transition it is written to two buffers and DRAWN TWICE, once by
+ * each neighbour, at the sum of their triangle counts. A second boundary therefore adds a second
+ * double-drawn annulus, and any triangle claim that ignores it is counting a frame nobody renders.
+ */
+export function partitionDetailMid(
+  source: Float32Array, count: number,
+  near: Float32Array, mid: Float32Array, far: Float32Array,
+  eye: THREE.Vector3, inner: Edge, outer: Edge,
+) {
+  let n = 0, m = 0, f = 0;
+  for (let i = 0; i < count; i++) {
+    const offset = i * 16;
+    const dx = source[offset + 12]! - eye.x, dy = source[offset + 13]! - eye.y, dz = source[offset + 14]! - eye.z;
+    const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (distance < inner.r + inner.t) {
+      const at = n++ * 16;
+      for (let j = 0; j < 16; j++) near[at+j] = source[offset+j]!;
+    }
+    if (distance >= inner.r - inner.t && distance < outer.r + outer.t) {
+      const at = m++ * 16;
+      for (let j = 0; j < 16; j++) mid[at+j] = source[offset+j]!;
+    }
+    if (distance >= outer.r - outer.t) {
+      const at = f++ * 16;
+      for (let j = 0; j < 16; j++) far[at+j] = source[offset+j]!;
+    }
+  }
+  return { near: n, mid: m, far: f };
+}
 /**
  * Whether two geometries are the same shape, to the byte.
  *
@@ -41,9 +80,28 @@ function sameForm(a: THREE.BufferGeometry, b: THREE.BufferGeometry): boolean {
   return true;
 }
 
-/** Complementary screen-door coverage makes two opaque LODs dissolve without alpha sorting. */
-function installDetailFade(material: THREE.Material, radius: number, transition: number, high: boolean): () => void {
+/**
+ * Complementary screen-door coverage makes opaque LODs dissolve without alpha sorting.
+ *
+ * A form is described by the two edges it lives BETWEEN, either of which may be absent: the detail
+ * form keeps everything up to `keepTo`, the ordinary form everything from `keepFrom`, and a mid form
+ * has both. At one edge the nearer form discards where `coverage < fade` and the farther form where
+ * `coverage >= fade`, so the two keep exactly complementary fragments and nothing is drawn twice or
+ * left bare.
+ *
+ * BOTH EDGES BELONG TO THE KEY. The base cache key is the constant 'natural-surface-v1' for every
+ * non-foliage class, so a program is picked by this suffix alone; three returns the FIRST program
+ * whose key matches, and a mid material that collided with its own class's detail material would
+ * silently draw with the detail form's fade — a forest drawn to the horizon, with nothing to catch
+ * it. Keying on the band name and both edges makes the collision impossible rather than unlikely.
+ */
+export function installBandFade(material: THREE.Material, band: string, keepFrom: Edge | null, keepTo: Edge | null): () => void {
   const compile = material.onBeforeCompile, cacheKey = material.customProgramCacheKey;
+  const smooth = (e: Edge) => `smoothstep(${(e.r - e.t).toFixed(2)}, ${(e.r + e.t).toFixed(2)}, vDetailRange)`;
+  const clauses = [
+    keepFrom ? `coverage >= ${smooth(keepFrom)}` : null,
+    keepTo ? `coverage < ${smooth(keepTo)}` : null,
+  ].filter(Boolean);
   material.onBeforeCompile = (shader, renderer) => {
     compile.call(material, shader, renderer);
     shader.vertexShader = 'varying float vDetailRange;\n' + shader.vertexShader;
@@ -54,12 +112,11 @@ function installDetailFade(material: THREE.Material, radius: number, transition:
     shader.fragmentShader = 'varying float vDetailRange;\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
       #include <clipping_planes_fragment>
-      float detailFade = smoothstep(${(radius-transition).toFixed(2)}, ${(radius+transition).toFixed(2)}, vDetailRange);
       float coverage = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));
-      if (coverage ${high ? '<' : '>='} detailFade) discard;
+      if (${clauses.join(' || ')}) discard;
     `);
   };
-  material.customProgramCacheKey = () => `${cacheKey.call(material)}-detail-fade-${radius}-${high}`;
+  material.customProgramCacheKey = () => `${cacheKey.call(material)}-band-${band}-${keepFrom?.r ?? 'x'}-${keepTo?.r ?? 'x'}`;
   material.needsUpdate = true;
   return () => { material.onBeforeCompile = compile; material.customProgramCacheKey = cacheKey; material.needsUpdate = true; };
 }
@@ -122,13 +179,15 @@ export function detailLayer(): WorldLayer {
           geometry.dispose();
           continue;
         }
-        const material = DETAIL_MATERIAL[id]!();
-        // Slow branch/leaf sway, rooted in the same instance transform used for collision.
-        if (['broadleaf','buttress-tree','conifer','acacia','fern','grass-tuft','bromeliad','reeds','canopy-palm','thicket','berry-bush'].includes(id)) {
-          const height = Math.max(1, geometry.boundingSphere!.center.y * 2);
-          const surfaceCompile = material.onBeforeCompile;
-          material.onBeforeCompile = (shader, renderer) => {
-            surfaceCompile.call(material, shader, renderer);
+        const SWAYS = ['broadleaf','buttress-tree','conifer','acacia','fern','grass-tuft','bromeliad','reeds','canopy-palm','thicket','berry-bush'];
+        // The sway is a property of the CLASS, not of the band, so every form of a swaying class has
+        // to carry it. A mid form built without it would stand perfectly still among trees that move.
+        const formMaterial = (height: number) => {
+          const m = DETAIL_MATERIAL[id]!();
+          if (!SWAYS.includes(id)) return m;
+          const surfaceCompile = m.onBeforeCompile;
+          m.onBeforeCompile = (shader, renderer) => {
+            surfaceCompile.call(m, shader, renderer);
             shader.uniforms.uFoliageTime = time;
             shader.vertexShader = 'uniform float uFoliageTime;\n' + shader.vertexShader;
             shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
@@ -139,20 +198,51 @@ export function detailLayer(): WorldLayer {
               transformed.z += cos(uFoliageTime * .8 + phase) * weight * .045;
             `);
           };
-          material.customProgramCacheKey = () => `natural-surface-v1-foliage-${id}`;
-        }
+          m.customProgramCacheKey = () => `natural-surface-v1-foliage-${id}`;
+          return m;
+        };
+        const material = formMaterial(Math.max(1, geometry.boundingSphere!.center.y * 2));
         const radius = ["broadleaf", "buttress-tree", "conifer", "acacia", "canopy-palm", "dead-tree"].includes(id)
           ? 180 : ["boulder", "shore-rock", "lichen-rock", "thicket", "berry-bush"].includes(id) ? 75 : DETAIL_DISTANCE_M;
-        const transition = Math.max(3, radius * .08);
-        const restoreMaterial = installDetailFade(source.material as THREE.Material, radius, transition, false);
-        installDetailFade(material, radius, transition, true);
+        // ONE PAIR OF EDGE CONSTANTS, SHARED BY EVERY FORM THAT MEETS AT THEM. Recomputing a
+        // transition from each mesh's own radius is the obvious edit and it opens a see-through band
+        // along the rim, because the two neighbours would smoothstep over different intervals and
+        // their discards would stop being complementary.
+        const outer: Edge = { r: radius, t: Math.max(3, radius * .08) };
+        let inner: Edge | undefined;
+        let mid: THREE.InstancedMesh | undefined;
+
+        const innerM = MID_BAND_INNER_M[id];
+        if (innerM !== undefined && innerM > 0 && innerM < radius) {
+          const midGeometry = MID_GEOMETRY[id]!();
+          const edge: Edge = { r: innerM, t: Math.max(3, innerM * .08) };
+          // A mid form earns its mesh only if it is a form NEITHER neighbour already draws, and only
+          // if its dither band clears the outer one — overlapping bands are not exclusive, so some
+          // fragments would be discarded by all three meshes and some drawn by two.
+          if (sameForm(midGeometry, geometry) || sameForm(midGeometry, source.geometry) || edge.r + edge.t > outer.r - outer.t) {
+            midGeometry.dispose();
+          } else {
+            inner = edge;
+            const midMaterial = formMaterial(Math.max(1, midGeometry.boundingSphere!.center.y * 2));
+            installBandFade(midMaterial, 'mid', inner, outer);
+            mid = new THREE.InstancedMesh(midGeometry, midMaterial, source.instanceMatrix.count);
+            mid.name = `${source.name}:mid`; mid.count = 0;
+            mid.receiveShadow = true; mid.castShadow = false;
+            mid.boundingSphere = source.boundingSphere!.clone(); mid.boundingSphere.radius += 10;
+            mid.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            ctx.scene.add(mid);
+          }
+        }
+
+        const restoreMaterial = installBandFade(source.material as THREE.Material, 'ordinary', outer, null);
+        installBandFade(material, 'detail', null, inner ?? outer);
         const detail = new THREE.InstancedMesh(geometry, material, source.instanceMatrix.count);
         detail.name = `${source.name}:detail`; detail.count = 0;
         detail.receiveShadow = true; detail.castShadow = false;
         detail.boundingSphere = source.boundingSphere!.clone(); detail.boundingSphere.radius += 10;
         detail.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         ctx.scene.add(detail);
-        pairs.push({ source, detail, saved: new Float32Array(source.instanceMatrix.array.length), count: -1, radius, transition, restoreMaterial });
+        pairs.push({ source, detail, mid, saved: new Float32Array(source.instanceMatrix.array.length), count: -1, outer, inner, restoreMaterial });
       }
     },
     update(dt) {
@@ -174,15 +264,31 @@ export function detailLayer(): WorldLayer {
         const low = pair.source.instanceMatrix.array as Float32Array;
         pair.count = pair.source.count;
         pair.saved.set(low.subarray(0, pair.count * 16));
-        const { near, far } = partitionDetail(pair.saved, pair.count, low, pair.detail.instanceMatrix.array as Float32Array, ctx.camera.position, pair.radius, pair.transition);
-        pair.source.count = far; pair.detail.count = near;
-        uploadPrefix(pair.source.instanceMatrix, far); uploadPrefix(pair.detail.instanceMatrix, near);
+        if (pair.mid && pair.inner) {
+          const { near, mid, far } = partitionDetailMid(
+            pair.saved, pair.count,
+            pair.detail.instanceMatrix.array as Float32Array,
+            pair.mid.instanceMatrix.array as Float32Array,
+            low, ctx.camera.position, pair.inner, pair.outer,
+          );
+          pair.source.count = far; pair.detail.count = near; pair.mid.count = mid;
+          uploadPrefix(pair.source.instanceMatrix, far);
+          uploadPrefix(pair.detail.instanceMatrix, near);
+          uploadPrefix(pair.mid.instanceMatrix, mid);
+        } else {
+          const { near, far } = partitionDetail(pair.saved, pair.count, low, pair.detail.instanceMatrix.array as Float32Array, ctx.camera.position, pair.outer.r, pair.outer.t);
+          pair.source.count = far; pair.detail.count = near;
+          uploadPrefix(pair.source.instanceMatrix, far); uploadPrefix(pair.detail.instanceMatrix, near);
+        }
       }
     },
     dispose() {
-      for (const { detail, restoreMaterial } of pairs) {
+      for (const { detail, mid, restoreMaterial } of pairs) {
         restoreMaterial();
-        detail.removeFromParent(); detail.geometry.dispose(); (detail.material as THREE.Material).dispose(); detail.dispose();
+        for (const mesh of [detail, mid]) {
+          if (!mesh) continue;
+          mesh.removeFromParent(); mesh.geometry.dispose(); (mesh.material as THREE.Material).dispose(); mesh.dispose();
+        }
       }
       pairs.length = 0;
     },

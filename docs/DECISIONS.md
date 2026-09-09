@@ -1978,3 +1978,69 @@ NEWLY OPEN, and owed before any society cue is written: which of kinship, bereav
 transaction, being-known and inheritance already has a cue, which needs one, and which of those has
 a `W` direction (SOC-6.G) — and then whether that list consumes the ONE-TIME `W` re-anchor flag 20
 records, or ships unrouted like the thirteen manner scalars already riding on this (SOC-0.D).
+
+## C38 — the missing LOD, built by coarsening the forms that exist, and priced in draw calls
+
+C37 named the lever and did not pull it: ordinary forms are 4–36 triangles, detail forms 38–1,376,
+**there is no middle**, so `detailLayer`'s only choice for the whole 180 m band was an arm's-reach
+budget. C36 measured what that costs on `847db45ffffffff` — detail alone at 1,077,608 triangles in
+eight draw calls, 68% of a frame 2.6× over C16's ceiling.
+
+**The mid form is not new art.** `MID_GEOMETRY` runs the same 26 detail builders against primitives
+at half their segment budget, through a module-level knob the primitive helpers read. It cannot
+drift from the form it stands in for, because it *is* that builder. Every explicit segment argument
+in the file is at or above the floors, so at full budget the knob is the identity and the detail
+forms are byte-unchanged.
+
+**C22's method does not transfer, and that is a fact about the budget rather than the form.**
+Deriving detail-vs-mid against `CLASS_SWITCH_PIXELS` puts the handoff at 240–396 m for the tree
+classes — past the 180 m at which detail stops being drawn at all. But detail-vs-**ordinary** derives
+to 404 m by the same method while the layer ships 180 m, and every shipped detail radius is 0.1×–0.7×
+of its derived one. Two pixels is a TOTAL COUNT over the whole silhouette, and this renderer already
+ships far inside it deliberately. So the band is placed against **the error the renderer already
+accepts at the outer edge**: `Rin = R·√(k/(1−fog(R)))`, where k is the mid form's error as a fraction
+of the ordinary form's. For `broadleaf`, k = 0.186 and Rin = **79 m**, derived by a test that
+re-measures k and fails if the shipped number drifts.
+
+**A COARSENING IS NOT ALWAYS A MIDDLE, and a triangle count cannot see it.** Measured per class,
+21 of 24 qualify at k = 0.015–0.42. `shell` comes back k = 4.96 — its coarsened form is five times
+*farther* from the detail form than the plain ordinary form is, because the ordinary form is
+purpose-built low-poly art while dropping segments off a curved shell lands on neither. `cactus`
+coarsens exactly onto its ordinary form; `fern` coarsens to itself. All three pass a cost test
+comfortably.
+
+**AND THE ERROR HAS A SIGN, which the quotient throws away.** A coarsening ERODES: measured by
+covered area, the mid form keeps 0.784–0.998 of the detail silhouette, one-sided, on every class.
+I had claimed the opposite from bounding boxes — *a bounding box cannot see a coarsening*, because
+three puts a primitive's vertices on the circumscribing radius and cuts the chord between them, so
+the extremes that set the box are exactly what survives. The scheme holds for a reason worth stating
+precisely: a mid form is a middle not because it erodes little but because it erodes **less than the
+purpose-built form does** — broadleaf keeps 0.926 against ordinary's 0.602. Six classes have a
+*dilating* ordinary form (fern 8.96×, dead-shrub 2.11×, grass-tuft 1.98×), where k divides unlike
+errors and cannot place a band; `canopy-palm` at 1.188 was on the shortlist until this was measured.
+
+**THE BINDING CONSTRAINT IS DRAW CALLS, NOT TRIANGLES.** C16's ceiling is 600,000 triangles *and*
+120 calls, and the demo measures 119 of 120. A mid mesh is +1 unavoidable call per class with
+instances — the layer hands it the source's whole-disk bounding sphere, which is never
+frustum-culled. So the table has **one entry**, and its emptiness is the measurement: `broadleaf` is
+the most expensive form in the registry, holds the 180 m band, and **does not grow on the demo
+parcel** (rainforest and beach, whose largest tree is buttress-tree at 361). `buttress-tree` is next
+and would put the demo at exactly 120, which is a budget decision and not a derivation.
+
+MEASURED, worst of 24 headings, all three routes:
+
+| route | before | after |
+|---|---|---|
+| `847db45` detail layer | 1,077,608 tri / 8 calls | **558,804 tri / 9 calls** (−48%) |
+| `847db45` frame | 1,580,189 tri | **1,029,768 tri** (−35%) |
+| `8482589` frame | 921,050 | 921,050 — unchanged |
+| demo frame | 867,015 tri / 119 calls | 867,015 tri / 119 calls — unchanged |
+
+The two routes without `broadleaf` came back byte-identical, which is how the inertness was checked
+rather than assumed. The worst *heading* moved to 86°, so that frame's 102 calls are not comparable
+to the old worst heading's 109; the detail layer's own count went 8 → 9, the +1 predicted.
+
+**WHAT THIS DOES NOT DO.** `847db45` is still 1.72× C16's ceiling, down from 2.63×. C36 is not
+closed. And **nobody has looked at it**: the harness cannot see a rendered frame, so whether a
+broadleaf at 80 m carrying 7.4% less canopy is acceptable is a fidelity judgement with a screenshot
+attached, exactly as C21 and C22 were taken.
