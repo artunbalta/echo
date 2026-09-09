@@ -47,11 +47,12 @@ SOC-6.C–F/H/I, SOC-7.
 0.3 — 26,602 settlements and a 41-minute walk between them (`C33`) — and `feat/f4-trust` is merged
 rather than retired (SOC-0.G).
 
-**Gates, measured 2026-09-07:** `check:register` ✅ · `build:shared` + `typecheck` ✅ (4 workspaces,
+**Gates, measured 2026-09-08:** `check:register` ✅ · `build:shared` + `typecheck` ✅ (4 workspaces,
 and in that order — SOC-2.H hole 6) · `@echo/planet` 155/159, 4 skipped *(they need
 `PLANET_TEST_DATABASE_URL`; they PASS against a Postgres with `max_connections=300`)* ·
 `@echo/shared` 31/31 · `@echo/web` 219/219 · `@echo/realtime` copresence ✅ · `services/ml` 135/135 ·
-e2e gate 21/21 in 54.6 s. **Red, all ten pre-existing and all verified so by stashing the day's
+e2e gate **21/21 in 1.1 m**, at `workers: 1` — see SOC-1.D, where that constant was wrong the first
+time and is now measured on this tree. **Red, all ten pre-existing and all verified so by stashing the day's
 render changes:** `scatterSplit` ×2 (the `C28` overage), `scatterImpostor` ×4, `globePick` ×2,
 `slice` ×1, `spawnSea` ×1 — quarantined by reason, never by retuning a threshold.
 
@@ -627,21 +628,37 @@ of those. Nor is the server it: `✓ Compiled /parcel/[cell] in 559ms`, `[planet
 a cold parcel response of 1,316 ms. The one ten-second server cost, `[planet] seeded the registry in
 11.1s`, is lazy by design and is on no route any spec navigates to.
 
-**THE CAUSE IS WORKER OVERSUBSCRIPTION, and the suite was measuring itself.** `playwright.config.ts`
-set no `workers`, so Playwright picked `ceil(12/2) = 6` on a 12-core box — and every spec here drives
-a REAL-GPU chromium against a `next dev` server on that same box. Three full runs, same tree, same 31
+**THE CAUSE IS THE RUNNER, AND THE SUITE WAS MEASURING ITSELF.** `playwright.config.ts` set no
+`workers`, so Playwright picked `ceil(12/2) = 6` on a 12-core box — and `use.launchOptions` sets
+`--disable-gpu-vsync` and `--disable-frame-rate-limit`, so **each browser spins the WebGL world
+uncapped**: 534 fps on the ordinary parcel and 312 on the demo, measured through the host's own
+instrument (`C31`). A worker is not a process waiting on a page, it is a process burning every cycle
+it can reach, on the same box as the `next dev` server it is talking to. **Measured: ONE worker takes
+the load average from 3.1 to 7.1 by itself.**
+
+**THIS ITEM WAS FIXED TWICE, AND THE FIRST NUMBER WAS WRONG.** The first pass measured 6 / 3 / 1
+workers on the PRE-MERGE tree and concluded three was both green and faster than one, so `workers: 3`
+was committed. `feat/f4-trust` then added routes and modules and the constant was carried forward
+**without being re-measured** — which is precisely the class of error §3 exists to catch, committed
+inside the change that closed this item. Re-measured on the merged tree, quarantine excluded, 21
 tests:
 
-| workers | wall | timed out | dev server's worst answer | its worst compile |
-| --- | --- | --- | --- | --- |
-| 6 | 15.3 m | **14 of 31** | 122,912 ms | 184.1 s (`/api/telemetry`) |
-| 3 | 3.0 m | **0** | 10,126 ms | 3.0 s |
-| 1 | 3.3 m | **0** | 2,121 ms | 535 ms |
+| workers | wall | result | load average, before → after |
+| --- | --- | --- | --- |
+| 3 | 27.8 m | **6 FAILED** / 15 passed | 3.99 → **62.10** |
+| 1 | **1.1 m** | **21 passed**, exit 0 | 3.08 → 7.09 |
 
-At six the load average reached **102 on 12 cores** and the dev server took 68,842 ms to return the
-landing page — which is why `smoke.spec.ts`, whose entire body is a `goto` and a title assertion,
-timed out, and why `stations.spec.ts` timed out twice on assertions its own header says land in the
-first paint. **Three workers is FASTER in wall time than one**, and nothing times out at all.
+**Twenty-five times faster and green**, confirmed over three consecutive runs (1.1 m, 1.2 m, 1.2 m,
+21/21 each) — and the third started at a load average of 14.6 and still passed, which is robustness
+three workers never had. Every one of the six three-worker failures was a `Test timeout` or
+`page.goto: net::ERR_ABORTED`, **including `smoke.spec.ts`, whose entire body is a goto and a title
+assertion and which passes ALONE IN 3.0 SECONDS on the same machine.** Not one was an assertion about
+the world.
+
+*(A run taken while macOS Spotlight was re-indexing — 142% CPU on `Metadata.framework`, load 105 —
+gave 11 failed of 21 with the identical signature. It is not evidence about the code, and it is
+recorded only because it is the same failure arriving from outside and it took a third run to tell
+the two apart.)*
 
 **Both of the remedies this item offered were taken anyway, for the reasons they are actually good
 for, not the one it gave:**

@@ -62,25 +62,38 @@ export default defineConfig({
   // sentence the author wrote. That is how a starved dev server spent months looking like a slow
   // world. 120 s is the smallest number that lets each of them finish and speak.
   timeout: 120_000,
-  // THREE WORKERS, not the six Playwright picks on a 12-core machine, and this is the whole of the
-  // batch flakiness. Every spec here drives a REAL-GPU chromium (see use.launchOptions) against a
-  // `next dev` server on the same box, and at six the box loses. Measured, one full chromium run
-  // each, same tree, same 31 tests:
+  // ONE WORKER, and the number was wrong twice before it was right.
   //
-  //   workers   wall     timed out   dev server's worst answer   its worst compile
-  //   6         15.3m    14 of 31    122,912 ms                  184.1 s  (/api/telemetry)
-  //   3          3.0m     0 of 31     10,126 ms                    3.0 s  (/api/telemetry)
-  //   1          3.3m     0 of 31      2,121 ms                    535 ms (/api/telemetry)
+  // THE MECHANISM. `use.launchOptions` below sets --disable-gpu-vsync and
+  // --disable-frame-rate-limit, so each browser spins the WebGL world as fast as the GPU allows --
+  // measured through the host's own instrument, 534 fps on the ordinary parcel and 312 on the demo.
+  // A worker is therefore not a process waiting on a page, it is a process burning every cycle it
+  // can reach, and it is doing that on the same box as the `next dev` server it is talking to.
+  // MEASURED: ONE worker takes the 12-core load average from 3.1 to 7.1 by itself.
   //
-  // At six the load average reached 102 on 12 cores and the dev server took 68,842 ms to return the
-  // landing page — which is why smoke.spec.ts, whose whole body is a goto and a title assertion,
-  // timed out, and why stations.spec.ts timed out twice on assertions its own header says land in
-  // the first paint. THE SUITE WAS NOT MEASURING THE WORLD; IT WAS MEASURING ITSELF. At three it is
-  // FASTER in wall time than at one, and nothing times out at all.
+  // MEASURED, this tree, quarantine excluded (21 tests), reporter=line:
   //
-  // Lower this on a machine with fewer cores. Do not raise it to "use the hardware": the hardware is
-  // already shared with the dev server every one of these specs is talking to.
-  workers: 3,
+  //   workers   wall     result                    load average, before -> after
+  //   3         27.8m    6 FAILED / 15 passed      3.99 -> 62.10
+  //   1          1.1m    21 passed, exit 0         3.08 ->  7.09
+  //
+  // Twenty-five times faster and green. Every one of the six failures at three workers was a
+  // `Test timeout` or `page.goto: net::ERR_ABORTED` -- including smoke.spec.ts, whose entire body is
+  // a goto and a title assertion and which passes ALONE IN 3.0 SECONDS on the same machine. Not one
+  // was an assertion about the world. THE SUITE WAS NOT MEASURING THE WORLD; IT WAS MEASURING
+  // ITSELF, and three workers is still that failure, just less of it than six.
+  //
+  // WHAT THIS COMMENT SAID BEFORE, and why it was wrong, because the correction is the point. It
+  // carried a 6/3/1 table concluding "at three it is FASTER in wall time than at one, and nothing
+  // times out at all". That table was taken on the PRE-MERGE tree; feat/f4-trust then added routes
+  // and modules, and the number was carried forward without being re-measured. A constant quoted
+  // from an old measurement is exactly the class of error SOCIETY-PLAN §3 exists to catch, and it
+  // happened here in the commit that closed SOC-1.D. Re-measure after anything that changes what a
+  // page loads, and put the new table in this comment rather than in a commit message.
+  //
+  // Do not raise this to "use the hardware": the hardware is already shared with the dev server, and
+  // an uncapped browser will take all of it that it is given.
+  workers: 1,
   fullyParallel: false,
   retries: 0,
   reporter: [["list"]],
