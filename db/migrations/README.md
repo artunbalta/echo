@@ -62,10 +62,41 @@ The gap is PERMANENT and is left open on purpose. The runner keys on the version
 requires contiguity, and 0010 is not free to reuse: a number a reader cannot account for is exactly
 what this folder is trying to stop producing.
 
-## They are not portable to a plain Postgres, and that is measured
+## They are not portable to a plain Postgres, and it takes TWO things to apply them
 
-Applied against a stock Postgres 16.15, **`0007_waitlist.sql` fails with `role "anon" does not
-exist`**. 0007 (eight references) and 0008 (two) hard-depend on Supabase's `anon` and
-`authenticated` roles at `revoke all on function … from public, anon, authenticated`. Anything that
-stands up a bare Postgres — the `pg` path of SOC-2.A, or CI under SOC-2.H — has to create those two
-roles first or skip those two files, and must say which.
+`0001_init.sql:1` says it out loud — "Run against a Supabase Postgres with pgvector" — and the set
+needs both halves of that sentence.
+
+1. **pgvector.** `0001_init.sql:5` is `create extension if not exists vector;`. **`if not exists`
+   guards against the extension being already CREATED, never against its being unavailable**, so on
+   a Postgres without pgvector the very first migration dies at line 5 and **zero of the thirty
+   tables are created**:
+
+       psql:db/migrations/0001_init.sql:5: ERROR:  extension "vector" is not available
+
+   The columns that need it are real and correct: `persona_state.z_mean vector(8)` matches
+   `persona.D == 8`, and `behavior_index.context_embedding vector(256)` matches
+   `SETTINGS.embed_dim == 256`.
+
+2. **The `anon` and `authenticated` roles.** 0007 (eight references) and 0008 (two) hard-depend on
+   them at `revoke all on function … from public, anon, authenticated`; without them
+   `0007_waitlist.sql` fails with `role "anon" does not exist`.
+
+CI provisions both: `pgvector/pgvector:pg16` rather than `postgres:16`, and `create role anon;
+create role authenticated;` before the runner.
+
+### ⚠️ This section was wrong when it was first written, and the reason matters more than the fix
+
+It said, under the heading "and that is measured", that the first failure on a stock Postgres was
+0007's missing role. **It is not — it is pgvector at 0001:5, before a single table.** The original
+measurement was taken on a machine where Homebrew's pgvector 0.8.6 had been installed **27 hours
+earlier**, so 0001 sailed past and 0007 was merely the first failure *that machine* could reach. The
+condition was never stated, so the result read as unconditional.
+
+That is SOCIETY-PLAN §3's exact failure mode — *a number measured under an unstated condition,
+recorded as unconditional* — and it shipped in the commit that built the migration ledger to prevent
+this class of thing. It also made CI red for one commit: the job used `postgres:16`, which does not
+carry pgvector, so `db:migrate:apply` would have died at 0001:5.
+
+**A measurement carries its environment or it carries nothing.** If you re-measure portability, say
+which Postgres, with which extensions, installed when.

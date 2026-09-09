@@ -74,7 +74,7 @@ jobs:
           docker run -d --name echo-pg \
             -e POSTGRES_USER=echo -e POSTGRES_DB=echo_planet \
             -e POSTGRES_HOST_AUTH_METHOD=trust \
-            -p 55432:5432 postgres:16 -c max_connections=300
+            -p 55432:5432 pgvector/pgvector:pg16 -c max_connections=300
           for i in $(seq 1 30); do
             docker exec echo-pg pg_isready -U echo -q && break
             sleep 2
@@ -83,11 +83,19 @@ jobs:
           # only place the migration set is exercised end to end, and it is also what puts the
           # registry tests on a properly migrated database rather than on one table applied by hand.
           #
-          # The two roles are created first because the set is NOT PORTABLE to a stock Postgres:
-          # MEASURED, 0007_waitlist.sql fails with `role "anon" does not exist`, and 0007 and 0008
-          # hard-depend on Supabase's anon/authenticated at
-          # `revoke all on function … from public, anon, authenticated`. Creating them is the
-          # smaller lie than skipping two migrations and pretending the set applied.
+          # THE IMAGE IS pgvector/pgvector, NOT postgres:16, and that is not a preference.
+          # `0001_init.sql:5` is `create extension if not exists vector;` — and `if not exists`
+          # guards against the extension being ALREADY CREATED, never against its being unavailable.
+          # The official postgres image does not ship pgvector, so this job would have died at line
+          # 5 of the first migration, before a single table. It was `postgres:16` for one commit;
+          # see db/migrations/README.md for why that mistake was made and what it says about the
+          # measurement it came from.
+          #
+          # The two roles are created because 0007 and 0008 hard-depend on Supabase's
+          # anon/authenticated at `revoke all on function … from public, anon, authenticated`, and
+          # MEASURED, 0007_waitlist.sql fails with `role "anon" does not exist` without them.
+          # Creating them is the smaller lie than skipping two migrations and calling the set
+          # applied.
           docker exec -i echo-pg psql -q -U echo -d echo_planet \
             -c "create role anon; create role authenticated;"
           npm run db:migrate:apply
