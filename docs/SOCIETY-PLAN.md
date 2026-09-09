@@ -181,10 +181,17 @@ exists. So does `docs/MULTIPLAYER.md:19`.
 
 ## §3. Corrections this plan makes to the record
 
-A roadmap that cites a wrong record inherits the error. Six are listed here — four record errors
-and two live defects — and a seventh, item 7, was found by the ground-truth pass that CORRECTED the
-first four, in this document's own SOC-1.B. **Items 1–4 are SOC-0.C and are ✅ done; item 7 was
-fixed in the same pass. Items 5 and 6 are owned by SOC-2.A/2.B and SOC-1.E and are still open.**
+A roadmap that cites a wrong record inherits the error. **Eight are listed here — four record
+errors, two live defects, and two this document produced itself.** Item 7 was found by the
+ground-truth pass that CORRECTED the first four, in this document's own SOC-1.B; item 8 was CREATED
+by this document's own SOC-0.E and found by its SOC-2.C.
+
+**Items 1–4 (SOC-0.C), 6 (SOC-1.E), 7 and 8 are ✅ done. Item 5 is ◑ — SOC-2.B removed the
+name-as-key collision, and the foreign key is still owed to SOC-2.E.**
+
+*That two of the eight are this plan's own is not an embarrassment to be tidied away; it is the
+measurement. A document that corrects records and produces none of its own has not been read
+closely enough.*
 
 1. **`DECISIONS.md` C23 and `game/world/touchInput.ts` both state "MOVER.ACCEL is 28 tiles/s² and
    the walk-to-run gap is 2.4 tiles/s, so the mover crosses it in 86 ms".** Wrong for the route
