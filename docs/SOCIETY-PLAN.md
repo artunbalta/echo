@@ -183,12 +183,13 @@ exists. So does `docs/MULTIPLAYER.md:19`.
 
 ## §3. Corrections this plan makes to the record
 
-A roadmap that cites a wrong record inherits the error. **Eight are listed here — four record
-errors, two live defects, and two this document produced itself.** Item 7 was found by the
+A roadmap that cites a wrong record inherits the error. **Nine are listed here — four record
+errors, two live defects, and three this document produced itself.** Item 7 was found by the
 ground-truth pass that CORRECTED the first four, in this document's own SOC-1.B; item 8 was CREATED
-by this document's own SOC-0.E and found by its SOC-2.C.
+by this document's own SOC-0.E and found by its SOC-2.C; item 9 was created and committed by SOC-1's
+own frame work and found by an adversarial review of it.
 
-**Items 1–4 (SOC-0.C), 6 (SOC-1.E), 7 and 8 are ✅ done. Item 5 is ◑ — SOC-2.B removed the
+**Items 1–4 (SOC-0.C), 6 (SOC-1.E), 7, 8 and 9 are ✅ done. Item 5 is ◑ — SOC-2.B removed the
 name-as-key collision, and the foreign key is still owed to SOC-2.E.**
 
 *That two of the eight are this plan's own is not an embarrassment to be tidied away; it is the
@@ -263,6 +264,23 @@ closely enough.*
    *This is the lesson §3 exists to teach, arriving inside the document that teaches it:* a number
    quoted from a reading ("42% invisible") became a claim about a measurement ("on every route
    measured") and then a remedy, and none of the three steps was checked against the file.
+
+9. **I refuted a real defect with an instrument that could not have seen it, and committed the
+   refutation.** ✅ *corrected.* Building the mid-band form for C38, the first hypothesis was that
+   coarsening a primitive SHRINKS it. I checked with bounding boxes, got ratios of 0.93–1.00, and
+   wrote into both a test comment and a commit message that "the envelope is intact and the
+   difference is rim, not size."
+   **A bounding box cannot see a coarsening.** three puts a primitive's vertices ON the
+   circumscribing radius and cuts the chord between them, so the extreme points that set the box are
+   exactly the ones a coarsening preserves; the instrument was guaranteed to return 1.00 whether the
+   hypothesis was true or false. Measured by covered silhouette area instead, the mid form loses up
+   to 22%, one-sided, on every class — the shrink was real.
+   *This is item 8's species, not item 7's.* Item 8 verified that text had survived a merge rather
+   than that it still meant what it said; this verified that a number came back unchanged from a
+   measurement that could not have changed. **A check that cannot fail is not evidence**, and both
+   times the failure was invisible because the check passed. It was found by pointing four
+   adversarial reviewers at the design before it shipped, which is the only reason it is item 9 of
+   this list rather than a wrong sentence in `DECISIONS`.
 
 ---
 

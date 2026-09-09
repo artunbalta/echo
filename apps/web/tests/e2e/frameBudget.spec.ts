@@ -59,10 +59,15 @@ async function readFrame(page: import("@playwright/test").Page): Promise<Frame> 
  * BOTH ordinary cells, named, because "the ordinary parcel" is not one place.
  *
  * `scatterSplit.spec.ts` measures `8482589ffffffff` and `demoUrl.ORDINARY_CELL` is
- * `847db45ffffffff`, and MEASURED they are 921,050 and 1,580,189 triangles at their worst headings —
+ * `847db45ffffffff`, and MEASURED they were 921,050 and 1,580,189 triangles at their worst headings —
  * a factor of 1.7 between two parcels the suite calls by the same name. DECISIONS C28 and C31 both
  * say "the ordinary parcel" as though it were singular; C28's 907,250 is the first cell. A frame
  * budget quoted without its cell is a frame budget about one parcel of 284,004.
+ *
+ * SINCE C38 the second cell is 1,029,768 and the first is unchanged, which is the same point made
+ * twice: `broadleaf` grows on `847db45` and on neither of the others, so the mid band that halves
+ * its detail layer is INERT on the two routes that do not have the class. The demo came back
+ * byte-identical, 867,015 triangles and 119 calls, which is how that inertness was checked.
  */
 for (const [label, href] of [
   ["ordinary 8482589 (C28's cell)", "/parcel/8482589ffffffff?debug=layers"],

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildCharacter, poseCharacter, solveLeg, gaitFootTarget, reachCharacter } from '../src/game/three/character';
-import { partitionDetail, detailLayer } from '../src/game/world/detailLayer';
+import { partitionDetail, partitionDetailMid, installBandFade, detailLayer } from '../src/game/world/detailLayer';
 import { parcelMovement, initialMover, stepMover } from '../src/game/world/controller';
 import { meadowSeed } from '../src/game/world/meadowLayer';
 import { parcelEnvironmentLayers, parcelLayers } from '../src/game/world/parcelWorld';
@@ -118,4 +118,47 @@ test('LOD transition shares only the overlap band; every other asset is drawn ex
   const result=partitionDetail(source,3,low,high,new THREE.Vector3(),34,4);
   assert.deepEqual(result,{near:2,far:2});
   assert.equal(high[12],20);assert.equal(high[28],34);assert.equal(low[12],34);assert.equal(low[28],50);
+});
+
+test('a three-band LOD draws every asset exactly once outside the two overlap bands', () => {
+  // The three-way partition is only correct if it is exhaustive AND exclusive: every instance lands
+  // in at least one bucket, and in two only where a dither is mixing its neighbours. An instance
+  // that lands in none is an asset that vanishes; one that lands in three is drawn three times.
+  const inner={r:79,t:6.32}, outer={r:180,t:14.4};
+  const at=[10,75,82,120,170,190,300];
+  const source=new Float32Array(at.length*16);
+  for(const [i,x] of at.entries()) new THREE.Matrix4().makeTranslation(x,0,0).toArray(source,i*16);
+  const near=new Float32Array(source.length), mid=new Float32Array(source.length), far=new Float32Array(source.length);
+  const result=partitionDetailMid(source,at.length,near,mid,far,new THREE.Vector3(),inner,outer);
+
+  // Inner dither spans [72.68, 85.32] and outer [165.6, 194.4], so 75 and 82 straddle the first and
+  // 170 and 190 straddle the second; 10 is detail alone, 120 mid alone, 300 ordinary alone.
+  assert.deepEqual(result,{near:3,mid:5,far:3});
+  const bucketed=(a:Float32Array,n:number)=>Array.from({length:n},(_,i)=>a[i*16+12]);
+  assert.deepEqual(bucketed(near,result.near),[10,75,82]);
+  assert.deepEqual(bucketed(mid,result.mid),[75,82,120,170,190]);
+  assert.deepEqual(bucketed(far,result.far),[170,190,300]);
+
+  // Exhaustive and at-most-twice, stated as the property rather than as the three lists above.
+  for(const x of at){
+    const n=bucketed(near,result.near).filter(v=>v===x).length+bucketed(mid,result.mid).filter(v=>v===x).length+bucketed(far,result.far).filter(v=>v===x).length;
+    assert.ok(n===1||n===2,`an asset at ${x} m is drawn ${n} times`);
+  }
+});
+
+test('the three bands of one class compile to three different programs', () => {
+  // THE SILENT ONE. The base cache key is the constant 'natural-surface-v1' for every non-foliage
+  // class, so a program is chosen by the fade suffix alone, and three returns the FIRST program
+  // whose key matches. A mid material that collided with its own class's detail material would draw
+  // with the detail form's fade and nothing would report it — the symptom is a forest drawn to the
+  // horizon, which reads as a tuning problem rather than a cache collision.
+  const inner={r:79,t:6.32}, outer={r:180,t:14.4};
+  const keys=new Set<string>();
+  for(const [band,from,to] of [['detail',null,inner],['mid',inner,outer],['ordinary',outer,null]] as const){
+    const m=new THREE.MeshLambertMaterial();
+    m.customProgramCacheKey=()=>'natural-surface-v1';
+    installBandFade(m,band,from,to);
+    keys.add(m.customProgramCacheKey());
+  }
+  assert.equal(keys.size,3,`three bands produced ${keys.size} distinct program keys: ${[...keys].join(' ')}`);
 });
