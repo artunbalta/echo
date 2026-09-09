@@ -1368,8 +1368,9 @@ getting it needs about forty lines in `PlanetWorld` (tag at `scene.add`, read ba
 own per-object hooks) rather than a change to any layer.
 
 AND THE RED SPECS, WHICH THIS ENTRY FIRST UNDERSTATED — corrected under SOC-1.D. It said "one more
-red spec". A full run of the suite at three workers is **10 failed, 24 passed, 2.9 minutes, and ZERO
-timeouts**, and the ten are across FIVE spec files, not two:
+red spec". A full run of the suite is **10 failed, 24 passed**, and the ten
+are across FIVE spec files, not two (the wall time is not quoted here: SOC-1.D later found the
+runner's own worker count was the variable, and it is `workers: 1` now):
 
   globePick.spec.ts        2   the parcel the landing names / the hexagon over the ground it names
   scatterImpostor.spec.ts  4   the far band at 390 m and 448 m, ordinary parcel and demo

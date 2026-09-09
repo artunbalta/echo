@@ -51,9 +51,11 @@ jobs:
       # for a recorded reason — see playwright.config.ts, which holds the list and the reasons.
       #
       # playwright.config.ts starts the app itself (webServer, `reuseExistingServer: true`, a 180 s
-      # boot budget), so there is no separate server step. It also pins `workers: 3`: SOC-1.D
-      # measured that Playwright's own default of six on a 12-core box timed out 14 of 31 tests by
-      # starving the dev server those very tests were talking to.
+      # boot budget), so there is no separate server step. It also pins `workers: 1`, and that is a
+      # measurement rather than caution: the launch args uncap the frame rate, so ONE worker takes a
+      # 12-core load average from 3.1 to 7.1 all by itself. On this tree, three workers is 6 failed
+      # in 27.8 minutes and one worker is 21 passed in 1.1 -- twenty-five times faster AND green,
+      # with every three-worker failure a timeout rather than an assertion. See the config comment.
       - name: e2e (quarantine excluded)
         env:
           E2E_QUARANTINE: skip
