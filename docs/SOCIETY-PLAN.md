@@ -569,6 +569,30 @@ brackets the whole frame as one object. The hook is on drawables only now.
    records this plan calling a free win.
 3. **A BODY COSTS TWICE WHAT SOC-4.A ASSUMES** — see below.
 
+**✅ AND THE FRAME THAT ACTUALLY BREAKS THE BUDGET IS NOW ATTRIBUTED — `C36`.** C31's split was the
+SPAWN VIEW, which is the cheapest frame either route draws. Over a full 24-heading turn:
+
+| | worst frame | `detail` | everything else |
+| --- | --- | --- | --- |
+| ordinary `8482589` | 921,050 | 255,481 | scatter 279k · meadow 172k · terrain 181k |
+| ordinary `847db45` | **1,580,189** | **1,077,608 in 8 calls — 68%** | 259,788 combined |
+| demo | 867,015, **119 of 120 calls** | 254,092 | scatter 244k · terrain 178k |
+
+**Four things this settles, and the first makes C28 and C31 imprecise.**
+1. **"The ordinary parcel" is TWO cells** — `scatterSplit` measures `8482589`, `demoUrl` designates
+   `847db45` — and they differ **1.7×** at their worst headings. Both entries said "the ordinary
+   parcel" as though it were one place.
+2. **`detailLayer` is the whole problem on the worse cell**: 68% of the frame, in eight draw calls,
+   5.2× its own spawn-view cost. Every plan for fitting the frame was aimed at the spawn view's
+   biggest layers.
+3. **The shadow pass is NOT the problem** — the standing hypothesis, refuted. 7% of the worst frame.
+   C20's 1.7 m rule is working: `detail` and `meadow` cast nothing.
+4. **One parcel is not one number.** `847db45`'s best heading is 596,810 — *under* the ceiling —
+   against 1,580,189 at its worst. A 2.6× swing without moving.
+
+*The instrument was checked against itself first: `?debug=render` and `?debug=layers` return
+1,580,189 identically, so the per-object hooks are not in the reading.*
+
 **☐ Still owed: the phone reading.** It is now possible without a harness, and nobody has taken it.
 
 There is **no measured shipped whole-frame number.** `DECISIONS.md:806-807` gives 326,414 tri / 37
@@ -1115,8 +1139,16 @@ exceed the draw-call ceiling by themselves, on a frame that is already 1.5× ove
 
 This is why SOC-4 is not blocked *by* SOC-1.A but *by what SOC-1.A found*: SOC-4.A is no longer
 "make the rig affordable to draw more than once", it is **make the frame fit at all**, and the rig is
-one term in it. `C31` says which the others are: `detail` at 205,466 and `meadow` at 171,600 are both
-larger than the body, and neither is a person.
+one term in it.
+
+**And `C36` says which term matters, which is not the one `C31`'s spawn view suggested.** On the
+frame that actually breaks the ceiling, `detailLayer` is **1,077,608 triangles in eight draw calls —
+68% of everything** — while meadow, scatter, terrain and the rig together are 259,788. The blocker is
+one layer's LOD behaviour, not a general fidelity negotiation. `detailLayer` already sizes its mesh
+at the full class count and re-partitions every frame; that is where to look first.
+
+**The draw-call half is separately urgent:** the demo's worst heading spends **119 of C16's 120
+calls** before a second body exists, and a body is 46.
 
 Merging to one skinned geometry with vertex colours is also the prerequisite for reusing
 `deriveImpostor`, which reads `geometry.getAttribute('color')` unconditionally
