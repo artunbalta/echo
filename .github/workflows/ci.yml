@@ -79,8 +79,20 @@ jobs:
             docker exec echo-pg pg_isready -U echo -q && break
             sleep 2
           done
+          # THE WHOLE FOLDER, THROUGH THE RUNNER — not one hand-picked file (SOC-2.C). This is the
+          # only place the migration set is exercised end to end, and it is also what puts the
+          # registry tests on a properly migrated database rather than on one table applied by hand.
+          #
+          # The two roles are created first because the set is NOT PORTABLE to a stock Postgres:
+          # MEASURED, 0007_waitlist.sql fails with `role "anon" does not exist`, and 0007 and 0008
+          # hard-depend on Supabase's anon/authenticated at
+          # `revoke all on function … from public, anon, authenticated`. Creating them is the
+          # smaller lie than skipping two migrations and pretending the set applied.
           docker exec -i echo-pg psql -q -U echo -d echo_planet \
-            < db/migrations/0009_planet_registry.sql
+            -c "create role anon; create role authenticated;"
+          npm run db:migrate:apply
+        env:
+          DATABASE_URL: postgres://echo@127.0.0.1:55432/echo_planet
 
       # planet + shared + web. NOT realtime: apps/realtime/package.json has no `test` key, so
       # `--workspaces --if-present` skips it silently. Its suites are run explicitly below.
