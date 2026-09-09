@@ -1,8 +1,23 @@
 """Per-user learning state (§9.9: lightweight, no per-user LLM weights).
 
 Holds {persona posterior, reward head, behavior index, autonomy buckets, calibration
-data}. In-memory by default; optionally hydrated/persisted to Supabase. The behavior
-index is an in-process cosine store mirroring the pgvector `behavior_index` table.
+data}. The behavior index is an in-process cosine store mirroring the pgvector
+`behavior_index` table.
+
+IN MEMORY, FULL STOP. This docstring used to say "optionally hydrated/persisted to Supabase" and
+there is no such option: nothing in `services/ml` has ever read a database, and `persona_state`,
+`behavior_index`, `reward_model_state`, `autonomy_buckets`, `preference_pairs` and
+`meeting_outcomes` have been declared in `db/migrations/0001_init.sql` since June with ZERO writers.
+`render.yaml` carried the same false sentence as a deployment instruction — "with both set, learning
+state hydrates/persists to Supabase" — which an operator could act on and get nothing.
+
+SO EVERY POSTERIOR RESETS ON EVERY REDEPLOY, and `autoDeploy: true` with no `buildFilter` means
+every push to the connected branch redeploys both services: measured over 90 days on `main`, 143
+commits across 17 active days, **of which only 38 touch `services/ml`** — so most of the redeploys
+that wipe every posterior are for changes that never touch the measurement engine. What a person
+then sees is `EchoPanel`'s "No one knows you here yet — not even your echo."
+
+That is SOC-2.D, and it is not fixed here. What is fixed here is the record.
 """
 from __future__ import annotations
 

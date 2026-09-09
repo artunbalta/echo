@@ -1641,6 +1641,86 @@ guards it derives its bound from `SETTLEMENT_RATE` itself — it was a hard-code
 went red the first time this dial moved, which is exactly how a bound gets re-typed to whatever the
 code now does.
 
+## C34 — the ML store is SNAPSHOTTED, not replayed; and "shared" is not being taken yet
+
+Answers the design half of SOCIETY-PLAN SOC-2.D, taken 2026-09-09. **No durable store is built by
+this entry.** What is built is the precondition (⚑24) and the decision; the build is next, and this
+says exactly what it will and will not be.
+
+THE ITEM'S TITLE IS "SHARED, DURABLE" AND THOSE ARE TWO PROBLEMS WITH DIFFERENT COSTS.
+
+  AMNESIA — nothing in `services/ml` serializes anything, so every restart returns every user to the
+  prior. Measured frequency: `render.yaml` has `autoDeploy: true` and NO `buildFilter`, so every
+  push to the connected branch redeploys both services. Over 90 days on `main`: 143 commits across
+  17 active days, **of which only 38 touch `services/ml`** — so the great majority of the redeploys
+  that wipe every posterior are for changes that never touch the measurement engine. **A docs commit
+  resets everyone.** What a person sees is `EchoPanel`'s "No one knows you here yet — not even your
+  echo", plus buckets back to `copilot` and the conditional signature gone.
+
+  ONE PROCESS, FOREVER — `Store` is a process-local dict, so the service can never run a second
+  worker or a second instance. Demonstrated with the real Dockerfile command plus `--workers 2`: 12
+  sequential observations for one user, then 12 reads on fresh connections, and one read came back
+  `persona.version 0`. Distinct versions `[0, 12]`. At `--workers 1`, `[12]`. **And the trap worth
+  recording: with a single keep-alive client the split does not appear at all** — the connection
+  pins to one socket — so anyone who tests this with one client concludes it is fine.
+
+**THIS DECISION TAKES DURABLE AND LEAVES SHARED.** A snapshot does not make the store shared, and it
+was measured not to: version 5 of 10 across two workers, with and without a version guard. The only
+thing that would is moving the read-modify-write into Postgres, which this repo already owns the
+primitive for — `registry.ts`'s `pg_advisory_xact_lock` — and which is expressible through the `pg`
+client and NOT through PostgREST. **So the shared half is coupled to SOC-2.A's choice of access path
+and the durable half is not.** Saying which half is being taken is the whole reason this paragraph
+exists: SOC-2.D has one name and two problems, and a half-fix recorded as a whole one is this
+repo's standing failure.
+
+SNAPSHOT, NOT REPLAY, AND THE REASON IS A MEASUREMENT. The attractive alternative was to keep no
+serialized state at all and rebuild a user by replaying their events — `feat/measurement-corpus`
+already does this and claims the rebuild "cannot drift from the live fold". **That property does not
+survive being ported onto the log this tree actually has.** `behavioral-store.ts` writes
+`action: str(ev.type) || "unknown"` — the raw type string — while the posterior was folded on a
+synthesized English sentence built in TypeScript ("On a lean day (day 3) they chose …"), which
+`persona.py` embeds and stylometrizes. Measured divergence on the real path, six folds each with
+identical telemetry: **max|Δmu| = 1.3006 against ‖mu‖ = 1.1579.** Changing one word inside the
+sentence moves it 0.3940. Reproducing the fold from migration 0011 means reimplementing a
+load-bearing string generator character-for-character in a second language.
+
+AND REPLAY'S ONE GENUINE ADVANTAGE IS INSURANCE AGAINST AN EVENT THAT CANNOT BE SCHEDULED. It would
+survive the one-time `W` re-anchor (C29) where a snapshot would not. But `⚑21` records that the
+re-anchor "is not schedulable until labels exist". **The argument that settles it: a snapshot stamped
+with the `W` it was folded under, which self-invalidates when `W` changes, degrades to the prior —
+which is precisely today's behaviour.** So the re-anchor costs nothing relative to the status quo,
+and one `w_sha256` column buys the whole of replay's advantage. Replay would also have cost a second
+identity-keyed behavioural log whose retention window is explicitly undecided (`⚑22`), an
+O(all-events-ever) cold read on a path reachable unauthenticated, and it still would not restore
+`reward`, `buckets`, `calib` or `temperature`.
+
+USE THE TABLES THAT EXIST. `persona_state`, `behavior_index`, `reward_model_state`,
+`autonomy_buckets`, `preference_pairs` and `meeting_outcomes` have been declared in `0001_init.sql`
+since June with **zero writers** — the same shape as `parcels.display_name`, which SOC-2.B has just
+filled in rather than superseded. The two expensive things are already right: `z_mean vector(8)`
+matches `persona.D == 8`, and `context_embedding vector(256)` matches `embed_dim == 256`, both
+enforced by pgvector. **ONE additive migration, numbered 0014** — 0013 is reserved for renaming the
+corpus migration off its branch — adding what has no column at all: `cond`, `temperature`, `calib`,
+`baseline_mu`, `BehaviorEntry.provenance`, and `Bucket._cusum`. Not `_recent`: it is written and
+never read, and the ECE that gates promotion is computed from `calib`.
+
+ONE COMMENT IS A LIE AND IS FIXED BY A COMMENT, NOT A COLUMN. `z_cov_json` says "diagonal covariance
+as array" and the shipped Σ is a full 8×8 — the comment was true for **seven hours**, between 0001
+shipping and "WI-1: full-covariance persona posterior" landing twelve commits later the same day,
+and nothing noticed for 85 days because nothing writes the column. `jsonb` cannot catch it: measured,
+the column accepts both the true 8×8 and a flat 8-number diagonal, and reads back as an array either
+way. *Sized honestly, though:* the eigenvalue floor pins Σ to exactly `0.02·I` from about the twelfth
+fold onward, so the off-diagonals are load-bearing for a user's first eleven observations and vacuous
+after. That is still exactly the cold-start case a snapshot exists for.
+
+THE PRECONDITION, DONE FIRST AND ON PURPOSE — `⚑24`. Every candidate design begins by reading
+`SETTINGS.supabase_*`, and those read the repo-wide names that `run.sh` sources from a gitignored
+`.env` holding production credentials. The first durable write would have made `npm run dev:ml` a
+laptop writing into production. Renamed to ML-owned names behind an explicit `ECHO_ML_PERSIST=1`
+before any write exists, because **a default that only fires once the feature lands is a default
+nobody tests.**
+
+
 ## Still open
 
 C8 (echo-ml on a paid plan), C13 (regenerate two legend plates).

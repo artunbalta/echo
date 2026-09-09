@@ -1085,3 +1085,36 @@ posteriors is circular by construction: those posteriors were produced BY the co
   pre-registration scope.
 - **Status:** OPEN. It is fixed by the re-anchor or it is not fixed at all.
 
+## ⚑ 24. The ML service's persistence was a loaded default aimed at production (2026-09-09)
+
+- **Opened:** 2026-09-09, in the ground-truth pass for SOC-2.D, and closed the same day. Recorded
+  because the fix is one rename and the reasoning is the part worth keeping.
+- **The shape.** `services/ml/echo_ml/config.py` declared `supabase_url` / `supabase_key` off the
+  REPO-WIDE names `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, and **nothing read
+  them**, so the gun never fired. It was loaded, though. `services/ml/run.sh:14` sources the
+  gitignored repo-root `.env` into this service's environment, and on a developer machine that file
+  holds a `NEXT_PUBLIC_SUPABASE_URL` **byte-identical to `render.yaml`'s production project** —
+  verified by comparing sha256 prefixes, not by printing either — beside a live 219-character
+  service-role key, which bypasses RLS.
+- **So the FIRST line of SOC-2.D that read `SETTINGS.supabase_*` would have turned `npm run dev:ml`
+  into a laptop writing personas into the production database.** And `apps/web/src/lib/identity.ts`
+  honours `?u=<id>` verbatim (SOC-2.E), so it would have written into a REAL PERSON'S row.
+- **Why it was worth catching before the feature and not during it.** Every candidate design for
+  SOC-2.D begins by reading exactly those two variables. A default that only fires once the feature
+  lands is a default nobody tests, and the window in which this is a ten-line change is the window
+  before the first durable write exists.
+- **Acted on:**
+  - `ECHO_ML_SUPABASE_URL` / `ECHO_ML_SUPABASE_SERVICE_KEY` — ML-owned names, so the shared `.env`
+    no longer reaches this service. Proven under `run.sh`'s own env loading: with both repo-wide
+    names present in the process, `SETTINGS.supabase_url` and `supabase_key` are empty.
+  - `ECHO_ML_PERSIST=1` is required in addition. **Credentials alone must never be enough**: a key
+    pasted into a shell to run one script would otherwise arm every write for the life of that shell.
+  - `SETTINGS.persist_enabled` is THE gate, and it is a property rather than a convention so that a
+    later author who only needed a URL cannot route around it.
+- **Three false records fixed alongside**, all claiming a persistence that has never existed:
+  `store.py` ("optionally hydrated/persisted to Supabase"), `render.yaml` ("with both set, learning
+  state hydrates/persists to Supabase" — **the damaging one, because it is a deployment instruction
+  an operator can follow**), and `config.py`'s bare declarations.
+- **Status:** CLOSED as a hazard. The absence it exposes — no durable store at all — is SOC-2.D and
+  is open.
+
