@@ -3,6 +3,7 @@ import { adminClient } from "@/lib/supabaseAdmin";
 import { hasFal, submitPortrait, fetchResult, extract } from "@/lib/fal-portrait";
 import { finishPortraitJob, LEASE_SECONDS, MAX_ATTEMPTS } from "@/lib/waitlist-portrait";
 import { sendWaitlistEmail } from "@/lib/waitlist-email";
+import { sweepRawRetention } from "@/lib/retention";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -59,10 +60,23 @@ async function webhookUrl(): Promise<string> {
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const admin = adminClient();
-  if (!admin) return NextResponse.json({ ok: true, skipped: "no supabase" });
+  // 0. RETENTION (C35, SOC-2.G). It rides this cron rather than having one of its own, and that is
+  //    a constraint rather than tidiness: Vercel's Hobby plan permits at most one cron run per day
+  //    and rejects the WHOLE DEPLOYMENT if a schedule is more frequent — the twelve-hour outage this
+  //    file's own header records. A second entry risks the deploy to save a function.
+  //
+  //    It runs BEFORE the authorization-adjacent early return below, and before any of the portrait
+  //    work, because the portrait path returns from several places and a sweep that only happens on
+  //    the quiet branch is a sweep that mostly does not happen. It cannot throw.
+  const retention = await sweepRawRetention(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
 
-  const out: Record<string, unknown> = {};
+  const admin = adminClient();
+  if (!admin) return NextResponse.json({ ok: true, skipped: "no supabase", retention });
+
+  const out: Record<string, unknown> = { retention };
 
   // 1. Close out anyone who has run out of attempts. They still get an email; it just says, plainly,
   //    that the character could not be made. Their seat was never at risk.
