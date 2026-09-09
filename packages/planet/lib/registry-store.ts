@@ -45,6 +45,14 @@ export interface RegistryClaim {
   placedAdjacent?: boolean;
 }
 
+/** What a claim carries beyond its key. */
+export interface ClaimOptions {
+  /** What the owner calls themselves. Stored on the parcel; never used to look one up. */
+  displayName?: string;
+  /** A parcel to try to settle beside (section 7.2). */
+  referrerParcel?: string;
+}
+
 export interface ParcelRegistry {
   world(): WorldRow;
   status(): Promise<RegistryStatus>;
@@ -55,7 +63,13 @@ export interface ParcelRegistry {
    * and is expected to say plainly that no land was free near their friend, which is what section
    * 7.2 asks for and is a better outcome than a mystery.
    */
-  claim(ownerId: string, referrerParcel?: string): Promise<RegistryClaim>;
+  /**
+   * `ownerId` IS THE KEY AND IT IS NOT A NAME (SOC-2.B). The claim route used to pass the trimmed
+   * typed display name here, so two people called Sam were one owner and the claim page's "exactly
+   * one owner, permanently" was backed by a string anybody could retype. What someone calls
+   * themselves goes in `displayName`, which is stored and shown and decides nothing.
+   */
+  claim(ownerId: string, options?: ClaimOptions): Promise<RegistryClaim>;
   parcelOf(ownerId: string): Promise<ClaimedParcel | null>;
   /** The most recently claimed parcels, for lighting the globe. Newest first. */
   recentlyClaimed(limit: number): Promise<Array<{ h3Index: string; ownerId: string }>>;
@@ -132,7 +146,8 @@ export class MemoryRegistry implements ParcelRegistry {
     };
   }
 
-  async claim(ownerId: string, referrerParcel?: string): Promise<RegistryClaim> {
+  async claim(ownerId: string, options: ClaimOptions = {}): Promise<RegistryClaim> {
+    const { displayName, referrerParcel } = options;
     const existing = this.byOwner.get(ownerId);
     if (existing) return { status: "assigned", parcel: this.parcels.get(existing)! };
     if (this.assignablePool.length === 0) return { status: "waitlisted" };
@@ -169,6 +184,7 @@ export class MemoryRegistry implements ParcelRegistry {
       landFraction: record.landFraction,
       areaKm2: cellAreaKm2(cell, this.manifest.radiusKm),
       roundAssigned: this.round,
+      displayName,
     };
     this.parcels.set(cell, { ...parcel, ownerId });
     this.byOwner.set(ownerId, cell);
@@ -245,13 +261,14 @@ export class PostgresRegistry implements ParcelRegistry {
     };
   }
 
-  async claim(ownerId: string, referrerParcel?: string): Promise<RegistryClaim> {
-    void referrerParcel;
+  async claim(ownerId: string, options: ClaimOptions = {}): Promise<RegistryClaim> {
+    void options.referrerParcel;
     const mine = await this.parcelOf(ownerId);
     if (mine) return { status: "assigned", parcel: mine };
 
     const result = await claimInPostgres(this.db, {
       ownerId,
+      displayName: options.displayName,
       world: this.manifest,
       landFraction: this.landFraction,
     });
@@ -266,9 +283,10 @@ export class PostgresRegistry implements ParcelRegistry {
 
   async parcelOf(ownerId: string): Promise<ClaimedParcel | null> {
     const { rows } = await this.db.query<{
-      h3_index: string; resolution: number; land_fraction: number; area_km2: number; round_assigned: number;
+      h3_index: string; resolution: number; land_fraction: number; area_km2: number;
+      round_assigned: number; display_name: string | null;
     }>(
-      `select h3_index, resolution, land_fraction, area_km2, round_assigned
+      `select h3_index, resolution, land_fraction, area_km2, round_assigned, display_name
          from parcels where owner_id = $1 limit 1`,
       [ownerId],
     );
@@ -280,6 +298,7 @@ export class PostgresRegistry implements ParcelRegistry {
           landFraction: row.land_fraction,
           areaKm2: row.area_km2,
           roundAssigned: row.round_assigned,
+          displayName: row.display_name ?? undefined,
         }
       : null;
   }

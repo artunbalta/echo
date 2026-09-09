@@ -62,6 +62,15 @@ export interface ClaimedParcel {
   landFraction: number;
   areaKm2: number;
   roundAssigned: number;
+  /**
+   * What the owner called themselves. NOT the key (SOC-2.B).
+   *
+   * `parcels` has carried a `display_name` column since 0009 and nothing ever wrote it, because the
+   * claim route was passing the trimmed typed NAME as `owner_id` — so two people typing "Sam" were
+   * one owner, and the claim page's "exactly one owner, permanently" was backed by a string anybody
+   * could retype. The column was always the right shape; the code collapsed the two ideas into one.
+   */
+  displayName?: string;
 }
 
 export interface SubdivisionReport {
@@ -169,7 +178,10 @@ export async function openRound(db: SqlClient, n: number, resolution: number, tr
 // ── claiming ────────────────────────────────────────────────────────────────────
 
 export interface ClaimInput {
+  /** THE KEY. An opaque, unguessable owner identifier — never a display name (SOC-2.B). */
   ownerId: string;
+  /** What to call them. Stored, shown, and load-bearing for nothing. Optional by design. */
+  displayName?: string;
   world: WorldRow;
   /** Land fraction of a cell. Needed only when this claim has to restock the registry. */
   landFraction: (cell: string) => number;
@@ -239,7 +251,7 @@ export async function claimParcel(db: SqlClient, input: ClaimInput): Promise<Cla
 type Attempt = { kind: "done"; result: ClaimResult } | { kind: "needs-subdivision" };
 
 async function attemptClaim(db: SqlClient, input: ClaimInput): Promise<Attempt> {
-  const { ownerId, world } = input;
+  const { ownerId, displayName, world } = input;
   const key = worldLockKey(world.id);
 
   await db.query("begin");
@@ -298,9 +310,9 @@ async function attemptClaim(db: SqlClient, input: ClaimInput): Promise<Attempt> 
     const areaKm2 = cellAreaKm2(cell.h3_index, world.radiusKm);
 
     await db.query(
-      `insert into parcels (h3_index, resolution, owner_id, round_assigned, land_fraction, area_km2)
-       values ($1, $2, $3, $4, $5, $6)`,
-      [cell.h3_index, cell.resolution, ownerId, open.n, cell.land_fraction, areaKm2],
+      `insert into parcels (h3_index, resolution, owner_id, round_assigned, land_fraction, area_km2, display_name)
+       values ($1, $2, $3, $4, $5, $6, $7)`,
+      [cell.h3_index, cell.resolution, ownerId, open.n, cell.land_fraction, areaKm2, displayName ?? null],
     );
 
     // Closing the round IS atomic with the claim. Only the restocking is deferred.

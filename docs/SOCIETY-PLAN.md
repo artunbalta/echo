@@ -719,11 +719,41 @@ C10 as currently written ("provision `DATABASE_URL` and run the seed") is missin
 nobody has scoped: **replace `planet.ts`'s hardcoded `backend: "memory"` with a two-backend seam**,
 and decide pooling for `pg` on Vercel serverless.
 
-### SOC-2.B — Fix ownership identity ☐ · *days*
+### SOC-2.B — Fix ownership identity ◑ · *the collision is gone; the foreign key is not*
 
-Owner is a typed display name. Make it a real id with a foreign key, and decide what happens to
-claims already made in memory. This is §3 item 5 and it is a correctness bug today, before any NPC
-exists.
+**✅ THE NAME IS NO LONGER THE KEY.** `claim/route.ts` called `store.claim(name, ...)` with the
+trimmed typed display name, so **two people who both typed "Sam" were one owner** — the second one's
+claim found the first one's parcel already assigned and handed it back as theirs. The claim page
+says "Every parcel has exactly one owner, permanently" and "That identifier is permanent"; both were
+backed by a string anybody could retype.
+
+**The schema already had the split and the code had collapsed it.** `packages/planet` has always
+taken an `ownerId`, and `parcels` has carried a `display_name` column since migration 0009 that
+**nothing ever wrote**. The whole defect was one argument at one call site. `claim` now takes
+`ClaimOptions { displayName, referrerParcel }`, both backends store the name, and the Postgres
+`parcelOf` reads it back — so the column stops being dead rather than the name being dropped.
+
+**Where the test had to go, and why the obvious place was wrong.** A test driving the registry with
+two ids would have passed *before* the fix and caught nothing: the registry contract was never the
+bug. The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
+server component — so the branch lives in `lib/claimRequest.ts` and the route calls it, which is
+`sliceOptionsFor`'s move for `sliceOptionsFor`'s stated reason: a test that writes its own branch is
+testing its own branch. Seven tests there, five in `packages/planet/tests/ownership.test.ts` for the
+registry contract (distinct ids get distinct parcels; a repeated id stays idempotent, which is how a
+returning owner finds their own land; changing your name costs you nothing).
+
+**The id is REQUIRED, not defaulted, and both tempting alternatives are worse.** Falling back to the
+name keeps the bug alive for exactly the callers most likely to hit it; minting one server-side
+hands out permanent ownership no browser could ever prove again. `resolveUserId()` mints on the
+client — correct here and only here, because this page asks no consent question a stamped key would
+answer early, and already promises the identifier is permanent.
+
+**☐ Still owed, and it is the harder half: the foreign key.** `owner_id` is still `text` with no
+reference, because the id is an unauthenticated localStorage UUID — anyone can send any string and
+claim as anybody. That is SOC-2.E, and until it lands a FK to `users` would be a constraint against a
+table nothing writes. **This item removed a collision; it did not add proof.** Also unanswered: what
+happens to claims already made under a name as the key, which is a data question for whenever the
+memory registry becomes durable (SOC-2.A).
 
 ### SOC-2.C — Migration discipline ☐ · *days*
 
