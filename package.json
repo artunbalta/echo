@@ -17,6 +17,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run build:shared && npm run test --workspaces --if-present",
     "seed": "node db/seed/seed.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:migrate:apply": "node scripts/migrate.mjs --apply",
     "gen:assets": "node pipeline/generate-venue-assets.mjs",
     "gen:island-assets": "node pipeline/generate-island-assets.mjs",
     "gen:flow-assets": "node pipeline/generate-flow-assets.mjs",
@@ -36,6 +38,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
+    "pg": "^8.23.0",
     "typescript": "^5.6.3"
   },
   "engines": {
