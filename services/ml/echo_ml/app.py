@@ -191,7 +191,9 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
         # only (fixes the EchoPanel showing behaviors:0 while the posterior moves).
         ck = obs["cond_key"]
         emb = embed(f"{ck} || {obs['action']}", input_type="document")
-        st.behaviors.append(BehaviorEntry(emb, obs["action"], ck))
+        # The provenance rides along and stops here: it is stored so rows can be told apart later
+        # (L7), and it is passed to NEITHER `P.observe` above NOR the conditional bucket below.
+        st.behaviors.append(BehaviorEntry(emb, obs["action"], ck, obs.get("provenance", {})))
         st.behaviors = st.behaviors[-500:]
 
         cond_before = st.cond.get(ck)

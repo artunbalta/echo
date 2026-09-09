@@ -760,13 +760,33 @@ persona**, and posteriors written under a spoofed id are indistinguishable from 
 afterwards. The care needed: `?u=` is load-bearing for the two-tab test path and for the harness that
 produces the headline individuation number, so confine it to non-production without breaking that.
 
-### SOC-2.F — Provenance in ingest, before any society event reaches a posterior ☐ · *days*
+### SOC-2.F — Provenance in ingest, before any society event reaches a posterior ◑ · *the class that exists is carried; two more have nothing to stamp them*
 
-The field exists — `SessionMode` in `packages/shared/src/telemetry.ts`, a checked column in 0011,
-stamped by `measure.ts` — and `ingest.event_to_observation` **never reads it and never carries it
-into the observation**. Every row written in the interim is permanently unfilterable (L7).
-Classes for a shared world, at minimum: NPC-witnessed vs player-witnessed, server-stamped vs
-client-asserted.
+**✅ `session_mode` now reaches the store.** It was declared in `packages/shared/src/telemetry.ts`,
+stamped by `measure.ts` at the TOP LEVEL of the event, forwarded verbatim by `/api/observe/behavioral`
+(the ML request model is `event: dict`, so nothing stripped it), stored as a checked column in
+migration 0011 — and `ingest.event_to_observation` read it nowhere, so it died one function short of
+the posterior. `grep -rn session_mode services/ml/` returned NOTHING. Every behavioural row written
+until now is permanently unfilterable, which is L7 exactly, and it is why this was small and urgent
+rather than large and clever.
+
+**IT IS CARRIED, NOT WEIGHED, and the second half is what makes the first safe to ship.** Provenance
+rides in its own field on `BehaviorEntry`. It never enters `telemetry`, so no posterior moves; it
+never enters `cond_key`, because that would **fork every existing user's conditional buckets** and
+silently re-partition evidence already gathered. L7 asks that classes stay DISTINGUISHABLE, not that
+they be weighed differently — the second is a modelling decision and nobody has taken it.
+
+`services/ml/tests/test_provenance.py`, 14 tests, holds both halves: the class survives the wire to
+the store through the real token-gated FastAPI route; an unstamped row carries **nothing rather than
+a guess** (defaulting to `"solo"` would be L7's failure wearing a helpful face); a value outside the
+declared three is dropped, because a provenance field that can hold anything distinguishes nothing;
+and the posterior after observing is **identical to the last bit** with and without the stamp,
+`array_equal` on both `mu` and `Sigma`. Eleven of the fourteen fail with the change reverted.
+
+**☐ Still owed: the two classes a shared world actually needs** — NPC-witnessed vs player-witnessed,
+and server-stamped vs client-asserted. **Neither is invented here, because nothing populates either.**
+The first needs the interaction path to say who was watching; the second needs `WorldRoom` to mark
+what it stamped itself. The field is a dict so that day is an added key rather than a migration.
 
 ### SOC-2.G — Retention window and profiling posture ☐ · *days*
 

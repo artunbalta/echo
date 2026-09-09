@@ -543,6 +543,37 @@ def _social_features(action: str, take: bool, rs: dict, tel: dict) -> bool:
     return False
 
 
+#: The evidentiary classes a row can belong to, and the only values `session_mode` may take.
+#: Mirrors `SessionMode` in packages/shared/src/telemetry.ts and the CHECK constraint in
+#: db/migrations/0011_behavioral_events.sql. Three places, one list; a value outside it is dropped
+#: rather than stored, because a provenance field that can hold anything distinguishes nothing.
+SESSION_MODES = ("solo", "room", "landing")
+
+
+def _provenance(ev: dict) -> dict[str, str]:
+    """Where this row came from, carried so rows of different classes can be told apart later (L7).
+
+    NOT A FEATURE AND NOT A BUCKET KEY. This never touches `telemetry`, so no posterior moves, and
+    never touches `cond_key`, because that would fork every existing user's conditional buckets and
+    re-partition evidence already gathered. L7 asks that classes stay DISTINGUISHABLE, not that they
+    be weighed differently — the second is a modelling decision and it has not been taken.
+
+    `session_mode` is the one class that is genuinely stamped today: declared in shared telemetry,
+    written by `measure.ts`, and a checked column in migration 0011. It was read by nothing here, so
+    every row written until now is permanently unfilterable — which is exactly the failure L7 names,
+    and it is why this is small and urgent rather than large and clever.
+
+    SOC-2.F also names NPC-witnessed vs player-witnessed and server-stamped vs client-asserted.
+    Neither is populated anywhere yet and neither is invented here. The return is a dict so that the
+    day something does stamp them, this is a new key and not a migration.
+    """
+    out: dict[str, str] = {}
+    mode = ev.get("session_mode")
+    if isinstance(mode, str) and mode in SESSION_MODES:
+        out["session_mode"] = mode
+    return out
+
+
 def event_to_observation(ev: dict) -> dict[str, Any]:
     """Map one BehavioralEvent → {userId, action, telemetry, context, cond_key, polarity}.
 
@@ -655,4 +686,5 @@ def event_to_observation(ev: dict) -> dict[str, Any]:
         "context": ctx,
         "cond_key": cond_key,
         "polarity": polarity,
+        "provenance": _provenance(ev),
     }

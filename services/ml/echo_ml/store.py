@@ -24,6 +24,24 @@ class BehaviorEntry:
     embedding: np.ndarray
     action_text: str
     context: str
+    #: WHERE THIS ROW CAME FROM (SOCIETY-PLAN SOC-2.F, cross-cutting law L7).
+    #:
+    #: L7: "Once a row of one evidentiary class is ingested it is indistinguishable from another
+    #: forever." `session_mode` has existed in `packages/shared/src/telemetry.ts` since the landing
+    #: path was built, is stamped by `measure.ts`, and is a checked column in migration 0011 -- and
+    #: `ingest.event_to_observation` never read it, so every row already written is unfilterable and
+    #: always will be. This field is where it stops.
+    #:
+    #: IT IS DELIBERATELY NOT A FEATURE AND NOT A BUCKET KEY. It never enters `telemetry`, so no
+    #: posterior moves; it never enters `cond_key`, because that would fork every existing user's
+    #: conditional buckets and silently re-partition evidence already gathered. Provenance is for
+    #: telling rows APART later, not for weighing them now. `test_provenance.py` pins both halves.
+    #:
+    #: A shared world multiplies the classes (SOC-2.F names NPC-witnessed vs player-witnessed and
+    #: server-stamped vs client-asserted). Nothing populates those yet, and none is invented here:
+    #: this carries the one class that is genuinely stamped today, and it is a dict so the next one
+    #: is an added key rather than a migration.
+    provenance: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
