@@ -21,6 +21,16 @@ from pydantic import BaseModel
 
 from .config import SETTINGS
 from .store import STORE, BehaviorEntry
+from . import persistence as _persistence
+
+#: The durable backing for the learning state (SOC-2.D, DECISIONS C34).
+#:
+#: `build` returns a disabled Persistence unless ⚑24's gate is open — ML-owned credentials AND an
+#: explicit ECHO_ML_PERSIST=1 — so the zero-key local run and every environment that has not opted
+#: in behave exactly as they did: in memory, lost on restart. Attached here rather than inside
+#: `Store` because `persistence` imports `store`.
+PERSIST = _persistence.build(STORE)
+STORE.attach(PERSIST)
 from . import ingest
 from .embeddings import embed
 from . import persona as P

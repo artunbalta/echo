@@ -1713,6 +1713,43 @@ way. *Sized honestly, though:* the eigenvalue floor pins Σ to exactly `0.02·I`
 fold onward, so the off-diagonals are load-bearing for a user's first eleven observations and vacuous
 after. That is still exactly the cold-start case a snapshot exists for.
 
+BUILT, 2026-09-09, in three pieces with a seam between them that is the point:
+`snapshot.py` is pure functions of their arguments — no network, no key, no service — so the things
+that are easy to get subtly wrong are testable without any of those; `persistence.py` holds the
+PostgREST client, the write-behind queue and the hydrate; `store.py` joins them. Migration `0014`
+adds only what had no column at all and corrects `z_cov_json`'s comment rather than adding a column
+beside it. **34 tests**, and each of the three files was verified fail-to-pass by reverting the thing
+it exists for.
+
+FOUR DECISIONS INSIDE THE BUILD THAT ARE NOT OBVIOUS FROM THE OUTSIDE.
+
+  **The snapshot is marked in `Store.updating`, not at the five call sites.** A sixth endpoint will
+  be written one day, and a convention that must be remembered at every mutation is one that will be
+  missed at one of them — the bug being a user whose posterior is durable on four paths and amnesiac
+  on the fifth, which nobody finds.
+
+  **`Store.get` hydrates OUTSIDE the global dict lock.** That lock is held by every user's every
+  access; a network read inside it would serialise all of them behind one Supabase latency, which is
+  exactly the cost per-user keying exists to avoid. Look under the lock, read outside it, take it
+  again to install — and on a race, FIRST WRITER WINS and the hydrated copy is dropped rather than
+  merged, because merging two views of one posterior reintroduces `⚑16` through the back door.
+
+  **An absent user is read once per process, not once per request.** `GET /persona/{uid}` is
+  unauthenticated until SOC-2.E, so without a negative cache, enumerating ids would be a database
+  read per probe. With it, the bound is one read per distinct id — the same bound `Store._users`
+  already has.
+
+  **`Store.delete` performs the durable delete FIRST and lets it raise.** Erasure is a promise to a
+  person: if the rows cannot be removed, the honest outcome is a failed request, not a cleared cache
+  and a surviving row that the next hydrate would bring back.
+
+WHAT IS NOT VERIFIED, AND IT IS THE TRANSPORT. Every test above runs against a dict-backed fake
+implementing the same three verbs. **No PostgREST round trip has been made** — there is no PostgREST
+to run locally, and the deployed transport is Render→Supabase over TLS, which is not the loopback
+number anyone would be tempted to quote. So: the serialization is proven, the queue is proven, the
+join is proven, and the wire is not. The first environment to set `ECHO_ML_PERSIST=1` is the test of
+the wire, and it should be a staging project rather than the one in `render.yaml`.
+
 THE PRECONDITION, DONE FIRST AND ON PURPOSE — `⚑24`. Every candidate design begins by reading
 `SETTINGS.supabase_*`, and those read the repo-wide names that `run.sh` sources from a gitignored
 `.env` holding production credentials. The first durable write would have made `npm run dev:ml` a

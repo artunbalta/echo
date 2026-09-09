@@ -850,7 +850,20 @@ has to fix the store first.
 `UserState` carries posterior, reward, behaviors, buckets, cond, temperature, calib, baseline_mu and
 locomotion — including a full-covariance matrix and a vector index.
 
-**◑ THE DESIGN IS TAKEN — `C34`. The precondition is DONE. Nothing durable is built yet.**
+**✅ BUILT — `C34`, `⚑24`, migration `0014`. The DURABLE half only; `shared` is explicitly not
+taken and the entry says why.**
+
+`snapshot.py` (pure, no network — so the subtle failures are testable with no key and no service),
+`persistence.py` (PostgREST over the httpx the service already has, a write-behind queue, a bounded
+hydrate), `0014_ml_state.sql` (only what had no column at all, plus a `comment on column` where 0001
+said "diagonal covariance" of a matrix that has been full since seven hours after it shipped), and
+the join in `store.py`. **34 tests**, each file verified fail-to-pass by reverting the thing it
+exists for — removing the one line that marks a user dirty fails three of the four end-to-end tests.
+
+**⚠️ THE TRANSPORT IS NOT VERIFIED.** Every test runs against a dict-backed fake. There is no
+PostgREST to run locally and the deployed path is Render→Supabase over TLS, so the serialization,
+the queue and the join are proven and **the wire is not**. The first environment to set
+`ECHO_ML_PERSIST=1` is the test of the wire, and it should be a staging project.
 
 **"A hard ceiling below every other line of this plan" is OVERSTATED, checked against this document's
 own blocker lines.** Exactly one workstream names SOC-2.D: SOC-3. SOC-4 does not and says it is
