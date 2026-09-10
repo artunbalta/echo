@@ -5,6 +5,7 @@
  * data (best-effort). Returns { analyses }.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { analyzeConnections, type PersonInput } from "@/lib/connections";
 
 export const runtime = "nodejs";
@@ -20,6 +21,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
 
+  // An asserted id stays OPTIONAL — a transcript may be analysed anonymously — but an id that IS
+  // supplied must be the caller's, or training data lands attributed to someone who never spoke.
+  const caller = body.userId ? subjectOf(req, String(body.userId)) : null;
+  if (caller && !caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+
   const people = Array.isArray(body.people) ? body.people : [];
   const analyses = await analyzeConnections(people);
 
@@ -28,7 +37,7 @@ export async function POST(req: Request) {
     const rows = people.map((p) => {
       const a = analyses.find((x) => x.id === p.id);
       return {
-        user_id: body.userId ?? null,
+        user_id: caller?.ok ? caller.subject : null,
         session_id: null, // session UUIDs land when Supabase sessions are wired (P8)
         counterpart_id: p.id,
         counterpart_name: p.name,

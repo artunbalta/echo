@@ -2044,3 +2044,67 @@ to the old worst heading's 109; the detail layer's own count went 8 → 9, the +
 closed. And **nobody has looked at it**: the harness cannot see a rendered frame, so whether a
 broadleaf at 80 m carrying 7.4% less canopy is acceptable is a fidelity judgement with a screenshot
 attached, exactly as C21 and C22 were taken.
+
+## C39 — identity is derived from a signature, and the world stops handing out the key
+
+SOC-2.E named three surfaces to authenticate. Mapping them found **five**, and the two the plan did
+not name are the ones that made the other three exploitable rather than merely weak.
+
+**What the plan named:** `/api/agent/persona?uid=` returned any posterior for any id; `lib/identity.ts`
+minted a bare localStorage UUID and honoured `?u=` verbatim; `WorldRoom` copied `options.userId` into
+`refId`, the key every `BehavioralEvent` is written under.
+
+**What it did not.** `GET /api/telemetry/recent?uid=` returns a person's **raw behavioural rows**, and
+`POST /api/account/delete {userId}` **hard-deletes** their posterior, eight Supabase tables and their
+island state — both keyed on a bare string, both unauthenticated. `telemetry/recent`'s own header said
+so and named the group: *"the id is the only credential either read has… Tighten all three together
+when auth lands."* And the id was not secret: `/api/planet/status` served up to 1,500 of them
+unauthenticated (`⚑27`), while `refId` was a **synced Colyseus field**, so standing near someone in
+the shared world handed you theirs. **The credential for erasing a person was being broadcast.**
+
+### The four decisions
+
+1. **A server-signed anonymous identity, not an auth provider.** Sign-in was deliberately removed from
+   the landing, so nobody holds a Supabase session and "verify the JWT" was never available. An HMAC
+   token covers the HTTP ingress and the room join with one primitive, and `apps/realtime` has no
+   Supabase client and no anon key, so a shared secret is the only mechanism that can reach both.
+2. **`?u=` is honoured only on two signals** — `ECHO_TRUST_CLIENT_ID=1` **and** a deployment that
+   proves it is not production. Neither alone. The harnesses compose their own ids and `?u=` is the
+   only mechanism in the tree that yields two identities inside one browser profile.
+3. **A new `ECHO_IDENTITY_SECRET`,** not a reuse of `ML_SERVICE_TOKEN`. Reuse costs no env plumbing,
+   but that token's compromise means "can talk to ML" today; widening it to "can impersonate anyone"
+   puts two unrelated blast radii on one string.
+4. **Anonymous people are orphaned by design, with an overlap window on rotation.** Clearing site data
+   loses the echo — the same as today, no regression — and `verifyIdentity` takes a *list* of secrets
+   so a key can be replaced without orphaning everyone at once, since an anonymous person holds the
+   only copy of their identity and has nothing to re-present.
+
+### What it costs, stated rather than discovered later
+
+**Rollout orphans every existing anonymous echo.** The minter refuses to sign an id handed to it, so a
+visitor with an unsigned localStorage id gets a new one and their prior evidence stays under the old
+key. This is the same loss as clearing site data, which decision 4 accepts — but it happens **once to
+everyone** rather than one person at a time. The alternative, a grandfathering window that signs
+whatever id is presented, is this hole left open with a date on it.
+
+### The shape, and why it is one shape
+
+`/api/auth/sync` was already the single route in the tree that **derived** its subject from a verified
+credential instead of reading it from the body. Every other id-bearing route now copies that
+inversion. The pure policy lives in `@echo/shared/identity` beside the verifier, because two runtimes
+enforce it and a policy written twice is a policy that drifts — the copy that relaxes by accident is
+the one nobody re-reads (L5). **The query shapes did not change**: `?uid=` and `{userId}` still
+arrive, but as a claim checked against the signature.
+
+`refId` lost its `@type` decorator rather than its value. The server still needs it and keeps it; it
+stops leaving the process. Clients identify a person by Colyseus's own `sessionId` — server-minted,
+opaque, room-scoped — which says "the same someone" without saying who. NPC ids ride a separate
+synced field, because an NPC's id is not a credential.
+
+**16 of 19 id-bearing routes are guarded.** The three that are not: `/api/auth/sync` verifies a
+Supabase token and always did, `/api/identity/session` accepts no id at all, and `/api/narrate`
+declares a `userId` it never reads — a guard there would assert a fact about nothing.
+
+**The closed-gate proof:** `npm run test:copresence` FAILS with no relaxation (its joins present
+`{userId:'userA'}` and no token) and PASSES with the flag. The flag lives in the npm script, so CI
+inherits it and `ci.yml` needed no change.

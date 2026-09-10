@@ -5,6 +5,7 @@
  * { statements, recognition, mocked }.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { getPersona } from "@/lib/ml";
 import { groundPersonaReading, type ChoiceLog } from "@/lib/reading";
 
@@ -17,8 +18,14 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const userId = typeof body.userId === "string" && body.userId ? body.userId : null;
-  if (!userId) return NextResponse.json({ error: "missing userId" }, { status: 400 });
+  const asserted = typeof body.userId === "string" && body.userId ? body.userId : null;
+  if (!asserted) return NextResponse.json({ error: "missing userId" }, { status: 400 });
+  const caller = subjectOf(req, asserted);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+  const userId = caller.subject;
 
   const choices = Array.isArray(body.choices)
     ? body.choices.filter((c): c is ChoiceLog => !!c && typeof c.forkKey === "string" && typeof c.option === "string").slice(0, 32)

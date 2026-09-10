@@ -5,6 +5,7 @@
  * Zero-key path: backed by the process-lifetime in-memory store when Supabase is unset.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { loadIslandState, saveIslandState } from "@/lib/island-state";
 import type { IslandDayState } from "@echo/shared";
 
@@ -49,10 +50,15 @@ function testClock(raw: string | number | null | undefined): number | undefined 
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const userId = url.searchParams.get("userId");
-  if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const asserted = url.searchParams.get("userId");
+  if (!asserted) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const caller = subjectOf(req, asserted);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
   const injected = testClock(url.searchParams.get("now"));
-  const loaded = await loadIslandState(userId, injected ?? Date.now());
+  const loaded = await loadIslandState(caller.subject, injected ?? Date.now());
   // Echoed back only when the hook actually opened, so a harness asserts that it is live rather
   // than assuming it, and a production response carries no trace of the field at all.
   return NextResponse.json(injected === undefined ? loaded : { ...loaded, testClock: injected });

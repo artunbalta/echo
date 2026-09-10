@@ -5,6 +5,7 @@
  * produces decision paralysis and nothing worth sharing.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { biomeAt, cellCentre } from "@echo/planet";
 
 import { claimRequestFrom, type ClaimBody } from "@/lib/claimRequest";
@@ -20,6 +21,14 @@ export async function POST(request: Request) {
   const claim = claimRequestFrom(body);
   if (!claim.ok) return NextResponse.json({ error: claim.error }, { status: 400 });
   const { ownerId, displayName: name } = claim;
+  // A claim is permanent and exclusive — "exactly one owner, permanently" is what the page promises
+  // — so it may not be made on someone else's behalf (SOC-2.B fixed WHICH field is the key; this
+  // fixes whether the key had to be proved).
+  const caller = subjectOf(request, ownerId);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
 
   const { registry, field, calibration } = planet();
   const store = registry();
