@@ -71,8 +71,23 @@ export interface ParcelRegistry {
    */
   claim(ownerId: string, options?: ClaimOptions): Promise<RegistryClaim>;
   parcelOf(ownerId: string): Promise<ClaimedParcel | null>;
-  /** The most recently claimed parcels, for lighting the globe. Newest first. */
-  recentlyClaimed(limit: number): Promise<Array<{ h3Index: string; ownerId: string }>>;
+  /**
+   * The most recently claimed parcels, for lighting the globe. Newest first.
+   *
+   * **THE OWNER ID IS NOT IN HERE, and it used to be.** Both consumers — `HeroPlanet` and
+   * `ClaimClient` — type the response as `{ h3Index }` and map straight to `c.h3Index`, so the owner
+   * id was never read by anything; it was simply serialised. `/api/planet/status` is unauthenticated
+   * and `force-dynamic`, and it passes a limit of 1500, so what was actually published was up to
+   * fifteen hundred owner ids to anyone who asked.
+   *
+   * WHAT MADE IT SERIOUS WAS THE FIX ABOVE. While `ownerId` was the trimmed typed display name, this
+   * leaked first names. SOC-2.B made the owner id the canonical user key — correctly — and in doing
+   * so converted this endpoint from publishing first names into publishing **the key every
+   * `BehavioralEvent` is written under**, which is also the only thing `/api/agent/persona`,
+   * `/api/telemetry/recent` and `/api/account/delete` ask for before answering. Neither half of that
+   * was wrong on its own.
+   */
+  recentlyClaimed(limit: number): Promise<Array<{ h3Index: string }>>;
 }
 
 // ── in memory ───────────────────────────────────────────────────────────────────
@@ -222,11 +237,8 @@ export class MemoryRegistry implements ParcelRegistry {
     return cell ? this.parcels.get(cell)! : null;
   }
 
-  async recentlyClaimed(limit: number): Promise<Array<{ h3Index: string; ownerId: string }>> {
-    return this.order.slice(0, limit).map((cell) => {
-      const parcel = this.parcels.get(cell)!;
-      return { h3Index: parcel.h3Index, ownerId: parcel.ownerId };
-    });
+  async recentlyClaimed(limit: number): Promise<Array<{ h3Index: string }>> {
+    return this.order.slice(0, limit).map((cell) => ({ h3Index: this.parcels.get(cell)!.h3Index }));
   }
 }
 
@@ -303,12 +315,14 @@ export class PostgresRegistry implements ParcelRegistry {
       : null;
   }
 
-  async recentlyClaimed(limit: number): Promise<Array<{ h3Index: string; ownerId: string }>> {
-    const { rows } = await this.db.query<{ h3_index: string; owner_id: string }>(
-      `select h3_index, owner_id from parcels order by assigned_at desc limit $1`,
+  async recentlyClaimed(limit: number): Promise<Array<{ h3Index: string }>> {
+    // `owner_id` is not SELECTed rather than selected and dropped: the column a query does not ask
+    // for cannot be leaked by a later author who adds it back to the mapped object out of symmetry.
+    const { rows } = await this.db.query<{ h3_index: string }>(
+      `select h3_index from parcels order by assigned_at desc limit $1`,
       [limit],
     );
-    return rows.map((r) => ({ h3Index: r.h3_index, ownerId: r.owner_id }));
+    return rows.map((r) => ({ h3Index: r.h3_index }));
   }
 }
 
