@@ -14,14 +14,13 @@ import assert from "node:assert/strict";
 
 import { signIdentity } from "@echo/shared/identity";
 
-import { subjectFor, subjectRejection, trustsAssertedId, type SubjectEnv } from "../src/lib/subject";
+import { subjectFor, subjectOf, subjectRejection, trustsAssertedId, type SubjectEnv } from "../src/lib/subject";
 
 const SECRET = "gate-secret-aaaa";
 const ROTATED = "gate-secret-bbbb";
 const SUBJECT = "ff96e0fc-1111-4222-8333-444455556666";
 const IAT = 1_757_000_000_000;
 
-const bearer = (t: string) => `Bearer ${t}`;
 const token = signIdentity(SUBJECT, SECRET, IAT);
 
 /** Closed: a real deployment. Neither signal set. */
@@ -30,27 +29,27 @@ const closed: SubjectEnv = { secrets: [SECRET] };
 const open: SubjectEnv = { ...closed, trustClientId: "1", vercelEnv: "development" };
 
 test("a verified token names the subject, and that is the whole point", () => {
-  assert.deepEqual(subjectFor(closed, bearer(token)), { ok: true, subject: SUBJECT, source: "token" });
+  assert.deepEqual(subjectFor(closed, token), { ok: true, subject: SUBJECT, source: "token" });
 });
 
 test("an asserted id may AGREE with the token but never override it", () => {
   // Every existing call site sends both — chain.test.mts pins `/api/agent/persona?uid=u-test` — so
   // agreement has to keep working or the query shapes all have to change at once.
-  assert.equal(subjectFor(closed, bearer(token), SUBJECT).ok, true);
-  assert.equal(subjectFor(closed, bearer(token), `  ${SUBJECT}  `).ok, true, "whitespace is not a different person");
-  assert.deepEqual(subjectFor(closed, bearer(token), "someone-else"), { ok: false, reason: "mismatch" });
+  assert.equal(subjectFor(closed, token, SUBJECT).ok, true);
+  assert.equal(subjectFor(closed, token, `  ${SUBJECT}  `).ok, true, "whitespace is not a different person");
+  assert.deepEqual(subjectFor(closed, token, "someone-else"), { ok: false, reason: "mismatch" });
 });
 
 test("without a token, a production deployment has no subject at all", () => {
   // The hole this closes: `POST /api/observe/behavioral` with a foreign actor_id, and
   // `POST /api/account/delete` with a foreign userId, both of which used to be answered.
-  assert.deepEqual(subjectFor(closed, null, "someone-else"), { ok: false, reason: "no-identity" });
-  assert.deepEqual(subjectFor(closed, bearer("not-a-token"), "someone-else"), { ok: false, reason: "no-identity" });
+  assert.deepEqual(subjectFor(closed, "", "someone-else"), { ok: false, reason: "no-identity" });
+  assert.deepEqual(subjectFor(closed, "not-a-token", "someone-else"), { ok: false, reason: "no-identity" });
 });
 
 test("a forged token does not become a subject by being well-shaped", () => {
   const forged = signIdentity("someone-else", "a-secret-nobody-gave-us", IAT);
-  assert.deepEqual(subjectFor(closed, bearer(forged)), { ok: false, reason: "no-identity" });
+  assert.deepEqual(subjectFor(closed, forged), { ok: false, reason: "no-identity" });
 });
 
 test("EVERY STRICT SUBSET OF THE RELAXATION STAYS CLOSED", () => {
@@ -63,7 +62,7 @@ test("EVERY STRICT SUBSET OF THE RELAXATION STAYS CLOSED", () => {
   ];
   for (const [name, env] of cases) {
     assert.equal(trustsAssertedId(env), false, `opened: ${name}`);
-    assert.deepEqual(subjectFor(env, null, "someone-else"), { ok: false, reason: "no-identity" }, `opened: ${name}`);
+    assert.deepEqual(subjectFor(env, "", "someone-else"), { ok: false, reason: "no-identity" }, `opened: ${name}`);
   }
 });
 
@@ -78,32 +77,32 @@ test("only the literal \"1\" counts, so no spelling of yes opens the gate", () =
 test("with both signals, an asserted id is honoured — which is what the harnesses need", () => {
   // cap_tessa, f4sil…_twin, eight cells per f5 run: ids composed by a script, with no browser to
   // mint them and no key to sign them.
-  assert.deepEqual(subjectFor(open, null, "cap_tessa"), { ok: true, subject: "cap_tessa", source: "asserted" });
-  assert.deepEqual(subjectFor(open, null, "  you_promise  "), { ok: true, subject: "you_promise", source: "asserted" });
+  assert.deepEqual(subjectFor(open, "", "cap_tessa"), { ok: true, subject: "cap_tessa", source: "asserted" });
+  assert.deepEqual(subjectFor(open, "", "  you_promise  "), { ok: true, subject: "you_promise", source: "asserted" });
 });
 
 test("relaxed still needs SOMETHING: an open gate is not an anonymous subject", () => {
-  assert.deepEqual(subjectFor(open, null, ""), { ok: false, reason: "no-identity" });
-  assert.deepEqual(subjectFor(open, null, null), { ok: false, reason: "no-identity" });
+  assert.deepEqual(subjectFor(open, "", ""), { ok: false, reason: "no-identity" });
+  assert.deepEqual(subjectFor(open, "", null), { ok: false, reason: "no-identity" });
 });
 
 test("a token still wins where one is presented, even in a relaxed environment", () => {
   // Otherwise the harness environment would be a place where the mismatch check silently stops
   // running, and that is where most of the tests live.
-  assert.deepEqual(subjectFor(open, bearer(token), "someone-else"), { ok: false, reason: "mismatch" });
-  assert.deepEqual(subjectFor(open, bearer(token)), { ok: true, subject: SUBJECT, source: "token" });
+  assert.deepEqual(subjectFor(open, token, "someone-else"), { ok: false, reason: "mismatch" });
+  assert.deepEqual(subjectFor(open, token), { ok: true, subject: SUBJECT, source: "token" });
 });
 
 test("rotation: the outgoing key verifies during the overlap and not after", () => {
-  assert.equal(subjectFor({ secrets: [ROTATED, SECRET] }, bearer(token)).ok, true);
-  assert.deepEqual(subjectFor({ secrets: [ROTATED] }, bearer(token)), { ok: false, reason: "no-identity" });
+  assert.equal(subjectFor({ secrets: [ROTATED, SECRET] }, token).ok, true);
+  assert.deepEqual(subjectFor({ secrets: [ROTATED] }, token), { ok: false, reason: "no-identity" });
 });
 
 test("no signing key is the SERVER's fault, and says so instead of blaming the browser", () => {
   // A deployment that forgot ECHO_IDENTITY_SECRET can neither mint nor verify. Reporting
   // "identity_required" would send whoever is debugging it into the client.
-  assert.deepEqual(subjectFor({ secrets: [] }, bearer(token), SUBJECT), { ok: false, reason: "unconfigured" });
-  assert.deepEqual(subjectFor({ secrets: ["", ""] }, null, SUBJECT), { ok: false, reason: "unconfigured" });
+  assert.deepEqual(subjectFor({ secrets: [] }, token, SUBJECT), { ok: false, reason: "unconfigured" });
+  assert.deepEqual(subjectFor({ secrets: ["", ""] }, "", SUBJECT), { ok: false, reason: "unconfigured" });
   assert.equal(subjectRejection({ ok: false, reason: "unconfigured" }).status, 503);
 });
 
@@ -111,13 +110,13 @@ test("an empty secret is never a usable key", () => {
   // The failure it guards: ECHO_IDENTITY_SECRET unset resolves to "", and an HMAC under the empty
   // key is one anybody can compute.
   const underEmpty = signIdentity(SUBJECT, "x", IAT);
-  assert.equal(subjectFor({ secrets: [""] }, bearer(underEmpty)).ok, false);
+  assert.equal(subjectFor({ secrets: [""] }, underEmpty).ok, false);
 });
 
 test("a harness with no key at all still runs, because the relaxation does not need one", () => {
   // run_individuation_3d.sh is a zero-key path by design; requiring a secret to run it would make
   // the headline number un-reproducible on a bare laptop.
-  assert.deepEqual(subjectFor({ secrets: [], trustClientId: "1", vercelEnv: "development" }, null, "cap_tessa"), {
+  assert.deepEqual(subjectFor({ secrets: [], trustClientId: "1", vercelEnv: "development" }, "", "cap_tessa"), {
     ok: true, subject: "cap_tessa", source: "asserted",
   });
 });
@@ -125,4 +124,26 @@ test("a harness with no key at all still runs, because the relaxation does not n
 test("rejections are 403 with a machine-readable reason, never a silent fallback", () => {
   assert.deepEqual(subjectRejection({ ok: false, reason: "no-identity" }), { body: { error: "identity_required" }, status: 403 });
   assert.deepEqual(subjectRejection({ ok: false, reason: "mismatch" }), { body: { error: "identity_mismatch" }, status: 403 });
+});
+
+test("subjectOf reads the Authorization header, so the routes never parse one themselves", () => {
+  // The pure policy is shared with apps/realtime; this is the web-side plumbing, and it is the only
+  // place a Bearer header is turned into a subject.
+  const before = { secret: process.env.ECHO_IDENTITY_SECRET, trust: process.env.ECHO_TRUST_CLIENT_ID, vercel: process.env.VERCEL_ENV };
+  process.env.ECHO_IDENTITY_SECRET = SECRET;
+  delete process.env.ECHO_TRUST_CLIENT_ID;
+  process.env.VERCEL_ENV = "production";
+  try {
+    const withHeader = new Request("https://echo.test/api/agent/persona?uid=x", { headers: { authorization: `Bearer ${token}` } });
+    assert.deepEqual(subjectOf(withHeader), { ok: true, subject: SUBJECT, source: "token" });
+    assert.deepEqual(subjectOf(withHeader, "someone-else"), { ok: false, reason: "mismatch" });
+    assert.deepEqual(subjectOf(new Request("https://echo.test/x"), "someone-else"), { ok: false, reason: "no-identity" });
+    // A header that is not a Bearer is not a token, and must not be tried as one.
+    const basic = new Request("https://echo.test/x", { headers: { authorization: `Basic ${token}` } });
+    assert.deepEqual(subjectOf(basic), { ok: false, reason: "no-identity" });
+  } finally {
+    if (before.secret === undefined) delete process.env.ECHO_IDENTITY_SECRET; else process.env.ECHO_IDENTITY_SECRET = before.secret;
+    if (before.trust === undefined) delete process.env.ECHO_TRUST_CLIENT_ID; else process.env.ECHO_TRUST_CLIENT_ID = before.trust;
+    if (before.vercel === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = before.vercel;
+  }
 });

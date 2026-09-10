@@ -7,7 +7,28 @@ import { Schema, MapSchema, type } from "@colyseus/schema";
 export class Entity extends Schema {
   @type("string") id = "";
   @type("string") kind: "user" | "npc" = "user";
-  @type("string") refId = "";
+  /**
+   * The canonical subject this entity acts as — a user's id, or an NPC's spec id.
+   *
+   * **NOT SYNCED, DELIBERATELY, AND THE MISSING DECORATOR IS THE POINT (⚑27, SOC-2.E).** This field
+   * used to carry `@type("string")`, so every connected client received every other player's
+   * canonical user id — and that id is the whole credential for reading their posterior, reading
+   * their raw behavioural rows, and erasing them. Nobody had to guess or spoof anything; standing
+   * near someone handed it to you. Authenticating those routes while broadcasting their key would
+   * have been half a fix.
+   *
+   * The server still needs it, and keeps it: every behavioural emission in `WorldRoom` is attributed
+   * to `refId`, and it stays exactly what it was. It simply stops leaving the process.
+   */
+  refId = "";
+  /**
+   * What a client is allowed to know about who this is: an NPC's id, or "" for a person.
+   *
+   * A person is identified across the wire by `id` — Colyseus's own `sessionId`, which is
+   * server-minted, opaque, and scoped to this room. That is the handle the client uses for approach
+   * and dwell targets, and it says "the same someone" without saying who.
+   */
+  @type("string") publicRef = "";
   @type("string") name = "";
   @type("string") spriteUrl = "";
   /** Position in tile units (fractional while moving). */

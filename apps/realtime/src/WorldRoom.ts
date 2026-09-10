@@ -8,6 +8,7 @@
  * client-side between state snapshots.
  */
 import { Room, type Client } from "@colyseus/core";
+import { subjectFor } from "@echo/shared/identity";
 import {
   WORLD,
   TICK_MS,
@@ -48,6 +49,8 @@ import { logInteraction, logTelemetry, observeBehavioral } from "./persistence.j
 
 interface JoinOptions {
   userId: string;
+  /** The signature that makes `userId` believable. Absent only where the relaxation applies. */
+  token?: string;
   name?: string;
   spriteUrl?: string;
   sessionId?: string;
@@ -122,7 +125,37 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   // ── presence ───────────────────────────────────────────────────────────────
-  onJoin(client: Client, options: JoinOptions) {
+  /**
+   * WHO IS ALLOWED TO BE WHOM (SOC-2.E, ⚑27).
+   *
+   * `refId` is the key every behavioural emission in this file is attributed to, and it used to be
+   * `options.userId` — copied out of the join message unchecked. Anyone could join as anyone, and
+   * the resulting rows are indistinguishable from real evidence afterwards.
+   *
+   * The policy is the SAME FUNCTION apps/web's routes use, imported from `@echo/shared/identity`
+   * rather than restated here: a policy written twice is a policy that drifts, and the copy that
+   * relaxes by accident is the one nobody re-reads (L5).
+   *
+   * THROWING IS DELIBERATE and must stay a throw. Colyseus frees the reserved seat when `onAuth`
+   * rejects; swallowing it and returning a guest identity would leak seat capacity at `maxClients`
+   * and, worse, would let a refused join keep writing.
+   */
+  onAuth(_client: Client, options: JoinOptions, context?: { token?: string }) {
+    const verdict = subjectFor(
+      {
+        trustClientId: process.env.ECHO_TRUST_CLIENT_ID,
+        vercelEnv: process.env.VERCEL_ENV,
+        nodeEnv: process.env.NODE_ENV,
+        secrets: [process.env.ECHO_IDENTITY_SECRET ?? "", process.env.ECHO_IDENTITY_SECRET_OLD ?? ""].filter(Boolean),
+      },
+      context?.token || options.token || "",
+      options.userId ?? null,
+    );
+    if (!verdict.ok) throw new Error(`identity_${verdict.reason}`);
+    return { uid: verdict.subject };
+  }
+
+  onJoin(client: Client, options: JoinOptions, auth?: { uid: string }) {
     // Crossing in from your own island (F2): appear at your archipelago slot's ocean coordinate so
     // Step-1-clustered neighbours land adjacent and mutually visible. Fall back to the cluster-spawn
     // (near the most-recently-seen live player) when no slot is carried.
@@ -131,7 +164,9 @@ export class WorldRoom extends Room<WorldState> {
     const e = new Entity();
     e.id = client.sessionId;
     e.kind = "user";
-    e.refId = options.userId ?? client.sessionId;
+    // The subject `onAuth` DERIVED, never the one the join message asserted. Everything downstream
+    // — every actor_id, every counterpartId, the first-contact and proxemics guards — reads this.
+    e.refId = auth?.uid ?? options.userId ?? client.sessionId;
     e.name = options.name ?? "Newcomer";
     e.spriteUrl = options.spriteUrl ?? "";
     e.x = spawn.x;
@@ -1003,6 +1038,7 @@ export class WorldRoom extends Room<WorldState> {
       e.id = s.id;
       e.kind = "npc";
       e.refId = s.id;
+      e.publicRef = s.id; // an NPC's id is not a credential, so it may cross the wire
       e.name = s.name;
       e.spriteUrl = s.sprite;
       const p = clampToMap(cx + s.dx, cy + s.dy);
@@ -1026,6 +1062,7 @@ export class WorldRoom extends Room<WorldState> {
       e.id = spec.id;
       e.kind = "npc";
       e.refId = spec.id;
+      e.publicRef = spec.id;
       e.name = spec.name;
       e.spriteUrl = spec.spriteUrl ?? "";
       // Place each NPC ON an island (their old seed coords were for the 64-tile map = now open sea).
