@@ -47,7 +47,7 @@ import {
   type TelemetryType,
 } from "@echo/shared";
 
-import { peekUserId, resolveUserId } from "../../lib/identity";
+import { ensureIdentity, identityToken, peekUserId, resolveUserId } from "../../lib/identity";
 import { LocomotionSampler, TelemetryCollector } from "../telemetry";
 import { ACTION_AXIS_MAP, type ActionRow } from "./actionMap";
 
@@ -244,6 +244,22 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
   let userId = opts.userId ?? peekUserId();
   const sessionId = opts.sessionId ?? newSessionId();
   const doFetch: typeof fetch = opts.fetchImpl ?? ((input, init) => fetch(input, init));
+
+  /**
+   * The signature that says which subject these writes belong to (SOC-2.E).
+   *
+   * The BODY still carries `userId` / `actor_id` and the persona read still uses `?uid=` — the
+   * shapes are unchanged, and `chain.test.mts` pins them. What changes is that the server now
+   * derives the subject from this header and treats the body field as a claim to check against it.
+   * An unsigned visit sends no header and is refused with `identity_required`, which is the point:
+   * quietly writing under an unverifiable id is the behaviour being removed.
+   */
+  function identityHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    const token = identityToken();
+    if (token) headers.authorization = `Bearer ${token}`;
+    return headers;
+  }
   const clock = opts.now ?? Date.now;
 
   let collector: TelemetryCollector | null = null;
@@ -285,7 +301,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     try {
       const r = await doFetch("/api/telemetry", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: identityHeaders(),
         body: JSON.stringify({ userId, sessionId, events }),
       });
       res = (await r.json()) as TelemetryRouteResponse;
@@ -339,7 +355,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     const at = clock();
     let next: Posterior;
     try {
-      const r = await doFetch(`/api/agent/persona?uid=${encodeURIComponent(userId)}`);
+      const r = await doFetch(`/api/agent/persona?uid=${encodeURIComponent(userId)}`, { headers: identityHeaders() });
       next = posteriorFromSnapshot((await r.json()) as PersonaRouteResponse, at);
     } catch (err) {
       next = { mu: zeros(), var: null, version: null, mocked: true, reason: `network_failed: ${(err as Error).message}`, source: "seed", at };
@@ -356,6 +372,14 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     // Consent has been given, so the id may now be written down. Before this line the chain has
     // only ever READ it, which is what lets a decline leave nothing behind.
     if (!userId) userId = resolveUserId();
+    // AND ask the server to mint a SIGNED id, off the critical path on purpose (SOC-2.E). `arm()`
+    // stays synchronous because every caller is a click handler; the collector's first flush is
+    // `flushMs` away, so in practice the signature arrives first. If it does not, production REFUSES
+    // those writes rather than attributing them to an id nobody verified — which is the whole point,
+    // and is why this is not awaited and not guarded.
+    void ensureIdentity(doFetch).then((id) => {
+      if (id && !disposed) userId = id;
+    });
     collector = new TelemetryCollector(sessionId, send, opts.flushMs ?? 2000, true);
     collector.start();
     // The same sampler /play uses, unmodified; its scalars ride the ordinary collector so the
@@ -445,7 +469,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
       try {
         const r = await doFetch("/api/observe/behavioral", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: identityHeaders(),
           body: JSON.stringify({ event }),
         });
         response = (await r.json()) as BehavioralRouteResponse;

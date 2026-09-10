@@ -20,6 +20,7 @@
  * 'your data is gone' and a sentence that only sounds like it."
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { deleteUser } from "@/lib/ml";
 import { deleteIslandState } from "@/lib/island-state";
 import { erasureVerdict, type MlDeleteResult } from "@/lib/erasureResult";
@@ -80,8 +81,16 @@ async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: s
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
-  const uid = body.userId;
-  if (!uid) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  if (!body.userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  // THE DESTRUCTIVE ONE. This hard-deletes the posterior, eight Supabase tables including
+  // behavioral_events, and the island state — and it used to do it for whatever string arrived in
+  // the body, while the shared world broadcast everyone's id to everyone standing near them (⚑27).
+  const caller = subjectOf(req, String(body.userId));
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+  const uid = caller.subject;
 
   // ALL THREE, DESTRUCTURED. This was a three-element `Promise.all` read into two bindings, so
   // `deleteIslandState`'s result was silently discarded and could never reach `ok`.

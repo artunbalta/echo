@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+import { storeIdentity } from "@/lib/identity";
 import { getSupabase } from "@/lib/supabase";
 
 type Mode = "signin" | "signup";
@@ -50,7 +52,11 @@ export default function AuthModal({
           headers: { authorization: `Bearer ${token}` },
         });
         const j = await r.json();
-        if (j.userId) localStorage.setItem("echo.userId", j.userId);
+        // The token rides back from the ONE route that verifies a Supabase session, so a signed-in
+        // identity is signed the same way an anonymous one is and every route checks one thing
+        // (SOC-2.E). `storeIdentity` writes both keys together; writing the id without the token
+        // would leave a signed-in user unable to write anything in production.
+        if (j.userId) storeIdentity(j.userId, j.token ?? "");
       } catch {
         /* non-fatal: session is valid even if the profile sync hiccups */
       }
