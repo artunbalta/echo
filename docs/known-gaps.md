@@ -1193,3 +1193,56 @@ posteriors is circular by construction: those posteriors were produced BY the co
 - **Status:** CLOSED. Erasure now reports what it knows and nothing more. The RETENTION question —
   how long the rows should have lived in the first place — is SOC-2.G and is open.
 
+
+## ⚑ 27. The globe published 1,500 canonical user ids, and the test forbidding it required them (2026-09-09)
+
+**`GET /api/planet/status` is unauthenticated, `force-dynamic`, and served `recentlyClaimed(1500)` —
+and every row carried `ownerId`.** Neither consumer wanted it: `HeroPlanet.tsx:80` and
+`ClaimClient.tsx:98` both type the response `Array<{ h3Index: string }>` and map straight to
+`c.h3Index`. The field was never read by anything. It was only published.
+
+**THE ID IS NOT AN IDENTIFIER HERE, IT IS A CREDENTIAL.** Verified by reading the three routes, each
+of which asks for nothing else before answering:
+
+| route | what it does with a bare id |
+|---|---|
+| `GET /api/agent/persona?uid=` | returns that person's posterior |
+| `GET /api/telemetry/recent?uid=` | returns their **raw behavioural event rows**, not an aggregate |
+| `POST /api/account/delete` `{userId}` | **hard-deletes** the ML posterior, eight Supabase tables including `behavioral_events`, and the island state |
+
+`telemetry/recent/route.ts:7-9` states the posture itself and names the group: *"the id is the only
+credential either read has… Tighten all three together when auth lands."* So the destructive one was
+reachable with a string the globe handed out fifteen hundred at a time.
+
+**WHAT MADE IT SERIOUS WAS AN EARLIER FIX IN THIS SAME WORKSTREAM.** While `ownerId` was the trimmed
+typed display name, this endpoint leaked **first names** — publishable beside a hex cell, arguably by
+design. SOC-2.B then made `ownerId` the canonical user key, correctly, to close the collision where two
+people who typed "Sam" were one owner. Neither half was wrong alone; together they converted a
+first-name leak into a credential leak, and **nothing in between noticed that the meaning of the field
+had changed underneath it.**
+
+**AND THE GUARD ASSERTED THE OPPOSITE OF ITS OWN TITLE.**
+`packages/planet/tests/ownership.test.ts:96` is named *"lighting the globe reveals no owner ids, which
+is what it did before and must keep doing"*, and its comment said it existed *"so that a future change
+which starts surfacing owner_id has to come past a test rather than quietly publish an identifier that
+used to be a first name."* Its assertion was
+`deepEqual(Object.keys(recent[0]).sort(), ["h3Index", "ownerId"])` — it **required** the leak. Removing
+the leak would have failed it, and anyone reading the title would have believed the opposite of what
+ran. It was written when the field was a first name, which is the same sentence again: the assertion
+outlived the meaning it was written against.
+
+**Acted on.** `owner_id` is no longer SELECTed in the Postgres implementation, rather than selected and
+dropped, so a later author adding it back to the mapped object out of symmetry has nothing to map. The
+interface return type no longer carries it, so the leak cannot return without a type change. The test
+now asserts `["h3Index"]`, and **it was checked that it fails when the leak returns** — 159 pass / 1
+fail with `ownerId` put back — because a guard that cannot fail is what this entry is about
+(SOCIETY-PLAN §3 items 8 and 9).
+
+**Status:** PARTIALLY CLOSED, and the open half is the larger one. The globe no longer publishes the
+credential. **The shared world still does:** `refId` at `apps/realtime/src/state.ts:10` is
+`@type("string")` on the Entity schema that the file's own header says is *"synced to every client by
+Colyseus"*, so standing near someone hands you their canonical id — no guessing and no spoofing
+required. And the three routes above still authenticate nothing. Both halves are SOC-2.E, which is now
+scoped and waiting only on the decisions its design needs. **Closing the endpoints while the world
+broadcasts the key is half a fix**, and of the three, the erasure route is the one that should not wait
+for the other half to be designed.

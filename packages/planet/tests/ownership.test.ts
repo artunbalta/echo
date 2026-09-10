@@ -97,8 +97,15 @@ test("lighting the globe reveals no owner ids, which is what it did before and m
   await store.claim("id-ffff-6666", { displayName: "Sam" });
   const recent = await store.recentlyClaimed(10);
   assert.ok(recent.length >= 1);
-  // The two consumers (HeroPlanet, ClaimClient) map to `c.h3Index` and drop everything else. This
-  // asserts the SHAPE they rely on, so that a future change which starts surfacing owner_id has to
-  // come past a test rather than quietly publish an identifier that used to be a first name.
-  assert.deepEqual(Object.keys(recent[0]!).sort(), ["h3Index", "ownerId"]);
+  // THIS TEST USED TO ASSERT THE OPPOSITE OF ITS OWN TITLE. It required `ownerId` to be present —
+  // `deepEqual(keys, ["h3Index", "ownerId"])` — under a name saying the globe "reveals no owner ids"
+  // and a comment saying it exists so that "a future change which starts surfacing owner_id has to
+  // come past a test". The guard enforced the leak it described itself as forbidding, so removing the
+  // leak would have failed it, and nobody reading the title would have looked.
+  //
+  // It was written when `ownerId` WAS the typed first name, which is the sentence that explains both
+  // halves: publishing a first name beside a hex cell is a product choice someone could defend, and
+  // SOC-2.B then made that field the canonical user key without anything here noticing the meaning
+  // had changed underneath the assertion.
+  assert.deepEqual(Object.keys(recent[0]!).sort(), ["h3Index"]);
 });
