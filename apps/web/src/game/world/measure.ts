@@ -298,6 +298,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
   async function postTelemetry(events: TelemetryEvent[], ids: string[]): Promise<void> {
     let res: TelemetryRouteResponse = { mocked: true, durable: false };
     let reason: string | undefined;
+    await identitySettled; // never write under an id that is about to be replaced
     try {
       const r = await doFetch("/api/telemetry", {
         method: "POST",
@@ -367,6 +368,18 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     notify();
   }
 
+  /**
+   * Resolves once `arm()` knows which subject this chain writes under.
+   *
+   * WITHOUT THIS THERE IS A WINDOW, and it drops exactly the events a first visit is made of. `arm()`
+   * takes a provisional id from `resolveUserId()` so that `armed()` can stay synchronous — two tests
+   * assert it the statement after `accept()` — and then asks the server for a SIGNED one. In between,
+   * an action would be stamped with the provisional id and sent with no token, which production
+   * refuses (`identity_required`). Fail-closed, and silently lossy: the first thing someone does is
+   * the thing that vanishes. Both senders await this, so a batch flushes under the settled subject.
+   */
+  let identitySettled: Promise<unknown> = Promise.resolve();
+
   function arm(): void {
     if (collector || disposed) return;
     // Consent has been given, so the id may now be written down. Before this line the chain has
@@ -377,7 +390,7 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     // `flushMs` away, so in practice the signature arrives first. If it does not, production REFUSES
     // those writes rather than attributing them to an id nobody verified — which is the whole point,
     // and is why this is not awaited and not guarded.
-    void ensureIdentity(doFetch).then((id) => {
+    identitySettled = ensureIdentity(doFetch).then((id) => {
       if (id && !disposed) userId = id;
     });
     collector = new TelemetryCollector(sessionId, send, opts.flushMs ?? 2000, true);
@@ -435,6 +448,10 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
       });
       if (!consentOn()) return refuse("consent_off");
       if (!collector) return refuse("not_armed");
+
+      // Before the envelope is built, because `actorId` is read out of `userId` below and a
+      // provisional id would be stamped into an event that outlives it.
+      await identitySettled;
 
       const row = rowFor(action);
       const cue = o.cue ?? row?.cue;

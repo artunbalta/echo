@@ -8,7 +8,7 @@
  * client-side between state snapshots.
  */
 import { Room, type Client } from "@colyseus/core";
-import { subjectFor } from "@echo/shared/identity";
+import { identitySecretsFor, subjectFor } from "@echo/shared/identity";
 import {
   WORLD,
   TICK_MS,
@@ -146,7 +146,12 @@ export class WorldRoom extends Room<WorldState> {
         trustClientId: process.env.ECHO_TRUST_CLIENT_ID,
         vercelEnv: process.env.VERCEL_ENV,
         nodeEnv: process.env.NODE_ENV,
-        secrets: [process.env.ECHO_IDENTITY_SECRET ?? "", process.env.ECHO_IDENTITY_SECRET_OLD ?? ""].filter(Boolean),
+        secrets: identitySecretsFor({
+          secret: process.env.ECHO_IDENTITY_SECRET,
+          previous: process.env.ECHO_IDENTITY_SECRET_OLD,
+          vercelEnv: process.env.VERCEL_ENV,
+          nodeEnv: process.env.NODE_ENV,
+        }),
       },
       context?.token || options.token || "",
       options.userId ?? null,

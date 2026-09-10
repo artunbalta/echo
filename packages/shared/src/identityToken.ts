@@ -155,3 +155,38 @@ export function subjectFor(env: SubjectEnv, token: string, asserted?: string | n
   if (!usableSecrets.length && !relaxed) return { ok: false, reason: "unconfigured" };
   return { ok: false, reason: "no-identity" };
 }
+
+
+/**
+ * The key a NON-PRODUCTION process signs with when none is configured.
+ *
+ * WHY THIS EXISTS: without it, a developer running `npm run dev` with no `.env` gets a dead
+ * measurement chain — minting answers 503, every guarded route refuses, and the posterior never
+ * moves. That is fail-closed working correctly and it is also unusable, and the e2e gate proved it:
+ * `chain-live.spec.ts` went red the moment the routes started checking, because CI has no secret.
+ *
+ * IT IS NOT A FALLBACK IN PRODUCTION, and that asymmetry is the whole design. A production process
+ * with no key gets an EMPTY list and refuses everything, because a well-known constant that signed
+ * real identities would be worse than no signature at all — it would look like authentication.
+ */
+export const DEV_IDENTITY_SECRET = "echo-dev-identity-secret-not-for-production";
+
+/**
+ * The signing keys for a process, newest first — configured if any are, the dev key if not and this
+ * is demonstrably not production, and NOTHING if it is.
+ *
+ * Both runtimes call this rather than reading env twice: a browser token signed by `apps/web` has to
+ * verify in `apps/realtime`, and two independent guesses at "am I production" is how they end up
+ * disagreeing about which key that is.
+ */
+export function identitySecretsFor(env: {
+  secret?: string | undefined;
+  previous?: string | undefined;
+  vercelEnv?: string | undefined;
+  nodeEnv?: string | undefined;
+}): string[] {
+  const configured = [env.secret ?? "", env.previous ?? ""].filter(Boolean);
+  if (configured.length) return configured;
+  const production = env.vercelEnv === "production" || env.nodeEnv === "production";
+  return production ? [] : [DEV_IDENTITY_SECRET];
+}

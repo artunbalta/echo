@@ -19,14 +19,19 @@
  * else. The lesson is `⚑24`'s: credentials alone must never be enough, because a shared `.env`
  * nobody chose can supply them.
  */
-import { bearerToken, subjectFor } from "@echo/shared/identity";
+import { bearerToken, identitySecretsFor, subjectFor } from "@echo/shared/identity";
 
 export type { SubjectEnv, SubjectVerdict } from "@echo/shared/identity";
 export { subjectFor, trustsAssertedId } from "@echo/shared/identity";
 
 /** The signing keys, newest first. Rotation keeps the outgoing key in `ECHO_IDENTITY_SECRET_OLD`. */
 export function identitySecrets(): string[] {
-  return [process.env.ECHO_IDENTITY_SECRET ?? "", process.env.ECHO_IDENTITY_SECRET_OLD ?? ""].filter(Boolean);
+  return identitySecretsFor({
+    secret: process.env.ECHO_IDENTITY_SECRET,
+    previous: process.env.ECHO_IDENTITY_SECRET_OLD,
+    vercelEnv: process.env.VERCEL_ENV,
+    nodeEnv: process.env.NODE_ENV,
+  });
 }
 
 export function subjectEnv(): import("@echo/shared/identity").SubjectEnv {
