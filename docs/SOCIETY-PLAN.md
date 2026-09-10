@@ -13,12 +13,14 @@
 
 ---
 
-### Where this stands — 2026-09-07
+### Where this stands — 2026-09-09
 
-**Decisions taken and recorded** as `C24`–`C33` in `docs/DECISIONS.md`: the world clock, NPC land in
+**Decisions taken and recorded** as `C24`–`C38` in `docs/DECISIONS.md`: the world clock, NPC land in
 the substrate, read-only mortality, the planet frame and the parcel as the shared unit (which also
 answers C11), the measured whole frame, the pre-registered re-anchor, the `consistency` zero column,
-trade access, and the planet's own census.
+trade access, and the planet's own census (`C24`–`C33`); then the ML store snapshotted rather than
+replayed (`C34`), the retention window (`C35`), the frame attributed per layer (`C36`), the detail
+radius refuted as the lever (`C37`), and the missing LOD built and priced in draw calls (`C38`).
 
 **Done.** SOC-0.A · SOC-0.B (and C11) · SOC-0.C *(seven passages, not four)* · SOC-0.D *(option 3
 taken, plus a finding worse than the thirteen it covers)* · SOC-0.E *(the register merged and a gate
@@ -26,10 +28,11 @@ that fails on a dangling ⚑)* · SOC-1.A *(machine and per-layer; only the phon
 *(not the item it was written as — §3 item 7)* · SOC-1.C *(89.43 MiB → 7.81 MiB)* · SOC-1.D *(the
 stated cause refuted; the real one was the test runner)* · SOC-1.E *(the promise is true, pinned in a
 browser)* · SOC-2.B *(the collision, not the foreign key)* · SOC-2.C *(a ledger, verified against a
-real Postgres)* · SOC-2.F *(the class that exists is carried)* · SOC-2.H *(eight holes, not one, and
-the registry suite now actually runs)* · SOC-6.A · SOC-6.B · SOC-6.G.
+real Postgres)* · SOC-2.D *(the durable half; `shared` deliberately not taken)* · SOC-2.F *(the class
+that exists is carried)* · SOC-2.G *(taken as C35)* · SOC-2.H *(eight holes, not one, and the
+registry suite now actually runs)* · SOC-6.A · SOC-6.B · SOC-6.G.
 
-**Seven things found while doing it, each worse than the plan assumed.**
+**Eight things found while doing it, each worse than the plan assumed.**
 1. `C28`/`C31` — the shipped frame is **907,250 triangles against a 600,000 ceiling**, the ORDINARY
    parcel is the expensive route, and **a body costs 46 draw calls of WHOLE frame, not 46 of main**.
    SOC-4 is not blocked *by* SOC-1.A; it is blocked by what SOC-1.A found.
@@ -47,9 +50,16 @@ the registry suite now actually runs)* · SOC-6.A · SOC-6.B · SOC-6.G.
 7. SOC-1.D — **fixed twice**, because the first fix's constant was measured on the pre-merge tree and
    carried forward without re-measuring. Three workers is 6 failed in 27.8 m; one is 21 passed in
    1.1. The §3 error, committed inside the change that closed §3's own workstream.
+8. `C36`–`C38` — **the frame budget is not a triangle problem.** SOC-1.A set out to find triangles
+   and found that `detailLayer` was 68% of the worst frame for want of a MIDDLE LOD — which C37
+   named after refuting the radius, and C38 built and shipped at −48% of that layer. But the constraint that decided the design was **draw
+   calls**: C16's ceiling is 600,000 triangles *and* 120 calls, the demo parcel measures 119 of 120,
+   and a mid mesh costs one unavoidable call per class. So the triangle lever that exists can only be
+   pulled for the classes the CALL budget can pay for — one of them — and SOC-4's bodies, which cost
+   46 calls each, are competing for the same single call of headroom. §3 item 9 is the error I
+   committed inside this work, and it is **§3 item 8's** species: a check that could not have failed.
 
-**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-2.D, SOC-2.E, SOC-2.G, SOC-3, SOC-4, SOC-5,
-SOC-6.C–F/H/I, SOC-7.
+**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-2.E, SOC-3, SOC-4, SOC-5, SOC-6.C–F/H/I, SOC-7.
 
 **The two ordering deadlines the plan names have both been met.** `feat/f4-trust` was merged before
 a society cue touched `ingest.py` (SOC-0.G), and `session_mode` reaches the store before a society
@@ -60,15 +70,19 @@ reclassified by anyone.
 0.3 — 26,602 settlements and a 41-minute walk between them (`C33`) — and `feat/f4-trust` is merged
 rather than retired (SOC-0.G).
 
-**Gates, measured 2026-09-08:** `check:register` ✅ · `build:shared` + `typecheck` ✅ (4 workspaces,
-and in that order — SOC-2.H hole 6) · `@echo/planet` **164/164, 0 skipped, against a real Postgres
-migrated by `db:migrate:apply`** *(160/164 with 4 skipped when no `PLANET_TEST_DATABASE_URL` is set,
-which is what a bare `npm test` still does)* ·
-`@echo/shared` 31/31 · `@echo/web` 219/219 · `@echo/realtime` copresence ✅ · `services/ml` 135/135 ·
-e2e gate **21/21 in 1.1 m**, at `workers: 1` — see SOC-1.D, where that constant was wrong the first
-time and is now measured on this tree. **Red, all ten pre-existing and all verified so by stashing the day's
-render changes:** `scatterSplit` ×2 (the `C28` overage), `scatterImpostor` ×4, `globePick` ×2,
-`slice` ×1, `spawnSea` ×1 — quarantined by reason, never by retuning a threshold.
+**Gates, measured 2026-09-09:** `check:register` ✅ *(1,196 lines, 27 entries, every ⚑ resolves)* ·
+`build:shared` + `typecheck` ✅ (4 workspaces, and in that order — SOC-2.H hole 6) · `@echo/planet`
+160/164 with 4 skipped, 0 failed *(the 4 need `PLANET_TEST_DATABASE_URL`; **164/164 against a real
+Postgres migrated by `db:migrate:apply`** was measured 2026-09-08 and is not re-measured here, so it
+carries that date)* · `@echo/shared` 31/31 · `@echo/web` **256/256** · `@echo/realtime` copresence ✅ ·
+`services/ml` **186/186** · e2e **27 passed of 37**, at `workers: 1` — see SOC-1.D, where that
+constant was wrong the first time and is now measured on this tree. **Red, all ten pre-existing:**
+`scatterSplit` ×2 (the `C28` overage), `scatterImpostor` ×4, `globePick` ×2, `slice` ×1, `spawnSea` ×1
+— quarantined by reason, never by retuning a threshold, and **re-verified pre-existing on 2026-09-09**
+by reverting `detailLayer.ts` and `scatterDetail.ts` to the pre-`C38` commit and re-running: the same
+five tests fail in the three specs checked, so the mid band caused none of them. *(A bare `npm run
+e2e` runs all 37; `E2E_QUARANTINE=skip` is what reports 21/21, and the two counts describe the same
+tree.)*
 
 ---
 
@@ -326,7 +340,7 @@ quietly reintroduce a ladder.
 
 ---
 
-## SOC-0 — The decisions and the record ◑ · *A, B, C and half of G taken 2026-09-07; D, E, F open*
+## SOC-0 — The decisions and the record ◑ · *A, B, C, E, G done; D half — the decision taken, the labels not; F open*
 
 **Nothing below this phase may start.** No code. Every item is hours of writing and potentially
 weeks of thinking, and every one of them is impossible to reverse once data exists.
@@ -536,7 +550,7 @@ nearest thing the repo has to an NPC who remembers you, which is SOC-6.F and SOC
 
 ---
 
-## SOC-1 — Ground truth: measure and repair what already ships ◑ · *B, C, E done; A half; D open*
+## SOC-1 — Ground truth: measure and repair what already ships ◑ · *B, C, D, E done; A half — only the phone frame is owed*
 
 *Blocked by: SOC-0.C.* Everything here is small, and every item is a number the rest of the plan
 needs or a promise the product is currently breaking.
@@ -777,7 +791,7 @@ implies, and that is a `C`-entry, not a widget.
 
 ---
 
-## SOC-2 — Foundations ☐ · *weeks*
+## SOC-2 — Foundations ◑ · *C, D, G, H done; B and F half; A and E open*
 
 *Blocked by: SOC-0.A(b), SOC-0.A(c).* None of this is visible to a player. All of it is underneath
 every line of the direction, and each item is a hard ceiling if skipped.
@@ -881,7 +895,7 @@ and a resume after creating the roles picked up exactly where it stopped.)*
 only because npm hoisted `@echo/planet`'s devDependency. Now declared at the same 8.23.0 the lock
 already had.
 
-### SOC-2.D — Give the ML store a shared, durable backing ◑ · *design taken (C34), precondition done (⚑24), build next*
+### SOC-2.D — Give the ML store a shared, durable backing ◑ · *the DURABLE half is built (C34, ⚑24, migration 0014); `shared` is deliberately not taken*
 
 `services/ml/echo_ml/store.py` is a **process-local dict** with a per-user `RLock` held at five call
 sites. `config.py:76-77` declares `supabase_url`/`supabase_key` and nothing in `services/ml` reads
