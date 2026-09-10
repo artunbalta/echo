@@ -100,3 +100,58 @@ export function bearerToken(header: string | null | undefined): string {
   const match = /^Bearer\s+(.+)$/i.exec(header.trim());
   return match ? match[1]!.trim() : "";
 }
+
+
+// ── who a request is for ────────────────────────────────────────────────────────
+
+/**
+ * THE POLICY LIVES HERE, ONCE, because two runtimes enforce it (L5).
+ *
+ * `apps/web` gates its route handlers and `apps/realtime` gates the room join, and a policy written
+ * twice is a policy that drifts — the version that relaxes by accident is the one nobody re-reads.
+ * Both call `subjectFor`; only the plumbing that reads a header or a join option differs.
+ */
+export interface SubjectEnv {
+  /** `ECHO_TRUST_CLIENT_ID`. Only the literal "1" counts. */
+  trustClientId?: string | undefined;
+  vercelEnv?: string | undefined;
+  nodeEnv?: string | undefined;
+  /** Signing keys, newest first. Empty means this process can verify nothing, and says so. */
+  secrets: readonly string[];
+}
+
+export type SubjectVerdict =
+  | { ok: true; subject: string; source: "token" | "asserted" }
+  | { ok: false; reason: "no-identity" | "mismatch" | "unconfigured" };
+
+/**
+ * Whether a deployment may honour an id the client simply asserted.
+ *
+ * Production is anything that does not PROVE it is not production, and BOTH signals are required.
+ * The harnesses compose their own ids and `?u=` is the only mechanism that yields two identities in
+ * one browser profile, so the relaxation has to exist; `⚑24`'s lesson is that credentials alone must
+ * never be enough to switch it on, because a shared `.env` nobody chose can supply them.
+ */
+export function trustsAssertedId(env: SubjectEnv): boolean {
+  if (env.trustClientId !== "1") return false;
+  if (env.vercelEnv === "production") return false;
+  if (env.nodeEnv === "production") return false;
+  return true;
+}
+
+/** The subject a caller is, or why they are nobody. `asserted` is whatever they claimed to be. */
+export function subjectFor(env: SubjectEnv, token: string, asserted?: string | null): SubjectVerdict {
+  const claimed = (asserted ?? "").trim();
+  const relaxed = trustsAssertedId(env);
+  const usableSecrets = env.secrets.filter(Boolean);
+  const verified = usableSecrets.length && token ? verifyIdentity(token, usableSecrets) : null;
+
+  if (verified) {
+    // An asserted id may AGREE with the token — every existing call site sends both — but never win.
+    if (claimed && claimed !== verified.subject) return { ok: false, reason: "mismatch" };
+    return { ok: true, subject: verified.subject, source: "token" };
+  }
+  if (relaxed && claimed) return { ok: true, subject: claimed, source: "asserted" };
+  if (!usableSecrets.length && !relaxed) return { ok: false, reason: "unconfigured" };
+  return { ok: false, reason: "no-identity" };
+}

@@ -13,7 +13,7 @@ import RecognitionMeter from "@/components/RecognitionMeter";
 import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
 import DuskReading, { type DuskReadingData } from "@/components/DuskReading";
 import { useEcho } from "@/lib/useEcho";
-import { resolveUserId } from "@/lib/identity";
+import { resolveUserId, identityToken } from "@/lib/identity";
 import { markFunnel, telemetryConsented } from "@/lib/funnel";
 import { useDay, type DuskReason } from "@/lib/useDay";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEvent, IslandDayState } from "@echo/shared";
@@ -1480,7 +1480,8 @@ export default function WorldClient() {
 
       if (disposed) return;
       try {
-        await net.connect({ userId, name, spriteUrl, sessionId, slotIndex });
+        // The signature travels with the join; WorldRoom's onAuth derives refId from it.
+        await net.connect({ userId, name, spriteUrl, sessionId, slotIndex, token: identityToken() });
         // Respect telemetry consent (§2, §13): only collect if the user opted in.
         if (telemetryConsent) tele.start();
       } catch {

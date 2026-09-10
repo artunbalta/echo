@@ -738,7 +738,7 @@ export class WorldCore {
     const within = best && bestDist <= WORLD.INTERACTION_RADIUS + 0.5 ? bestId : null;
     if (within !== this.nearbyId) {
       if (within && best) {
-        this.hooks.emitTelemetry?.("approach", { targetId: best.refId, dist: Number(bestDist.toFixed(2)) });
+        this.hooks.emitTelemetry?.("approach", { targetId: best.id, dist: Number(bestDist.toFixed(2)) });
         this.hooks.onNearbyChange?.({ id: within, name: best.name, refId: best.refId, kind: best.kind });
         this.nearbyKind = best.kind;
       } else {
@@ -750,7 +750,7 @@ export class WorldCore {
     } else if (within) {
       this.dwellTimer += dt;
       if (this.dwellTimer > 3) {
-        this.hooks.emitTelemetry?.("dwell", { targetId: best!.refId, seconds: 3 });
+        this.hooks.emitTelemetry?.("dwell", { targetId: best!.id, seconds: 3 });
         this.dwellTimer = 0;
       }
     }

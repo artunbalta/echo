@@ -41,7 +41,10 @@ export class NetClient {
   private reconnecting = false;
   private left = false;
 
-  async connect(opts: { userId: string; name: string; spriteUrl: string; sessionId: string; slotIndex?: number }) {
+  async connect(opts: { userId: string; name: string; spriteUrl: string; sessionId: string; slotIndex?: number; token?: string }) {
+    // The token rides in the join options and is verified by the room's onAuth, which derives refId
+    // from the signature instead of from `userId` (SOC-2.E). It must never be logged: WorldRoom's
+    // join log prints name and id only.
     this.room = await this.client.joinOrCreate("world", opts);
     this.selfId = this.room.sessionId;
     this.bindRoom();
@@ -66,7 +69,9 @@ export class NetClient {
         map.set(id, {
           id,
           kind: e.kind,
-          refId: e.refId,
+          // An NPC's id, or "" for a person. A person is `id`, which is the room-scoped handle —
+          // their canonical user id no longer crosses the wire at all (⚑27).
+          refId: e.publicRef ?? "",
           name: e.name,
           spriteUrl: e.spriteUrl,
           x: e.x,
