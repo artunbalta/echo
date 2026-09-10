@@ -6,6 +6,7 @@
  * client, and works key-free (the client also keeps a localStorage copy). Returns { ok }.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 
 export const runtime = "nodejs";
 
@@ -45,8 +46,16 @@ export async function POST(req: Request) {
   const spec = countMe(body.specific);
   const ctrl = countMe(body.controls);
 
+  // An asserted id stays OPTIONAL — this row is accepted anonymously — but an id that is supplied
+  // must be the caller's, or a survey response lands under someone else's name.
+  const caller = body.uid ? subjectOf(req, String(body.uid)) : null;
+  if (caller && !caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+
   const row = {
-    user_id: body.uid ?? null,
+    user_id: caller?.ok ? caller.subject : null,
     session_id: body.sessionId ?? null,
     overall: Math.round(overall),
     specific_total: spec.total,

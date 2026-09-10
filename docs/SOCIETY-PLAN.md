@@ -952,17 +952,51 @@ three of which go red if the old shape returns.
 `store.py`'s header, `config.py`'s declarations, and — the damaging one, because an operator can
 follow it — `render.yaml`'s "with both set, learning state hydrates/persists to Supabase".
 
-### SOC-2.E — Authenticate the ingress, the persona read and the room join ☐ · *days*
+### SOC-2.E — Authenticate the ingress, the persona read and the room join ✅ · *done, and it was five surfaces rather than three*
 
 Verified: there is no `middleware.ts` under `apps/web`; `api/agent/persona/route.ts:7` returns any
-posterior for any `uid` in a query string; `lib/identity.ts:24-40` mints a bare localStorage UUID and
-honours `?u=<id>` verbatim; `WorldRoom.ts:134` copies `options.userId` into `refId` unchecked. `refId`
-is the key **every** `BehavioralEvent` is written under.
+posterior for any `uid` in a query string; `lib/identity.ts` mints a bare localStorage UUID at `:36-39`
+and honours `?u=<id>` verbatim at `:26` and `:33`; `WorldRoom.ts:134` copies `options.userId` into
+`refId` unchecked. `refId` is the key **every** `BehavioralEvent` is written under.
+
+*(The original citation here said `identity.ts:24-40` "mints", which conflates two functions whose
+difference is the point: `:24-29` is `peekUserId`, which NEVER mints — that is its entire purpose, so
+that a render which runs before the consent card cannot stamp a durable key under a card promising a
+"no" changes nothing. Only `resolveUserId` mints.)*
 
 In a solo world this is a convenience. **In a shared one it is a way to author another person's
 persona**, and posteriors written under a spoofed id are indistinguishable from real evidence
 afterwards. The care needed: `?u=` is load-bearing for the two-tab test path and for the harness that
 produces the headline individuation number, so confine it to non-production without breaking that.
+
+**✅ DONE — `C39`, and the item was bigger than it was written.** Two surfaces the entry does not name
+turned out to be the ones that made the three it does name exploitable rather than merely weak:
+`GET /api/telemetry/recent?uid=` returns a person's **raw behavioural rows**, and
+`POST /api/account/delete {userId}` **hard-deletes** their posterior, eight Supabase tables and their
+island state — both on a bare string. And the string was public: `/api/planet/status` served up to
+1,500 of them (`⚑27`) and `refId` was a **synced** Colyseus field, so standing near someone in the
+shared world handed you the credential for erasing them.
+
+- **`packages/shared/src/identityToken.ts`** — HMAC sign/verify plus the pure policy, reached by the
+  `@echo/shared/identity` subpath so `node:crypto` never enters a browser bundle. One module, because
+  `apps/web` and `apps/realtime` both enforce it and a policy written twice drifts (L5).
+- **`apps/web/src/lib/subject.ts`** — the request plumbing and the one place a Bearer header is read.
+- **`/api/identity/session`** — the only minter. It refuses to sign an id handed to it, which is why
+  rollout orphans existing anonymous echoes; `C39` states that cost rather than discovering it later.
+- **16 of 19 id-bearing routes guarded.** The other three *should* not be: `auth/sync` verifies a
+  Supabase token and always did, `identity/session` takes no id, and `narrate` declares a `userId` it
+  never reads.
+- **`refId` lost its `@type`, not its value.** The server still attributes every emission to it; it
+  stops leaving the process. Clients identify a person by Colyseus's own room-scoped `sessionId`.
+- **The second minter is gone** — `Flow0Client` wrote `"u_" + Math.random()…` into the canonical key
+  on mount, pre-consent, with the exact prefix `identity.ts` says it "deliberately DON'T prepend".
+
+**The closed-gate proof, not an assertion that it is closed:** `npm run test:copresence` FAILS with no
+relaxation and PASSES with `ECHO_TRUST_CLIENT_ID=1`. 26 tests on the token and the gate, every strict
+subset of the relaxation asserted closed.
+
+**Still owed:** the foreign key SOC-2.B waits on — now unblocked, because there is finally a verified
+subject to point it at.
 
 ### SOC-2.F — Provenance in ingest, before any society event reaches a posterior ◑ · *the class that exists is carried; two more have nothing to stamp them*
 

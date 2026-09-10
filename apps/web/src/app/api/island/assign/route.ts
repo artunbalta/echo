@@ -4,6 +4,7 @@
  * stable across returns. Zero-key: backed by the in-memory store; durable when Supabase is set.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { assignIslandForUser } from "@/lib/island-registry";
 
 export const runtime = "nodejs";
@@ -17,7 +18,12 @@ export async function POST(req: Request) {
   }
   const userId = typeof body.userId === "string" && body.userId ? body.userId : null;
   if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const caller = subjectOf(req, userId);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
 
-  const placement = await assignIslandForUser(userId);
+  const placement = await assignIslandForUser(caller.subject);
   return NextResponse.json(placement);
 }

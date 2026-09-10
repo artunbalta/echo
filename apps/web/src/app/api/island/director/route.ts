@@ -11,6 +11,7 @@
  * rhythm. The director is an upgrade, never a dependency.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { selectSituation } from "@/lib/ml";
 
 export const runtime = "nodejs";
@@ -34,8 +35,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
   if (!body.userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+  const caller = subjectOf(req, String(body.userId));
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
 
-  const pick = await selectSituation({ userId: body.userId, npcs: CANDIDATES });
+  const pick = await selectSituation({ userId: caller.subject, npcs: CANDIDATES });
   // cap 0 (converged posterior) or mock → no intervention today: the world relaxes.
   const surface = !pick.mocked && pick.cap >= 1 ? pick.selected : null;
   return NextResponse.json({ surface, cap: pick.cap ?? 0, mocked: !!pick.mocked });

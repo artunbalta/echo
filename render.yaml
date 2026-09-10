@@ -85,6 +85,15 @@ services:
       # Same bearer token as echo-ml's ML_SERVICE_TOKEN.
       - key: ML_SERVICE_TOKEN
         sync: false
+      # VERIFIES THE ROOM JOIN (SOC-2.E / C39). Must be byte-identical to apps/web's
+      # ECHO_IDENTITY_SECRET, or a browser that Vercel signed cannot join the world Render hosts.
+      # This server has no Supabase client and no anon key, which is why identity is a shared secret.
+      # Absent → every join is refused with identity_unconfigured, deliberately rather than silently.
+      - key: ECHO_IDENTITY_SECRET
+        sync: false
+      # Only during a key rotation, matching the web side's overlap window.
+      - key: ECHO_IDENTITY_SECRET_OLD
+        sync: false
       # Real NPC dialogue (without it, NPCs reply with deterministic mocks). Enter in dashboard.
       - key: ANTHROPIC_API_KEY
         sync: false

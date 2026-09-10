@@ -1238,11 +1238,21 @@ now asserts `["h3Index"]`, and **it was checked that it fails when the leak retu
 fail with `ownerId` put back — because a guard that cannot fail is what this entry is about
 (SOCIETY-PLAN §3 items 8 and 9).
 
-**Status:** PARTIALLY CLOSED, and the open half is the larger one. The globe no longer publishes the
-credential. **The shared world still does:** `refId` at `apps/realtime/src/state.ts:10` is
-`@type("string")` on the Entity schema that the file's own header says is *"synced to every client by
-Colyseus"*, so standing near someone hands you their canonical id — no guessing and no spoofing
-required. And the three routes above still authenticate nothing. Both halves are SOC-2.E, which is now
-scoped and waiting only on the decisions its design needs. **Closing the endpoints while the world
-broadcasts the key is half a fix**, and of the three, the erasure route is the one that should not wait
-for the other half to be designed.
+**Status:** CLOSED, both halves, as `C39` / SOC-2.E.
+
+The globe no longer publishes the credential, and **the shared world no longer broadcasts it either**:
+`refId` lost its `@type` decorator, so it stays server-side where every emission is attributed to it
+and stops crossing the wire. Clients now identify a person by Colyseus's own room-scoped `sessionId`,
+which says "the same someone" without saying who, and NPC ids ride a separate synced field because an
+NPC's id is not a credential.
+
+All three routes named above derive their subject from an HMAC signature instead of reading it out of
+the request — 16 of 19 id-bearing routes do, the exceptions being `auth/sync` (which verifies a
+Supabase token and always did), `identity/session` (which accepts no id) and `narrate` (which declares
+a `userId` it never reads). The room join is verified by `WorldRoom.onAuth` using the **same function**
+the routes use, imported from `@echo/shared/identity` rather than restated, because a policy written
+twice is a policy that drifts.
+
+**What is NOT closed by this, and is stated in `C39` rather than left to be discovered:** rollout
+orphans every existing anonymous echo, because the minter refuses to sign an id handed to it. That is
+the same loss as clearing site data — but once to everyone, rather than one person at a time.
