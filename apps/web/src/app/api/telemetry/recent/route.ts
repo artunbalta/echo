@@ -10,13 +10,21 @@
  */
 import { NextResponse } from "next/server";
 import { readRecent } from "@/lib/behavioral-store";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const uid = (url.searchParams.get("uid") ?? "").trim();
-  if (!uid) return NextResponse.json({ error: "uid required" }, { status: 400 });
+  const asserted = (url.searchParams.get("uid") ?? "").trim();
+  if (!asserted) return NextResponse.json({ error: "uid required" }, { status: 400 });
+  // "Tighten all three together when auth lands" — this route's own header, and this is that.
+  const verdict = subjectOf(req, asserted);
+  if (!verdict.ok) {
+    const { body, status } = subjectRejection(verdict);
+    return NextResponse.json(body, { status });
+  }
+  const uid = verdict.subject;
   const n = Number(url.searchParams.get("n") ?? 25);
   const recent = await readRecent(uid, Number.isFinite(n) ? n : 25);
   return NextResponse.json({ ok: true, uid, count: recent.rows.length, ...recent });

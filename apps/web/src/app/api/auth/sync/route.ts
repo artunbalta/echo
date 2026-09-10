@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+
+import { signIdentity } from "@echo/shared/identity";
+
 import { adminClient, anonServer } from "@/lib/supabaseAdmin";
+import { identitySecrets } from "@/lib/subject";
 import { assignIslandForUser } from "@/lib/island-registry";
 
 export const runtime = "nodejs";
@@ -37,5 +41,15 @@ export async function POST(req: Request) {
   // the empty slot nearest the most-recently-joined arrival, stable across returns (§2).
   const island = await assignIslandForUser(userId);
 
-  return NextResponse.json({ userId, email: user.email, island });
+  // THE ONE VERIFICATION OF A SUPABASE SESSION IN THE TREE, so this is where a signed-in user's
+  // identity token comes from too (SOC-2.E). The subject is `userId` — the public.users row this
+  // route just resolved — and NOT the JWT's own `sub`, because every write in the app is attributed
+  // to the former. Signing the wrong one would produce a valid token for a subject nothing reads.
+  //
+  // A deployment with no ECHO_IDENTITY_SECRET still signs in; it just cannot hand out a token, and
+  // the caller finds `token` absent rather than empty. Sign-in and identity fail independently.
+  const [signing] = identitySecrets();
+  const identityToken = signing ? signIdentity(userId, signing, Date.now()) : undefined;
+
+  return NextResponse.json({ userId, email: user.email, island, token: identityToken });
 }

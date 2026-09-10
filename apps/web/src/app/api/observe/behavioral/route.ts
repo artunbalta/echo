@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import { observeBehavioralEvent } from "@/lib/ml";
 import { recordEvents, rowFromBehavioral } from "@/lib/behavioral-store";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,26 @@ export async function POST(req: Request) {
   }
   const events = Array.isArray(body.events) ? body.events : body.event ? [body.event] : [];
   if (!events.length) return NextResponse.json({ ok: true, forwarded: 0, durable: false, results: [] });
+
+  // WHOSE EVIDENCE THIS IS (SOC-2.E). `actor_id` is the key every row is written under and every
+  // posterior is routed by, and it arrived inside the envelope being authenticated — so a POST could
+  // name any actor and the row was indistinguishable from real evidence afterwards.
+  //
+  // The check is per-envelope because one POST may carry several, and a batch that mixed a real
+  // actor with a borrowed one would otherwise pass on the strength of its first element. Nothing is
+  // stamped or rewritten: an envelope without an actor_id is still not recorded, exactly as before
+  // (ML rejects it on the same ground), so this rejects and never invents.
+  const actors = [...new Set(events.map((e) => (typeof e.actor_id === "string" ? e.actor_id.trim() : "")).filter(Boolean))];
+  if (actors.length) {
+    const caller = subjectOf(req, actors[0]);
+    if (!caller.ok) {
+      const { body: error, status } = subjectRejection(caller);
+      return NextResponse.json(error, { status });
+    }
+    if (actors.some((a) => a !== caller.subject)) {
+      return NextResponse.json({ error: "identity_mismatch" }, { status: 403 });
+    }
+  }
 
   // Record first, awaited: the row is what the posterior was shown. An envelope without an actor_id
   // has no silo to land in (ML rejects it on the same ground) and is not recorded.

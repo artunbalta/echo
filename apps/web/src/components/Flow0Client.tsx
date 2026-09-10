@@ -20,6 +20,8 @@
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+
+import { resolveUserId } from "@/lib/identity";
 import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import {
@@ -111,8 +113,12 @@ export default function Flow0Client() {
 
   // ── mount: assign the island, build its shore, place self + the F0 objects ──────────────────
   useEffect(() => {
-    const userId = localStorage.getItem("echo.userId") ?? "u_" + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem("echo.userId", userId);
+    // THE SECOND MINTER IS GONE. This wrote `"u_" + Math.random().toString(36).slice(2,10)` into
+    // the canonical `echo.userId` key — the exact `u_` prefix `lib/identity.ts` says it
+    // "deliberately DON'T prepend", and eight characters of Math.random where the resolver uses
+    // crypto.randomUUID. Whichever minter ran first in a browser won for the whole app, so a
+    // visitor's canonical id depended on which page they happened to open (SOC-2.E, ⚑27).
+    const userId = resolveUserId();
     uidRef.current = userId;
     sessionRef.current = "s_" + Math.random().toString(36).slice(2, 10);
 

@@ -24,6 +24,7 @@
  * end-to-end before the re-anchor. Degrades to { mocked: true } when ML_SERVICE_URL is unset.
  */
 import { NextResponse } from "next/server";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 import { observeEvent, telemetryEvent } from "@/lib/ml";
 import { recordEvents, rowFromTelemetry } from "@/lib/behavioral-store";
 import type { TelemetryEvent } from "@echo/shared";
@@ -43,7 +44,13 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const userId = typeof body.userId === "string" && body.userId ? body.userId : null;
+  const asserted = typeof body.userId === "string" && body.userId ? body.userId : null;
+  const verdict = subjectOf(req, asserted);
+  if (!verdict.ok && asserted) {
+    const { body: error, status } = subjectRejection(verdict);
+    return NextResponse.json(error, { status });
+  }
+  const userId = verdict.ok ? verdict.subject : null;
   const events = Array.isArray(body.events) ? body.events : [];
   if (!userId || !events.length) return NextResponse.json({ ok: true, forwarded: 0, mocked: !process.env.ML_SERVICE_URL, durable: false });
 

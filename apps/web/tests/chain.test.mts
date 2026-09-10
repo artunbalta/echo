@@ -44,6 +44,20 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   return new Response(JSON.stringify(respond(url, body)), { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
 
+/**
+ * The POSTs that WRITE something, which is what every count in this file is about.
+ *
+ * `/api/identity/session` is excluded because it is the credential handshake and not a write: it
+ * carries no event, no telemetry and no user data, and it exists so that the writes below can be
+ * attributed to a subject the server verified rather than one the client asserted (SOC-2.E). Counting
+ * it as a write would make "one action is exactly one POST" a claim about network traffic instead of
+ * a claim about the chain, which is the thing being tested.
+ */
+const writes = () => calls.filter((c) => c.method === "POST" && c.url !== "/api/identity/session");
+
+/** Every request the chain makes about the WORLD — the handshake excluded, for the same reason. */
+const traffic = () => calls.filter((c) => c.url !== "/api/identity/session");
+
 /** Let the fire-and-forget sends settle (fetch → json → log). */
 const settle = async () => {
   for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0));
@@ -149,7 +163,7 @@ test("after accept, one action is exactly one POST carrying all eight context fi
 
     const r = await chain.emitAction("enter_cave", { raw: { risk01: 0.75, decision_latency_ms: 420 }, target: { id: "cave_mouth", kind: "place" } });
 
-    const posts = calls.filter((c) => c.method === "POST");
+    const posts = writes();
     assert.equal(posts.length, 1, "exactly one POST for one action");
     assert.equal(posts[0].url, "/api/observe/behavioral");
     const ev = (posts[0].body as { event: BehavioralEvent }).event;
@@ -195,7 +209,10 @@ test("after accept, one action is exactly one POST carrying all eight context fi
     assert.equal(log[0].mocked, false);
 
     await settle();
-    assert.equal(calls.length, 2, "no polling: one seed GET, one POST, nothing else");
+    assert.equal(traffic().length, 2, "no polling: one seed GET, one POST, nothing else");
+    // The handshake happens ONCE per armed chain and never again — a mint per event would be a
+    // different kind of polling, and one nothing else in this file would have caught.
+    assert.equal(calls.filter((c) => c.url === "/api/identity/session").length, 1, "one identity mint, not one per event");
   } finally {
     chain.dispose();
   }
@@ -308,7 +325,7 @@ test("revoke drops what was buffered and nothing is sent afterwards", async () =
     walkEast(chain.feedPosition, 20_000);
     chain.flush();
     await settle();
-    assert.equal(calls.filter((c) => c.method === "POST").length, 0);
+    assert.equal(writes().length, 0);
     assert.equal(chain.log().length, 0, "revoke forgets the local log too");
   } finally {
     chain.dispose();
