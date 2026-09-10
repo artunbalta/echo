@@ -30,9 +30,10 @@ stated cause refuted; the real one was the test runner)* · SOC-1.E *(the promis
 browser)* · SOC-2.B *(the collision, not the foreign key)* · SOC-2.C *(a ledger, verified against a
 real Postgres)* · SOC-2.D *(the durable half; `shared` deliberately not taken)* · SOC-2.F *(the class
 that exists is carried)* · SOC-2.G *(taken as C35)* · SOC-2.H *(eight holes, not one, and the
-registry suite now actually runs)* · SOC-6.A · SOC-6.B · SOC-6.G.
+registry suite now actually runs)* · SOC-2.E *(five surfaces, not three — `C39`)* · SOC-6.A ·
+SOC-6.B · SOC-6.G.
 
-**Eight things found while doing it, each worse than the plan assumed.**
+**Nine things found while doing it, each worse than the plan assumed.**
 1. `C28`/`C31` — the shipped frame is **907,250 triangles against a 600,000 ceiling**, the ORDINARY
    parcel is the expensive route, and **a body costs 46 draw calls of WHOLE frame, not 46 of main**.
    SOC-4 is not blocked *by* SOC-1.A; it is blocked by what SOC-1.A found.
@@ -58,8 +59,17 @@ registry suite now actually runs)* · SOC-6.A · SOC-6.B · SOC-6.G.
    pulled for the classes the CALL budget can pay for — one of them — and SOC-4's bodies, which cost
    46 calls each, are competing for the same single call of headroom. §3 item 9 is the error I
    committed inside this work, and it is **§3 item 8's** species: a check that could not have failed.
+9. `C39`/`⚑27` — **SOC-2.E was five surfaces, not three, and two of them were a public credential.**
+   The item names the persona read, the id minting and the room join. It does not name
+   `GET /api/telemetry/recent?uid=`, which returns a person's RAW behavioural rows, or
+   `POST /api/account/delete {userId}`, which HARD-DELETES their posterior and eight tables — both on
+   a bare string. And the string was published: `/api/planet/status` served up to 1,500 of them and
+   `refId` was a SYNCED Colyseus field, so standing near someone in the shared world handed you the
+   credential for erasing them. **Two correct changes composed into it:** SOC-2.B made `ownerId` the
+   canonical key to fix the "Sam" collision, and the globe had been publishing that field since it
+   was a first name. Neither half was wrong alone.
 
-**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-2.E, SOC-3, SOC-4, SOC-5, SOC-6.C–F/H/I, SOC-7.
+**Open and unchanged:** SOC-0.F, SOC-2.A, SOC-3, SOC-4, SOC-5, SOC-6.C–F/H/I, SOC-7.
 
 **The two ordering deadlines the plan names have both been met.** `feat/f4-trust` was merged before
 a society cue touched `ingest.py` (SOC-0.G), and `session_mode` reaches the store before a society
@@ -791,7 +801,7 @@ implies, and that is a `C`-entry, not a widget.
 
 ---
 
-## SOC-2 — Foundations ◑ · *C, D, G, H done; B and F half; A and E open*
+## SOC-2 — Foundations ◑ · *C, D, E, G, H done; B and F half; only A open*
 
 *Blocked by: SOC-0.A(b), SOC-0.A(c).* None of this is visible to a player. All of it is underneath
 every line of the direction, and each item is a hard ceiling if skipped.

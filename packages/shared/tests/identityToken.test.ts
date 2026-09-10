@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { bearerToken, signIdentity, verifyIdentity } from "../src/identityToken.js";
+import { DEV_IDENTITY_SECRET, bearerToken, identitySecretsFor, signIdentity, verifyIdentity } from "../src/identityToken.js";
 
 const SECRET = "test-secret-aaaa";
 const OTHER = "test-secret-bbbb";
@@ -104,4 +104,36 @@ test("the bearer header is parsed in one place, tolerantly, and never returns a 
   for (const none of [null, undefined, "", "abc", "Basic abc", "Bearer", "Bearer   "]) {
     assert.equal(bearerToken(none), "", `parsed a token out of ${JSON.stringify(none)}`);
   }
+});
+
+test("the dev key signs where there is no key, and NEVER where it is production", () => {
+  // THE ASYMMETRY IS THE DESIGN. Without a dev key, `npm run dev` with no .env has a dead
+  // measurement chain — minting 503s and every guarded route refuses — which is fail-closed working
+  // correctly and also unusable; the e2e gate proved it by going red the moment the routes started
+  // checking. With one in production, a well-known constant would sign real identities, which is
+  // worse than no signature because it LOOKS like authentication.
+  assert.deepEqual(identitySecretsFor({}), [DEV_IDENTITY_SECRET], "a bare laptop must be able to run");
+  assert.deepEqual(identitySecretsFor({ nodeEnv: "development" }), [DEV_IDENTITY_SECRET]);
+  assert.deepEqual(identitySecretsFor({ vercelEnv: "preview" }), [DEV_IDENTITY_SECRET]);
+
+  assert.deepEqual(identitySecretsFor({ nodeEnv: "production" }), [], "production without a key signs nothing");
+  assert.deepEqual(identitySecretsFor({ vercelEnv: "production" }), []);
+  assert.deepEqual(identitySecretsFor({ vercelEnv: "production", nodeEnv: "development" }), [], "either signal is enough to mean production");
+});
+
+test("a configured key always wins, and the dev key never joins it", () => {
+  // If the dev key were APPENDED rather than replaced, every deployment would keep accepting tokens
+  // signed by a constant published in this file. It is a fallback, not an addition.
+  assert.deepEqual(identitySecretsFor({ secret: "real" }), ["real"]);
+  assert.deepEqual(identitySecretsFor({ secret: "real", previous: "old" }), ["real", "old"], "newest first, for the rotation window");
+  assert.deepEqual(identitySecretsFor({ previous: "old" }), ["old"], "an outgoing key alone is still a real key");
+  assert.deepEqual(identitySecretsFor({ secret: "real", nodeEnv: "development" }), ["real"]);
+  for (const s of identitySecretsFor({ secret: "real", previous: "old", nodeEnv: "development" })) {
+    assert.notEqual(s, DEV_IDENTITY_SECRET, "the dev key must never ride alongside a configured one");
+  }
+});
+
+test("an empty-string key is not a key, so a blank env var falls back rather than signing with \"\"", () => {
+  assert.deepEqual(identitySecretsFor({ secret: "", previous: "" }), [DEV_IDENTITY_SECRET]);
+  assert.deepEqual(identitySecretsFor({ secret: "", nodeEnv: "production" }), []);
 });
