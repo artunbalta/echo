@@ -76,7 +76,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "userId and state required" }, { status: 400 });
   }
   // THE HALF C39 MISSED, and the reason it was missable: the guard count in the record is a count of
-  // ROUTE FILES containing `subjectOf`, and this is the only file in the tree that exports two verbs.
+  // ROUTE FILES containing `subjectOf`, and this is the only ID-BEARING route that exports two verbs
+  // (`waitlist/route.ts` exports two as well and carries no id, so it cannot have this defect).
   // The GET above was gated; this POST kept writing under whatever string arrived in the body — so
   // the surface was READ-REFUSED AND WRITE-OPEN, exactly inverted, while `16 of 19` stayed
   // arithmetically true. Anyone holding a user id could overwrite that person's day: their crop,

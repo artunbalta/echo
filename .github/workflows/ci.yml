@@ -130,7 +130,19 @@ jobs:
             -c "select count(*) from pg_policies where schemaname='public';")
           covered=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
             -c "select count(*) filter (where rowsecurity) || ' of ' || count(*) from pg_tables where schemaname='public';")
+          total=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select count(*) from pg_tables where schemaname='public';")
           echo "RLS coverage: $covered ; policies: $policies"
+          # A GREEN THAT MEANS NOTHING IS WORSE THAN A RED. Both assertions below are satisfied by an
+          # EMPTY schema — no table lacks RLS when there is no table — so a migration step that
+          # silently did nothing, or a psql pointed at the wrong database, would print
+          # "RLS coverage: 0 of 0" and pass. The migrations create 30 tables; anything far below that
+          # means this gate is not looking at the schema it thinks it is.
+          if [ "$total" -lt 25 ]; then
+            echo "::error::only $total tables in public — this is not a migrated database, so the"
+            echo "coverage assertion below would pass vacuously. Check the migrate step."
+            exit 1
+          fi
           if [ -n "$open" ]; then
             echo "::error::these public tables have RLS disabled: $open"
             echo "PostgREST exposes them to anyone holding the anon key, which ships in the browser"

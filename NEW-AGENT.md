@@ -156,10 +156,10 @@ What shipped:
   should not: `auth/sync` verifies a Supabase token (it is the inversion everything else copies),
   `identity/session` accepts no id, `narrate` declares a `userId` it never reads.
   **⚠️ CORRECTED — `⚑28`. That 16 counts route FILES containing `subjectOf`, and `island/state` is the
-  only route in the tree exporting two verbs: its GET was guarded and its POST wrote whatever `userId`
+  only **id-bearing** route exporting two verbs: its GET was guarded and its POST wrote whatever `userId`
   arrived in the body. The sentence was arithmetically true for as long as the hole was open.** And
-  the larger half was on the client: MEASURED, **23 of 31 browser call sites to guarded routes sent no
-  signature at all**, because `identityHeaders()` lived in one component's closure — so every guarded
+  the larger half was on the client: MEASURED, **30 of 33 browser fetch expressions to guarded routes
+  sent no signature at all** (23 of 26 distinct file/route pairs), because `identityHeaders()` lived in one component's closure — so every guarded
   route outside the parcel chain had been answering 403 to its only caller, silently, since C39
   shipped. `/play` never minted a token, so the shared world refused every join on the canonical path
   and the player got a solo world that **looks exactly like an empty shared one**.
@@ -196,7 +196,7 @@ reader can see what moved and what did not):
 | `typecheck` | ✅ clean | ✅ clean |
 | `@echo/planet` | 160/164, **4 skipped** (need `PLANET_TEST_DATABASE_URL`), 0 failed | unchanged |
 | `@echo/shared` | 46/46 | **53/53** |
-| `@echo/web` | 271/271 | **275/275** |
+| `@echo/web` | 271/271 | **277/277** |
 | `services/ml` | 186/186 | 186/186 |
 | realtime copresence | ✅ PASS | ✅ PASS — **and `exit 1` / `identity_no-identity` unrelaxed** |
 | RLS coverage | *not measured* | **30 of 30 tables, 0 policies** (PostgreSQL 16.15, via `db:migrate:apply`) |

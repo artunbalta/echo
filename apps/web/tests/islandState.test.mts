@@ -9,7 +9,8 @@
  * a token. Read-refused and write-open, exactly inverted.
  *
  * WHY THE RECORD SAID IT WAS CLOSED. "16 of 19 id-bearing routes are guarded" counts ROUTE FILES
- * containing `subjectOf`, and this is the only file in the tree that exports two verbs. The count
+ * containing `subjectOf`, and this is the only ID-BEARING route that exports two verbs — `waitlist`
+ * exports two as well and carries no id at all, so it cannot have this defect. The count
  * was arithmetically true the whole time the hole was open.
  *
  * THE ROUTE IS THE UNIT UNDER TEST, not a copy of its branch, for `renderDebug.ts`'s reason: a test
@@ -19,7 +20,7 @@
  * empty module for it is enough. `next/server` loads fine. `lib/subject.ts`, the pure `subjectFor`
  * and the in-memory island store are all REAL here — nothing about the gate is faked.
  *
- * (SOCIETY-PLAN.md:834-836 says a route "cannot be tested — it imports `next/server`, which refuses
+ * (SOCIETY-PLAN.md's SOC-2.B says a route "cannot be tested — it imports `next/server`, which refuses
  * to load outside a server component". Measured on this tree, that is not the blocker; `server-only`
  * is, and it is seedable. The plan's §3 is the place that correction belongs.)
  *
@@ -47,7 +48,7 @@ const require_ = createRequire(import.meta.url);
 const SERVER_ONLY = require_.resolve("server-only");
 require_.cache[SERVER_ONLY] = { id: SERVER_ONLY, filename: SERVER_ONLY, path: SERVER_ONLY, loaded: true, exports: {}, children: [], paths: [] } as never;
 
-const { POST } = await import("../src/app/api/island/state/route");
+const { GET, POST } = await import("../src/app/api/island/state/route");
 const { loadIslandState, saveIslandState } = await import("../src/lib/island-state");
 
 const SECRET = "gate-secret-aaaa";
@@ -70,6 +71,11 @@ after(() => {
 
 const day = (dayCount: number, scarcityLevel: number): IslandDayState =>
   ({ dayCount, scarcityLevel, cropStage: "none", cropPlantedAt: null, raft: freshRaft(), tieWarmth: {}, promisedTo: null, vitalityCarry: 0.85, updatedAt: 1 } as IslandDayState);
+
+const get = (asserted: string, token?: string) =>
+  GET(new Request(`https://echo.test/api/island/state?userId=${encodeURIComponent(asserted)}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  }));
 
 const post = (body: unknown, token?: string) =>
   POST(new Request("https://echo.test/api/island/state", {
@@ -114,4 +120,37 @@ test("the day is stored under the DERIVED subject, never the asserted string", a
   const res = await post({ userId: `  ${VICTIM}  `, state: day(33, 0.66) }, signIdentity(VICTIM, SECRET, IAT));
   assert.equal(res.status, 200);
   assert.equal((await loadIslandState(VICTIM, 2)).state.dayCount, 33, "the write did not land under the subject GET reads");
+});
+
+test("the READ half is pinned too, because nothing else pins it", async () => {
+  // The GET has derived its subject since C39 and no test has ever driven it: its guard could be
+  // deleted outright and this suite would stay green, which is the shape `⚑27` is about — a
+  // protection that nothing would notice the loss of. Both halves of one file, one suite.
+  await saveIslandState(VICTIM, day(21, 0.3));
+  const bare = await get(VICTIM);
+  assert.equal(bare.status, 403, "an unsigned GET read someone's island back");
+  assert.deepEqual(await bare.json(), { error: "identity_required" });
+
+  const wrong = await get(VICTIM, signIdentity(ATTACKER, SECRET, IAT));
+  assert.equal(wrong.status, 403);
+  assert.deepEqual(await wrong.json(), { error: "identity_mismatch" });
+
+  const own = await get(VICTIM, signIdentity(VICTIM, SECRET, IAT));
+  assert.equal(own.status, 200);
+  assert.equal(((await own.json()) as { state: IslandDayState }).state.dayCount, 21);
+});
+
+test("the TOKEN decides the key, not the body — and this is the assertion trim() cannot pass", async () => {
+  // Test 4 above does not actually discriminate: against `String(userId).trim()` it is green,
+  // because trimming "  VICTIM  " and deriving VICTIM land in the same place. `subjectFor` gives a
+  // case where they cannot: when the asserted id trims to EMPTY it is not compared at all
+  // (identityToken.ts, `if (claimed && claimed !== verified.subject)`), so the verdict is the
+  // token's subject while the body string is "". A route writing the asserted value stores the day
+  // under "" — a key whose owner can never read it back. A route writing `caller.subject` stores it
+  // under VICTIM. Only the second passes this.
+  await saveIslandState(VICTIM, day(5, 0.5));
+  const res = await post({ userId: "   ", state: day(77, 0.77) }, signIdentity(VICTIM, SECRET, IAT));
+  assert.equal(res.status, 200, "a blank claim beside a valid token is the token's subject");
+  assert.equal((await loadIslandState(VICTIM, 2)).state.dayCount, 77, "the write did not land under the token's subject");
+  assert.equal((await loadIslandState("", 2)).state.dayCount, 0, "the write landed under the asserted string instead");
 });

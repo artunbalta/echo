@@ -81,13 +81,15 @@ reclassified by anyone.
 0.3 — 26,602 settlements and a 41-minute walk between them (`C33`) — and `feat/f4-trust` is merged
 rather than retired (SOC-0.G).
 
-**Gates, measured 2026-09-14** *(the 2026-09-09 readings this block carried were stale in five
-numbers; every figure below was re-run on `b22c3d4` plus the `⚑28`/`⚑29` fixes)***:**
-`check:register` ✅ *(1,406 lines, 30 entries, every ⚑ resolves)* ·
+**Gates, measured 2026-09-14** *(four of the figures this block carried on 2026-09-09 had moved;
+every figure below was re-run on `b22c3d4` plus the `⚑28`/`⚑29` fixes **except the two marked NOT
+re-measured**, which need a dev server and are carried with their old date rather than restated as
+if they were fresh)***:**
+`check:register` ✅ *(1,448 lines, 30 entries, every ⚑ resolves)* ·
 `build:shared` + `typecheck` ✅ (4 workspaces, and in that order — SOC-2.H hole 6) · `@echo/planet`
 160/164 with 4 skipped, 0 failed *(the 4 need `PLANET_TEST_DATABASE_URL`; **164/164 against a real
 Postgres migrated by `db:migrate:apply`** was measured 2026-09-08 and is not re-measured here, so it
-carries that date)* · `@echo/shared` **53/53** · `@echo/web` **275/275** · `@echo/realtime` copresence
+carries that date)* · `@echo/shared` **53/53** · `@echo/web` **277/277** · `@echo/realtime` copresence
 ✅ *(and FAILS with `exit 1`, `identity_no-identity`, with no relaxation — both halves re-measured)* ·
 `services/ml` **186/186** · **RLS 30 of 30 public tables, 0 policies**, measured through
 `db:migrate:apply` against PostgreSQL 16.15 *(and 24 of 24 on a `--baseline`d database that never ran
@@ -97,9 +99,11 @@ constant was wrong the first time and is now measured on this tree. **Red, all t
 `scatterSplit` ×2 (the `C28` overage), `scatterImpostor` ×4, `globePick` ×2, `slice` ×1, `spawnSea` ×1
 — quarantined by reason, never by retuning a threshold, and **re-verified pre-existing on 2026-09-09**
 by reverting `detailLayer.ts` and `scatterDetail.ts` to the pre-`C38` commit and re-running: the same
-five tests fail in the three specs checked, so the mid band caused none of them. *(A bare `npm run
-e2e` runs all 37; `E2E_QUARANTINE=skip` is what reports 21/21, and the two counts describe the same
-tree.)*
+five tests fail in the three specs checked, so the mid band caused none of them. *(⚠️ **These numbers do not reconcile and the reconciliation sentence was wrong.** A bare
+`npm run e2e` runs all 37 and `E2E_QUARANTINE=skip` was said to report 21/21 — but 37 − 10 = 27, not
+21, and `NEW-AGENT.md` reports the same gate as 24 passing. Quarantine is applied by FILE, so the
+excluded files hold more tests than the ten that fail. Three counts for one gate, none of them
+re-derived since tests were added. Not re-measured here, and not restated as agreeing.)*
 
 ---
 
@@ -214,14 +218,16 @@ exists. So does `docs/MULTIPLAYER.md:19`.
 
 ## §3. Corrections this plan makes to the record
 
-A roadmap that cites a wrong record inherits the error. **Eleven are listed here — five record
-errors, two live defects, and four this document produced itself.** Items 10 and 11 were added
-2026-09-14 by the pass that closed `⚑28` and `⚑29`; item 10 is this document marking SOC-2.E ✅ on a
-coverage count that could not fail, which makes four of the eleven errors this document's own.
+A roadmap that cites a wrong record inherits the error. **Eleven are listed here — four record
+errors, two live defects, and five this document produced itself.** Items 10 and 11 were added
+2026-09-14 by the pass that closed `⚑28` and `⚑29`, and BOTH are this document's own: item 10 is it
+marking SOC-2.E ✅ on a coverage count that could not fail, and item 11 corrects a sentence that lives
+in this file, at :875. That is five of eleven — and the correction to *that* number is itself the
+sixth time this list has had to count its own errors rather than someone else's.
 Item 7 was found by the ground-truth pass that CORRECTED the first four, in this document's own
 SOC-1.B; item 8 was CREATED by this document's own SOC-0.E and found by its SOC-2.C; item 9 was
-created and committed by SOC-1's own frame work and found by an adversarial review of it; item 10 is
-this document's own ✅ on SOC-2.E, and was found by a pass that re-measured the claim rather than
+created and committed by SOC-1's own frame work and found by an adversarial review of it; items 10
+and 11 are this document's own, and were found by a pass that re-measured the claims rather than
 re-reading it.
 
 **Items 1–4 (SOC-0.C), 6 (SOC-1.E), 7, 8, 9, 10 and 11 are ✅ done. Item 5 is ◑ — SOC-2.B removed the
@@ -323,8 +329,8 @@ closely enough.*
     route in the tree exporting two verbs, and its POST was writing whatever `userId` arrived in the
     body. **The sentence was arithmetically true for as long as the hole was open**, because a grep
     over files cannot see inside one.
-    *And the larger half was on the other side of the wire.* 23 of 31 browser call sites to guarded
-    routes sent no signature at all, because `identityHeaders()` lived in one component's closure —
+    *And the larger half was on the other side of the wire.* 30 of 33 browser fetch expressions to
+    guarded routes sent no signature at all — 23 of 26 distinct *(file, route)* pairs — because `identityHeaders()` lived in one component's closure —
     so every guarded route outside the parcel chain had been answering 403 to its only caller since
     C39 shipped, silently. The worst case was `/play`, which never minted a token and therefore
     joined nothing: the player got a solo world that **looks exactly like an empty shared one.**
@@ -333,7 +339,9 @@ closely enough.*
     `DECISIONS.md` under "C39, corrected after review".
 
 11. **"The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
-    server component" is false on this tree.** ✅ *corrected 2026-09-14.* SOC-2.B (below, :834-836)
+    server component" is false on this tree.** ✅ *corrected 2026-09-14.* SOC-2.B (below, **:875** on this
+    tree — it was :836 before this item was added, and adding the item moved it, which is a small live
+    demonstration of why §3 exists)
     records that as the reason its test had to live in `lib/claimRequest.ts`, and the reasoning it
     draws from that — a test that writes its own branch is testing its own branch — is right and
     unaffected. But the stated blocker is not the blocker. MEASURED: `next/server` loads fine under
@@ -872,7 +880,10 @@ taken an `ownerId`, and `parcels` has carried a `display_name` column since migr
 
 **Where the test had to go, and why the obvious place was wrong.** A test driving the registry with
 two ids would have passed *before* the fix and caught nothing: the registry contract was never the
-bug. The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
+bug. ⚠️ *The next sentence is corrected by §3 item 11: the blocker is `server-only`, not `next/server`,
+and a route handler CAN be driven directly — `apps/web/tests/islandState.test.mts` does. The reasoning
+that follows it is unaffected.*
+The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
 server component — so the branch lives in `lib/claimRequest.ts` and the route calls it, which is
 `sliceOptionsFor`'s move for `sliceOptionsFor`'s stated reason: a test that writes its own branch is
 testing its own branch. Seven tests there, five in `packages/planet/tests/ownership.test.ts` for the

@@ -1279,11 +1279,11 @@ time.** Anyone holding a user id could overwrite it while its owner could not re
 **WHY THE RECORD SAID OTHERWISE, AND IT IS AN ARITHMETIC SHAPE, NOT A LIE.** `C39` and `⚑27` both say
 "16 of 19 id-bearing routes are guarded". MEASURED: `grep -rl subjectOf apps/web/src/app/api` returns
 exactly 16 files and 19 route files are id-bearing, so the sentence was true throughout. **The unit is
-the file.** `island/state` is the only route in the tree that exports two verbs, so it is the only
+the file.** `island/state` is the only **id-bearing** route in the tree that exports two verbs — `waitlist/route.ts` exports POST and GET too, and carries no id at all (MEASURED: zero hits for `userId|uid|ownerId|user_id`), which is why it cannot have this defect, so it is the only
 place where a file could be counted as guarded while a handler was not. A count over files cannot see
 inside one.
 
-**THE SECOND HALF IS LARGER: 23 OF 31 BROWSER CALL SITES SENT NO SIGNATURE AT ALL.** MEASURED on
+**THE SECOND HALF IS LARGER: MOST BROWSER CALL SITES SENT NO SIGNATURE AT ALL.** **30 of 33 browser fetch expressions to guarded routes sent no signature** — 27 sending `content-type` alone and 3 sending no headers at all. (Across 23 of 26 distinct *(file, route)* pairs; the first published figure here was "23 of 31", which took its numerator from the pair count and its denominator from neither — an L6 slip inside the entry about a count that could not fail. Both units are stated now, because the fix is counted in expressions and the defect reads naturally in pairs.) MEASURED on
 `b22c3d4` by enumerating every `fetch` in `apps/web/src` that targets a route containing `subjectOf`.
 `identityHeaders()` existed — as a closure inside `createMeasureChain` (`measure.ts:257`), reachable
 by the three routes the parcel chain calls and by nothing else. Everything outside that chain — the
@@ -1301,8 +1301,14 @@ in one component's closure is a policy three other components do not have (L5).
 stamps an id with **no signature**. So in production `WorldRoom.onAuth` threw `identity_no-identity`,
 `WorldClient.tsx:1486-1493` caught it, set offline and started the solo world. **The failure mode was
 not an error anyone would see. It was an empty ocean.** A player was told nothing; the world simply
-looked unpopulated. Only a browser that had signed in through `AuthModal` on the landing page — the
-one path that calls `storeIdentity` with `/api/auth/sync`'s token — could join at all.
+looked unpopulated. **AND THE OUTAGE WAS TOTAL, not partial.** The first version of this entry said
+"only a browser that had signed in through `AuthModal` could join at all", which describes an EMPTY
+POPULATION: `AuthModal.tsx` is imported by nothing — `app/page.tsx:41` says so in as many words, "NO
+AUTH. The header's Log in, the hero's two auth buttons and `AuthModal` are all gone (§6)". So the one
+path in the tree that called `storeIdentity` with `/api/auth/sync`'s token was unreachable, and
+**nothing in the shipped product minted a token for the shared world at all.** The sentence sized a
+total outage as a partial one, which is the same failure as the count above: a claim about coverage
+written from a grep rather than from a call graph.
 
 **A FOURTH THING, FOUND WHILE FIXING THE THIRD.** `/account`'s erase removed four localStorage keys
 and not `echo.identityToken`. `resolveUserId` then minted a fresh anonymous id beside last life's
@@ -1320,7 +1326,7 @@ only thing that could have re-minted was the thing that returned early. No reloa
   the asserted string restored, 4 pass with the fix.** The one that stays green is the one that
   should — "the legitimate caller is not the casualty" is true either way, and it is a regression
   guard rather than a gate.
-- `identityHeaders()` moved to `lib/identity.ts` and all 23 bare call sites go through it. It carries
+- `identityHeaders()` moved to `lib/identity.ts` and all 30 bare expressions go through it. It carries
   one rule the closure did not need: **a `?u=` override sends NO token.** `subjectFor` checks the
   token branch before the relaxation, so a browser profile that had ever held a token would present
   it beside `?u=alice` and be refused — which would break the two-tab harness `verify-3d-render.md`
@@ -1340,10 +1346,46 @@ only thing that could have re-minted was the thing that returned early. No reloa
   also drops the token now, which was never right on its own terms: leaving a credential behind after
   "erase everything" is its own answer.
 
-**Status:** CLOSED. The consent rule `identity.ts` states is unchanged and now has two callers rather
-than one: `/play` is behind a render gate that will not mount `WorldClient` until `echo.character`
-exists, and `/onboard` writes `echo.consent` before it writes that. It is not the mistake C39 removed
-— `Flow0Client` was a SECOND MINTER of a different form (`"u_" + Math.random()`), writing pre-consent.
+**Status:** CLOSED for the server half and for the two surfaces that matter; **PARTIAL on the client,
+deliberately, and the remainder is named below.** The first version of this entry said CLOSED flatly,
+which was the same mistake it was opened about — plumbing counted as behaviour. **Routing a call site
+through `identityHeaders()` does not make it send a signature; it makes it send one IF THE BROWSER HAS
+ONE.** `ensureIdentity` has three callers: `arm()`, `/play` and `/claim`. So on a cold browser
+`/flow0`, `/flow1`, `/flow4`, `/flow5` and `/account` still send nothing and are still refused.
+
+**That remainder is a decision, not an oversight.** For the four flow pages, minting is exactly what
+C39 REMOVED: `Flow0Client` is the file the second minter was deleted from, and adding one back under
+a different name would be the same act before the same question. They run under `?u=` and the
+relaxation, which is what the harnesses use; in production they write unsigned and are refused.
+`/account` is sharper and worse: a browser with no token cannot prove the subject whose data it is
+asking to erase, so "delete everything" is refused for precisely the people who never signed in.
+**Both are open. Neither is closed by this entry, and the fix for either is a consent question about
+where that surface asks — not a line of plumbing.**
+
+The consent rule `identity.ts` states is unchanged and now has three callers rather than one: `/play`
+is behind a render gate that will not mount `WorldClient` until `echo.character` exists, and
+`/onboard` writes `echo.consent` before it writes that; `/claim` asks no consent question a stamped
+key would answer early and already promises the identifier is permanent, which is the case SOC-2.B
+makes for it in its own words. It is not the mistake C39 removed — `Flow0Client` was a SECOND MINTER
+of a different form (`"u_" + Math.random()`), writing pre-consent.
+
+**TWO COSTS THIS ENTRY DID NOT NAME WHEN IT WAS WRITTEN, both found by review.**
+
+*The re-mint moves your island and leaks a slot.* A browser holding an unsigned id X gets a signed
+Y, and `/api/island/assign` then assigns under Y: `archipelago.ts:191-194` returns an existing
+assignment only for a matching userId, `0005_island_slots.sql:12` puts a UNIQUE index on
+`slot_index`, and `island-registry.ts`'s `remove()` is never called on this path. So X's row holds
+its slot forever and the player's island relocates. C39 disclosed the orphaning of evidence; it did
+not disclose that the island moves.
+
+*And it is not "once to everyone at rollout", which is how `identity/session/route.ts:16-17` and C39
+both describe it.* `onboard/page.tsx:66-67` calls `resolveUserId()` during character creation and
+`:147` then pushes to `/play`, so **every brand-new player is stamped with an unsigned id and has it
+replaced on their first visit to the world — permanently, as a standing property of the flow.** It
+costs nothing today because nothing durable is written under the first id, but the record describes
+a migration where the code has an invariant. The honest fix is for `/onboard` to mint, since it is
+the surface that asks the consent question; that is a change to the onboarding flow and is not taken
+here.
 
 **What this does NOT close:** `harness/f4/f4_capture.py` sends no Authorization header either, so the
 F4 acceptance harness has been failing its first GET since that route was gated and reporting it as

@@ -46,14 +46,18 @@ test("THIS PARSE VERIFIES NOTHING, and a forged token proves it", () => {
 
 test("anything that is not the format is null rather than a guess", () => {
   assert.equal(parseIdentityToken(""), null);
-  assert.equal(parseIdentityToken("v1.a.b"), null, "three fields is not a token");
-  assert.equal(parseIdentityToken("v1.a.b.c.d"), null, "five fields is not a token");
+  // THE FIELD COUNT IS TESTED WITH REAL FIELDS, deliberately. "v1.a.b" is rejected whether or not
+  // the length check exists — "a" is not decodable base64url, so it dies one line later and the
+  // assertion passes for a reason it does not state. Splicing a genuine token's own fields leaves
+  // the count as the only thing that can reject them, which is what the assertion claims to test.
+  const [v, sub, iat, sig] = signIdentity(SUBJECT, SECRET, IAT).split(".") as [string, string, string, string];
+  assert.equal(parseIdentityToken([v, sub, iat].join(".")), null, "three fields is not a token");
+  assert.equal(parseIdentityToken([v, sub, iat, sig, sig].join(".")), null, "five fields is not a token");
   // The version prefix exists so a future format is a REJECTION and not a mis-parse.
   const token = signIdentity(SUBJECT, SECRET, IAT);
   assert.equal(parseIdentityToken(`v2${token.slice(2)}`), null, "an unknown version must not parse");
-  const [, encodedSubject, , sig] = token.split(".");
-  assert.equal(parseIdentityToken(["v1", encodedSubject, "zzzz!!", sig].join(".")), null, "a non-base36 issuedAt");
-  assert.equal(parseIdentityToken(["v1", "", IAT.toString(36), sig].join(".")), null, "an empty subject");
+  assert.equal(parseIdentityToken([v, sub, "zzzz!!", sig].join(".")), null, "a non-base36 issuedAt");
+  assert.equal(parseIdentityToken([v, "", iat, sig].join(".")), null, "an empty subject");
 });
 
 test("a token and the id beside it AGREE, which is the ordinary case", () => {
