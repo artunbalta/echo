@@ -23,7 +23,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import { Flow4Trust } from "@/game/activities/flow4Trust";
-import { resolveUserId } from "@/lib/identity";
+import { identityHeaders, resolveUserId } from "@/lib/identity";
 import {
   type EntitySnapshot, type BehavioralEvent, type Flow4Beat, type IslandDayState,
 } from "@echo/shared";
@@ -44,7 +44,7 @@ export default function Flow4Client() {
   const postEvents = useCallback((events: BehavioralEvent[]) => {
     if (!events.length) return;
     void fetch("/api/observe/behavioral", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+      method: "POST", headers: identityHeaders(), body: JSON.stringify({ events }),
     }).catch(() => { /* best-effort; never block the player */ });
   }, []);
 
@@ -70,7 +70,7 @@ export default function Flow4Client() {
       const next = mutate(cur);
       stateRef.current = next;
       void fetch("/api/island/state", {
-        method: "POST", headers: { "content-type": "application/json" },
+        method: "POST", headers: identityHeaders(),
         body: JSON.stringify({ userId, state: next }),
       }).catch(() => { /* the beat still plays with no backend */ });
     };
@@ -79,13 +79,13 @@ export default function Flow4Client() {
       let seed = 7;
       try {
         const r = await fetch("/api/island/assign", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ userId }),
         });
         const placement = (await r.json()) as { seed?: number };
         if (typeof placement.seed === "number") seed = placement.seed;
       } catch { /* zero-key offline → default seed */ }
       try {
-        const r = await fetch(`/api/island/state?userId=${encodeURIComponent(userId)}`);
+        const r = await fetch(`/api/island/state?userId=${encodeURIComponent(userId)}`, { headers: identityHeaders() });
         const loaded = (await r.json()) as { state?: IslandDayState };
         if (loaded.state) stateRef.current = loaded.state;
       } catch { /* the promise simply will not persist without a backend */ }

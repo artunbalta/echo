@@ -75,12 +75,26 @@ export async function POST(req: Request) {
   if (!userId || !state || typeof state !== "object") {
     return NextResponse.json({ error: "userId and state required" }, { status: 400 });
   }
+  // THE HALF C39 MISSED, and the reason it was missable: the guard count in the record is a count of
+  // ROUTE FILES containing `subjectOf`, and this is the only file in the tree that exports two verbs.
+  // The GET above was gated; this POST kept writing under whatever string arrived in the body — so
+  // the surface was READ-REFUSED AND WRITE-OPEN, exactly inverted, while `16 of 19` stayed
+  // arithmetically true. Anyone holding a user id could overwrite that person's day: their crop,
+  // their raft, their scarcity, their tie warmth (⚑28).
+  const caller = subjectOf(req, String(userId));
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
   // Minimal shape guard — the pure core owns semantics; reject obviously foreign payloads.
   if (typeof state.dayCount !== "number" || typeof state.scarcityLevel !== "number") {
     return NextResponse.json({ error: "malformed state" }, { status: 400 });
   }
   const injected = testClock(body.now);
-  const persistence = await saveIslandState(userId, { ...state, updatedAt: injected ?? Date.now() });
+  // The DERIVED subject, never the asserted string — the same inversion the GET performs at :57.
+  // Writing under `userId` here would leave the guard as decoration: it would refuse an unsigned
+  // caller and then still let a signed one write wherever they pointed.
+  const persistence = await saveIslandState(caller.subject, { ...state, updatedAt: injected ?? Date.now() });
   return NextResponse.json(
     injected === undefined ? { ok: true, persistence } : { ok: true, persistence, testClock: injected },
   );

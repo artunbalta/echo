@@ -27,18 +27,17 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-/** The current format. A version prefix so a future change is a rejection and not a mis-parse. */
-const VERSION = "v1";
+// The FORMAT lives in `identityFormat.ts`, which imports no crypto and is therefore reachable from a
+// browser bundle (L5). The browser has one honest question about a token it already holds — is this
+// a signature over the id beside it — and answering it needs the shape, not the key. Keeping the
+// shape here as well would be the same description written twice, and the copy that drifts is the
+// one nobody re-reads. This module owns SIGNING and VERIFYING; that one owns what a token looks like.
+import { IDENTITY_TOKEN_VERSION as VERSION, parseIdentityToken } from "./identityFormat.js";
 
-export interface IdentityClaim {
-  /** The canonical user id every write is attributed to. */
-  subject: string;
-  /** When the token was minted, epoch ms. Recorded for audit; NOT enforced as an expiry. */
-  issuedAt: number;
-}
+export type { IdentityClaim } from "./identityFormat.js";
+import type { IdentityClaim } from "./identityFormat.js";
 
 const b64u = (s: string) => Buffer.from(s, "utf8").toString("base64url");
-const unb64u = (s: string) => Buffer.from(s, "base64url").toString("utf8");
 
 function signature(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("base64url");
@@ -63,35 +62,24 @@ export function signIdentity(subject: string, secret: string, issuedAt: number):
  * oracle. The routes need one bit: is this subject usable.
  */
 export function verifyIdentity(token: string, secrets: readonly string[]): IdentityClaim | null {
-  if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length !== 4) return null;
-  const [version, encodedSubject, encodedIat, provided] = parts as [string, string, string, string];
-  if (version !== VERSION) return null;
+  // Shape first, and it is the shared parse rather than a second copy of it. A malformed token and
+  // a badly signed one both leave here as `null`, which is the one bit the routes need — the order
+  // the two checks happen in is not observable from outside this function.
+  const parsed = parseIdentityToken(token);
+  if (!parsed) return null;
 
-  const payload = `${version}.${encodedSubject}.${encodedIat}`;
-  const offered = Buffer.from(provided, "base64url");
+  const offered = Buffer.from(parsed.signature, "base64url");
   let matched = false;
   for (const secret of secrets) {
     if (!secret) continue;
-    const expected = Buffer.from(signature(payload, secret), "base64url");
+    const expected = Buffer.from(signature(parsed.payload, secret), "base64url");
     // Length is checked first because timingSafeEqual THROWS on a mismatch rather than returning
     // false, and an exception here would be a rejection that looks like an outage.
     if (expected.length === offered.length && timingSafeEqual(expected, offered)) matched = true;
   }
   if (!matched) return null;
 
-  const issuedAt = parseInt(encodedIat, 36);
-  if (!Number.isFinite(issuedAt)) return null;
-  let subject: string;
-  try {
-    subject = unb64u(encodedSubject);
-  } catch {
-    return null;
-  }
-  // A signature over an empty subject cannot be produced by `signIdentity`, so reaching this means
-  // a secret leaked or the format changed underneath us. Either way it is not a usable identity.
-  return subject ? { subject, issuedAt } : null;
+  return { subject: parsed.subject, issuedAt: parsed.issuedAt };
 }
 
 /** The `Authorization: Bearer <token>` value, or "" — one place, so no route re-parses a header. */

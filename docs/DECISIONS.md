@@ -2108,3 +2108,46 @@ declares a `userId` it never reads — a guard there would assert a fact about n
 **The closed-gate proof:** `npm run test:copresence` FAILS with no relaxation (its joins present
 `{userId:'userA'}` and no token) and PASSES with the flag. The flag lives in the npm script, so CI
 inherits it and `ci.yml` needed no change.
+
+### C39, corrected after review — the count was over FILES, and no client ever sent the header
+
+Three sentences above are wrong on this tree, and the way they are wrong is worth more than the fix.
+
+**"16 of 19 id-bearing routes are guarded" is arithmetically true and was never the question.** The
+unit is the route FILE: `grep -rl subjectOf apps/web/src/app/api` returns exactly 16, and 19 files are
+id-bearing. `island/state` is the only route in the tree that **exports two verbs**, so it is the only
+place where a file can be counted as guarded while a handler is not — and its POST wrote whatever
+`userId` arrived in the body straight into `saveIslandState`. The surface was read-refused and
+write-open at once. A count over files cannot see inside one, and the sentence stayed true the entire
+time the hole was open. Closed as `⚑28`.
+
+**"Every other id-bearing route now copies that inversion" was true of the routes and false of the
+product**, because nothing on the other side sent the header. MEASURED: 23 of 31 browser call sites to
+guarded routes sent `content-type` and nothing else. `identityHeaders()` was a closure inside
+`createMeasureChain`, so the three routes the parcel chain calls were signed and **every other guarded
+route in the app had been answering 403 to its only caller since this decision shipped** — silently,
+because each call site swallows its own failure. The guards were real; the product had simply stopped
+talking to them, and no gate could see it because no gate exercises a browser.
+
+**The largest consequence was not a 403 anywhere. It was an empty ocean.** `/play` joined with
+`token: identityToken()`, which only reads storage, and `ensureIdentity` — the one minter — was
+reachable from `measure.ts:393` and nowhere else. The canonical route to the shared world is landing →
+`/onboard` → `/play`, and `/onboard` requires no sign-in: it calls `resolveUserId()`, which stamps an
+id with no signature. So `onAuth` refused the join, `WorldClient` caught it and started the solo
+world, and the player was shown a world that looked unpopulated rather than one that had refused them.
+**This decision's own closed-gate proof could not catch it:** `test:copresence` drives a node client
+that composes its own join options, so it proves the ROOM refuses an unsigned join and says nothing
+about whether the shipped browser sends one.
+
+**What did not change.** The decisions themselves stand — derive the subject from a signature, refuse
+to sign an id handed to you, fail closed in production, keep the policy in one module. Three of the
+four sentences that broke were *descriptions of coverage*, and all three were written from a grep
+rather than from a call graph. The fourth, in `identity.ts` ("the caller is `arm()`, never a render"),
+named the mechanism that happened to be true instead of the rule, which is *after the consent
+question* — `/play` satisfies the rule and not the sentence.
+
+`⚑28` carries the fixes and the closed-gate proof for each. The one addition worth naming here,
+because it is a policy and not a repair: **a `?u=` override now sends no token, in either transport.**
+`subjectFor` checks the token branch before the relaxation, so a profile that had ever held a token
+would present it beside `?u=alice` and be refused — and `?u=` is the only mechanism in the tree that
+yields two identities inside one browser profile, which `verify-3d-render.md` depends on.

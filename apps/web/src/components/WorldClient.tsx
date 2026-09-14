@@ -13,7 +13,7 @@ import RecognitionMeter from "@/components/RecognitionMeter";
 import EchoActivityPanel, { type EchoAct } from "@/components/EchoActivityPanel";
 import DuskReading, { type DuskReadingData } from "@/components/DuskReading";
 import { useEcho } from "@/lib/useEcho";
-import { resolveUserId, identityToken } from "@/lib/identity";
+import { ensureIdentity, identityHeaders, outboundIdentityToken, peekUserId, resolveUserId } from "@/lib/identity";
 import { markFunnel, telemetryConsented } from "@/lib/funnel";
 import { useDay, type DuskReason } from "@/lib/useDay";
 import type { InteractTurnPayload, EntitySnapshot, BehavioralEvent, TelemetryEvent, IslandDayState } from "@echo/shared";
@@ -354,7 +354,7 @@ export default function WorldClient() {
     try {
       await fetch("/api/telemetry", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: identityHeaders(),
         body: JSON.stringify({ userId: uidRef.current, sessionId: sessionIdRef.current, events }),
       });
     } catch {
@@ -651,7 +651,7 @@ export default function WorldClient() {
     (async () => {
       try {
         const r = await fetch("/api/island/director", {
-          method: "POST", headers: { "content-type": "application/json" },
+          method: "POST", headers: identityHeaders(),
           body: JSON.stringify({ userId: uidRef.current }),
         });
         const pick = (await r.json()) as { surface: string | null };
@@ -705,7 +705,7 @@ export default function WorldClient() {
       send: (events) => {
         if (!telemetryConsented()) return;
         void fetch("/api/observe/behavioral", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ events }),
         }).catch(() => {});
       },
       addEntity: (snap) => { probeEntsRef.current = [...probeEntsRef.current.filter((e) => e.id !== snap.id), snap]; },
@@ -745,7 +745,7 @@ export default function WorldClient() {
         },
       });
       void fetch("/api/observe/behavioral", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event }),
+        method: "POST", headers: identityHeaders(), body: JSON.stringify({ event }),
       }).catch(() => {});
     },
     [dayCommitted],
@@ -952,7 +952,7 @@ export default function WorldClient() {
       try {
         const res = await fetch("/api/island/reading", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: identityHeaders(),
           body: JSON.stringify({ userId: uidRef.current, choices: dayChoicesRef.current }),
         });
         setDuskReading((await res.json()) as DuskReadingData);
@@ -1004,7 +1004,7 @@ export default function WorldClient() {
       } catch {
         /* best-effort */
       }
-      fetch("/api/island/validate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(record) }).catch(() => {});
+      fetch("/api/island/validate", { method: "POST", headers: identityHeaders(), body: JSON.stringify(record) }).catch(() => {});
       markFunnel(uidRef.current, "reading_submitted");
     },
     [duskReading],
@@ -1023,7 +1023,7 @@ export default function WorldClient() {
       });
       try {
         await fetch("/api/observe/behavioral", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ event }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ event }),
         });
       } catch { /* best-effort; never block the player */ }
     },
@@ -1054,11 +1054,28 @@ export default function WorldClient() {
     // (emitFlow0 actorId + net.connect below) AND every READ (setUid → useEcho → /persona), so the
     // "your echo" panel reflects the real posterior the events wrote to. `name` still honours ?u=.
     const override = (new URLSearchParams(window.location.search).get("u") || "").trim() || null;
-    const userId = resolveUserId();
     const name = override ?? localStorage.getItem("echo.name") ?? "Newcomer";
     const sessionId = "s_" + Math.random().toString(36).slice(2, 10);
-    setUid(userId);
-    uidRef.current = userId;
+    /**
+     * THE SIGNATURE THE SHARED WORLD ASKS FOR, STARTED HERE AND AWAITED BELOW.
+     *
+     * `/play` sent `token: identityToken()` and never minted one: `ensureIdentity` was reachable
+     * from the parcel measure chain and from nowhere else, and the canonical route here — landing →
+     * /onboard → /play — goes through `resolveUserId`, which stamps an id with no signature. So in
+     * production every join was refused with `identity_no-identity`, the catch below set offline,
+     * and the player got a solo world that looked exactly like an empty shared one. Nothing in the
+     * tree reported it, because a silent fallback is what the catch is for.
+     *
+     * CONSENT IS ALREADY ANSWERED HERE, which is the condition `lib/identity.ts` sets for minting —
+     * `play/page.tsx` will not render this component until `echo.character` exists, and `/onboard`
+     * writes `echo.consent` before it writes that. The mint is fired now and AWAITED before the
+     * first consumer, so `uid` is set exactly once, under the settled subject: setting it twice
+     * would re-run `useDay`'s load effect under a new id and reset a returning player to day 0.
+     */
+    const identityReady = ensureIdentity();
+    // A READ, not a mint, so a callback that fires before the await has the id this browser already
+    // had rather than an empty string. `setUid` deliberately waits.
+    uidRef.current = peekUserId();
     sessionIdRef.current = sessionId;
     try {
       voiceConsentRef.current = JSON.parse(localStorage.getItem("echo.consent") ?? "{}").voice === true;
@@ -1299,6 +1316,15 @@ export default function WorldClient() {
     });
 
     (async () => {
+      // THE SUBJECT, SETTLED BEFORE ANYTHING READS IT — ahead of `world.init` so no world callback
+      // can exist while it is still in flight. The fallback is the local id `resolveUserId` mints:
+      // a failed mint leaves the player in the solo world they get today rather than in no world at
+      // all, and the routes will refuse the writes, which is the honest outcome the mint documents.
+      const userId = (await identityReady) || resolveUserId();
+      if (disposed) return;
+      setUid(userId);
+      uidRef.current = userId;
+
       await world.init(mountRef.current!);
       if (disposed) return;
       // Resolve this user's archipelago slot so they cross into the shared ocean AT their own
@@ -1307,7 +1333,7 @@ export default function WorldClient() {
       let slotIndex: number | undefined;
       try {
         const r = await fetch("/api/island/assign", {
-          method: "POST", headers: { "content-type": "application/json" },
+          method: "POST", headers: identityHeaders(),
           body: JSON.stringify({ userId }),
         });
         const placement = (await r.json()) as { slotIndex?: number };
@@ -1353,7 +1379,7 @@ export default function WorldClient() {
           // and known-gaps ⚑10; flipping that constant is the whole of the decision.
           if (soloRef.current && !SOLO_CUES_FEED_POSTERIOR) return;
           void fetch("/api/observe/behavioral", {
-            method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+            method: "POST", headers: identityHeaders(), body: JSON.stringify({ events }),
           }).catch(() => { /* best-effort; never block the player */ });
         },
         // Resume the raft you left on this shore. useDay has already aged it (the lashings work
@@ -1481,7 +1507,7 @@ export default function WorldClient() {
       if (disposed) return;
       try {
         // The signature travels with the join; WorldRoom's onAuth derives refId from it.
-        await net.connect({ userId, name, spriteUrl, sessionId, slotIndex, token: identityToken() });
+        await net.connect({ userId, name, spriteUrl, sessionId, slotIndex, token: outboundIdentityToken() });
         // Respect telemetry consent (§2, §13): only collect if the user opted in.
         if (telemetryConsent) tele.start();
       } catch {

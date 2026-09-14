@@ -14,3 +14,6 @@ export * from "./persona.js";
 export * from "./telemetry.js";
 export * from "./protocol.js";
 export * from "./npcgen.js";
+// The token FORMAT only — no `node:crypto`, so it is safe in the barrel the client components pull
+// in. Signing and verifying stay behind the `@echo/shared/identity` subpath.
+export * from "./identityFormat.js";
