@@ -83,12 +83,22 @@ def _auth(authorization: str | None):
 
     `compare_digest` rather than `!=` because this is a secret comparison, and `!=` on `str`
     short-circuits at the first differing byte.
+
+    ON BYTES, NOT ON STR, AND THAT IS NOT A STYLE CHOICE. `hmac.compare_digest` REFUSES a `str`
+    containing a non-ASCII character — it raises `TypeError: comparing strings with non-ASCII
+    characters is not supported`. Comparing the strings directly therefore turned an unauthenticated
+    request carrying `Authorization: Bearer café` into a 500 instead of a 401, and would have taken
+    the service down entirely for any operator whose configured token had an accent in it. That was
+    introduced by the first draft of this very fix and found by review; a `TestClient` cannot reach
+    it, because httpx refuses to encode the header client-side, so it took driving the ASGI app with
+    the raw header tuple uvicorn produces. Encoding both sides first is the correct use of the
+    function and compares exactly what was sent.
     """
     expected = SETTINGS.ml_token
     if not expected:
         raise HTTPException(status_code=503, detail="ml_token_unconfigured")
     token = (authorization or "").removeprefix("Bearer ").strip()
-    if not hmac.compare_digest(token, expected):
+    if not hmac.compare_digest(token.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=401, detail="bad ML token")
 
 

@@ -1518,27 +1518,95 @@ the outbound assertions were vacuous. The only reason it was caught is that the 
 not the casualty" test asserts a forward DID happen, and it went red. A regression guard caught a
 hole in the gates beside it.
 
-**Status:** PARTIAL, and the open half is the one that bounds the bill.
+**Status:** CLOSED, in two passes. The second one is below, and it also carries the corrections
+review made to the first.
 
 **THE GUARD IS NOT A COST CONTROL AND MUST NOT BE READ AS ONE.** `/api/identity/session` mints for
 anyone who asks, so a determined caller mints a token and spends anyway. What the guard buys is that
 the spend is ATTRIBUTABLE and that a casual unauthenticated script is refused; the caps bound a single
-call. Neither bounds a loop. **Still owed:** a rate limit. The mechanism exists —
-`waitlist_rate_hit` (`0007_waitlist.sql`), an atomic per-(ip, window) counter called by rpc — but it
-cannot be reused as it stands: its primary key is `(ip_hash, window_start)` with no bucket, so a burst
-on `/api/vision` would consume the waitlist's own window for that IP, and `hashIp`/`clientIp` are
-route-private. It also **fails OPEN** by explicit decision, which is right for a signup ("a real
-person must still be able to join") and is the expensive choice for a paid route. Generalising it is a
-migration plus a lib extraction plus a fail-open-or-closed decision, and that decision is the user's.
+call. **Neither bounds a loop, and that is what the second pass added.**
+
+**THE LIMIT, AND THE POSTURE IS THE DECISION.** `0018_rate_limit.sql` generalises 0007's limiter with
+a BUCKET column, and `lib/rateLimit.ts` is the one place `hashIp`, `clientIp` and the window
+arithmetic live — they were route-private, and copying them would have meant two IP-hashing policies
+with two salts (L5). The bucket is the whole point: `waitlist_rate`'s key is `(ip_hash, window_start)`
+alone, so the moment a second caller used it a burst on `/api/vision` would consume the waitlist's own
+window and tell a real person the list was full. MEASURED against PostgreSQL 16.15 through the real
+runner: same bucket+ip+window counts 1 → 2; the SAME ip and window in another bucket answers 1, not 3;
+another ip answers 1; the next window is back to 1; **forty concurrent calls produce exactly 40**; and
+as `anon`, with the grants Supabase gives, the counter reads 0 rows. Coverage after it: **31 of 31
+tables with RLS, 0 policies.**
+
+**`onUnavailable` is per caller, and the two callers choose opposite answers — the user's call.** The
+waitlist keeps `"allow"`, whose reason still stands and is now declared rather than implied: if the
+counter is unavailable a real person must still be able to join. The paid routes take `"deny"`,
+because "the counter is unavailable" and "there is no limit" are the same sentence when every call
+spends. 429 for over-limit, **503 for a counter that is down** — 429 would tell the caller to slow
+down, which is a lie about what happened and would have them retry into the same wall.
+
+**AND THE ORDER OF THE CHECKS IS LOAD-BEARING, which the first version got wrong.** Placed before the
+no-provider short circuits, a deny-on-unavailable limiter closed the ZERO-KEY LOCAL RUN: with no
+Supabase there is no counter, so `/api/vision` answered 503 even on the path that would only ever
+have returned a mock. A deployment with nothing to spend has nothing to fail closed about. The
+limiter is now reached only past `if (!KEY)` on vision and only inside `if (process.env.ART_PROVIDER)`
+on portrait, and "works with no keys" is exactly as it was. **MEASURED: five tests caught the
+inversion**, which is the second time in this workstream that a test caught a hole in the fix rather
+than in the original defect.
 
 **Also owed, and named rather than bundled:** `COST_DAILY_USD_BUDGET` (`services/ml/echo_ml/cost.py`)
 enforces nothing — `over_budget` has exactly one hit in the tree, its own assignment — and the meter
 never sees `/api/vision`, `/api/portrait`, the TTS providers or `apps/realtime`'s direct Anthropic
 call. A ceiling nobody reads is not a budget.
 
-**And the four `/api/venue/*` paid routes are untouched here, deliberately.** `/venue` is a nine-line
-redirect to `/play` — the entry point was retired in `b406d49` — but **the six API routes under it
-were not**, and `/api/venue/dialogue/simulate` bills eleven Claude calls per request with an unbounded
-`profile` stringified into every system prompt. The subsystem appears in none of the four planning
-documents (`grep -ric venue` over them: 0, 0, 0, 0). Gate it, delete it, or keep it: that is a product
-call and it is the user's, not a defect to be quietly patched.
+**And the six `/api/venue/*` routes are untouched here, deliberately.** `/venue` is a nine-line
+redirect to `/play` — the entry point was retired in `b406d49` — but **the API routes under it were
+not**, and `/api/venue/dialogue/simulate` bills eleven Claude calls per request with an unbounded
+`profile` stringified into every system prompt. Gate it, delete it, or keep it: that is a product call
+and it is the user's, not a defect to be quietly patched.
+
+*CORRECTED, and it was wrong in a way that mattered to that decision.* This paragraph first said "the
+four `/api/venue/*` paid routes" and then "the six API routes" three words later — `find` returns
+**six** — and asserted that the subsystem "appears in none of the four planning documents
+(`grep -ric venue`: 0, 0, 0, 0)". MEASURED: SOCIETY-PLAN 0, DECISIONS 0, NEW-AGENT 0, and
+**`docs/BUILD-PLAN.md` 4** — which `NEW-AGENT.md` names as inherited-unchanged, and whose `:98`
+tables the brand-stand demo as an "**Optional funding wedge — Phase 4**" with `:547-548` calling it
+"a faster-revenue wedge that can fund" the rest. So it is planned work with a phase attached, not an
+orphan. Checking four documents and reporting "none of the four" was true of the set I looked at and
+false of the claim I made, which is the third published count in this workstream that did not
+reproduce.
+
+
+---
+
+## ⚑ 31. The venue API outlived the page it belonged to (2026-09-14)
+
+`b406d49` retired the THY brand-stand demo as an entry point — `app/venue/page.tsx` became a nine-line
+redirect to `/play`. **The six routes under `/api/venue/` were not retired with it.** They stayed
+reachable with no page in front of them, unauthenticated and unlimited, and three of them spend:
+`tts` at ElevenLabs or OpenAI, `dialogue/sales-turn` at Anthropic, and `dialogue/simulate` — which
+bills **eleven Claude calls per request** (`orchestrate.ts` loops six states producing six sales turns
+and five visitor turns, then calls `finalize`, which calls Claude again) and stringifies an unbounded
+caller-supplied `profile` into every one of those system prompts.
+
+**Decided: 410 Gone, not a guard and not a delete, and the reasoning is the point.**
+`docs/BUILD-PLAN.md:98` tables this demo as an "**Optional funding wedge — Phase 4**" and `:547-548`
+calls it "a faster-revenue wedge that can fund" the rest — so it is planned work with a phase
+attached, and deleting it throws that away. But it has no entry point today, so gating it would be
+securing a surface nobody can reach: investment in an inactive subsystem, while money stays spendable
+for as long as that investment takes. 410 says "this existed and is deliberately gone", stops the
+spend now, and costs one line to reverse. `lib/venue/*`, `game/venue/VenueScene.ts` and the
+`/dashboard` page are untouched and still compile. Each route's header says what it was and what
+bringing it back needs first: the treatment `⚑30` gave `/api/vision` and `/api/portrait`.
+
+**`/dashboard` was the live surface nobody accounted for.** It polls `/api/venue/research` **every two
+seconds** with `.catch(() => {})` and `r.json()` on whatever comes back — so against a 410 it would
+have set its state to the error body and hammered a dead endpoint forever, showing an empty dashboard
+with no explanation. It now stops on 410 and says what happened. The page is deliberately kept rather
+than retired: its code is the demo's, and `⚑30` is where the decision to keep it is recorded.
+
+**Status:** CLOSED. Six routes answer 410; nothing is deleted; the record says how to come back.
+
+**Not closed, and it belongs to whoever brings this back:** the routes were never in
+`SOCIETY-PLAN.md`, `DECISIONS.md` or the gate lists, and `/api/venue/dialogue/simulate`'s eleven-call
+fan-out was never costed anywhere. A surface that spends per request and appears in no gate is how
+this one survived a retirement.

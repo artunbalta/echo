@@ -62,7 +62,7 @@ HYPER = Hyper()
 @dataclass(frozen=True)
 class Settings:
     # THE SERVICE NEVER INVENTS A CREDENTIAL. This used to default to the literal
-    # "dev-ml-token-change-me", which is also committed at .env.example:21 — so an operator who
+    # "dev-ml-token-change-me", which is also committed at .env.example:27 — so an operator who
     # skipped render.yaml's `sync: false` prompt got a service that came up healthy and accepted a
     # token anyone can read out of this repository. Behind that one token: GET /persona/{uid} and
     # DELETE /user/{uid}, which are the same two capabilities ⚑27 closed at the Next.js boundary,

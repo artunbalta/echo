@@ -1,7 +1,7 @@
 """The ML service's one gate, tested at the edge that decides whether it is worth having.
 
 WHAT THIS EXISTS TO CATCH. `config.py` used to default `ml_token` to the literal
-"dev-ml-token-change-me", which is also committed at `.env.example:21`. `render.yaml:37` marks
+"dev-ml-token-change-me", which is also committed at `.env.example:27`. `render.yaml:44` marks
 ML_SERVICE_TOKEN `sync: false`, so an operator who skipped the dashboard prompt got a service that
 came up HEALTHY and accepted a token anyone could read out of this repository. Behind that one
 token: `GET /persona/{uid}` returns a person's posterior and `DELETE /user/{uid}` hard-deletes it —
@@ -35,7 +35,7 @@ from echo_ml import app as app_module
 from echo_ml.app import app
 from echo_ml.config import SETTINGS
 
-# Committed in this repository, at `.env.example:21` and `services/ml/_devlauncher.py`. That is the
+# Committed in this repository, at `.env.example:27` and `services/ml/_devlauncher.py`. That is the
 # whole point: it is not a secret and must never be what a deployment falls back to.
 PUBLISHED_DEV_TOKEN = "dev-ml-token-change-me"
 REAL_TOKEN = "a-real-operator-secret-9f3c"
@@ -145,3 +145,66 @@ def test_the_DEFAULT_is_empty_and_not_a_literal_anyone_can_read(monkeypatch):
         # Leave the module as the rest of the session found it, token and all.
         monkeypatch.undo()
         importlib.reload(config_module)
+
+
+async def _raw_asgi(path: str, method: str, authorization: bytes | None) -> tuple[int, bytes]:
+    """Drive the ASGI app the way uvicorn does, with RAW header bytes.
+
+    `TestClient` cannot express this case: httpx refuses to encode a non-ASCII header value and
+    raises client-side, so a test written on top of it asserts about a request that never left. The
+    bug below was reachable only from a real HTTP client, which is exactly the class of defect a
+    test harness is supposed to cover and this one could not.
+    """
+    headers = [(b"host", b"echo.test")]
+    if authorization is not None:
+        headers.append((b"authorization", authorization))
+    scope = {
+        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": method,
+        "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"",
+        "root_path": "", "headers": headers, "client": ("127.0.0.1", 1234), "server": ("echo.test", 80),
+    }
+    status: list[int] = []
+    body = bytearray()
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        if message["type"] == "http.response.start":
+            status.append(message["status"])
+        elif message["type"] == "http.response.body":
+            body.extend(message.get("body", b""))
+
+    await app(scope, receive, send)
+    return status[0], bytes(body)
+
+
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Bearer café".encode("utf-8"),
+        "Bearer café".encode("latin-1"),
+        b"Bearer \xff\xfe",
+        "Bearer türkçe-token".encode("utf-8"),
+    ],
+)
+def test_a_non_ascii_credential_is_a_401_and_never_a_500(header):
+    """A REFUSAL, not a crash — and this is a regression of the fix, not of the original defect.
+
+    `hmac.compare_digest` raises `TypeError: comparing strings with non-ASCII characters is not
+    supported` when handed a `str`. The first draft of the fail-closed change compared the strings
+    directly, so any unauthenticated caller could turn a guarded endpoint into a 500 by putting one
+    accented character in the header — and an operator whose real token contained one would have
+    had a service that answered 500 to its own callers. Encoding both sides first is the correct use
+    of the function. Revert to `compare_digest(token, expected)` and this goes red.
+    """
+    import asyncio
+
+    original = app_module.SETTINGS
+    app_module.SETTINGS = replace(SETTINGS, ml_token=REAL_TOKEN)
+    try:
+        for path, method in [("/persona/victim", "GET"), ("/user/victim", "DELETE"), ("/metrics", "GET")]:
+            status, _ = asyncio.run(_raw_asgi(path, method, header))
+            assert status == 401, f"{method} {path} answered {status} to a non-ASCII credential"
+    finally:
+        app_module.SETTINGS = original
