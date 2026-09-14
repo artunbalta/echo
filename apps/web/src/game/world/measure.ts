@@ -47,7 +47,7 @@ import {
   type TelemetryType,
 } from "@echo/shared";
 
-import { ensureIdentity, identityToken, peekUserId, resolveUserId } from "../../lib/identity";
+import { ensureIdentity, identityHeaders, peekUserId, resolveUserId } from "../../lib/identity";
 import { LocomotionSampler, TelemetryCollector } from "../telemetry";
 import { ACTION_AXIS_MAP, type ActionRow } from "./actionMap";
 
@@ -245,21 +245,11 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
   const sessionId = opts.sessionId ?? newSessionId();
   const doFetch: typeof fetch = opts.fetchImpl ?? ((input, init) => fetch(input, init));
 
-  /**
-   * The signature that says which subject these writes belong to (SOC-2.E).
-   *
-   * The BODY still carries `userId` / `actor_id` and the persona read still uses `?uid=` — the
-   * shapes are unchanged, and `chain.test.mts` pins them. What changes is that the server now
-   * derives the subject from this header and treats the body field as a claim to check against it.
-   * An unsigned visit sends no header and is refused with `identity_required`, which is the point:
-   * quietly writing under an unverifiable id is the behaviour being removed.
-   */
-  function identityHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    const token = identityToken();
-    if (token) headers.authorization = `Bearer ${token}`;
-    return headers;
-  }
+  // The signature that says which subject these writes belong to (SOC-2.E) now comes from
+  // `lib/identity.ts`, because this closure was the only place in the tree that knew how to send it
+  // — so `/play` and `/flow4` wrote under no signature at all and were refused the moment their
+  // routes were gated (L5). Two behaviours came with the move: a `?u=` override deliberately sends
+  // NO token, and the body still carries `userId` / `actor_id` exactly as `chain.test.mts` pins it.
   const clock = opts.now ?? Date.now;
 
   let collector: TelemetryCollector | null = null;

@@ -14,7 +14,7 @@ import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import { Flow1Scene } from "@/game/activities/flow1Scene";
 import { type RaftPhase } from "@/game/activities/raftBuild";
-import { resolveUserId } from "@/lib/identity";
+import { identityHeaders, resolveUserId } from "@/lib/identity";
 import { type EntitySnapshot, type BehavioralEvent } from "@echo/shared";
 
 interface LiveResult { delta_mu?: number; mocked?: boolean; cond_key?: string }
@@ -39,7 +39,7 @@ export default function Flow1Client() {
     void (async () => {
       try {
         const res = await fetch("/api/observe/behavioral", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ events }),
         });
         const data = (await res.json()) as { results?: LiveResult[]; mocked?: boolean };
         const log = (window as unknown as { __echoFlow1?: unknown[] }).__echoFlow1 ?? [];
@@ -64,7 +64,7 @@ export default function Flow1Client() {
       let seed = 7;
       try {
         const r = await fetch("/api/island/assign", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ userId }),
         });
         const placement = (await r.json()) as { seed?: number };
         if (typeof placement.seed === "number") seed = placement.seed;

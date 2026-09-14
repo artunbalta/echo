@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-import { resolveUserId } from "@/lib/identity";
+import { identityHeaders, resolveUserId } from "@/lib/identity";
 import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import {
@@ -73,7 +73,7 @@ export default function Flow0Client() {
       try {
         const res = await fetch("/api/observe/behavioral", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: identityHeaders(),
           body: JSON.stringify({ event }),
         });
         const data = (await res.json()) as { results?: LiveResult[]; mocked?: boolean };
@@ -130,7 +130,7 @@ export default function Flow0Client() {
       let seed = 7;
       try {
         const r = await fetch("/api/island/assign", {
-          method: "POST", headers: { "content-type": "application/json" },
+          method: "POST", headers: identityHeaders(),
           body: JSON.stringify({ userId }),
         });
         const placement = (await r.json()) as { seed?: number };
@@ -283,7 +283,7 @@ export default function Flow0Client() {
     });
     try {
       await fetch("/api/observe/behavioral", {
-        method: "POST", headers: { "content-type": "application/json" },
+        method: "POST", headers: identityHeaders(),
         body: JSON.stringify({ event }),
       });
     } catch { /* best-effort */ }

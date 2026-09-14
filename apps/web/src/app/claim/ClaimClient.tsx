@@ -15,7 +15,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useReducedMotion, type GlobePhase } from "@/components/planet/motion";
-import { resolveUserId } from "@/lib/identity";
+import { identityHeaders, resolveUserId } from "@/lib/identity";
 
 const GlobeCanvas = dynamic(() => import("@/components/planet/GlobeCanvas"), {
   ssr: false,
@@ -110,7 +110,7 @@ export function ClaimClient() {
     try {
       const response = await fetch("/api/planet/claim", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: identityHeaders(),
         // The NAME is what to call them; the OWNER ID is who they are (SOC-2.B). Sending only the
         // name made two people called Sam one owner. `resolveUserId` mints on first use, which is
         // correct here and only here: this page already promises "that identifier is permanent",

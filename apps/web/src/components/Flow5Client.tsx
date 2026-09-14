@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import { Flow5Probes, type ProbeKind } from "@/game/activities/flow5Probes";
-import { resolveUserId } from "@/lib/identity";
+import { identityHeaders, resolveUserId } from "@/lib/identity";
 import { type EntitySnapshot, type BehavioralEvent } from "@echo/shared";
 
 export default function Flow5Client() {
@@ -36,7 +36,7 @@ export default function Flow5Client() {
   const postEvents = useCallback((events: BehavioralEvent[]) => {
     if (!events.length) return;
     void fetch("/api/observe/behavioral", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+      method: "POST", headers: identityHeaders(), body: JSON.stringify({ events }),
     }).catch(() => { /* best-effort; never block the player */ });
   }, []);
 
@@ -55,7 +55,7 @@ export default function Flow5Client() {
       let seed = 7;
       try {
         const r = await fetch("/api/island/assign", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ userId }),
         });
         const placement = (await r.json()) as { seed?: number };
         if (typeof placement.seed === "number") seed = placement.seed;

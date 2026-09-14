@@ -17,6 +17,11 @@
  * All state renders DIEGETICALLY (sun, body, bushes) — no numeric bars (Law 1, §V.1).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+
+// Every call below is to a route that derives its subject from this signature (SOC-2.E). The day
+// loop used to send `content-type` alone: the GET was refused with identity_required and swallowed
+// by `if (res.ok)`, and the POSTs wrote under an unverified id until the guard landed (⚑28).
+import { identityHeaders } from "@/lib/identity";
 import {
   SURVIVAL,
   scarcityMultiplier,
@@ -141,7 +146,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     (async () => {
       let loaded: { state: IslandDayState; changes: string[] } | null = null;
       try {
-        const res = await fetch(`/api/island/state?userId=${encodeURIComponent(userId)}`);
+        const res = await fetch(`/api/island/state?userId=${encodeURIComponent(userId)}`, { headers: identityHeaders() });
         if (res.ok) loaded = (await res.json()) as { state: IslandDayState; changes: string[] };
       } catch {
         /* zero-network fallback below */
@@ -255,7 +260,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
     setClock((c) => ({ ...c, crop: "planted" }));
     void fetch("/api/island/state", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: identityHeaders(),
       body: JSON.stringify({ userId, state: next }),
     }).catch(() => {});
   }, [userId]);
@@ -292,7 +297,7 @@ export function useDay({ userId, onSurvivalTick, onForcedDusk }: UseDayOptions):
       try {
         await fetch("/api/island/state", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: identityHeaders(),
           body: JSON.stringify({ userId, state: next }),
         });
       } catch {
