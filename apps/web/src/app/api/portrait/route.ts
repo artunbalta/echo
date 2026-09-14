@@ -8,24 +8,47 @@
 import { NextResponse } from "next/server";
 import type { CharacterAttributes } from "@echo/shared";
 import { generatePortrait } from "@/lib/art";
+import { subjectOf, subjectRejection } from "@/lib/subject";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+/** Above anything `styleFromAttributes` produces, and far below a prompt worth paying for. */
+const MAX_ATTRIBUTE_CHARS = 4 * 1024;
+
 export async function POST(req: Request) {
-  let body: { attributes?: CharacterAttributes; selfieUrl?: string };
+  // THE CALLER MUST BE SOMEBODY (SOC-2.E, C39, `⚑30`) — see the note in api/vision/route.ts for why
+  // this is attribution rather than a cost control, and for why it can be closed now.
+  const caller = subjectOf(req);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+
+  let body: { attributes?: CharacterAttributes };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
   const attributes = body.attributes ?? {};
+  // The attributes are caller-supplied and are interpolated into the generation prompt, so they are
+  // an input the caller controls the size of. `art/types.ts` builds the prompt from these fields.
+  if (JSON.stringify(attributes).length > MAX_ATTRIBUTE_CHARS) {
+    return NextResponse.json({ error: "attributes too large" }, { status: 413 });
+  }
   const styleReferenceUrl = process.env.ART_STYLE_REFERENCE;
 
-  const result = await generatePortrait({
-    attributes,
-    selfieUrl: body.selfieUrl,
-    styleReferenceUrl,
-  });
+  // `selfieUrl` IS GONE FROM THE ACCEPTED BODY, and it had no sender. This route read
+  // `body.selfieUrl` and handed it to `generatePortrait`, which sets `input.image_url = req.selfieUrl`
+  // (lib/art/fal.ts:43) or `InputImage.fromUrl(req.selfieUrl)` (lib/art/higgsfield.ts:43-44) — so an
+  // unauthenticated caller could make this project's paid image-generation account fetch an
+  // arbitrary URL of their choosing and generate from it, on this project's credentials. MEASURED:
+  // `lib/character.ts`'s `fetchPortrait` sends `{ attributes }` and nothing else, and a tree-wide
+  // grep finds no other sender — every other `selfieUrl` in the repo belongs to the waitlist
+  // portrait pipeline, which is server-side and uploads to fal storage itself. The parameter was
+  // dead and wired straight through. The style anchor a portrait legitimately needs is
+  // ART_STYLE_REFERENCE, which is server-side and stays.
+  const result = await generatePortrait({ attributes, styleReferenceUrl });
   return NextResponse.json(result);
 }

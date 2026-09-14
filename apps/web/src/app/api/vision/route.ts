@@ -10,6 +10,8 @@
 import { NextResponse } from "next/server";
 import type { CharacterAttributes } from "@echo/shared";
 
+import { subjectOf, subjectRejection } from "@/lib/subject";
+
 export const runtime = "nodejs";
 
 const KEY = process.env.ANTHROPIC_API_KEY ?? "";
@@ -35,7 +37,37 @@ function parseJson(text: string): CharacterAttributes {
   }
 }
 
+/**
+ * The most a selfie may be, and why there is a number here at all.
+ *
+ * `onboard/page.tsx` draws the capture into a 384x384 canvas and calls `toDataURL("image/jpeg", 0.9)`
+ * — MEASURED at roughly 20-40 KB. This cap is an order of magnitude above the largest thing the
+ * product sends and still bounds what a caller can put on the bill: every byte here is an input
+ * token at Anthropic, and there was no limit at all. MEASURED before this: a 5 MB base64 string was
+ * forwarded verbatim, a 5,243,524-byte request body to api.anthropic.com.
+ *
+ * A cap, not a rate limit. The guard below says WHO is spending; this says HOW MUCH per call.
+ * Neither is a budget — see ⚑30.
+ */
+const MAX_SELFIE_CHARS = 512 * 1024;
+
 export async function POST(req: Request) {
+  // THE CALLER MUST BE SOMEBODY (SOC-2.E, C39, `⚑30`). This route spends real money at a paid
+  // provider and had no gate of any kind. The subject is not asserted anywhere in the body, so this
+  // is the tree's first `subjectOf` with no claimed id: a valid token answers with its own subject,
+  // and no token answers `no-identity`. `/onboard` mints before it gets here, which is why this can
+  // be closed now and could not be before (⚑28 left it as the named remainder).
+  //
+  // THIS IS NOT A COST CONTROL AND MUST NOT BE READ AS ONE. The minter hands an identity to anyone
+  // who asks, so a determined caller mints one and spends anyway. What it buys is that the spend is
+  // ATTRIBUTABLE and that a casual unauthenticated script is refused. The cap below and the limit
+  // ⚑30 records are the parts that bound the bill.
+  const caller = subjectOf(req);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+
   let selfie: string | undefined;
   try {
     ({ selfie } = await req.json());
@@ -44,6 +76,10 @@ export async function POST(req: Request) {
   }
   if (!selfie || !selfie.startsWith("data:image/")) {
     return NextResponse.json({ error: "selfie data URL required" }, { status: 400 });
+  }
+  if (selfie.length > MAX_SELFIE_CHARS) {
+    // 413 before any provider call, so an oversized body costs nothing.
+    return NextResponse.json({ error: "selfie too large" }, { status: 413 });
   }
 
   if (!KEY) {

@@ -4,6 +4,7 @@
  * upload. Keeps the raw selfie in memory only for the duration of the calls (§13).
  */
 import type { CharacterAttributes } from "@echo/shared";
+import { identityHeaders } from "@/lib/identity";
 import { config } from "./config";
 import { getSupabase } from "./supabase";
 import { styleFromAttributes, styleFromId, buildCharacterSheet } from "@/game/art";
@@ -19,7 +20,7 @@ export interface CharacterResult {
 export async function extractAttributes(selfieDataUrl: string): Promise<CharacterAttributes> {
   const res = await fetch("/api/vision", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: identityHeaders(),
     body: JSON.stringify({ selfie: selfieDataUrl }),
   });
   if (!res.ok) throw new Error("vision failed");
@@ -32,7 +33,7 @@ async function fetchPortrait(attributes: CharacterAttributes): Promise<string> {
   try {
     const res = await fetch("/api/portrait", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: identityHeaders(),
       body: JSON.stringify({ attributes }),
     });
     const data = (await res.json()) as { url: string; placeholder: boolean };
