@@ -7,6 +7,18 @@ anything — it will save you from repeating mistakes that are already recorded.
 half-finished; every commit is green.** The work is not merged to `main` and should not be until a
 human has looked at the two things listed under *Owed to a human* below.
 
+> **AMENDED 2026-09-14, and read this before the paragraph above.** Three things in it are no longer
+> true. (1) **The merge already happened**: `git reflog show main` line 1 is
+> `merge feat/society-substrate: Fast-forward`, `main` and `feat/society-substrate` are both
+> `b22c3d4`, and it is pushed to `echo/main`. No PR was ever opened, so CI first ran *after* the
+> merge — one run, ever. The four items under *Owed to a human* are therefore owed **on `main`**, not
+> before a merge. (2) §5 is introduced above as "the two things" and lists **four**. (3) The diff is
+> 138 files / +15,481 by `git diff --shortstat 2999d59 b22c3d4`, not 137 / +15,209.
+>
+> A later pass closed `⚑28` and `⚑29` on top of that tree — the identity boundary C39 did not finish,
+> and the RLS coverage `⚑25` closed at 61%. §3's C39 summary below is amended in place; the full
+> account is in `docs/known-gaps.md` and in `DECISIONS.md` under "C39, corrected after review".
+
 ---
 
 ## 1. The three documents that are the real source of truth
@@ -17,7 +29,7 @@ Read these before the code. They are long, and they are load-bearing.
 |---|---|
 | `docs/SOCIETY-PLAN.md` | The roadmap: phases SOC-0…SOC-7, turning ECHO from an empty planet into a peopled, generational, ONE SHARED WORLD. **Start with §0 (how to read it), §3 (corrections), §4 (the cross-cutting laws), then "Where this stands".** |
 | `docs/DECISIONS.md` | The decision record, `C1`…`C39`. A decision here is binding; if you disagree, take a new decision and say why, do not quietly diverge. |
-| `docs/known-gaps.md` | The defect register, `⚑1`…`⚑27`. 28 entries. `npm run check:register` fails if a `⚑` reference dangles. |
+| `docs/known-gaps.md` | The defect register, `⚑1`…`⚑29`. 30 entries. `npm run check:register` fails if a `⚑` reference dangles — though **not** if the register is out of order: its ascend rule requires the `⚑ ` prefix that entries 1–6 predate, and those six are in fact `1, 2, 6, 3, 4, 5`. One regex, still open. |
 
 **The status banner at the top of `SOCIETY-PLAN.md` is the fastest way to see where things stand.** It
 is dated; if you do work, update it. It drifted once already and correcting that is commit `999e7fb`.
@@ -95,7 +107,8 @@ The branch has two halves.
   and a register gate (`scripts/check-register.mjs`).
 - **`services/ml/echo_ml/{snapshot,persistence}.py`** — the ML store is snapshotted, not replayed
   (C34). Durable half only; `shared` is deliberately *not* taken and the entry says why.
-- **Retention** (C35), **RLS on sixteen tables** (⚑25), **honest erasure** (⚑26).
+- **Retention** (C35), **RLS on sixteen tables** (⚑25 — *sixteen was the count changed, not the count
+  needed; the real figure was 20 of 30 and the rest is `⚑29`*), **honest erasure** (⚑26).
 - **CI**: `.github/workflows/{ci,e2e}.yml`.
 
 ### B. Rendering + security (C36–C39) — this session
@@ -142,6 +155,14 @@ What shipped:
 - **16 of 19 id-bearing routes** derive their subject from the signature. The three that do not
   should not: `auth/sync` verifies a Supabase token (it is the inversion everything else copies),
   `identity/session` accepts no id, `narrate` declares a `userId` it never reads.
+  **⚠️ CORRECTED — `⚑28`. That 16 counts route FILES containing `subjectOf`, and `island/state` is the
+  only route in the tree exporting two verbs: its GET was guarded and its POST wrote whatever `userId`
+  arrived in the body. The sentence was arithmetically true for as long as the hole was open.** And
+  the larger half was on the client: MEASURED, **23 of 31 browser call sites to guarded routes sent no
+  signature at all**, because `identityHeaders()` lived in one component's closure — so every guarded
+  route outside the parcel chain had been answering 403 to its only caller, silently, since C39
+  shipped. `/play` never minted a token, so the shared world refused every join on the canonical path
+  and the player got a solo world that **looks exactly like an empty shared one**.
 - `refId` **lost its `@type`, not its value** — the server still attributes every emission to it, it
   just stops leaving the process. Clients identify people by Colyseus's room-scoped `sessionId`.
 - `WorldRoom.onAuth` verifies the join using the **same function** the routes use.
@@ -166,19 +187,26 @@ cd services/ml && .venv/bin/python -m pytest -q      # 186 passed
 cd apps/web && E2E_QUARANTINE=skip npx playwright test --reporter=line
 ```
 
-Measured 2026-09-09 on this tree:
+Measured 2026-09-14, on `b22c3d4` plus the `⚑28`/`⚑29` fixes (the 2026-09-09 column is kept so a
+reader can see what moved and what did not):
 
-| gate | result |
-|---|---|
-| `check:register` | ✅ 28 entries |
-| `typecheck` | ✅ clean |
-| `@echo/planet` | 160/164, **4 skipped** (need `PLANET_TEST_DATABASE_URL`), 0 failed |
-| `@echo/shared` | 46/46 |
-| `@echo/web` | 271/271 |
-| `services/ml` | 186/186 |
-| realtime copresence | ✅ PASS |
-| e2e (non-quarantined) | **24/24** |
-| e2e (everything) | 24 pass / **10 known-quarantined failures** |
+| gate | 2026-09-09 | 2026-09-14 |
+|---|---|---|
+| `check:register` | ✅ 28 entries | ✅ **30 entries** |
+| `typecheck` | ✅ clean | ✅ clean |
+| `@echo/planet` | 160/164, **4 skipped** (need `PLANET_TEST_DATABASE_URL`), 0 failed | unchanged |
+| `@echo/shared` | 46/46 | **53/53** |
+| `@echo/web` | 271/271 | **275/275** |
+| `services/ml` | 186/186 | 186/186 |
+| realtime copresence | ✅ PASS | ✅ PASS — **and `exit 1` / `identity_no-identity` unrelaxed** |
+| RLS coverage | *not measured* | **30 of 30 tables, 0 policies** (PostgreSQL 16.15, via `db:migrate:apply`) |
+| e2e (non-quarantined) | **24/24** | **not re-measured** — needs a dev server |
+| e2e (everything) | 24 pass / **10 known-quarantined failures** | **not re-measured** |
+
+Two gates are on no list in this file and were found by re-measuring rather than reading:
+`npm run test:race -w @echo/realtime` (the `⚑16` per-actor lost-update regression, PASS) and
+`npm run check:env` (PASS, 17 shared keys). Neither is in the block above, and `test:race` is
+deliberately kept out of CI's blocking job — but it should at least be *listed*.
 
 **The 10 e2e failures are pre-existing and documented** in `apps/web/playwright.config.ts:16-46` —
 `scatterSplit` ×2, `scatterImpostor` ×4, `globePick` ×2, `slice` ×1, `spawnSea` ×1. They fail on

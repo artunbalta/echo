@@ -1163,6 +1163,13 @@ posteriors is circular by construction: those posteriors were produced BY the co
   "no TTL, no expiry column, no pruning job" is now true of five more tables. This makes the rows
   unreadable by the public; it does not make them go away.
 - **Status:** CLOSED. `db/migrations/0015_rls_on_0001.sql`.
+- **CORRECTED 2026-09-14, and the correction is in the title.** *Sixteen* was the number of tables
+  0015 CHANGED, not the number that needed changing. This entry reasoned "all sixteen, not the four
+  I touched — the four would have been arbitrary", which was the right instinct applied to the wrong
+  set: it scoped itself to what `0001` created and never re-counted the folder. MEASURED on
+  `b22c3d4`: **20 of 30 public tables had RLS.** Ten did not, including `connection_analyses`, whose
+  `transcript_json` holds the full `[{who,text}]` exchange. This flag was closed at 61%. The
+  remainder, and the gate that stops a third round of the same arithmetic, are `⚑29`.
 
 ## ⚑ 26. Erasure said "your data is gone" three different ways it could not know (2026-09-09)
 
@@ -1247,7 +1254,9 @@ which says "the same someone" without saying who, and NPC ids ride a separate sy
 NPC's id is not a credential.
 
 All three routes named above derive their subject from an HMAC signature instead of reading it out of
-the request — 16 of 19 id-bearing routes do, the exceptions being `auth/sync` (which verifies a
+the request — 16 of 19 id-bearing routes do, **and that sentence is the one `⚑28` is about: 16 counts
+ROUTE FILES containing `subjectOf`, and one file exports two verbs with one guard.** The exceptions
+being `auth/sync` (which verifies a
 Supabase token and always did), `identity/session` (which accepts no id) and `narrate` (which declares
 a `userId` it never reads). The room join is verified by `WorldRoom.onAuth` using the **same function**
 the routes use, imported from `@echo/shared/identity` rather than restated, because a policy written
@@ -1256,3 +1265,141 @@ twice is a policy that drifts.
 **What is NOT closed by this, and is stated in `C39` rather than left to be discovered:** rollout
 orphans every existing anonymous echo, because the minter refuses to sign an id handed to it. That is
 the same loss as clearing site data — but once to everyone, rather than one person at a time.
+
+---
+
+## ⚑ 28. C39 guarded the route FILES; one file has two verbs, and no client ever sent the signature (2026-09-14)
+
+**`POST /api/island/state` never called `subjectOf`.** `route.ts:51-59` derived the GET's subject and
+loaded under `caller.subject`; the POST at `:67-87` read `userId` out of the body and handed it to
+`saveIslandState` at `:83`. So the island day state — a person's crop, raft, scarcity and tie warmth,
+and on a configured deployment a durable Supabase row — **was read-refused and write-open at the same
+time.** Anyone holding a user id could overwrite it while its owner could not read it back.
+
+**WHY THE RECORD SAID OTHERWISE, AND IT IS AN ARITHMETIC SHAPE, NOT A LIE.** `C39` and `⚑27` both say
+"16 of 19 id-bearing routes are guarded". MEASURED: `grep -rl subjectOf apps/web/src/app/api` returns
+exactly 16 files and 19 route files are id-bearing, so the sentence was true throughout. **The unit is
+the file.** `island/state` is the only route in the tree that exports two verbs, so it is the only
+place where a file could be counted as guarded while a handler was not. A count over files cannot see
+inside one.
+
+**THE SECOND HALF IS LARGER: 23 OF 31 BROWSER CALL SITES SENT NO SIGNATURE AT ALL.** MEASURED on
+`b22c3d4` by enumerating every `fetch` in `apps/web/src` that targets a route containing `subjectOf`.
+`identityHeaders()` existed — as a closure inside `createMeasureChain` (`measure.ts:257`), reachable
+by the three routes the parcel chain calls and by nothing else. Everything outside that chain — the
+whole day loop, `/flow0`, `/flow1`, `/flow4`, `/flow5`, `/claim`, `/account`, and every one of
+`lib/agent.ts`'s five calls — sent `content-type` and nothing else, so **every one of those routes had
+been answering 403 to its only caller since C39 shipped**, silently: each call site swallows its own
+failure (`.catch(() => {})`, `if (res.ok)`), which is what the swallow is for. A header policy living
+in one component's closure is a policy three other components do not have (L5).
+
+**AND `/play` NEVER MINTED A TOKEN, so the shared world was dead on the canonical path.**
+`WorldClient.tsx` joined with `token: identityToken()`, which only READS `localStorage`.
+`ensureIdentity` — the only thing that mints — was called from exactly one place in the tree,
+`measure.ts:393`, the parcel measure chain. The canonical route to the world is landing → `/onboard`
+→ `/play`, and `/onboard` does not require sign-in: `page.tsx:67` calls `resolveUserId()`, which
+stamps an id with **no signature**. So in production `WorldRoom.onAuth` threw `identity_no-identity`,
+`WorldClient.tsx:1486-1493` caught it, set offline and started the solo world. **The failure mode was
+not an error anyone would see. It was an empty ocean.** A player was told nothing; the world simply
+looked unpopulated. Only a browser that had signed in through `AuthModal` on the landing page — the
+one path that calls `storeIdentity` with `/api/auth/sync`'s token — could join at all.
+
+**A FOURTH THING, FOUND WHILE FIXING THE THIRD.** `/account`'s erase removed four localStorage keys
+and not `echo.identityToken`. `resolveUserId` then minted a fresh anonymous id beside last life's
+signature, and `ensureIdentity` short-circuited on `existing && identityToken()` — **both keys
+present, so no mint** — leaving every write refused with `identity_mismatch` permanently, because the
+only thing that could have re-minted was the thing that returned early. No reload healed it.
+
+**Acted on, and the gate is the point.**
+
+- The POST derives its subject and writes under `caller.subject`, not the asserted string — the
+  fourth test is the one that separates a guard from a fix, because a guard that then writes wherever
+  the caller pointed is decoration.
+- `apps/web/tests/islandState.test.mts` drives the REAL route handler, not a copy of its branch.
+  **It was checked that it fails when the defect returns: 3 fail / 1 pass with the guard removed and
+  the asserted string restored, 4 pass with the fix.** The one that stays green is the one that
+  should — "the legitimate caller is not the casualty" is true either way, and it is a regression
+  guard rather than a gate.
+- `identityHeaders()` moved to `lib/identity.ts` and all 23 bare call sites go through it. It carries
+  one rule the closure did not need: **a `?u=` override sends NO token.** `subjectFor` checks the
+  token branch before the relaxation, so a browser profile that had ever held a token would present
+  it beside `?u=alice` and be refused — which would break the two-tab harness `verify-3d-render.md`
+  depends on, and `?u=` is the only mechanism in the tree that yields two identities in one profile.
+  The Colyseus join asks `outboundIdentityToken()` for the same reason through a different transport.
+- `/play` awaits the mint **before** `world.init`, so the subject is settled before any world
+  callback exists and `uid` is set exactly once — setting it twice would re-run `useDay`'s load
+  effect under a new id and reset a returning player to day 0.
+- The mint is memoized on a module-level in-flight promise. `next.config.mjs` sets
+  `reactStrictMode: true`, so the effect that calls it is double-invoked in dev, and nothing was
+  memoized: two callers both failed the early return, both POSTed, and `identity/session` minted two
+  different subjects. The last response won `localStorage` while the other caller kept the id it was
+  handed — one subject, the other's token, `identity_mismatch`.
+- The early return now requires that the stored token actually covers the stored id
+  (`tokenMatchesSubject`, `packages/shared/src/identityFormat.ts`), so a browser already in the
+  erased state heals itself on the next visit rather than staying refused forever. The erase list
+  also drops the token now, which was never right on its own terms: leaving a credential behind after
+  "erase everything" is its own answer.
+
+**Status:** CLOSED. The consent rule `identity.ts` states is unchanged and now has two callers rather
+than one: `/play` is behind a render gate that will not mount `WorldClient` until `echo.character`
+exists, and `/onboard` writes `echo.consent` before it writes that. It is not the mistake C39 removed
+— `Flow0Client` was a SECOND MINTER of a different form (`"u_" + Math.random()`), writing pre-consent.
+
+**What this does NOT close:** `harness/f4/f4_capture.py` sends no Authorization header either, so the
+F4 acceptance harness has been failing its first GET since that route was gated and reporting it as
+`[INFRA] could not reach the no-flag server`. It is a harness, not a product surface, and it is not in
+any gate list — but it is the same defect and it is still open.
+
+---
+
+## ⚑ 29. RLS was closed on a count of sixteen; the real number was twenty-six (2026-09-14)
+
+**`⚑25` closed at 61%.** MEASURED on `b22c3d4`: **20 of 30 public tables had row level security.**
+0015 enabled it for the sixteen tables `0001_init.sql` created and never re-counted the folder, so the
+ten created by `0002`, `0003`, `0004`, `0006` and `0009` were never in scope. `0015:8-10` states the
+exposure in its own words — with RLS disabled, PostgREST serves a table to anyone holding the anon
+key, **which ships in the browser bundle by definition** — and `lib/config.ts:4` is that key.
+
+**Four of the ten are live, and one of them is the reason this is not housekeeping.**
+`connection_analyses` (`0002:5`) carries `user_id` and `transcript_json`, the full `[{who,text}]`
+exchange — the same sensitivity class as `messages.text`, which `lib/retention.ts:44-48` marks with a
+⚠️. The others: `island_validation` (`0003:6`), `islands` (`0004:6`, `owner_user_id`) and
+`island_state` (`0006:7`), which is also `⚑28`'s table. The remaining six are `0009`'s planet
+registry, which has no writers until SOC-2.A because `lib/planet.ts:99` hardcodes `backend: "memory"`
+— RLS before the first row is free, and this folder is forward-only.
+
+**MEASURED, on PostgreSQL 16.15, against a database the runner built from this folder.** Granting
+`anon` the table privileges Supabase grants, and inserting one row:
+
+| | anon reads | anon deletes |
+|---|---|---|
+| with `0017` | **0 rows** | — |
+| with RLS disabled in the same transaction | **1 row, and the transcript text with it** | **1 row it does not own** |
+
+**THE MIGRATION IS GUARDED PER TABLE, AND THAT IS NOT DEFENSIVENESS.** `scripts/migrate.mjs:130-143`
+runs a whole file in ONE transaction, so one missing relation aborts all of it and records nothing. A
+database migrated by hand and adopted with `--baseline` has `0009` **recorded as applied and not
+run** — the expected production shape, because the planet registry has never been deployed. MEASURED
+end to end through the real runner: a bare `alter table world_manifest …` fails such a database with
+`relation "world_manifest" does not exist`, **the four live tables get nothing**, and every later
+`--apply` fails identically because `0009` will never run. The operator is handed an error naming a
+parcel table with no personal data while the transcript table stays open — SOCIETY-PLAN §3 item 8's
+species exactly. With the guard: **24 of 24 on that database, the four live tables covered**, and the
+six absent ones skipped with a notice. On a fully migrated database: **30 of 30, zero policies.**
+
+**THE ELEVENTH TABLE IS A GATE, NOT A MIGRATION.** This invariant has now been broken twice by one
+mechanism — a migration covers what it can see, later migrations add tables, nobody re-counts — so
+`.github/workflows/ci.yml` asserts it against the schema the runner just built: every public table has
+`rowsecurity`, and `pg_policies` is empty. **Verified to fire in both directions:** green at 30 of 30,
+red on a table created without RLS, red on a policy added. A loop over `pg_tables` inside the
+migration would have covered the eleventh table too, and was rejected — it would silently enable RLS
+on tables nobody has looked at, in a forward-only folder, which is the opposite of the per-table
+decision 0015 documented.
+
+**Status:** CLOSED. `db/migrations/0017_rls_on_0002_0009.sql` plus the CI gate.
+
+**What this does NOT close, and it is owed to C35:** `connection_analyses` and `island_validation` are
+in NEITHER of `lib/retention.ts`'s lists, and that file says in its own words that "a table in neither
+list is a table nobody has decided about". C35 classified thirteen identity-keyed tables and did not
+see these two. Making rows unreadable by the public does not decide how long they live — and
+`connection_analyses` holds the transcripts `messages` is already on a clock for.
