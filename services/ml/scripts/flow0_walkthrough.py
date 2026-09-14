@@ -26,6 +26,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# The dev credential for a local run, from the one place the launchers share. `_auth` refuses an
+# empty ML_SERVICE_TOKEN now, so this import is what keeps `python scripts/<name>.py` working with no
+# keys — the same role run.sh plays for the service.
+import _devlauncher  # noqa: F401,E402  (side effect: the setdefault)
+
 import numpy as np
 from fastapi.testclient import TestClient
 

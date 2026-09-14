@@ -61,7 +61,22 @@ HYPER = Hyper()
 
 @dataclass(frozen=True)
 class Settings:
-    ml_token: str = os.getenv("ML_SERVICE_TOKEN", "dev-ml-token-change-me")
+    # THE SERVICE NEVER INVENTS A CREDENTIAL. This used to default to the literal
+    # "dev-ml-token-change-me", which is also committed at .env.example:21 — so an operator who
+    # skipped render.yaml's `sync: false` prompt got a service that came up healthy and accepted a
+    # token anyone can read out of this repository. Behind that one token: GET /persona/{uid} and
+    # DELETE /user/{uid}, which are the same two capabilities ⚑27 closed at the Next.js boundary,
+    # one layer down. C39 chose fail-closed-in-production for exactly this shape; services/ml has no
+    # production marker to key that on (render.yaml sets NODE_ENV on echo-realtime and nothing on
+    # echo-ml), so the polarity is inverted instead: EMPTY MEANS REFUSE, and the dev literal lives
+    # in the launcher — `run.sh` and `conftest.py` — the way harness/f4/run_f4_acceptance.sh:30 and
+    # three sibling scripts already keep it. Every deployment path that does not run `run.sh`
+    # (Render's Dockerfile CMD is uvicorn directly) therefore fails closed with nothing to
+    # configure, and there is no flag that could re-open the published literal in production.
+    #
+    # NOT a module-level constant: `_auth` re-reads this so a test can drive the real handler with
+    # monkeypatch instead of reloading the module.
+    ml_token: str = os.getenv("ML_SERVICE_TOKEN", "")
     anthropic_key: str = os.getenv("ANTHROPIC_API_KEY", "")
     model_strong: str = os.getenv("LLM_MODEL_STRONG", "claude-opus-4-8")
     model_cheap: str = os.getenv("LLM_MODEL_CHEAP", "claude-haiku-4-5-20251001")
