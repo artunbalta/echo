@@ -32,7 +32,12 @@ export async function POST(request: Request) {
 
   const { registry, field, calibration } = planet();
   const store = registry();
-  const result = await store.claim(ownerId, {
+  // THE DERIVED SUBJECT, NOT THE ASSERTED STRING. This guarded on `caller` and then claimed under
+  // `ownerId`, which is the shape `islandState.test.mts`'s fourth test forbids: it refuses a caller
+  // who cannot prove the id and then still writes wherever they pointed. It is safe today only
+  // because `subjectFor` and this route happen to trim identically — an accident of two files, not
+  // a property. `owner_id` is the permanent key this page promises; it must be the proved one (⚑28).
+  const result = await store.claim(caller.subject, {
     displayName: name,
     referrerParcel: claim.referrer,
   });

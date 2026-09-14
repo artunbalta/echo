@@ -1316,17 +1316,21 @@ export default function WorldClient() {
     });
 
     (async () => {
-      // THE SUBJECT, SETTLED BEFORE ANYTHING READS IT — ahead of `world.init` so no world callback
-      // can exist while it is still in flight. The fallback is the local id `resolveUserId` mints:
-      // a failed mint leaves the player in the solo world they get today rather than in no world at
-      // all, and the routes will refuse the writes, which is the honest outcome the mint documents.
-      const userId = (await identityReady) || resolveUserId();
+      // THE SUBJECT, SETTLED BEFORE ANYTHING READS IT — but ALONGSIDE `world.init`, not ahead of it.
+      // Serialising them put the mint's whole round trip in front of the first frame, under a
+      // "Connecting…" panel whose solo fallback lives around `net.connect` far below and is
+      // therefore unreachable while it waits. Nothing needs the id during init: every consumer is
+      // either inside this block (`island/assign`, the join) or a world callback that reads
+      // `uidRef` at event time, and a callback cannot fire before init resolves. The fallback is
+      // the local id `resolveUserId` mints — a failed mint leaves the player in the solo world they
+      // get today rather than in no world at all, and the routes refuse the writes, which is the
+      // honest outcome the mint documents. A browser whose token already covers its id makes no
+      // request at all and settles in a microtask.
+      const [settled] = await Promise.all([identityReady, world.init(mountRef.current!)]);
       if (disposed) return;
+      const userId = settled || resolveUserId();
       setUid(userId);
       uidRef.current = userId;
-
-      await world.init(mountRef.current!);
-      if (disposed) return;
       // Resolve this user's archipelago slot so they cross into the shared ocean AT their own
       // island's coordinate (Step-1 clustering → an adjacent, reachable neighbour). Zero-key: the
       // in-memory registry answers; offline → undefined → server cluster-spawn fallback.

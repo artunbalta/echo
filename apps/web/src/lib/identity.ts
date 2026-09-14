@@ -139,8 +139,11 @@ export function storeIdentity(userId: string, token: string): void {
  * exists to make that possible: `peekUserId` reads without writing precisely so a render that runs
  * before the question cannot stamp a durable key under a card promising that a "no" changes nothing.
  *
- * **THERE ARE NOW TWO CALLERS, AND THE RULE IS THE SAME ONE.** `arm()` is the parcel chain's accept
- * path. The second is `/play`'s connect effect, which is downstream of a RENDER GATE: `play/page.tsx`
+ * **THERE ARE NOW THREE CALLERS, AND THE RULE IS THE SAME ONE.** `arm()` is the parcel chain's accept
+ * path. `/claim` is the third, where `resolveUserId` already minted unsigned: that page asks no
+ * consent question a stamped key would answer early and already promises the identifier is
+ * permanent, which is the case `lib/identity.ts` and SOC-2.B both make for it.
+ * The second is `/play`'s connect effect, which is downstream of a RENDER GATE: `play/page.tsx`
  * returns a placeholder and redirects to `/onboard` unless `echo.character` exists, and `/onboard`
  * writes `echo.consent` before it writes `echo.character` — so `WorldClient` cannot mount until the
  * question has been answered. The sentence this used to carry ("never from a render") named the
@@ -148,7 +151,16 @@ export function storeIdentity(userId: string, token: string): void {
  *
  * It is NOT the mistake C39 removed. `Flow0Client` was a SECOND MINTER of a different form, writing
  * `"u_" + Math.random()` into the canonical key on mount, before any question. This is the one
- * minter, reached from one more place that has already asked.
+ * minter, reached from two more places that have already asked.
+ *
+ * **WHO STILL DOES NOT MINT, AND WHY THAT IS A DECISION RATHER THAN AN OMISSION.** `/flow0`,
+ * `/flow1`, `/flow4`, `/flow5` and `/account` route their fetches through `identityHeaders()` and so
+ * send a signature **if one exists** — but none of them asks for one. For the flow pages that is
+ * deliberate: `Flow0Client` is exactly where C39 removed a pre-consent minter, and adding one back
+ * under a different name would be the same act. They run under `?u=` and the relaxation, which is
+ * what the harnesses use. In production those four write unsigned and are refused. `/account` is the
+ * sharper one: a browser with no token cannot prove the subject whose data it is asking to erase.
+ * **Both are open, and they are `⚑28`'s named remainder — not something this closed.**
  *
  * A `?u=` override returns verbatim and mints NOTHING. It has no signature and needs none: the
  * server honours an asserted id only where `ECHO_TRUST_CLIENT_ID=1` and the deployment proves it is
@@ -171,6 +183,13 @@ export async function ensureIdentity(fetchImpl: typeof fetch = fetch): Promise<s
   // different subjects. Whichever response landed last won localStorage while the other caller kept
   // the id it was handed — and a caller holding one subject with the other's token is refused with
   // identity_mismatch. A second caller now awaits the first rather than racing it.
+  // AN INJECTED FETCH IS NEVER SERVED FROM THE MEMO, and that is not a detail. `measure.ts` injects
+  // a recorder for the reason it states — "a mint that reached past it would be the one request in
+  // the flow they could not see" — and a shared promise hands the second caller the FIRST caller's
+  // transport, so the recorder records nothing and the test passes anyway. That is this repo's own
+  // "a check that cannot fail" shape, introduced by the fix for a different one. The memo exists to
+  // stop StrictMode's double-invoke racing itself; those are the default-transport callers.
+  if (fetchImpl !== fetch) return mintIdentity(fetchImpl);
   if (!identityInFlight) {
     identityInFlight = mintIdentity(fetchImpl).finally(() => {
       identityInFlight = null;

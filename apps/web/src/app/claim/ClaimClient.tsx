@@ -15,7 +15,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useReducedMotion, type GlobePhase } from "@/components/planet/motion";
-import { identityHeaders, resolveUserId } from "@/lib/identity";
+import { ensureIdentity, identityHeaders, resolveUserId } from "@/lib/identity";
 
 const GlobeCanvas = dynamic(() => import("@/components/planet/GlobeCanvas"), {
   ssr: false,
@@ -108,15 +108,22 @@ export function ClaimClient() {
     setBusy(true);
     setError(null);
     try {
+      // The SIGNED id, awaited before the claim is sent. `resolveUserId` mints a local id with no
+      // signature, and `/api/planet/claim` has derived its subject from one since C39 — so this page
+      // has been answering `identity_required` to every claim on a cold browser, while the button
+      // still read "Claim it". Routing the fetch through `identityHeaders()` does not fix that:
+      // a header builder can only send a token that exists (⚑28). THIS is the mint that makes it
+      // exist, and this page is where lib/identity.ts already says one belongs — it asks no consent
+      // question a stamped key would answer early, and it already promises the identifier is
+      // permanent. A failed mint falls back to the local id and the route refuses, which is the
+      // honest outcome rather than a claim recorded under something nobody can prove.
+      const ownerId = (await ensureIdentity()) || resolveUserId();
       const response = await fetch("/api/planet/claim", {
         method: "POST",
         headers: identityHeaders(),
         // The NAME is what to call them; the OWNER ID is who they are (SOC-2.B). Sending only the
-        // name made two people called Sam one owner. `resolveUserId` mints on first use, which is
-        // correct here and only here: this page already promises "that identifier is permanent",
-        // and unlike the parcel routes it asks no consent question that a stamped key would answer
-        // early — see lib/identity.ts, which reserves minting for exactly this kind of act.
-        body: JSON.stringify({ name: name.trim(), ownerId: resolveUserId() }),
+        // name made two people called Sam one owner.
+        body: JSON.stringify({ name: name.trim(), ownerId }),
       });
       const data = await response.json();
       if (!response.ok) {

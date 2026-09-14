@@ -2122,8 +2122,11 @@ write-open at once. A count over files cannot see inside one, and the sentence s
 time the hole was open. Closed as `⚑28`.
 
 **"Every other id-bearing route now copies that inversion" was true of the routes and false of the
-product**, because nothing on the other side sent the header. MEASURED: 23 of 31 browser call sites to
-guarded routes sent `content-type` and nothing else. `identityHeaders()` was a closure inside
+product**, because nothing on the other side sent the header. MEASURED: **30 of 33 browser fetch
+expressions** to guarded routes sent no signature — 27 with `content-type` alone, 3 with no headers —
+across 23 of 26 distinct *(file, route)* pairs. (This sentence first read "23 of 31", a numerator from
+one unit and a denominator from neither; the correction is `⚑28`'s, and it is the same species as the
+sentence it was written to correct.) `identityHeaders()` was a closure inside
 `createMeasureChain`, so the three routes the parcel chain calls were signed and **every other guarded
 route in the app had been answering 403 to its only caller since this decision shipped** — silently,
 because each call site swallows its own failure. The guards were real; the product had simply stopped
