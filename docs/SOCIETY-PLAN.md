@@ -85,13 +85,13 @@ rather than retired (SOC-0.G).
 every figure below was re-run on `b22c3d4` plus the `⚑28`/`⚑29` fixes **except the two marked NOT
 re-measured**, which need a dev server and are carried with their old date rather than restated as
 if they were fresh)***:**
-`check:register` ✅ *(1,448 lines, 30 entries, every ⚑ resolves)* ·
+`check:register` ✅ *(1,545 lines, 31 entries, every ⚑ resolves)* ·
 `build:shared` + `typecheck` ✅ (4 workspaces, and in that order — SOC-2.H hole 6) · `@echo/planet`
 160/164 with 4 skipped, 0 failed *(the 4 need `PLANET_TEST_DATABASE_URL`; **164/164 against a real
 Postgres migrated by `db:migrate:apply`** was measured 2026-09-08 and is not re-measured here, so it
-carries that date)* · `@echo/shared` **53/53** · `@echo/web` **277/277** · `@echo/realtime` copresence
+carries that date)* · `@echo/shared` **53/53** · `@echo/web` **284/284** · `@echo/realtime` copresence
 ✅ *(and FAILS with `exit 1`, `identity_no-identity`, with no relaxation — both halves re-measured)* ·
-`services/ml` **186/186** · **RLS 30 of 30 public tables, 0 policies**, measured through
+`services/ml` **196/196** · **RLS 30 of 30 public tables, 0 policies**, measured through
 `db:migrate:apply` against PostgreSQL 16.15 *(and 24 of 24 on a `--baseline`d database that never ran
 `0009` — `⚑29`)* · e2e **NOT re-measured here**, and the last reading is 2026-09-09's **27 passed of
 37**, at `workers: 1` — see SOC-1.D, where that

@@ -1362,6 +1362,17 @@ asking to erase, so "delete everything" is refused for precisely the people who 
 **Both are open. Neither is closed by this entry, and the fix for either is a consent question about
 where that surface asks — not a line of plumbing.**
 
+**UPDATE 2026-09-14 — `/onboard` MINTS NOW, which was the largest piece of this remainder** and is
+closed under `⚑30`, because guarding the two paid routes required it. The consent rule is satisfied by
+the step order rather than by an argument: `Step` is `"consent" | "select" | "selfie" | "reveal"`, the
+initial state is `"consent"`, and the only exit is the Continue button — so `resolveUserId` was
+ALREADY stamping a durable key there, after the answer. Minting a signed id at the same point changes
+what is stamped, not when. With it, the "every brand-new player is stamped unsigned and replaced on
+their first `/play`" property above is gone, and with it the island relocation and the leaked slot for
+new players. **An existing player whose island was assigned under an unsigned id still relocates
+once** — the mint moved earlier, it did not become retroactive. `ensureIdentity` now has four callers:
+`arm()`, `/play`, `/claim`, `/onboard`. The flow pages and `/account` are still open, unchanged.
+
 The consent rule `identity.ts` states is unchanged and now has three callers rather than one: `/play`
 is behind a render gate that will not mount `WorldClient` until `echo.character` exists, and
 `/onboard` writes `echo.consent` before it writes that; `/claim` asks no consent question a stamped
@@ -1445,3 +1456,89 @@ in NEITHER of `lib/retention.ts`'s lists, and that file says in its own words th
 list is a table nobody has decided about". C35 classified thirteen identity-keyed tables and did not
 see these two. Making rows unreadable by the public does not decide how long they live — and
 `connection_analyses` holds the transcripts `messages` is already on a clock for.
+
+---
+
+## ⚑ 30. Two routes spent real money for anybody who asked, and one of them fetched a URL of their choosing (2026-09-14)
+
+**`POST /api/vision` and `POST /api/portrait` had no gate of any kind.** MEASURED: zero `subjectOf`
+in either file, no input cap in either, and the repo's only rate limiter is the waitlist's — whose
+own comment says why it exists, *"Rate limiting matters more here than it looks: the selfie path
+spends real image-generation money"*, about this exact path. `/api/vision` forwards a caller-supplied
+base64 image to `api.anthropic.com`; `/api/portrait` sends a caller-supplied prompt to Fal or
+Higgsfield. MEASURED before the fix: a 5 MB base64 selfie was forwarded verbatim as a **5,243,524-byte
+request body**, from a request that proved nothing about who sent it.
+
+**THE WORST OF IT WAS NOT THE MONEY.** `/api/portrait` read `selfieUrl` out of the body and handed it
+to `generatePortrait`, which sets `input.image_url = req.selfieUrl` (`lib/art/fal.ts`) or
+`InputImage.fromUrl(req.selfieUrl)` (`lib/art/higgsfield.ts`). So an unauthenticated caller could make
+**this project's paid image-generation account fetch an arbitrary URL of their choosing** and
+generate from it, on this project's credentials. MEASURED: the field had **no sender**.
+`lib/character.ts`'s `fetchPortrait` posts `{ attributes }` and nothing else, and every other
+`selfieUrl` in the tree belongs to the waitlist portrait pipeline, which is server-side and uploads to
+fal storage itself. A dead parameter, wired straight through to a paid backend.
+
+**WHY IT COULD NOT BE CLOSED UNTIL NOW, and what closed it.** Guarding these two needs the caller to
+hold a signature, and the caller is onboarding — which was `⚑28`'s named remainder: `/onboard` called
+`resolveUserId()`, stamping a durable id with no signature. The step order settles the consent
+question rather than arguing it: `Step` is `"consent" | "select" | "selfie" | "reveal"`, the initial
+state is `"consent"`, and the only exit is the Continue button — so every paid call already happened
+*after* the answer, and `resolveUserId` was already stamping a durable key there. Minting a **signed**
+id at the same point changes *what* is stamped, not *when*. The selfie path is additionally gated on
+`consent.biometric` (`onboard/page.tsx:235` disables the button), so `/api/vision` is unreachable
+without explicit biometric consent.
+
+**Acted on.**
+
+- Both routes derive a subject. This is the tree's **first `subjectOf(req)` with no asserted id** —
+  every other call site passes one — which answers with the token's own subject and refuses a caller
+  with no token. Stated as a new pattern rather than left to be inferred.
+- `MAX_SELFIE_CHARS` 512 KB and `MAX_ATTRIBUTE_CHARS` 4 KB, both refused with 413 **before** any
+  provider call. The product's own capture is a 384×384 JPEG at quality 0.9 — an order of magnitude
+  under the cap.
+- `selfieUrl` is **gone from `PortraitRequest` and from both providers**, not filtered at the route.
+  That is `⚑27`'s move for `ownerId`: the passthrough cannot come back without a type change, so a
+  later author adding it out of symmetry has nothing to add it to.
+- `/onboard` mints, closing `⚑28`'s largest remainder. The mint is fired when the consent question is
+  answered and awaited where it is needed, so its round trip overlaps with choosing a character
+  instead of sitting in front of the first paid call.
+- `lib/character.ts` sends `identityHeaders()` — the other half of `⚑28`, on this path.
+- `apps/web/tests/paidRoutes.test.mts`, seven tests, driving the REAL handlers with `globalThis.fetch`
+  replaced by a recorder. **The outbound assertion is the one that matters:** a route can answer 403
+  and still have called the provider, and `/api/vision` degrades to a mock on any error, so a test
+  that only read the status would pass on a route that refuses *after* spending. MEASURED, each
+  defect turning exactly one test red: guard removed → `an unsigned caller cannot spend…` (6 pass /
+  1 fail) · cap removed → `an oversized selfie is refused BEFORE the provider…` (6/1) · portrait
+  guard removed → `an unsigned caller cannot spend the project's image-generation budget` (6/1).
+
+**Writing that suite reproduced the trap it warns about.** `vision/route.ts` reads
+`ANTHROPIC_API_KEY` into a module-level `KEY` at load, so setting it in `before()` — after the import
+— left the handler answering a mock and never reaching the forward. The guard tests were green and
+the outbound assertions were vacuous. The only reason it was caught is that the "legitimate caller is
+not the casualty" test asserts a forward DID happen, and it went red. A regression guard caught a
+hole in the gates beside it.
+
+**Status:** PARTIAL, and the open half is the one that bounds the bill.
+
+**THE GUARD IS NOT A COST CONTROL AND MUST NOT BE READ AS ONE.** `/api/identity/session` mints for
+anyone who asks, so a determined caller mints a token and spends anyway. What the guard buys is that
+the spend is ATTRIBUTABLE and that a casual unauthenticated script is refused; the caps bound a single
+call. Neither bounds a loop. **Still owed:** a rate limit. The mechanism exists —
+`waitlist_rate_hit` (`0007_waitlist.sql`), an atomic per-(ip, window) counter called by rpc — but it
+cannot be reused as it stands: its primary key is `(ip_hash, window_start)` with no bucket, so a burst
+on `/api/vision` would consume the waitlist's own window for that IP, and `hashIp`/`clientIp` are
+route-private. It also **fails OPEN** by explicit decision, which is right for a signup ("a real
+person must still be able to join") and is the expensive choice for a paid route. Generalising it is a
+migration plus a lib extraction plus a fail-open-or-closed decision, and that decision is the user's.
+
+**Also owed, and named rather than bundled:** `COST_DAILY_USD_BUDGET` (`services/ml/echo_ml/cost.py`)
+enforces nothing — `over_budget` has exactly one hit in the tree, its own assignment — and the meter
+never sees `/api/vision`, `/api/portrait`, the TTS providers or `apps/realtime`'s direct Anthropic
+call. A ceiling nobody reads is not a budget.
+
+**And the four `/api/venue/*` paid routes are untouched here, deliberately.** `/venue` is a nine-line
+redirect to `/play` — the entry point was retired in `b406d49` — but **the six API routes under it
+were not**, and `/api/venue/dialogue/simulate` bills eleven Claude calls per request with an unbounded
+`profile` stringified into every system prompt. The subsystem appears in none of the four planning
+documents (`grep -ric venue` over them: 0, 0, 0, 0). Gate it, delete it, or keep it: that is a product
+call and it is the user's, not a defect to be quietly patched.

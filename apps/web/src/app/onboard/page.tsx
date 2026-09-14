@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AvatarPreview from "@/components/AvatarPreview";
-import { resolveUserId } from "@/lib/identity";
+import { ensureIdentity, resolveUserId } from "@/lib/identity";
 import { styleFromAttributes, styleFromId, type CharStyle } from "@/game/art";
 import {
   createFromSelfie,
@@ -61,11 +61,34 @@ export default function Onboard() {
     setName(localStorage.getItem("echo.name") ?? "");
   }, []);
 
-  // The ONE canonical id (bare form, no "u_" prefix) — same resolver the world uses, so the
-  // character created here is written under exactly the id the world reads/writes later.
-  function userId(): string {
-    return resolveUserId();
+  /**
+   * The ONE canonical id (bare form, no "u_" prefix) — same resolver the world uses, so the
+   * character created here is written under exactly the id the world reads/writes later. It is now
+   * the SIGNED one.
+   *
+   * WHY THIS IS NOT A CHANGE OF WHEN, ONLY OF WHAT. This called `resolveUserId()`, which stamps a
+   * durable localStorage id with NO signature — so onboarding was ⚑28's largest remainder: every
+   * brand-new player was marked with an unsigned id here and had it silently replaced on their
+   * first visit to `/play`, which re-ran `/api/island/assign` under the new subject and left the
+   * old one holding a slot forever. The mint happens at exactly the same point in the flow that
+   * `resolveUserId` already did, so nothing moves earlier relative to the consent question.
+   *
+   * AND THE CONSENT RULE IS SATISFIED BY THE STEP ORDER, not by an argument. `Step` is
+   * "consent" | "select" | "selfie" | "reveal", the initial state is "consent", and the only exit
+   * is the Continue button below — so every caller of this function runs after the question has
+   * been answered. That is the rule `lib/identity.ts` states; "never from a render" was the old
+   * wording of it and named a mechanism rather than the rule.
+   *
+   * The fallback is the local id: a failed mint leaves onboarding working and the writes refused,
+   * which is the honest outcome rather than a character recorded under something nobody can prove.
+   */
+  async function signedUserId(): Promise<string> {
+    return (await identityReady.current) || resolveUserId();
   }
+
+  // Fired when the consent question is answered, awaited when it is needed — so the mint's round
+  // trip overlaps with choosing a character instead of sitting in front of the first paid call.
+  const identityReady = useRef<Promise<string>>(Promise.resolve(""));
 
   // ── camera ──────────────────────────────────────────────────────────────────
   async function startCamera() {
@@ -102,9 +125,10 @@ export default function Onboard() {
 
     setBusy("Reading your style… (your photo is processed, then discarded)");
     try {
-      const res = await createFromSelfie(dataUrl, userId());
+      const uid = await signedUserId();
+      const res = await createFromSelfie(dataUrl, uid);
       setResult(res);
-      setStyle(styleFromAttributes(res.attributes, userId()));
+      setStyle(styleFromAttributes(res.attributes, uid));
       setStep("reveal");
     } catch {
       setError("Generation failed. Try again or pick a premade.");
@@ -116,7 +140,7 @@ export default function Onboard() {
   async function pickPremade(id: string) {
     setBusy("Preparing your character…");
     try {
-      const res = await createFromPremade(id, userId());
+      const res = await createFromPremade(id, await signedUserId());
       setResult(res);
       setStyle(styleFromId(id));
       setStep("reveal");
@@ -193,7 +217,14 @@ export default function Onboard() {
                 </span>
               </label>
             ))}
-            <button onClick={() => setStep("select")} className="mt-4 w-full rounded bg-echo px-4 py-2 font-bold text-ink">
+            <button
+              onClick={() => {
+                // The answer is made HERE, so this is where minting becomes allowed.
+                identityReady.current = ensureIdentity();
+                setStep("select");
+              }}
+              className="mt-4 w-full rounded bg-echo px-4 py-2 font-bold text-ink"
+            >
               Continue →
             </button>
           </div>
