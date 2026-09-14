@@ -29,7 +29,7 @@ Read these before the code. They are long, and they are load-bearing.
 |---|---|
 | `docs/SOCIETY-PLAN.md` | The roadmap: phases SOC-0…SOC-7, turning ECHO from an empty planet into a peopled, generational, ONE SHARED WORLD. **Start with §0 (how to read it), §3 (corrections), §4 (the cross-cutting laws), then "Where this stands".** |
 | `docs/DECISIONS.md` | The decision record, `C1`…`C39`. A decision here is binding; if you disagree, take a new decision and say why, do not quietly diverge. |
-| `docs/known-gaps.md` | The defect register, `⚑1`…`⚑30`. 31 entries. `npm run check:register` fails if a `⚑` reference dangles — though **not** if the register is out of order: its ascend rule requires the `⚑ ` prefix that entries 1–6 predate, and those six are in fact `1, 2, 6, 3, 4, 5`. One regex, still open. |
+| `docs/known-gaps.md` | The defect register, `⚑1`…`⚑31`. 32 entries. `npm run check:register` fails if a `⚑` reference dangles — though **not** if the register is out of order: its ascend rule requires the `⚑ ` prefix that entries 1–6 predate, and those six are in fact `1, 2, 6, 3, 4, 5`. One regex, still open. |
 
 **The status banner at the top of `SOCIETY-PLAN.md` is the fastest way to see where things stand.** It
 is dated; if you do work, update it. It drifted once already and correcting that is commit `999e7fb`.
@@ -192,14 +192,14 @@ reader can see what moved and what did not):
 
 | gate | 2026-09-09 | 2026-09-14 |
 |---|---|---|
-| `check:register` | ✅ 28 entries | ✅ **31 entries** |
+| `check:register` | ✅ 28 entries | ✅ **32 entries** |
 | `typecheck` | ✅ clean | ✅ clean |
 | `@echo/planet` | 160/164, **4 skipped** (need `PLANET_TEST_DATABASE_URL`), 0 failed | unchanged |
 | `@echo/shared` | 46/46 | **53/53** |
-| `@echo/web` | 271/271 | **284/284** |
-| `services/ml` | 186/186 | **196/196** |
+| `@echo/web` | 271/271 | **286/286** |
+| `services/ml` | 186/186 | **200/200** |
 | realtime copresence | ✅ PASS | ✅ PASS — **and `exit 1` / `identity_no-identity` unrelaxed** |
-| RLS coverage | *not measured* | **30 of 30 tables, 0 policies** (PostgreSQL 16.15, via `db:migrate:apply`) |
+| RLS coverage | *not measured* | **31 of 31 tables, 0 policies** (PostgreSQL 16.15, via `db:migrate:apply`) |
 | e2e (non-quarantined) | **24/24** | **not re-measured** — needs a dev server |
 | e2e (everything) | 24 pass / **10 known-quarantined failures** | **not re-measured** |
 

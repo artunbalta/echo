@@ -34,7 +34,7 @@ services:
     envVars:
       # REQUIRED, AND UNSET IS NOW FAIL-CLOSED. The bearer token every caller (realtime + web) must
       # present. Set the SAME value here, on echo-realtime, and in Vercel. It used to have a fallback:
-      # `config.py` defaulted to "dev-ml-token-change-me", which is committed at .env.example:21, so
+      # `config.py` defaulted to "dev-ml-token-change-me", which is committed at .env.example:27, so
       # skipping this prompt produced a service that came up HEALTHY and accepted a token anyone
       # could read out of the repository — with `GET /persona/{uid}` and `DELETE /user/{uid}` behind
       # it. It now answers 503 `ml_token_unconfigured` to every guarded request instead. `/health`

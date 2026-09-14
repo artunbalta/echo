@@ -26,21 +26,59 @@ const REASON_LABEL: Record<string, string> = {
 export default function Dashboard() {
   const [data, setData] = useState<ResearchData | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [retired, setRetired] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    let iv: ReturnType<typeof setInterval> | undefined;
+    /**
+     * STOP ON 410, and that is the whole of this change.
+     *
+     * The venue API routes are retired (⚑30). This poll ran every two seconds with `.catch(() => {})`
+     * and `r.json()` on whatever came back — so against a 410 it would have set `data` to the error
+     * body and kept hammering a dead endpoint forever, showing an empty dashboard with no
+     * explanation. The page and its code are deliberately kept rather than deleted; what it must not
+     * do is pretend the backend is merely slow.
+     */
     const tick = () =>
       fetch("/api/venue/research")
-        .then((r) => r.json())
-        .then((d) => alive && setData(d))
+        .then(async (r) => {
+          if (r.status === 410) {
+            if (alive) setRetired(true);
+            if (iv) clearInterval(iv);
+            return;
+          }
+          const d = (await r.json()) as ResearchData;
+          if (alive) setData(d);
+        })
         .catch(() => {});
     tick();
-    const iv = setInterval(tick, 2000);
+    iv = setInterval(tick, 2000);
     return () => {
       alive = false;
-      clearInterval(iv);
+      if (iv) clearInterval(iv);
     };
   }, []);
+
+  if (retired) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-ink p-8 font-mono text-parchment">
+        <div className="panel max-w-lg rounded-lg p-6">
+          <h1 className="mb-3 text-lg font-bold text-echo">Bu pano emekliye ayrıldı</h1>
+          <p className="mb-3 text-sm text-parchment/80">
+            The venue brand-stand demo&apos;s API routes answer <code>410 Gone</code>. Its entry point was
+            retired in <code>b406d49</code>; the routes followed, because six unauthenticated endpoints —
+            three of them spending at paid providers — were still reachable with no page in front of them.
+          </p>
+          <p className="text-xs text-parchment/60">
+            Nothing is deleted. The implementation is in <code>lib/venue/*</code> and in git, and
+            <code> docs/known-gaps.md</code> (⚑30) and <code>BUILD-PLAN.md:98</code> record what bringing
+            it back would need first.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   const a = data?.aggregates;
   return (

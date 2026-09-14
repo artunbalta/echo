@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import type { CharacterAttributes } from "@echo/shared";
 
 import { subjectOf, subjectRejection } from "@/lib/subject";
+import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
     return NextResponse.json(error, { status });
   }
 
+
   let selfie: string | undefined;
   try {
     ({ selfie } = await req.json());
@@ -84,6 +86,26 @@ export async function POST(req: Request) {
 
   if (!KEY) {
     return NextResponse.json({ attributes: mockAttributes(), source: "mock" });
+  }
+
+  // AND A LIMIT, FAIL-CLOSED — BUT ONLY ONCE THERE IS SOMETHING TO SPEND.
+  //
+  // The guard says WHO is spending and the cap says how much per call; neither bounds a loop,
+  // because `/api/identity/session` mints for anybody who asks. This is the part that does.
+  // `onUnavailable: "deny"` is the opposite of the waitlist's posture and is the point: for a
+  // signup, refusing a real person costs more than letting one through, and for a paid provider
+  // call "the counter is unavailable" and "there is no limit" are the same sentence.
+  //
+  // THE ORDER IS LOAD-BEARING and the first version of this had it wrong. Placed before the
+  // no-provider short circuit above, a deny-on-unavailable limiter closed the ZERO-KEY LOCAL RUN:
+  // with no Supabase there is no counter, so every call answered 503 — including the ones that
+  // would only ever have returned a mock. A deployment with nothing to spend has nothing to fail
+  // closed about. Reached only from here, this refuses to spend when it cannot count and leaves
+  // "works with no keys" exactly as it was. MEASURED: five tests caught the inversion.
+  const rate = await rateLimit(req, { bucket: "vision", windowMs: 60 * 60 * 1000, max: 10, onUnavailable: "deny" });
+  if (!rate.ok) {
+    const { body: error, status } = rateLimitRejection(rate);
+    return NextResponse.json(error, { status });
   }
 
   // Parse the data URL into media type + base64 payload (kept only in memory).

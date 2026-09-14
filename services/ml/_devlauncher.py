@@ -2,7 +2,7 @@
 
 `echo_ml.config.Settings.ml_token` defaults to "" and `_auth` refuses when it is empty, so a
 deployment that does not set `ML_SERVICE_TOKEN` fails closed with nothing to configure — which is
-the point, because the literal below used to BE that default and is committed at `.env.example:21`.
+the point, because the literal below used to BE that default and is committed at `.env.example:27`.
 Anyone could read it out of this repository and present it to a production `GET /persona/{uid}` or
 `DELETE /user/{uid}`.
 
