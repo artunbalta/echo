@@ -13,6 +13,7 @@ Endpoints (all except /health require Authorization: Bearer ML_SERVICE_TOKEN):
 """
 from __future__ import annotations
 
+import hmac
 from typing import Optional
 
 import numpy as np
@@ -68,8 +69,26 @@ def _top_correlation(post: P.Posterior) -> Optional[dict]:
 
 
 def _auth(authorization: str | None):
+    """The one gate. Unconfigured is a REFUSAL, not an open door.
+
+    THE TRAP THIS EXISTS FOR, measured: with `ml_token` defaulting to "" and a plain `!=`, a request
+    presenting the header `Bearer ` — or no header at all — compares "" to "" and PASSES. So the
+    obvious half of this fix, dropping the published default, turns the service from "accepts a token
+    anyone can read out of the repository" into "accepts everyone". The empty branch below is the
+    fix; the empty default is only what makes it reachable.
+
+    503 rather than 401: 401 says "your credential was wrong", which is a claim about the caller.
+    This is a claim about the DEPLOYMENT, and it is the same answer and the same shape
+    `subjectRejection` gives for `identity_unconfigured` (apps/web/src/lib/subject.ts).
+
+    `compare_digest` rather than `!=` because this is a secret comparison, and `!=` on `str`
+    short-circuits at the first differing byte.
+    """
+    expected = SETTINGS.ml_token
+    if not expected:
+        raise HTTPException(status_code=503, detail="ml_token_unconfigured")
     token = (authorization or "").removeprefix("Bearer ").strip()
-    if token != SETTINGS.ml_token:
+    if not hmac.compare_digest(token, expected):
         raise HTTPException(status_code=401, detail="bad ML token")
 
 

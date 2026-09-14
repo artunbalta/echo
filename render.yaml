@@ -32,8 +32,15 @@ services:
     plan: starter # 512MB; "free" works but cold-starts (~30-60s first hit) and loses in-memory state
     autoDeploy: true
     envVars:
-      # REQUIRED — the bearer token every caller (realtime + web) must present. Set the SAME value
-      # here, on echo-realtime, and in Vercel. NOT the dev default; enter a real secret in the dashboard.
+      # REQUIRED, AND UNSET IS NOW FAIL-CLOSED. The bearer token every caller (realtime + web) must
+      # present. Set the SAME value here, on echo-realtime, and in Vercel. It used to have a fallback:
+      # `config.py` defaulted to "dev-ml-token-change-me", which is committed at .env.example:21, so
+      # skipping this prompt produced a service that came up HEALTHY and accepted a token anyone
+      # could read out of the repository — with `GET /persona/{uid}` and `DELETE /user/{uid}` behind
+      # it. It now answers 503 `ml_token_unconfigured` to every guarded request instead. `/health`
+      # still answers 200, so THIS SERVICE CAN STILL PASS ITS HEALTH CHECK WHILE REFUSING EVERY
+      # REQUEST — the same gap render.yaml already warns about for ECHO_IDENTITY_SECRET below, and it
+      # is recorded rather than fixed here.
       - key: ML_SERVICE_TOKEN
         sync: false
       # Real NPC/agent dialogue for /npc/turn + /agent/turn. Absent → deterministic mock replies.
@@ -46,11 +53,16 @@ services:
         value: voyage
       - key: VOYAGE_API_KEY
         sync: false
-      # NO PERSISTENCE. This block used to say "with both set, learning state hydrates/persists to
-      # Supabase" — a deployment instruction that did NOTHING, and the most damaging of the three
-      # places that claim was made, because an operator can follow it. Nothing in services/ml has
-      # ever read a database. Learning state is per-process and lost on every restart, and with
-      # autoDeploy on and no buildFilter, that is every push to the connected branch. SOC-2.D.
+      # PERSISTENCE IS OFF HERE, BY THE VALUE BELOW — not by absence, which is what this block used
+      # to say and what the next two paragraphs already contradicted. The old text ("Nothing in
+      # services/ml has ever read a database. Learning state is per-process and lost on every
+      # restart") was true when it was written and SOC-2.D made it false: echo_ml/persistence.py,
+      # echo_ml/snapshot.py and migration 0014 shipped, and app.py:33 calls STORE.attach(PERSIST).
+      # So this file said "there is no persistence" immediately above the instructions for enabling
+      # it. With ECHO_ML_PERSIST="0" the OUTCOME is unchanged — state is per-process and lost on
+      # every restart, and with autoDeploy on and no buildFilter that is every push to the connected
+      # branch — but it is now a setting an operator can change rather than a property of the code.
+      # SOC-2.D, ⚑24.
       #
       # THE NAMES ARE ML-OWNED ON PURPOSE (⚑24). They were NEXT_PUBLIC_SUPABASE_URL and
       # SUPABASE_SERVICE_ROLE_KEY, which services/ml/run.sh sources from the gitignored repo-root
