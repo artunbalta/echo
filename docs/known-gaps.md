@@ -1713,3 +1713,24 @@ ORDINARY parcel's (C28, C31) with a village on top. A bigger town, smoke, more p
 **Status:** OPEN. The levers on record: SOC-4.C's person impostor (fewer crowd calls at distance),
 thinning the scatter inside a settled cell (realistic, and cuts scatter calls), and C38's mid band
 for more classes. None is free; pick with a measurement.
+
+---
+
+## ⚑ 37. Talking to a villager is closed wherever migration 0018 has not been applied, and remembers nobody (2026-10-18)
+
+`/api/village/talk` (C42) uses the shared limiter with `onUnavailable: "deny"`. On this machine the
+configured Supabase answers the `rate_limit_hit` rpc with an error — `0018_rate_limit.sql` has not
+been applied there — so the route answers **503 `rate_limiter_unavailable`** for every real call, as
+`/api/vision` and `/api/portrait` do. That is the fail-closed posture working, not a bug in it; but it
+means the feature, and the two paid routes, are dark on any environment whose database is behind, and
+**which migrations production has is still unanswerable** (SOCIETY-PLAN §6 question 5).
+
+Two further limits, written down rather than found later:
+- **No memory.** Each conversation starts from nothing: the villager does not know you were there
+  yesterday. That is SOC-6.C's delta layer and SOC-6.F's memory store, and it needs a signed subject
+  and an erasure path before a single row is written.
+- **The server does not check proximity.** Any living villager can be spoken to by id from anywhere.
+  It changes nothing in the world (L3) and is rate-limited, so it is a cost question, not a state one.
+
+**Status:** OPEN. Applying 0018 is an operator action on a database this repository does not own a
+connection to; it was not done here.

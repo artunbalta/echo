@@ -2327,3 +2327,61 @@ NOT comparable to C33's 619,413: that was day 0, this is day 4,907, thirteen wor
 The density decision stands; it was taken on shape, not on the last digit. But a sampled figure is
 an estimate with an error, and from here on it is quoted as one. The exact per-village list (name,
 kind, population, households, graves, URL) was written to a scratch file for the user, not committed.
+
+## C42 — a villager answers from the life they lived, and the model may not invent one
+
+The user's ask, 2026-10-18: walk up to a villager and talk to them. This is C40 §7's "awakening",
+shaped by what C41 built: press E beside someone whose nameplate shows, and they stop, turn to you,
+and answer.
+
+**The client names a person; the server decides who that is.** `POST /api/village/talk` takes a cell,
+a `Person.id`, the stranger's line and the conversation so far. The village, the life, the family,
+the chronicle and the hour are rebuilt from the seed on every call (`lib/villager.ts`), so a crafted
+request can change what the stranger says and nothing about who the villager is. Nothing the
+villager says becomes a world fact (L3).
+
+**The model narrates; it does not invent.** The preamble forbids inventing a person, place, date or
+event and allows feeling and small daily texture; the facts give the life, dated, oldest first, the
+family as it stands, the chronicle the villager witnessed, and the whole village's roster ("everyone
+knows everyone"). `unknownNames` is the mechanical half: a reply naming someone who is in neither the
+village nor the stranger's own words is asked for again, once. Turkish case endings after an
+apostrophe ("Konreef'te") are stripped first, or every Turkish reply would have tripped it.
+
+**Order is the cache.** Preamble, then facts, each a breakpoint (Claude Opus 5.5's minimum is 512
+tokens, and a villager's facts are ~1,700), then the conversation, then the hour as a mid-
+conversation system message, because it changes every few minutes. Measured: a second line to the
+same villager read 1,837 tokens from the cache and wrote none.
+
+**Model and cost — measured, and the choice left where it belongs.** `claude-opus-5-5` at effort
+`low`, with `fallbacks: "default"` for refusals; `VILLAGER_MODEL` overrides. Three real calls on
+2026-10-18 (two Konreef villagers, Turkish and English): 2.6–3.8 s each, **$0.028 in total — about
+$0.012 for a villager's first line (the cache write) and $0.004 after.** Nothing invented in any of
+them: the fisher named his sons Kum and Tul and the hungry years; the widowed teacher named Vum,
+lost this year, and was on the bench the schedule had put her on. `claude-haiku-5-5` would cost about
+a fortieth and has no server-side fallback. Picking it is a decision about money and voice, for the
+user, and `.env.example` says so; the repository's older `LLM_MODEL_CHEAP` (Haiku 4.5 "for ambient
+NPCs") is precedent for that choice, not a substitute for making it.
+
+**Guarded like the routes that spend (⚑30).** Signed subject first; every string capped and refused
+413 before any provider call; the zero-key run answers from the facts without spending; the limiter
+(bucket `villager`, 40 per ten minutes per IP) sits after the zero-key branch and fails closed.
+`tests/villagerTalk.test.mts` drives the real handler with fetch replaced, and each guard was shown
+to fail on its defect: no subject check, a limiter that allows when the counter is down, no retry on
+an invented name, the hour inside the cached prefix.
+
+**What is kept: nothing.** The stranger's words go to the model and nowhere else — the log line
+counts tokens — and the talk route is not part of the measurement chain, which is how the consent
+card's "never what you type" stays true. The panel says so under the input, before anything is typed.
+
+**Presentation is per viewer.** The villager stops and faces you only in your own view
+(`villagersLayer.hold`) and walks back into their day over 2.5 s when you leave; the schedule everyone
+else sees is untouched (C27).
+
+**Found while building:** the limiter is down locally because the configured Supabase has not had
+migration `0018` applied, so the route answers 503 there by design — the UI was exercised end to end
+on the zero-key path instead, and the model on the route's exact request outside it (`⚑37`); and the
+panel was mapping the wrong error code for "the counter is down".
+
+**Not built:** memory of the stranger across conversations (SOC-6.C/6.F — every villager meets you
+for the first time, every time); proximity is not checked by the server, so any living villager can be
+spoken to by id, rate-limited and changing nothing; voice.

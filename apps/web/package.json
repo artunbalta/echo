@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@echo/planet": "*",
     "@echo/shared": "*",
     "@fal-ai/client": "^1.10.1",

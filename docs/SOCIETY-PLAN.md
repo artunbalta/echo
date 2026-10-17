@@ -15,6 +15,12 @@
 
 ### Where this stands — 2026-09-14
 
+> **2026-10-18 — `C42`, talking.** Press E beside a villager and they answer from the life they
+> lived — family, dated life, the chronicle they witnessed, the whole village's roster — in the
+> stranger's own language, with a mechanical check that they name nobody who is not there. Measured
+> on the real model: ~$0.012 for a first line, ~$0.004 after, 2.6–3.8 s. Not yet: memory of the
+> stranger (SOC-6.C/6.F); closed wherever migration 0018 is missing (`⚑37`).
+>
 > **2026-10-17 — `C41`, the village slice itself (§7 step 5), on every settled parcel.** Houses by
 > household, dock and boats, fields, graveyard and benches laid out from the substrate; everyone's
 > day as a closed form of the hour (`schedule.ts`) — to the boats and the fields before sunrise, on
