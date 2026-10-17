@@ -62,6 +62,7 @@ import TouchControls from "@/components/world/TouchControls";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
 import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
+import VillagerTalk from "@/components/world/VillagerTalk";
 import WorldCanvas from "@/components/world/WorldCanvas";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "@/game/world/parcelWorld";
@@ -198,6 +199,10 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       <Minimap world={() => world.current} />
 
       <ConsentCard consent={consent} onAccept={() => chain.accept()} onDecline={() => chain.decline()} />
+
+      {/* Talking to a villager, where the cell has a village (C42). It reads the villagers layer out of
+          the same ref the minimap does, so a parcel with no village simply never shows it. */}
+      <VillagerTalk world={() => world.current} cell={manifest.cell} consent={consent} coarse={coarse} />
 
       {/* The one thing a person can read without knowing a key exists. It is handed the same chain
           state the inspector gets, so the glance and the panel cannot disagree; what it may say

@@ -46,11 +46,31 @@ const PLAYER_WALK_MPS = 1.65;
 /** Close enough to speak: the nameplate shows inside this many metres. */
 const SPEAKING_M = 7;
 
+/** The person close enough to speak to, as the talk panel needs them. */
+export interface NearVillager {
+  id: string;
+  name: string;
+  occupation: string;
+  age: number;
+  distanceM: number;
+}
+
 export interface VillagersLayer extends WorldLayer {
   /** How many people the last frame drew. For tests and the frame budget. */
   drawn(): number;
   /** The plans in force, for tests. */
   plans(): readonly DayPlan[];
+  /** Whoever is within speaking distance of the player, nearest first; the held one while talking. */
+  nearest(): NearVillager | null;
+  /** Metres from the player to a villager drawn last frame, or null if they are not out. */
+  distanceTo(id: string): number | null;
+  /**
+   * Stop one villager where they stand, facing the player, for as long as a conversation lasts; null
+   * lets them go, and they walk back into their day over a couple of seconds rather than jumping to
+   * it. PRESENTATION ONLY, and only for this viewer: the schedule — what everyone else sees — is
+   * unchanged, which is why this can exist without a server (C27, L2).
+   */
+  hold(id: string | null): void;
 }
 
 interface PlayerLike {
@@ -109,6 +129,16 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   const head = new THREE.Vector3();
   const tint = new THREE.Color();
   let drawn = 0;
+  /** Where each visible villager stood last frame, local metres. Reused; the hook may not allocate per person. */
+  const lastAt = new Map<string, { x: number; y: number }>();
+  let near: NearVillager | null = null;
+  let held: { id: string; x: number; y: number; activity: string } | null = null;
+  let released: { id: string; x: number; y: number; at: number } | null = null;
+  /** How long a released villager takes to walk back into their day, seconds. */
+  const RELEASE_S = 2.5;
+  /** The player's last position (local metres) and the sky's last hour, for the calls between frames. */
+  const playerAt = { x: Infinity, y: Infinity };
+  let lastHour = 0.5;
 
   const refresh = (day: number) => {
     const v = village!;
@@ -185,12 +215,45 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       const player = ctx.layer<WorldLayer & PlayerLike>("player");
       const me = player?.position();
       const [mx, my] = me ? frame.toLocalM(me.x, me.y) : [Infinity, Infinity];
+      playerAt.x = mx;
+      playerAt.y = my;
+      lastHour = hour;
       let nearest: { id: string; d: number; x: number; y: number; z: number } | null = null;
 
       crowd.begin();
       for (const d of state.plans) {
         const w = whereabouts(d, hour, state.boats, state.moorings);
-        if (!w.visible) continue;
+        if (held && held.id === d.person) {
+          // Talking: where they stood when it began, turned to the player, sitting if they sat.
+          w.x = held.x;
+          w.y = held.y;
+          w.visible = true;
+          w.heading = Math.atan2(my - held.y, mx - held.x);
+          w.activity = held.activity === "sit" ? "sit" : "stand";
+          w.speed = 0;
+        } else if (released && released.id === d.person) {
+          const k = (seconds - released.at) / RELEASE_S;
+          if (k >= 1 || !w.visible) released = null;
+          else {
+            // Back into the day: a short walk from where the conversation left them.
+            const tx0 = released.x + (w.x - released.x) * k;
+            const ty0 = released.y + (w.y - released.y) * k;
+            w.heading = Math.atan2(w.y - released.y, w.x - released.x);
+            w.x = tx0;
+            w.y = ty0;
+            w.activity = "walk";
+            w.speed = 1;
+          }
+        }
+        if (!w.visible) {
+          lastAt.delete(d.person);
+          continue;
+        }
+        const seen = lastAt.get(d.person);
+        if (seen) {
+          seen.x = w.x;
+          seen.y = w.y;
+        } else lastAt.set(d.person, { x: w.x, y: w.y });
         const [tx, ty] = frame.fromLocalM(w.x, w.y);
         const y = w.boat !== null ? 0.22 + Math.sin(seconds * 1.3 + w.boat) * 0.03 : Math.max(0, frame.heightAtTile(tx, ty));
         const look = looks.get(d.person)!;
@@ -210,12 +273,18 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           look,
         );
         const dist = Math.hypot(w.x - mx, w.y - my);
-        if (dist < SPEAKING_M && (!nearest || dist < nearest.d)) {
+        // While talking, the plate stays on the one being talked to, whoever wanders nearer.
+        const eligible = held ? held.id === d.person : dist < SPEAKING_M;
+        if (eligible && (!nearest || dist < nearest.d)) {
           nearest = { id: d.person, d: dist, x: tx * frame.tileM, y: y + 1.95 * look.scale * (frame.tileM / 1.6), z: ty * frame.tileM };
         }
       }
       crowd.end();
       drawn = crowd.placed();
+      if (nearest) {
+        const p = people.get(nearest.id)!;
+        near = { id: p.id, name: `${p.given} ${p.family}`, occupation: p.occupation, age: Math.floor(ageYears(p, day)), distanceM: nearest.d };
+      } else near = null;
 
       if (label) {
         if (nearest && nearest.id !== labelled?.id) {
@@ -254,6 +323,30 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
 
     drawn: () => drawn,
     plans: () => state.plans,
+    nearest: () => near,
+
+    distanceTo(id) {
+      const at = lastAt.get(id);
+      return at ? Math.hypot(at.x - playerAt.x, at.y - playerAt.y) : null;
+    },
+
+    hold(id) {
+      if (id === (held?.id ?? null)) return;
+      if (held) {
+        const at = lastAt.get(held.id);
+        released = at ? { id: held.id, x: at.x, y: at.y, at: performance.now() / 1000 } : null;
+        held = null;
+      }
+      if (id) {
+        const at = lastAt.get(id);
+        const d = state.plans.find((x) => x.person === id);
+        if (!at || !d) return;
+        // The sky's hour, as everywhere in this layer: never the clock's (see the header).
+        const w = whereabouts(d, lastHour, state.boats, state.moorings);
+        held = { id, x: at.x, y: at.y, activity: w.activity };
+        if (released?.id === id) released = null;
+      }
+    },
 
     dispose() {
       crowd?.dispose();
