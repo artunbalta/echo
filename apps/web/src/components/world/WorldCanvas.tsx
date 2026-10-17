@@ -106,7 +106,8 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
     // The world is rebuilt only when the manifest or the frame changes; layer and callback
     // identity is not a reason to rebuild a planet. devInfo is read once at construction.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.cell, options.seed, options.seaLevel, options.peakElevation, options.radiusKm, options.k, options.heightScaleM, options.tileM]);
+    // The commons are an array a parent may rebuild every render, so the dependency is their contents.
+  }, [options.cell, options.seed, options.seaLevel, options.peakElevation, options.radiusKm, options.k, options.heightScaleM, options.tileM, options.commons?.join(","), options.day]);
 
   return (
     <div className={className ?? "relative h-full w-full"}>

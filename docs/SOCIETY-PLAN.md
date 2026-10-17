@@ -15,6 +15,14 @@
 
 ### Where this stands — 2026-09-14
 
+> **2026-10-17 — `C41`, the village slice itself (§7 step 5), on every settled parcel.** Houses by
+> household, dock and boats, fields, graveyard and benches laid out from the substrate; everyone's
+> day as a closed form of the hour (`schedule.ts`) — to the boats and the fields before sunrise, on
+> the green at dusk, home after dark; a crowd drawn by part; village lights and names on the landing
+> globe. Seen at the main entrance through the shared parcel layers, not on a route of its own. On a
+> settled parcel you now arrive at the village's edge. Worst frame with people: 110 of 120 calls on
+> the largest village measured (`⚑36`). Not yet: talking, avoidance, smoke, impostors, a phone.
+>
 > **2026-10-17 — `C40`, step 1 of §7 step 5's village slice.** `packages/planet/lib/life.ts`: every
 > person's lived past (kinship, the trade and who taught it, close friends, estate rifts, what they
 > died of), the village's chronicle (fever, storm, hungry year, fire) and a heritable temperament on

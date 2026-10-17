@@ -46,7 +46,7 @@ export default async function ParcelPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { cell } = await params;
-  const { world, calibration } = planet();
+  const { world, calibration, commons } = planet();
 
   const { set, refused } = stationSetFor(cell, (await searchParams)[STATIONS_PARAM]);
   if (refused) console.warn(`[parcel] ${refused}`);
@@ -65,6 +65,7 @@ export default async function ParcelPage({
         seaLevel={calibration.seaLevel}
         peakElevation={calibration.peakElevation}
         radiusKm={world.radiusKm}
+        commons={commons.cells}
       />
       {/* z-30 because it is the only way off this page and it shares the top of the screen with a
           meter that sits at z-20. In the same stacking context the meter simply won, and at 390 px

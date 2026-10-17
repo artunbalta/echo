@@ -130,6 +130,14 @@ export default function HeroPlanet() {
       });
       instance.setClaimed(Object.keys(world.commons), 1400);
       globe.current = instance;
+      // The planet's villages as lights (DECISIONS C41). A static index derived from the seed, so a
+      // seed with no index simply has no lights; it is never a reason for the planet not to draw.
+      fetch(`/planet/villages-${world.seed}.json`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((index: { cells: string[]; capacity: number[] } | null) => {
+          if (live && index && instance) instance.setVillages(index.cells, index.capacity);
+        })
+        .catch(() => undefined);
     });
 
     return () => {
@@ -226,15 +234,37 @@ export default function HeroPlanet() {
 }
 
 /** Selection opens a window onto this exact coordinate, using the same layers as the route. */
+interface VillageSummary { name: string; kind: string; population: number; households: number; graves: number }
+
+/** The village a picked cell holds, if it holds one (DECISIONS C41). Null until it is known, and for open ground. */
+function useVillage(cell: string): VillageSummary | null {
+  const [village, setVillage] = useState<VillageSummary | null>(null);
+  useEffect(() => {
+    let live = true;
+    setVillage(null);
+    fetch(`/api/planet/village?cell=${cell}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { village: VillageSummary | null } | null) => {
+        if (live) setVillage(data?.village ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [cell]);
+  return village;
+}
+
 function DemoPrompt({ parcel, world, onDismiss }: {
   parcel: PickedParcel; world: World; onDismiss: () => void;
 }) {
   const canEnter = parcel.assignable || !!parcel.commonsName;
+  const village = useVillage(parcel.cell);
   return (
     <section aria-label="Selected parcel" className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-white/25 bg-[#16241f]/95 text-[#f7f5e9] shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
       {canEnter ? (
         <div className="relative h-[230px] sm:h-[300px]" data-preview-cell={parcel.cell}>
-          <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} />
+          <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} commons={Object.keys(world.commons)} />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#16241f] via-transparent to-transparent" />
           <span className="absolute left-5 top-4 rounded-full bg-[#16241f]/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">Live world · arrival view</span>
         </div>
@@ -242,9 +272,18 @@ function DemoPrompt({ parcel, world, onDismiss }: {
       <button type="button" aria-label="Close parcel preview" onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-[#16241f]/80 text-xl hover:bg-[#324638]">×</button>
       <div className="relative px-6 pb-6 pt-4">
         <p className="text-[10px] uppercase tracking-[.24em] text-[#bdd0ae]">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
-        <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? (canEnter ? 'A place in the world.' : 'The open ocean.')}</h2>
+        <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? village?.name ?? (canEnter ? 'A place in the world.' : 'The open ocean.')}</h2>
+        {village ? (
+          <p data-village={village.name} className="mt-1 text-sm text-[#e8c98a]">
+            {village.kind === 'abandoned village'
+              ? `An abandoned village · ${village.graves} graves`
+              : `A ${village.kind} · ${village.population} ${village.population === 1 ? 'person lives' : 'people live'} here · ${village.households} households`}
+          </p>
+        ) : null}
         <p className="mt-2 max-w-md text-sm leading-relaxed text-white/65">
-          {canEnter ? 'Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.' : 'Choose a patch of land to begin exploring.'}
+          {village && village.population > 0
+            ? 'You arrive at the edge of the village. Everyone in it has lived a life here, and the houses, the boats and the graves are theirs.'
+            : canEnter ? 'Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.' : 'Choose a patch of land to begin exploring.'}
         </p>
         <div className="mt-5 flex items-center gap-4">
           {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="rounded-full bg-[#e2edc8] px-6 py-3 text-sm font-medium text-[#213522] hover:bg-white">Explore this place <span aria-hidden>↗</span></a> : null}

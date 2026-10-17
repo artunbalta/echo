@@ -1,0 +1,419 @@
+/**
+ * Where everyone in a village is, at any instant (DECISIONS C41): the day a person lives, as a pure
+ * function of the settlement, its plan, the world day and the hour.
+ *
+ * NO TICK. A schedule is a closed form, like the lineage it reads: `whereabouts(day plan, hour)` is
+ * arithmetic on a handful of times and places, so two people standing in the same village see the
+ * same baker at the same well without a server having moved her there (SOC-3.E stays unanswered and
+ * stops blocking the first village). The plan for a day is computed once per world day; an instant
+ * inside it is a piecewise evaluation.
+ *
+ * THE DAY, on the sky's own clock (0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset). Everyone sleeps
+ * indoors, rises a little before sunrise, walks to their work, works, walks to the green toward
+ * evening, and goes home after dark. What "work" is comes from their trade, and where it is comes
+ * from the plan: a fisher rows out from the dock, a farmer bends over the field nearest home, a smith
+ * works at their own door, a trader keeps a stall on the green, and those whose work is beyond the
+ * village (herders, foresters, miners, carters) walk out inland and are gone until evening. Children
+ * play on the green; the old sit there most of the day; the smallest stay indoors.
+ *
+ * WHAT DIFFERS BETWEEN TWO PEOPLE comes from the substrate, never from a die rolled for flavour: the
+ * trade, the age, the house, and the temperament (`life.ts`) — someone high on `energy` walks
+ * faster, and someone high on `pace` (the future-orientation anchor, BUILD-PLAN D4) is out the door
+ * earlier. The small jitter that keeps a village from moving in lockstep is keyed on the person and
+ * the day, so it differs between days and never between viewers.
+ *
+ * Pure: no clock, no I/O. Coordinates are planet-local metres, east and north, like the plan.
+ */
+
+import { hashString } from "./terrain.js";
+import { WORLD_DAY_S } from "./worldclock.js";
+import { ageYears, type Person, type Settlement } from "./society.js";
+import { temperaments } from "./life.js";
+import { householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
+
+// ── the dials ───────────────────────────────────────────────────────────────────
+
+export const SCHEDULE = {
+  /** Strolling pace, metres per second, before temperament. The player walks 1.65. */
+  walkMps: 1.2,
+  /** A boat under oars and sail, metres per second. */
+  boatMps: 2.5,
+  /** The least time a boat spends at its ground, as a fraction of a day: about forty real seconds. */
+  minFishing: 0.06,
+  wake: 0.235,
+  workEnd: 0.6,
+  /** When the green fills, and when the last of them go in. */
+  gatherEnd: 0.8,
+  /** Children are put to bed first, and the old go in early. */
+  childBed: 0.76,
+  elderBed: 0.77,
+  /** The day's jitter, as a fraction of a day. ±0.015 is about eleven real seconds. */
+  jitter: 0.015,
+  /** Under this age a person is indoors all day: carried, not walking. */
+  infantYears: 4,
+  childYears: 13,
+  elderYears: 68,
+  /** How far beyond the outermost house the outbound workers walk before they are out of sight. */
+  outboundM: 140,
+} as const;
+
+/** What a person is doing, for the pose. */
+export type Activity = "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish";
+
+export interface Whereabouts {
+  x: number;
+  y: number;
+  /** Radians, planet-local (0 east, π/2 north): the way they face. */
+  heading: number;
+  activity: Activity;
+  /** Walking speed relative to a stroll, for the gait; 0 standing. */
+  speed: number;
+  /** Indoors, asleep, or out of the village. */
+  visible: boolean;
+  /** The boat they are in, by mooring index, while they are at sea. */
+  boat: number | null;
+}
+
+export interface Mooring {
+  household: number;
+  x: number;
+  y: number;
+  heading: number;
+  /** Drawn up on the shore because the dock was full: it stays there. */
+  ashore: boolean;
+}
+
+/** A leg of somebody's day: from `from` to `to`, leaving at `t0`, arriving at `t1`. */
+interface Leg {
+  t0: number;
+  t1: number;
+  from: Point;
+  to: Point;
+}
+
+/** A still part of a day: at `at`, doing `activity`, facing `heading`, from `t0` to `t1`. */
+interface Stay {
+  t0: number;
+  t1: number;
+  at: Point;
+  heading: number;
+  activity: Activity;
+  /** A small wander around `at`, metres, so a farmer works along a furrow and children run about. */
+  wander: number;
+  /** Where in the boat, metres along it from the middle, for two of a family rowing out together. */
+  seat?: number;
+}
+
+export interface DayPlan {
+  person: string;
+  /** Times outside every leg and stay are indoors. */
+  legs: Leg[];
+  stays: Stay[];
+  /** Relative walking speed. */
+  pace: number;
+  /** The boat this person goes out in, by mooring index, if any. */
+  boat: number | null;
+}
+
+// ── places ──────────────────────────────────────────────────────────────────────
+
+const along = (p: Point, a: number, d: number): Point => ({ x: p.x + Math.cos(a) * d, y: p.y + Math.sin(a) * d });
+const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
+const toward = (a: Point, b: Point): number => Math.atan2(b.y - a.y, b.x - a.x);
+
+/** One jittered number per person per day per purpose. */
+const jitter = (person: string, day: number, what: string): number => hashString(`${person}/day/${day}/${what}`) - 0.5;
+
+/** The step in front of a house's door. */
+export function doorOf(plot: Plot): Point {
+  return along({ x: plot.x, y: plot.y }, plot.facing, plot.depthM / 2 + 1.1);
+}
+
+/** A seat on one of the green's benches: two to a bench, a metre apart, facing the well. */
+function benchSeat(plan: VillagePlan, person: string): { at: Point; heading: number } {
+  const seats = plan.benches.length * 2;
+  if (seats === 0) return { at: greenSpot(plan, person, 0.8), heading: 0 };
+  const k = Math.floor(hashString(`${person}/bench`) * seats);
+  const b = plan.benches[Math.floor(k / 2)];
+  const side = k % 2 === 0 ? -0.5 : 0.5;
+  return { at: along(b, b.heading, side), heading: toward(b, plan.centre) };
+}
+
+/** A seat on the green, somewhere round the well, the same one every evening. */
+function greenSpot(plan: VillagePlan, person: string, ring: number): Point {
+  const a = hashString(`${person}/green`) * Math.PI * 2;
+  return along(plan.centre, a, plan.greenRadiusM * ring);
+}
+
+/**
+ * The boats of a day: one for every household living with a fisher in it, moored along the dock from
+ * its end inward, both sides, and drawn up on the shore beside it when the dock is full. Pure, so the
+ * drawing and the schedule agree about which boat is whose.
+ */
+export function mooringsOn(s: Settlement, plan: VillagePlan, day: number): Mooring[] {
+  const dock = plan.dock;
+  if (!dock) return [];
+  const owners: number[] = [];
+  for (const plot of plan.plots) {
+    const h = householdOn(s, plot, day);
+    if (h === null) continue;
+    const fishes = s.people.some(
+      (p) => p.occupation === "fisher" && p.birthDay <= day && p.deathDay > day && (p.household === h.index || p.bornInto === h.index),
+    );
+    if (fishes) owners.push(h.index);
+  }
+  const c = Math.cos(dock.heading);
+  const sn = Math.sin(dock.heading);
+  return owners.map((household, i) => {
+    const slot = Math.floor(i / 2);
+    const side = i % 2 === 0 ? 1 : -1;
+    const at = dock.lengthM - 3 - slot * 5;
+    if (at > 3) {
+      return { household, x: dock.root.x + c * at - sn * side * 2.1, y: dock.root.y + sn * at + c * side * 2.1, heading: dock.heading, ashore: false };
+    }
+    const k = slot - Math.floor((dock.lengthM - 6) / 5);
+    return {
+      household,
+      x: dock.root.x - c * (3 + k * 0.5) - sn * side * (4 + k * 2.2),
+      y: dock.root.y - sn * (3 + k * 0.5) + c * side * (4 + k * 2.2),
+      heading: dock.heading + side * 1.2,
+      ashore: true,
+    };
+  });
+}
+
+// ── the boats' day ──────────────────────────────────────────────────────────────
+
+export interface BoatDay {
+  mooring: Mooring;
+  /** Leaves the dock, reaches the fishing ground, leaves it, is moored again. */
+  t: [number, number, number, number];
+  ground: Point;
+}
+
+/** When a household's boat goes out and where it fishes. A boat drawn up ashore stays ashore. */
+export function boatDay(plan: VillagePlan, mooring: Mooring, index: number, day: number): BoatDay | null {
+  if (mooring.ashore || !plan.dock) return null;
+  const key = `${plan.name}/${mooring.household}`;
+  const out = SCHEDULE.wake + 0.06 + jitter(key, day, "sail") * 0.03;
+  const home = SCHEDULE.workEnd - 0.02 + jitter(key, day, "home") * 0.03;
+  // Out along the dock's own heading, fanned so two boats do not sit on each other.
+  const fan = (hashString(`${key}/fan`) - 0.5) * 1.1 + (index % 2 === 0 ? 0.12 : -0.12);
+  let ground = along(plan.dock.tip, plan.dock.heading + fan, 60 + hashString(`${key}/reach`) * 120);
+  let sailDays = dist(mooring, ground) / (SCHEDULE.boatMps * WORLD_DAY_S);
+  // A day is twelve real minutes (C24), so a long row out can eat the time there is to fish in.
+  // The first version did, and `schedule.test.ts` caught boats turning for home before they had
+  // arrived. The ground is pulled in along its own bearing until the fishing fits.
+  const most = Math.max(0.01, (home - out - SCHEDULE.minFishing) / 2);
+  if (sailDays > most) {
+    const k = most / sailDays;
+    ground = { x: mooring.x + (ground.x - mooring.x) * k, y: mooring.y + (ground.y - mooring.y) * k };
+    sailDays = most;
+  }
+  return { mooring, t: [out, out + sailDays, home - sailDays, home], ground };
+}
+
+/** Where a boat is at an hour: moored, under way, or riding at its ground. */
+export function boatAt(b: BoatDay | null, mooring: Mooring, t: number): { x: number; y: number; heading: number; moving: boolean } {
+  if (b === null || t <= b.t[0] || t >= b.t[3]) return { x: mooring.x, y: mooring.y, heading: mooring.heading, moving: false };
+  const [t0, t1, t2, t3] = b.t;
+  const m: Point = mooring;
+  if (t < t1) {
+    const k = (t - t0) / (t1 - t0);
+    return { x: m.x + (b.ground.x - m.x) * k, y: m.y + (b.ground.y - m.y) * k, heading: toward(m, b.ground), moving: true };
+  }
+  if (t > t2) {
+    const k = (t - t2) / (t3 - t2);
+    return { x: b.ground.x + (m.x - b.ground.x) * k, y: b.ground.y + (m.y - b.ground.y) * k, heading: toward(b.ground, m), moving: true };
+  }
+  // At the ground: a slow swing on the anchor line.
+  const swing = Math.sin((t - t1) * 900) * 0.5;
+  return { x: b.ground.x + Math.cos(swing) * 3, y: b.ground.y + Math.sin(swing) * 3, heading: swing + Math.PI / 2, moving: false };
+}
+
+// ── a person's day ──────────────────────────────────────────────────────────────
+
+const OUTBOUND = new Set(["herder", "forester", "miner", "stonecutter", "carter"]);
+const CRAFT = new Set(["smith", "potter", "weaver", "carpenter", "healer"]);
+const GREEN = new Set(["trader", "innkeeper", "teacher"]);
+
+/**
+ * Everyone's plan for a world day. Computed once per day; `whereabouts` evaluates an instant of it.
+ * Infants are left out: they are carried, and nothing in this file draws a carried child.
+ */
+export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans: DayPlan[]; boats: (BoatDay | null)[]; moorings: Mooring[] } {
+  const moorings = mooringsOn(s, plan, day);
+  const boats = moorings.map((m, i) => boatDay(plan, m, i, day));
+  const boatOf = new Map(moorings.map((m, i) => [m.household, i]));
+  const away = plan.dock ? toward(plan.dock.root, plan.centre) : toward(plan.arrival, plan.centre) + Math.PI;
+  const fieldFor = (plot: Plot) =>
+    plan.fields.length === 0 ? null : plan.fields.reduce((best, f) => (dist(f, plot) < dist(best, plot) ? f : best), plan.fields[0]);
+
+  const plans: DayPlan[] = [];
+  const temper = temperaments(s);
+  const seats = new Map<number, number>();
+  for (const { person: p, plot } of residentsOn(s, plan, day)) {
+    const age = ageYears(p, day);
+    if (age < SCHEDULE.infantYears) continue;
+    const t = temper.get(p.id)!;
+    const pace = (0.86 + 0.14 * (t[3] + 1)) * (age >= SCHEDULE.elderYears ? 0.72 : age < SCHEDULE.childYears ? 1.1 : 1);
+    const v = SCHEDULE.walkMps * pace * WORLD_DAY_S; // metres per day-fraction
+    const j = (what: string) => jitter(p.id, day, what) * 2 * SCHEDULE.jitter;
+    const door = doorOf(plot);
+    const legs: Leg[] = [];
+    const stays: Stay[] = [];
+    let clock = SCHEDULE.wake + j("wake") - 0.01 * t[6];
+    let here = door;
+    const go = (to: Point) => {
+      const dur = dist(here, to) / v;
+      legs.push({ t0: clock, t1: clock + dur, from: here, to });
+      clock += dur;
+      here = to;
+    };
+    const stay = (until: number, heading: number, activity: Activity, wander = 0) => {
+      if (until > clock) stays.push({ t0: clock, t1: until, at: here, heading, activity, wander });
+      clock = Math.max(clock, until);
+    };
+    /** Home to the door, and in. Indoors is simply the absence of any leg or stay. */
+    const bed = () => {
+      go(door);
+      stays.push({ t0: clock, t1: clock + 0.004, at: door, heading: plot.facing + Math.PI, activity: "stand", wander: 0 });
+    };
+
+    const household = p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto;
+    const boatIndex = boatOf.get(household);
+    const rows = age >= SCHEDULE.childYears && age < SCHEDULE.elderYears && p.occupation === "fisher" && boatIndex !== undefined && boats[boatIndex] !== null;
+    // A moment on the step, then the day — except for those who row out, who leave before first
+    // light; a stay on the step would overlap the walk down to the dock.
+    if (!rows) stay(clock + 0.006, plot.facing, "stand");
+
+    let boat: number | null = null;
+    if (age < SCHEDULE.childYears) {
+      go(greenSpot(plan, p.id, 0.55));
+      stay(SCHEDULE.childBed + j("play"), 0, "play", plan.greenRadiusM * 0.45);
+      bed();
+    } else if (age >= SCHEDULE.elderYears) {
+      const seat = benchSeat(plan, p.id);
+      go(seat.at);
+      stay(SCHEDULE.elderBed + j("bed"), seat.heading, "sit");
+      bed();
+    } else {
+      const work = SCHEDULE.workEnd + j("end");
+      if (rows) {
+        boat = boatIndex!;
+        const b = boats[boat]!;
+        const m = moorings[boat];
+        // Walk down to the dock in time for the boat, go out in it, come back, walk up.
+        clock = Math.min(clock, b.t[0] - dist(door, m) / v - 0.004);
+        go({ x: m.x, y: m.y });
+        stay(b.t[0], m.heading, "stand");
+        const seat = seats.get(boat) ?? 0;
+        seats.set(boat, seat + 1);
+        stays.push({ t0: b.t[0], t1: b.t[3], at: { x: m.x, y: m.y }, heading: m.heading, activity: "fish", wander: 0, seat: seat === 0 ? -0.55 : 0.75 });
+        clock = b.t[3];
+      } else if (p.occupation === "fisher" || (p.occupation === "labourer" && plan.dock && hashString(`${p.id}/dock`) < 0.5)) {
+        // Mending nets and hauling on the dock.
+        go(plan.dock ? along(plan.dock.root, plan.dock.heading, 2 + hashString(`${p.id}/net`) * (plan.dock.lengthM - 4)) : greenSpot(plan, p.id, 1));
+        stay(work, plan.dock ? plan.dock.heading + Math.PI / 2 : 0, "work", 1.5);
+      } else if (p.occupation === "farmer" || p.occupation === "labourer") {
+        const f = fieldFor(plot);
+        if (f) {
+          const u = (hashString(`${p.id}/row`) - 0.5) * f.lengthM * 0.7;
+          const w = (hashString(`${p.id}/col`) - 0.5) * f.widthM * 0.7;
+          go({ x: f.x + Math.cos(f.heading) * u - Math.sin(f.heading) * w, y: f.y + Math.sin(f.heading) * u + Math.cos(f.heading) * w });
+          stay(work, f.heading, "stoop", 4);
+        } else {
+          stay(work, plot.facing, "work", 1);
+        }
+      } else if (OUTBOUND.has(p.occupation)) {
+        // Out inland and over the hill: gone until the evening, then back the way they went.
+        const out = along(plan.centre, away + (hashString(`${p.id}/out`) - 0.5) * 1.6, SCHEDULE.outboundM);
+        go(out);
+        // Back so as to be in by the end of work, but never before they got there: a slow walker on
+        // a long road would otherwise be on the way back while still on the way out.
+        const back = greenSpot(plan, p.id, 1.15);
+        const dur = dist(out, back) / v;
+        const t0 = Math.max(clock, work - dur);
+        legs.push({ t0, t1: t0 + dur, from: out, to: back });
+        here = back;
+        clock = t0 + dur;
+      } else if (GREEN.has(p.occupation)) {
+        go(greenSpot(plan, p.id, 1.05));
+        stay(work, toward(here, plan.centre), "stand", 0.8);
+      } else if (CRAFT.has(p.occupation)) {
+        go(along(door, plot.facing + (hashString(`${p.id}/yard`) - 0.5), 1.8));
+        stay(work, plot.facing, "work");
+      } else {
+        stay(work, plot.facing, "work", 1);
+      }
+      // The evening on the green, and home after dark.
+      go(greenSpot(plan, p.id, 0.9));
+      stay(SCHEDULE.gatherEnd + j("bed") + (age < 30 ? 0.03 : 0), toward(here, plan.centre), "stand", 0.4);
+      bed();
+    }
+    plans.push({ person: p.id, legs, stays, pace, boat });
+  }
+  return { plans, boats, moorings };
+}
+
+/** Where a person is at hour `t` of their day plan. */
+export function whereabouts(d: DayPlan, t: number, boats: readonly (BoatDay | null)[], moorings: readonly Mooring[]): Whereabouts {
+  for (const leg of d.legs) {
+    if (t >= leg.t0 && t < leg.t1) {
+      const k = (t - leg.t0) / (leg.t1 - leg.t0);
+      return {
+        x: leg.from.x + (leg.to.x - leg.from.x) * k,
+        y: leg.from.y + (leg.to.y - leg.from.y) * k,
+        heading: toward(leg.from, leg.to),
+        activity: "walk",
+        speed: d.pace,
+        // Past the outbound distance a person is over the hill; the fog hides the rest.
+        visible: true,
+        boat: null,
+      };
+    }
+  }
+  for (const s of d.stays) {
+    if (t >= s.t0 && t < s.t1) {
+      if (s.activity === "fish" && d.boat !== null) {
+        const b = boatAt(boats[d.boat] ?? null, moorings[d.boat], t);
+        const seat = s.seat ?? 0;
+        return {
+          x: b.x + Math.cos(b.heading) * seat,
+          y: b.y + Math.sin(b.heading) * seat,
+          heading: b.heading,
+          activity: b.moving ? "row" : "fish",
+          speed: 0,
+          visible: true,
+          boat: d.boat,
+        };
+      }
+      let { x, y } = s.at;
+      let heading = s.heading;
+      let moving = false;
+      if (s.wander > 0) {
+        // A slow figure-of-eight about the spot: a furrow worked along, a game of tag. A runner faces
+        // the way the curve is going, which is its derivative; a worker keeps facing the work.
+        const rate = s.activity === "play" ? 0.5 : 0.06;
+        const phase = (t - s.t0) * WORLD_DAY_S * rate + hashString(d.person) * 6.28;
+        x += Math.sin(phase) * s.wander;
+        y += Math.sin(phase * 2) * s.wander * 0.5;
+        moving = s.activity === "play";
+        if (moving) heading = Math.atan2(Math.cos(phase * 2) * s.wander, Math.cos(phase) * s.wander);
+      }
+      return { x, y, heading, activity: s.activity, speed: moving ? 1.6 : 0, visible: true, boat: null };
+    }
+  }
+  return { x: 0, y: 0, heading: 0, activity: "stand", speed: 0, visible: false, boat: null };
+}
+
+/** The world day and hour of an instant, as the schedule reads them. */
+export function dayAndHour(worldDay: number): { day: number; hour: number } {
+  const day = Math.floor(worldDay);
+  return { day, hour: worldDay - day };
+}
+
+/** Who a person is, in the form a nameplate wants. */
+export function personLabel(s: Settlement, p: Person, day: number): string {
+  return `${p.given} ${p.family} · ${Math.floor(ageYears(p, day))} · ${p.occupation}`;
+}

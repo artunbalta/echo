@@ -29,3 +29,8 @@ export * from "./society.js";
 export * from "./geography.js";
 // Life events and temperament, read off the society substrate (C40).
 export * from "./life.js";
+// The village on the ground: plots, dock, fields, graves (C41).
+export * from "./village.js";
+export * from "./villageAt.js";
+// Everyone's day, as a closed form of the hour (C41).
+export * from "./schedule.js";
