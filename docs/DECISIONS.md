@@ -2239,3 +2239,91 @@ day counts incomers before they arrive) and `⚑33` (a person's `seedKey` double
 
 **What it does not do yet:** narrate (step 2, the "awakening"), schedule (`whereIs`, step 3), draw
 anyone, or remember a player. `docs/world-design/life-events.md` §7 holds the contracts.
+
+## C41 — a settled parcel shows its village, and the village decides where you arrive
+
+The user's ask, 2026-10-17: the people of C40 seen in 3D, in a real world — coastal villages that
+fish, different cultures, built houses, people going to work — **at the main entrance, not at a
+separate URL**. Decisions taken with it: the first village is Konreef (`84b38ebffffffff`, a fishing
+village of 46); the frame budget is measured first and decided after; the art bible's style holds.
+
+**What it is.** Every parcel whose anchor cell holds a settlement now shows it, through the one
+parcel layer list (`parcelWorld.ts`) the landing preview and `/parcel/[cell]` share — no route of its
+own. `packages/planet/lib/village.ts` lays the village out (green, houses by household, dock, fields,
+graveyard, benches) as a pure function of the settlement and the ground; `villageAt.ts` builds that
+ground from the same height and walkability functions the terrain and the mover use;
+`schedule.ts` says where everyone is at any hour as a closed form (no tick, SOC-3.E untouched);
+`settlementLayer` draws the static village, `villagersLayer` the people and the boats, `crowd.ts`
+the bodies. The landing globe shows every village as a light (`villages-<seed>.json`, a cache of the
+seed held to it by a test), and picking one names it: "Konreef · A fishing village · 46 people live
+here · 16 households" (`/api/planet/village`).
+
+**C15 is superseded for settlements, and only for them.** C15 keeps authored human structures off
+every cell but the demo's. A settlement is not authored — it is the substrate (C25) — so a settled
+parcel shows it. Stations stay the demo's. This also answers part of SOC-0.F: an ordinary settled
+parcel contains its village.
+
+**The village decides the arrival, not the other way round.** The first version laid the village out
+in front of the parcel's spawn; on Konreef, coastal 0.83, that put a fishing village with no dock six
+hundred metres inland of its own sea, because the sea was beyond the spawn's 280 m sight line. Now
+the green goes where the ground says (a setback inland of the nearest shore, or the flattest dry
+ground near the cell's centre), the houses ring it, and **on a settled parcel `region.spawn` is the
+village's edge, looking in.** Unsettled parcels keep `spawnPointFor` exactly; so do the demo cell and
+the ordinary perf cell, which hold no settlement.
+
+**L2 again, in three places.** A house built a hundred years ago stands where it stood when the
+village is read later: households take plots in founding order, reusing a plot only after its last
+family has been gone three years, and the test proves an early horizon's plots are a prefix of a
+later one's. Graves take slots in order of death and are dug again once the yard is full, so a grave
+never moves. The arrival point and everything static depend on the place, never the day.
+
+**Measured, worst of twelve headings, people included** (desktop, sky frozen):
+
+| village | noon | dusk | of which the static village |
+|---|---|---|---|
+| Konreef, 46 | 91 calls / 270k tri | 92 / 302k | 2 calls / 17k |
+| Drurkkuifell, 36 | 110 / 447k | 109 / 431k | 2 / 13k |
+| Vakeel, 74 | 109 / 489k | 110 / 520k | 2 / 22k |
+
+C16's ceiling is 120 calls and 600k triangles, so all three fit — and **the headroom on a large
+village is about ten calls** (`⚑36`). The whole static village is ONE merged mesh plus one for the lit
+windows; the crowd is nine instanced meshes for everybody plus the boats, with only torso and head
+casting (13 calls with its shadows, ~46k triangles for 44 people). The estimate before building was
++20–35 calls for the static village alone; it is 2 by day and 3 at night, when the windows light.
+
+**Found by looking, not by testing:** the windows were lit at noon because the layer read the clock
+and the screenshot had frozen the sky (the sky is now the one authority on the hour); the first
+aerial view read as cottages scattered in a field (rings and spacing tightened); twenty-eight thousand
+equal lights buried the continents, and then a dimmer version lost them (sized by capacity now).
+**Found by tests:** boats turning for home before they had arrived (a twelve-minute day leaves little
+time to row; the ground is pulled in until the fishing fits); a past-day home lookup that put people
+in their future house before their wedding (the test was missing, not the code wrong); fields drawn
+facing the ground. Each gate was shown to fail on its defect.
+
+**The index test has a sensitivity, stated rather than implied.** Moving SETTLEMENT_RATE from 0.30
+to 0.31 flips none of its 1,500 sampled cells (measured), so it passes; at 0.36 it fails. It catches
+drift of the size a dial change makes, not a single cell; regenerating the file is the full check.
+
+**Not built:** talking (C40's awakening), villagers avoiding walls and each other, chimney smoke,
+distant-person impostors (SOC-4.C), anything about a parcel finer than the start resolution, and a
+phone reading. See `⚑34`–`⚑36`.
+
+### C33, counted exactly — the census was a sample, and it undercounted by 8.1%
+
+C33's figures come from a 3,000-cell sample (`census:planet -- 3000`), scaled. On 2026-10-17 every one
+of the 284,004 cells was counted (349 s, seed `echo-capacity-1`):
+
+  settled      28,952 settlements           (C33's estimate: 26,602; the default 4,000-cell sample: 27,477)
+  on land      28,282  ·  in sea cells 670  (habitable from the 3 km disk around them, nothing to walk on)
+  living       713,736 on world day 4,907   (709,780 of them in villages on land)
+  graves       2,808,156
+  abandoned    2,171 villages on land with nobody left alive
+
+**Whether a cell is settled does not depend on the day**, so 28,952 against 26,602 is sampling error
+alone: −8.1%, about one and a half binomial standard errors for a 3,000-cell sample at a 10% rate —
+plausible, and larger than any sentence quoting "26,602" ever said it might be. The living count is
+NOT comparable to C33's 619,413: that was day 0, this is day 4,907, thirteen world years later.
+
+The density decision stands; it was taken on shape, not on the last digit. But a sampled figure is
+an estimate with an error, and from here on it is quoted as one. The exact per-village list (name,
+kind, population, households, graves, URL) was written to a scratch file for the user, not committed.

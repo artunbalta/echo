@@ -34,7 +34,7 @@ import {
 } from "./followCamera";
 import { createInput, type WorldInput } from "./input";
 import type { TouchControlHandle } from "./touchInput";
-import { SPAWN_HORIZON_MARGIN_DEG, spawnView } from "./spawnView";
+import { SPAWN_HORIZON_MARGIN_DEG, spawnView, yawBehindHeading } from "./spawnView";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 
 export interface PlayerLayerOptions {
@@ -119,7 +119,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     async build(ctx, signal) {
       // Which way a person is facing when they arrive, and how far down the camera looks: toward
       // the sea when there is one in sight, and the shipped heading otherwise. See spawnView.
-      const view = spawnView(
+      let view = spawnView(
         ctx.frame.patch,
         ctx.field,
         ctx.calibration.seaLevel,
@@ -128,6 +128,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         { ...initialFollowCamera(options.camera), pitch: 0.14, distance: 5.8, boom: 5.8 },
         { fovDegrees: ctx.camera.fov, horizonMarginDeg: SPAWN_HORIZON_MARGIN_DEG },
       );
+      // On a settled parcel you arrive at the village's edge, and you face the village (C41). The
+      // heading is in spawnView's own convention — atan2 of minus the north step against the east
+      // step — so the camera that follows it is the one spawnView would have built for that heading.
+      const facing = ctx.region.village?.plan.arrivalFacing;
+      if (facing) {
+        const heading = Math.atan2(-facing.y, facing.x);
+        view = { ...view, heading, camera: { ...view.camera, yaw: yawBehindHeading(heading) } };
+      }
       state = initialMover(ctx.region.spawnTile[0], ctx.region.spawnTile[1], view.heading);
       cam = view.camera;
       camOpts = { chestM: 1.6, ...options.camera, tileM: ctx.frame.tileM, nearM: ctx.camera.near };
@@ -137,10 +145,11 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       // The scatter layer builds before this one, so its colliders are ready. A world without it
       // keeps the old gate exactly: walkable ground, and nothing else.
       const obstacles = ctx.layer<ObstacleSource>("scatter");
-      blocked =
-        obstacles && typeof obstacles.blockedTile === "function"
-          ? (x, y) => obstacles.blockedTile(x, y, bodyRadiusM)
-          : null;
+      // The village's walls stop a body too (C41). Both are asked; either can say no.
+      const gates = [obstacles, ctx.layer<ObstacleSource>("settlement")].filter(
+        (o): o is ObstacleSource => !!o && typeof o.blockedTile === "function",
+      );
+      blocked = gates.length > 0 ? (x, y) => gates.some((g) => g.blockedTile(x, y, bodyRadiusM)) : null;
 
       const colliderIndex = obstacles?.colliders?.();
       colliders = colliderIndex ?? null;

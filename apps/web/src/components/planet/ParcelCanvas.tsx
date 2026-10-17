@@ -81,6 +81,8 @@ export interface ParcelCanvasProps {
   radiusKm: number;
   /** Ring count of the built disk; 1 is the cell and its six neighbours. */
   k?: number;
+  /** The world's commons cells, which a settled parcel needs to build its village (DECISIONS C41). */
+  commons?: readonly string[];
   /**
    * The furniture this cell is allowed to stand, as the SERVER resolved it. Null is an ordinary
    * parcel and is the only answer any cell but the demo cell can get, whatever the URL asked for.

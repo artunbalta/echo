@@ -25,11 +25,16 @@ import {
   createTerrain,
   regionBound,
   spawnPointFor,
+  villageAt,
   walkableAt,
+  worldClock,
+  worldDayIndex,
   DEFAULT_REGION_OPTIONS,
   DEFAULT_SCENE_OPTIONS,
+  WORLD_EPOCH,
   type Calibration,
   type RegionBound,
+  type SettledParcel,
   type SpawnPoint,
   type TangentPatch,
   type TerrainField,
@@ -154,6 +159,12 @@ export interface RegionInfo {
   readonly spawn: SpawnPoint;
   /** The spawn in tiles. */
   readonly spawnTile: [number, number];
+  /**
+   * The anchor cell's village, where it has one and the mount passed the commons (DECISIONS C41).
+   * When it is set, `spawn` is the village's arrival point rather than the cell's: you arrive at the
+   * edge of a settlement, looking in, not in the empty middle of the land it farms.
+   */
+  readonly village?: SettledParcel | null;
 }
 
 export interface LayerContext {
@@ -221,6 +232,14 @@ export interface PlanetWorldOptions {
    * so the fps beside a per-layer table is worth less than the fps beside a bare one.
    */
   devLayers?: boolean;
+  /**
+   * The world's twelve commons cells. Passing them is what lets a settled parcel build its village
+   * (DECISIONS C41): `tradeAccess` is distance to the nearest commons, capacity depends on it, and a
+   * village computed without them would be a different, plausible, wrong village. Absent: no village.
+   */
+  commons?: readonly string[];
+  /** World day to read the village at. Defaults to today on the world's own clock (C24). */
+  day?: number;
 }
 
 /** What one layer cost in the frame that was sampled, split by pass. */
@@ -350,7 +369,8 @@ export class PlanetWorld {
     const resolutionM = options.resolution ?? DEFAULT_REGION_OPTIONS.resolution;
     const k = options.k ?? 1;
     const bound = regionBound(options.cell, k, options.radiusKm);
-    const spawn = spawnPointFor(options.cell, this.field, this.calibration, options.radiusKm);
+    const village = this.settle(options, k, heightScaleM, resolutionM);
+    const spawn = village?.spawn ?? spawnPointFor(options.cell, this.field, this.calibration, options.radiusKm);
     if (!spawn) throw new Error(`${options.cell} has no dry ground to spawn on`);
 
     const field = this.field;
@@ -380,7 +400,7 @@ export class PlanetWorld {
       toLocalM,
       fromLocalM,
     };
-    this.region = { cell: options.cell, k, bound, extentM: bound.radiusM, spawn, spawnTile: fromLocalM(spawn.x, spawn.y) };
+    this.region = { cell: options.cell, k, bound, extentM: bound.radiusM, spawn, spawnTile: fromLocalM(spawn.x, spawn.y), village };
 
     this.ownsRenderer = !options.handle;
     this.handle = options.handle ?? createRendererHandle(host);
@@ -428,6 +448,27 @@ export class PlanetWorld {
     this.layers.push(layer);
     this.byName.set(layer.name, layer);
     return this;
+  }
+
+  /**
+   * The anchor cell's village, or null. A village that fails to build is reported and dropped rather
+   * than taking the parcel with it: the ground is the product and the village is on it, so a defect
+   * in the second must never cost a visitor the first. The error is logged, never swallowed.
+   */
+  private settle(options: PlanetWorldOptions, k: number, heightScaleM: number, resolutionM: number): SettledParcel | null {
+    if (!options.commons) return null;
+    try {
+      return villageAt(options.seed, options.cell, this.field, this.calibration, options.radiusKm, {
+        commons: options.commons,
+        day: options.day ?? worldDayIndex(worldClock(WORLD_EPOCH), Date.now()),
+        k,
+        heightScaleM,
+        resolutionM,
+      });
+    } catch (e) {
+      console.error(`[village] ${options.cell}: the village could not be built`, e);
+      return null;
+    }
   }
 
   /** The layer context, for layers and for tests. */

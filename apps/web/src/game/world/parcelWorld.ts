@@ -15,7 +15,10 @@
  *     orange wall somebody reported standing under on /parcel, where nothing had ever claimed it.
  *   terrain second, because the scatter stands each prop on the ground the terrain actually drew
  *     rather than on the placer's own z, which is sampled off a 10 m mask grid.
- *   scatter third.
+ *   settlement third, where the cell has a village (DECISIONS C41). It draws what PlanetWorld planned
+ *     at construction, and it goes BEFORE the scatter so that nothing about it can depend on the
+ *     scatter: the dependency runs the other way, the scatter keeping the village's ground clear.
+ *   scatter fourth, told about the village's clearings and lanes by the same plan.
  *   canopy-closure fourth, and it can be nowhere else: it darkens the ground the terrain layer
  *     uploaded by the crowns the scatter layer placed, so it is the one layer that needs BOTH of
  *     them already built. DECISIONS C17. It reaches for them by name and complains if either is
@@ -23,6 +26,8 @@
  *   player after the scatter, and this one is load-bearing rather than tidy: `playerLayer.build`
  *     looks the scatter up by name and takes its collider index, so a player built ahead of it
  *     walks through every trunk on the parcel.
+ *   villagers after the player, where the cell has a village (C41): the nameplate is for whoever is
+ *     nearest the player, and the position it asks for is the one the mover committed this frame.
  *   walk after the player, so the position it feeds the chain and tallies is the one the mover
  *     committed this frame rather than the one from the frame before.
  *   slice last, where there is one: it reads the same player position, and it may only act on a
@@ -49,8 +54,10 @@ import { canopyClosureLayer } from "./canopyClosure";
 import { DEMO_SCATTER } from "./demoStations";
 import type { MeasureChain } from "./measure";
 import { playerLayer } from "./playerLayer";
-import type { WorldLayer } from "./PlanetWorld";
-import { scatterLayer } from "./scatterLayer";
+import type { LayerContext, WorldLayer } from "./PlanetWorld";
+import { scatterLayer, type StationExclusions } from "./scatterLayer";
+import { settlementLayer } from "./settlementLayer";
+import { villagersLayer } from "./villagersLayer";
 import { skyLayer } from "./skyLayer";
 import { sliceLayer } from "./sliceLayer";
 import { terrainLayer } from "./terrainChunks";
@@ -119,15 +126,31 @@ export function sliceOptionsFor(
   return stations === SLICE_STATIONS_FLAG ? callbacks : undefined;
 }
 
+/**
+ * The ground a village needs kept bare: its green, its houses, its fields and graveyard, and the
+ * lanes between them. A parcel with no village gets an empty record, which leaves the scatter's own
+ * floor (the buildable footprint and the spawn clearing) exactly as it was.
+ */
+export function villageStations(ctx: LayerContext): StationExclusions {
+  const plan = ctx.region.village?.plan;
+  if (!plan) return {};
+  return {
+    clearings: plan.clearings,
+    paths: plan.paths.map(([a, b]) => ({ a: [a.x, a.y] as const, b: [b.x, b.y] as const, widthM: 2.4 })),
+  };
+}
+
 /** Shared geography and art for landing previews and playable parcels. */
 export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch, clock = WORLD_CLOCK }: Pick<ParcelWorldOptions, "slice" | "inputEnabled" | "touch" | "clock"> = {}): WorldLayer[] {
   return [
     skyLayer({ clock }),
     terrainLayer(),
-    slice ? scatterLayer(DEMO_SCATTER) : scatterLayer(),
+    settlementLayer({ clock }),
+    slice ? scatterLayer(DEMO_SCATTER) : scatterLayer({ stations: villageStations }),
     canopyClosureLayer(),
     detailLayer(),
     playerLayer({ inputEnabled, touch }),
+    villagersLayer({ clock }),
     meadowLayer(),
   ];
 }

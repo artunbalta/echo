@@ -1668,3 +1668,48 @@ date on it.
 **Status:** OPEN, and a decision for the user: compress it before SOC-6.C, or accept the cost
 permanently. Recommendation: before. Measure `settlementAt` with and without first, so the decision
 is made on a number.
+
+---
+
+## ⚑ 34. The landing page downloads the planet's village index: 594 KB, 103 KB compressed (2026-10-17)
+
+`HeroPlanet` fetches `/planet/villages-<seed>.json` after the globe has drawn, to light every
+village (C41). It is 28,282 cells and their capacities: 594,391 bytes, 103,036 gzip -9. It never
+blocks the planet — a missing file is no lights — but it is the heaviest thing the landing fetches
+after the scripts, and it has **not been measured on a phone**, on a slow connection, or for the time
+`setVillages` spends placing 28,282 points (one `globeRadiusAt` each).
+
+**Status:** OPEN. Cheaper shapes exist and none is chosen: drop hamlets below a capacity, ship
+resolution-3 parents with counts, or a binary encoding of the h3 indices. Measure first.
+
+---
+
+## ⚑ 35. A village is drawn as it stood on the day the parcel was built, and its people walk through walls (2026-10-17)
+
+Three limits of C41's first village, written down rather than discovered:
+
+- **The houses are the build day's.** `PlanetWorld` builds the village once; a world day is twelve
+  real minutes, so a session that stays an hour sees five days of schedules on one day's houses: a
+  family that dissolves keeps its lit windows until a reload. The schedule itself does change daily.
+- **Nobody avoids anything.** Legs are straight lines: a villager can cross a house, a field or
+  another villager, and the player walks through villagers (houses do stop the player).
+- **Only start-resolution parcels have villages.** `settlementAt` keys on the cell id, so a
+  subdivided child would get a different village from the parent C33 counted. `villageAt` and
+  `/api/planet/village` refuse any other resolution until SOC-0.F says what a child's village is.
+
+**Status:** OPEN, all three. The first is a rebuild on a day change; the second is a path graph over
+the plan's lanes; the third is a decision.
+
+---
+
+## ⚑ 36. The frame has about ten draw calls of headroom left on a large village (2026-10-17)
+
+Measured with people, worst of twelve headings: Vakeel (74 people) **110 of 120 calls and 520k of
+600k triangles** at dusk; Drurkkuifell 110 / 447k; Konreef 92 / 302k (C41's table). The village itself
+is cheap — two calls — and the crowd is thirteen with its shadows whatever its size, so the cost is the
+ORDINARY parcel's (C28, C31) with a village on top. A bigger town, smoke, more props or the C38
+`buttress-tree` mid band each spend from the same ten.
+
+**Status:** OPEN. The levers on record: SOC-4.C's person impostor (fewer crowd calls at distance),
+thinning the scatter inside a settled cell (realistic, and cuts scatter calls), and C38's mid band
+for more classes. None is free; pick with a measurement.
