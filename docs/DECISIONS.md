@@ -2154,3 +2154,88 @@ because it is a policy and not a repair: **a `?u=` override now sends no token, 
 `subjectFor` checks the token branch before the relaxation, so a profile that had ever held a token
 would present it beside `?u=alice` and be refused — and `?u=` is the only mechanism in the tree that
 yields two identities inside one browser profile, which `verify-3d-render.md` depends on.
+
+## C40 — a lived past before anyone arrives: life events read off the substrate, never written back
+
+The user's ask, 2026-10-17: NPCs that **live a life before they enter the world**, and arrive with it
+— they talk about it, they move, they go to work. This is step 1 of that, and of SOCIETY-PLAN §7
+step 5's village slice: the past, as data. `packages/planet/lib/life.ts`, designed in
+`docs/world-design/life-events.md`.
+
+**The three decisions, taken by the user as recommended:**
+
+1. **Events explain demographic facts; they never cause them.** A storm year is read off the fishers
+   lost at sea, never rolled first and then made to kill anyone. So no birth, death or pairing on the
+   planet moves, and C33 stands. A later version may let a hungry year raise child mortality; that
+   rewrites every lifespan on the planet and is its own decision.
+2. **Temperament is constant over a life in v1.** Heritable plus noise. Bounded shifts from events
+   (a childhood bereavement, a long rift) are v2.
+3. **Temperament lives on the eight player axes**, so BALD can choose among the people standing
+   nearby (SOC-6.F's recommendation on record). The cost: those axes are conversational and
+   stylometric (BUILD-PLAN D4), so "brave" or "thrifty" has to be read off them.
+
+**What it is.** `lives(s)` gives every person a dated, sorted life: kinship read straight off the
+substrate (born, arrived, married, child-born, sibling-died, widowed, …), plus four kinds with their
+own draws — the trade and who taught it, close friends (one symmetric decision per pair), a rift over
+an estate and sometimes peace, and what someone died of. `chronicle(s)` gives the village's completed
+years: `fever` and `storm` inferred from the graves, `hungry-year` and `fire` drawn and killing
+nobody. `temperaments(s)` gives eight numbers per person. Shared memory needs no coordination: two
+people who married carry one pairing, and every witness of a year carries the same year.
+
+**Four things the proposal had wrong, found by building it, and each corrected in the design doc:**
+
+- **Causes of death read the chronicle in the proposal. That was an L2 violation.** A chronicle year
+  is settled only when it ends, but a death earlier that year is already a fact, so its cause would
+  have changed the day the year closed. The chronicle reads the causes instead; a storm year is a year
+  somebody was lost at sea.
+- **"Childbirth" fired 0 times in 9,374 deaths.** Under decision 1, death days are drawn at birth,
+  independently of anyone's children, so the coincidence it needs essentially never happens. Removed
+  rather than shipped as a cause a narrator would be told about and never see.
+- **A fever at three child deaths a year happened 11 times in 376 sample villages.** At two it is
+  216, about one fever year in every second village's history.
+- **Friendship.** Childhood-only, at a fixed chance, left 82–95% of adults friendless, because the
+  villages are small (1.39 eligible peers for a child at capacity 30–59). Normalising by CAPACITY
+  still left the coast at median 0, because villages sit far below it (coastal capacity 38, headcount
+  11.2). The shipped form has two windows (childhood, and adulthood within ten years, likelier in the
+  same trade), normalised by the village's **headcount at the start of the year the friendship
+  forms**, which is L2-safe for the reason `bearChildren`'s damping is. The constants are a
+  calibration and are labelled one in the code.
+
+**The L2 test caught a real violation on its first run**, which is the only reason to write it first.
+The friendship pass skipped any pair who ever married each other, and that read a pairing from after
+the friendship's own day: a childhood friendship existed when the village was read to day −14,600
+and vanished when it was read to day 10,950, the day the two of them wed. Now a pair is excluded only
+if already married ON the day, so "married her childhood friend" is something the world can hold.
+
+**Inert, shown three ways rather than asserted.**
+- A sha256 over `settlementAt` for 60 cells at three horizons (36 settlements) is byte-identical
+  before and after: `26a00b5f…56e3`. `society.ts` changed by one exported word and two comments.
+- `census:planet -- 3000` reproduces C33 exactly: 26,602 settlements, 619,413 living, 2,396,426 graves.
+- The bare `census:planet` gives 27,477 and 626,229 **with and without this change**. That is not a
+  regression: the script defaults to 4,000 cells and C33 states 3,000. `society.ts`'s re-measure note
+  now names the argument, because the bare command does not reproduce the record.
+
+**Gates.** `tests/life.test.ts`, 13 tests: L2 over 60 cells at two horizon pairs (>10,000 events
+compared), one-life-equals-the-whole, inertness, symmetry (married, befriended, rift, reconciled, and
+learned-trade ↔ taught), every event inside its own life, teachers present and in the trade, the
+friendship target on every ground, causes following their rules, every chronicle witness present and
+every death it explains a grave, temperament range and order-independence, spread surviving the
+generations, kin closer than strangers, and Design Law 1. `apps/web/tests/temperamentAxes.test.mts`
+pins `TEMPERAMENT_AXES` to `PERSONA_DIM` where both packages are visible. **Each gate was shown to
+fail on its defect**: a naive temperament blend (`h·mean + (1−h)·noise`) fails the spread test; a
+one-sided friendship fails symmetry; the ever-married exclusion fails L2; witnesses checked for
+`alive` rather than `present` fail both L2 and the chronicle test.
+
+**Cost, measured on the shipped code.** The lives, chronicle and temperaments of a whole village take
+0.4–1.6 ms, against 2.5–12.5 ms for `settlementAt` on the same cells (three grounds, 33–48 villages
+each, two runs): roughly an eighth. The machine's load average was ~8 throughout, so the absolute
+figures are high and the RATIO is the reading. (An earlier reading of 0.3–1.4 ms was taken before the
+adult friendship window existed, and is superseded.) No timing assertion was added, because timing
+assertions fail under load (NEW-AGENT.md §6, trap 3).
+
+**Two things found beside it, recorded rather than fixed in passing:** `⚑32` (`census()` on a past
+day counts incomers before they arrive) and `⚑33` (a person's `seedKey` doubles every generation,
+36,037 characters at the longest, and must be compressed before SOC-6.C writes a row, or never).
+
+**What it does not do yet:** narrate (step 2, the "awakening"), schedule (`whereIs`, step 3), draw
+anyone, or remember a player. `docs/world-design/life-events.md` §7 holds the contracts.

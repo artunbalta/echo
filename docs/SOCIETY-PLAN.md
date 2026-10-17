@@ -15,6 +15,15 @@
 
 ### Where this stands — 2026-09-14
 
+> **2026-10-17 — `C40`, step 1 of §7 step 5's village slice.** `packages/planet/lib/life.ts`: every
+> person's lived past (kinship, the trade and who taught it, close friends, estate rifts, what they
+> died of), the village's chronicle (fever, storm, hungry year, fire) and a heritable temperament on
+> the player's eight axes — read off the substrate, never written back; `society.ts` output
+> byte-identical, C33 reproduced. It feeds SOC-6.F (axis vectors from a demographic model) and
+> SOC-6.H (an old person talking about the dead). Found beside it: `⚑32`, `⚑33` — and `⚑33` has a
+> deadline, SOC-6.C's first row. Not built: narration, schedules, bodies. The block below is
+> unchanged and keeps its own date.
+
 **Decisions taken and recorded** as `C24`–`C38` in `docs/DECISIONS.md`: the world clock, NPC land in
 the substrate, read-only mortality, the planet frame and the parcel as the shared unit (which also
 answers C11), the measured whole frame, the pre-registered re-anchor, the `consistency` zero column,

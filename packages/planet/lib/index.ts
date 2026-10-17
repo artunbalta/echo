@@ -27,3 +27,5 @@ export * from "./demo-cell.js";
 export * from "./worldclock.js";
 export * from "./society.js";
 export * from "./geography.js";
+// Life events and temperament, read off the society substrate (C40).
+export * from "./life.js";

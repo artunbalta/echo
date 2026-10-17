@@ -1610,3 +1610,61 @@ than retired: its code is the demo's, and `⚑30` is where the decision to keep 
 `SOCIETY-PLAN.md`, `DECISIONS.md` or the gate lists, and `/api/venue/dialogue/simulate`'s eleven-call
 fan-out was never costed anywhere. A surface that spends per request and appears in no gate is how
 this one survived a retirement.
+
+---
+
+## ⚑ 32. `census()` on a past day counts people who were not in the village yet (2026-10-17)
+
+`alive(p, day)` is `birthDay <= day < deathDay` (`society.ts:471`), and `census(s, day)` filters on
+it alone (`society.ts:878`). An incomer is born elsewhere years before they marry in
+(`society.ts:662-673`), and a founder before the founding day, so for those days they are *alive* and
+*not here* — and `census()` counts them as living in the village.
+
+**MEASURED** with a probe over 60 cells (`echo-capacity-1`, one fixed geography, horizon 0): of
+1,813 incomers alive five years before they arrived, **1,813** are in `census(s, thatDay).alive`.
+Founders show the same before the founding day: **720**.
+
+**Nothing shipped is wrong because of it.** Five of the six call sites — including
+`scripts/census-planet.ts:58-62`, which produces C33 — ask about day 0 of a settlement generated to
+day 0, and an incomer in that list has always arrived by then. The sixth, `society.test.ts:206-210`,
+generates to year 10 and asks about day 0, so it does overcount; it asserts an UPPER bound
+(`<= capacity * 2.2`), so the overcount makes it stricter and hides nothing.
+
+**Why it is recorded now:** `lib/life.ts` (C40) asks about the past constantly — who witnessed a fever
+forty years ago, who could teach a trade — and it uses `present()` (alive AND arrived) for exactly this
+reason. The two predicates now coexist, and the next caller to ask `census()` about a past day gets
+the wrong one without being told.
+
+**Status:** OPEN. The fix is one line in `census()` (filter on `present`), but it changes what
+`census()` returns for past days, and `society.test.ts:210`'s bound would then be measured against a
+different population. Take it as its own change, re-run that test, and say what moved.
+
+---
+
+## ⚑ 33. A person's `seedKey` doubles in length every generation, and every draw reads all of it (2026-10-17)
+
+`bearChildren` keys a child on both parents' full keys — `` `${mother.seedKey}+${father.seedKey}/kid/${i}` ``
+(`society.ts:595`) — so a key is roughly twice its parents' length, and `stream()` calls
+`hashString(key, n)` (`terrain.ts:245`), whose `hashSeed` walks the whole string on EVERY draw
+(`terrain.ts:108-115`).
+
+**MEASURED** over 60 sample cells at horizon 0 (`echo-capacity-1`, one geography, 3,141 people): the
+longest `seedKey` is **36,037 characters** and the mean is **2,089**. A person costs a dozen or so
+draws, each one a full pass over a key that size. What share of `settlementAt`'s time that is has
+**not** been measured; nor has the memory the keys hold (up to `MAX_PEOPLE` = 4,000 of them per
+settlement).
+
+`lib/life.ts` (C40) does not inherit it: it keys its streams on `Person.id`, and says why in its
+header.
+
+**THE DEADLINE, which is the reason this is an entry and not a note.** Compressing the key (hashing
+the parents' keys rather than concatenating them, say) is a small change, but it changes **every draw
+of every person on the planet** — names, lifespans, trades, who pairs with whom. Today that costs
+nothing that persists: C25 means zero rows, and the delta layer (SOC-6.C) does not exist. **The day
+SOC-6.C writes its first row keyed on a `Person.id`, it becomes unpayable**, because the same id would
+then name a different human being. It is the same species as the `bearChildren` horizon bug, with a
+date on it.
+
+**Status:** OPEN, and a decision for the user: compress it before SOC-6.C, or accept the cost
+permanently. Recommendation: before. Measure `settlementAt` with and without first, so the decision
+is made on a number.
