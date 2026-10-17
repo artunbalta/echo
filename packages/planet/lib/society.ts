@@ -155,8 +155,11 @@ export const MIN_HABITABILITY = 0.2;
  * one cell in three is not that world. At 0.3 it is roughly one in ten: a village every ~4.1 km,
  * about a 41-minute walk at the parcel's 1.65 m/s, with real ground in between.
  *
- * Re-measure with `npm run census:planet -w @echo/planet` after touching it, and put the number in
- * C33 rather than in a commit message. Free to move: C25 means zero rows, so the whole planet
+ * Re-measure with `npm run census:planet -w @echo/planet -- 3000` after touching it, and put the
+ * number in C33 rather than in a commit message. The `3000` is C33's sample and is not optional: the
+ * script's default is 4,000 cells, which is a different estimate (27,477 settlements and 626,229
+ * living rather than 26,602 and 619,413, measured 2026-10-17 on an unchanged substrate), so the bare
+ * command does not reproduce the record and looks like a regression when it is not. Free to move: C25 means zero rows, so the whole planet
  * re-derives from the seed the moment it changes.
  */
 export const SETTLEMENT_RATE = 0.3;
@@ -314,8 +317,10 @@ export interface Settlement {
  * index-keyed stream means inserting one person early in the generation re-rolls every person after
  * them, and the day someone adds a rule that creates one extra incomer, every lifespan on the
  * planet changes and every NPC anybody met becomes a different person.
+ *
+ * Exported for `life.ts` (C40), so there is one stream in the package and not two (L5).
  */
-function stream(key: string): () => number {
+export function stream(key: string): () => number {
   let n = 0;
   return () => hashString(key, n++);
 }
