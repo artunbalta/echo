@@ -57,19 +57,21 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { LifeChange } from "@echo/planet";
+import type { LifeChange, WorldEffect } from "@echo/planet";
 
 import ConsentCard from "@/components/world/ConsentCard";
 import TouchControls from "@/components/world/TouchControls";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
 import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
+import Interact from "@/components/world/Interact";
 import VillagerTalk from "@/components/world/VillagerTalk";
 import WorldCanvas from "@/components/world/WorldCanvas";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "@/game/world/parcelWorld";
 import { createTouchControls } from "@/game/world/touchInput";
 import { useCoarsePointer } from "@/lib/pointerKind";
+import type { InteractLayer } from "@/game/world/interactLayer";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
@@ -155,6 +157,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
   // not wait, and a request that fails or takes too long builds the seed's village, as the route would.
   const hasVillage = Boolean(manifest.commons);
   const [changes, setChanges] = useState<readonly LifeChange[] | null>(hasVillage ? null : []);
+  // The marks acts have left (C45), from the same request: drawn by the interact layer once it exists.
+  const marks = useRef<readonly WorldEffect[]>([]);
   useEffect(() => {
     if (!hasVillage) return;
     let live = true;
@@ -162,8 +166,10 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
     const timer = setTimeout(() => ctl.abort(), 2500);
     fetch(`/api/village/changes?cell=${encodeURIComponent(manifest.cell)}`, { signal: ctl.signal })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { changes?: LifeChange[] } | null) => {
-        if (live) setChanges(Array.isArray(d?.changes) ? d.changes : []);
+      .then((d: { changes?: LifeChange[]; effects?: WorldEffect[] } | null) => {
+        if (!live) return;
+        marks.current = Array.isArray(d?.effects) ? d.effects : [];
+        setChanges(Array.isArray(d?.changes) ? d.changes : []);
       })
       .catch(() => {
         if (live) setChanges([]);
@@ -185,6 +191,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       layers={layers}
       onWorld={(w) => {
         world.current = w;
+        w?.context().layer<InteractLayer>("interact")?.setMarks(marks.current);
       }}
       className="relative h-full w-full"
     >
@@ -234,6 +241,10 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       {/* Talking to a villager, where the cell has a village (C42). It reads the villagers layer out of
           the same ref the minimap does, so a parcel with no village simply never shows it. */}
       <VillagerTalk world={() => world.current} cell={manifest.cell} consent={consent} coarse={coarse} />
+
+      {/* Everything within reach, and the act (C45): one prompt, the registry's verbs, the echo and
+          the village told. It opens the conversation above with `T`. */}
+      <Interact world={() => world.current} cell={manifest.cell} consent={consent} chain={chain} coarse={coarse} />
 
       {/* The one thing a person can read without knowing a key exists. It is handed the same chain
           state the inspector gets, so the glance and the panel cannot disagree; what it may say

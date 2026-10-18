@@ -36,7 +36,7 @@
  */
 
 import { DAYS_PER_YEAR, yearsToDays } from "./worldclock.js";
-import { hash01, occupationOn, stream, type Household, type Person, type Settlement } from "./society.js";
+import { hash01, occupationOn, occupationWeights, stream, type Household, type Person, type Settlement } from "./society.js";
 import { present } from "./life.js";
 
 // ── what the module needs and returns ───────────────────────────────────────────
@@ -150,6 +150,12 @@ export interface VillagePlan {
    * metre apart along the bench. Static: the place has them whoever sits on them.
    */
   benches: { x: number; y: number; heading: number }[];
+  /**
+   * The mine, where the ground has metal or stone in it (C45): a timbered mouth in the hillside
+   * landward of the houses, facing the village, where the miners and stonecutters go to work. Null
+   * where the ground does not, or where no standable ground was found for it.
+   */
+  mine: { x: number; y: number; heading: number } | null;
   /** Ground the vegetation has to leave bare, for the scatter layer. */
   clearings: { x: number; y: number; radiusM: number }[];
   /** Centrelines worn between the places people walk, for the scatter layer. */
@@ -197,6 +203,11 @@ export const VILLAGE = {
   dockMaxShoreM: 260,
   dockMinM: 10,
   dockMaxM: 26,
+  /** A mine where miners and stonecutters are at least this share of what the ground would raise (C45). */
+  mineMinShare: 0.1,
+  /** How far past the outermost houses the mine mouth is, and the ground kept clear around it. */
+  mineBeyondM: 48,
+  mineClearM: 8,
   /** Fields: how many per unit of capacity times arable, and their size. */
   fieldsPerArableCapacity: 0.1,
   maxFields: 12,
@@ -542,6 +553,9 @@ export function villagePlan(s: Settlement, ground: VillageGround, site: VillageS
   if (graveyard) clearings.push({ x: graveyard.x, y: graveyard.y, radiusM: graveyard.radiusM + 1 });
   if (dock) clearings.push({ x: dock.root.x, y: dock.root.y, radiusM: 6 });
 
+  const mine = layMine(ground, s, centre, away, outerM, keepOut);
+  if (mine) clearings.push({ x: mine.x, y: mine.y, radiusM: VILLAGE.mineClearM });
+
   const benchCount = Math.max(4, Math.round(greenRadiusM / 2.2));
   const turn = hash01(`${key}/benches`) * Math.PI * 2;
   const benches = Array.from({ length: benchCount }, (_, i) => {
@@ -554,6 +568,7 @@ export function villagePlan(s: Settlement, ground: VillageGround, site: VillageS
   if (dock) paths.push([centre, dock.root]);
   if (graveyard) paths.push([centre, { x: graveyard.x, y: graveyard.y }]);
   for (const f of fields) paths.push([centre, { x: f.x, y: f.y }]);
+  if (mine) paths.push([centre, { x: mine.x, y: mine.y }]);
 
   return {
     name: s.name,
@@ -568,9 +583,42 @@ export function villagePlan(s: Settlement, ground: VillageGround, site: VillageS
     fields,
     graveyard,
     benches,
+    mine,
     clearings,
     paths,
   };
+}
+
+/** Whether a place's ground has enough metal or stone in it for a mine: its weights, not its people. */
+export function hasMine(s: Settlement): boolean {
+  const w = occupationWeights(s.geography);
+  const total = w.reduce((a, [, x]) => a + x, 0);
+  const digging = w.filter(([o]) => o === "miner" || o === "stonecutter").reduce((a, [, x]) => a + x, 0);
+  return total > 0 && digging / total >= VILLAGE.mineMinShare;
+}
+
+/**
+ * The mine: landward, past the fields, on standable ground with room around the mouth. It reads only
+ * the geography and the plan's own centre, so it is the same mine on every day (L2), and it is laid
+ * after the houses so it cannot move one.
+ */
+function layMine(ground: VillageGround, s: Settlement, centre: Point, away: Point, outerM: number, keepOut: Circle[]): { x: number; y: number; heading: number } | null {
+  if (!hasMine(s)) return null;
+  const awayAngle = Math.atan2(away.y, away.x);
+  const r = outerM + VILLAGE.mineBeyondM;
+  for (const k of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+    const a = awayAngle + k * 0.32;
+    const p = along(centre, { x: Math.cos(a), y: Math.sin(a) }, r);
+    const room = [0, 1, 2, 3, 4, 5].every((i) => {
+      const t = (i / 6) * Math.PI * 2;
+      const q = along(p, { x: Math.cos(t), y: Math.sin(t) }, VILLAGE.mineClearM - 2);
+      return ground.standable(q.x, q.y) && ground.heightAt(q.x, q.y) > 0;
+    });
+    if (!room || !ground.standable(p.x, p.y)) continue;
+    if (keepOut.some((c) => dist(c, p) < c.r + VILLAGE.mineClearM)) continue;
+    return { x: p.x, y: p.y, heading: Math.atan2(centre.y - p.y, centre.x - p.x) };
+  }
+  return null;
 }
 
 /**

@@ -5,8 +5,9 @@
  *   - all string-keyed rows in Supabase (telemetry, interactions, behaviors, persona,
  *     reward, autonomy, preference pairs, meeting outcomes, narrations, behavioral events,
  *     villagers' memories of them)
- *   - their name on the village changes they were part of (C44): cleared, not deleted, because
- *     those rows are the shared world's history
+ *   - their name on the village changes they were part of (C44) and on the marks their acts left
+ *     (C45): cleared, not deleted, because those rows are the shared world's
+ *   - what they did in each village and who saw it (C45): deleted, so the villagers forget it
  *
  * Selfies are never stored (discarded after attribute extraction, §6), so there is no
  * biometric image to erase. Auth-uuid-keyed tables (characters/world_entities) cascade
@@ -51,12 +52,18 @@ const USER_KEYED: [string, string][] = [
   ["behavioral_events", "actor_id"],
   // C44. What each villager remembers of this person, in the villager's words. Deleted outright.
   ["villager_memories", "subject"],
+  // C45. What this person did in each village, with who saw it. Deleted: the villagers forget it.
+  ["village_deeds", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
 // at the person only through that column. C44's `village_changes`: deleting a row would bring a family
 // back from wherever it went, for every other visitor, so the row stays and forgets who was there.
-const USER_NAMED: [string, string][] = [["village_changes", "subject"]];
+const USER_NAMED: [string, string][] = [
+  ["village_changes", "subject"],
+  // C45. The marks acts left on the shared world: they heal on their own day, nameless meanwhile.
+  ["world_effects", "subject"],
+];
 
 async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: string[] }> {
   // NO KEY IS A FAILURE, NOT A CLEAN SLATE. This returned `{wiped: [], failed: []}`, which made

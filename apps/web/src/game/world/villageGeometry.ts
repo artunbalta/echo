@@ -434,10 +434,91 @@ export function buildVillage(frame: WorldFrame, v: SettledParcel, day: number): 
     }
   }
 
+  // The mine (C45): a timbered mouth in a heap of broken rock, facing the village, with the spoil and
+  // a cart of ore beside it. The heap stops a body; the mouth is where you stand.
+  const mine = plan.mine;
+  if (mine) {
+    const h = Math.max(0, groundAt(frame, mine.x, mine.y));
+    built.setTransform(placement(frame, mine.x, mine.y, mine.heading, h));
+    const rock = rgb(PALETTE.rock);
+    const rockDark = mix(PALETTE.rock, PALETTE.shadow, 0.35);
+    built.box(-2.4, 1.2, 0, 3.2, 2.4, 6.4, rock, rockDark);
+    built.box(-3.6, 2.6, 0, 2.6, 1.6, 4.6, rockDark);
+    built.box(-0.85, 0.95, 0, 0.2, 1.9, 1.7, rgb(0x15110f));
+    for (const z of [-0.95, 0.95]) built.box(-0.7, 1.0, z, 0.24, 2.0, 0.24, POST);
+    built.box(-0.7, 2.05, 0, 0.3, 0.24, 2.3, POST);
+    built.box(1.6, 0.25, 2.2, 1.6, 0.5, 1.4, rockDark);
+    built.box(1.2, 0.35, -2.2, 1.1, 0.5, 0.8, rgb(PALETTE.wood));
+    built.box(1.2, 0.65, -2.2, 0.9, 0.18, 0.6, mix(PALETTE.rock, PALETTE.rockLight, 0.5));
+    footprints.push({ x: mine.x - Math.cos(mine.heading) * 2.6, y: mine.y - Math.sin(mine.heading) * 2.6, heading: mine.heading, halfAlong: 1.7, halfAcross: 3.2 });
+  }
+
   return {
     built: built.geometry(),
     glow: glow.geometry(),
     footprints,
     triangles: built.triangles + glow.triangles,
   };
+}
+
+/**
+ * The marks acts have left on the village (C45), as one small mesh over it: trampled rows, a weeded
+ * stripe, a door forced off its bar, flowers at a tidied grave, fresh spoil at a worked mine. Rebuilt
+ * whenever the marks change; a thing that was taken is not drawn here but hidden in the scatter.
+ */
+export function buildMarks(frame: WorldFrame, v: SettledParcel, marks: ReadonlyMap<string, { kind: string }>, day: number): THREE.BufferGeometry | null {
+  const { plan, settlement } = v;
+  const m = new Mesher();
+  let any = false;
+  for (const [ref, mark] of marks) {
+    const [what, id] = ref.split(":");
+    if (what === "field" && (mark.kind === "trampled" || mark.kind === "tended")) {
+      const f = plan.fields[Number(id)];
+      if (!f) continue;
+      const c = Math.cos(f.heading);
+      const sn = Math.sin(f.heading);
+      const r = variation(`${ref}/${mark.kind}`);
+      const colour = mark.kind === "trampled" ? mix(PALETTE.soil, PALETTE.thatch, 0.55) : mix(PALETTE.soil, PALETTE.shadow, 0.25);
+      const blobs = mark.kind === "trampled" ? 7 : 1;
+      m.setTransform(new THREE.Matrix4());
+      for (let b = 0; b < blobs; b++) {
+        const u0 = (r() - 0.5) * f.lengthM * 0.7;
+        const w0 = mark.kind === "trampled" ? (r() - 0.5) * f.widthM * 0.7 : f.widthM * 0.25;
+        const lu = mark.kind === "trampled" ? 1.6 + r() * 2.4 : f.lengthM * 0.9;
+        const lw = mark.kind === "trampled" ? 1.2 + r() * 1.6 : 0.6;
+        const at = (du: number, dw: number): number[] => {
+          const u = (mark.kind === "trampled" ? u0 : 0) + du;
+          const w = w0 + dw;
+          const x = f.x + c * u - sn * w;
+          const y = f.y + sn * u + c * w;
+          const p = sceneAt(frame, x, y, Math.max(0, groundAt(frame, x, y)) + 0.11);
+          return [p.x, p.y, p.z];
+        };
+        m.quad(at(-lu / 2, -lw / 2), at(lu / 2, -lw / 2), at(lu / 2, lw / 2), at(-lu / 2, lw / 2), colour);
+      }
+      any = true;
+    } else if (what === "house" && mark.kind === "forced") {
+      const plot = plan.plots[Number(id)];
+      if (!plot) continue;
+      const door = { x: plot.x + Math.cos(plot.facing) * (plot.depthM / 2 + 0.02), y: plot.y + Math.sin(plot.facing) * (plot.depthM / 2 + 0.02) };
+      m.setTransform(placement(frame, door.x, door.y, plot.facing, Math.max(0, groundAt(frame, door.x, door.y)) + 0.12));
+      m.box(0.03, 0.85, 0, 0.04, 1.7, 0.85, rgb(0x0e0b09));
+      m.setTransform(placement(frame, door.x, door.y, plot.facing + 0.9, Math.max(0, groundAt(frame, door.x, door.y)) + 0.12));
+      m.box(0.45, 0.8, 0.2, 0.06, 1.6, 0.8, rgb(PALETTE.wood));
+      any = true;
+    } else if (what === "grave" && mark.kind === "tidied") {
+      const g = gravesOn(settlement, plan, day).find((x) => x.person === id);
+      if (!g) continue;
+      m.setTransform(placement(frame, g.x, g.y, 0, Math.max(0, groundAt(frame, g.x, g.y))));
+      const r = variation(ref);
+      for (let i = 0; i < 4; i++) m.box(0.4 + r() * 0.5, 0.12, (r() - 0.5) * 0.4, 0.08, 0.24, 0.08, i % 2 === 0 ? rgb(0xe8d66a) : rgb(0xf2efe6));
+      any = true;
+    } else if (what === "mine" && mark.kind === "worked" && plan.mine) {
+      const mn = plan.mine;
+      m.setTransform(placement(frame, mn.x, mn.y, mn.heading, Math.max(0, groundAt(frame, mn.x, mn.y))));
+      m.box(1.8, 0.3, -0.6, 1.2, 0.6, 1.0, mix(PALETTE.rock, PALETTE.rockLight, 0.6));
+      any = true;
+    }
+  }
+  return any ? m.geometry() : null;
 }

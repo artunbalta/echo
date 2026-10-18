@@ -65,6 +65,13 @@ export interface VillagersLayer extends WorldLayer {
   nearest(): NearVillager | null;
   /** Metres from the player to a villager drawn last frame, or null if they are not out. */
   distanceTo(id: string): number | null;
+  /**
+   * A household's boat is out with the stranger (C45): its mooring is drawn empty, in this view only,
+   * until `lend(null)`. The schedule — the family's fisher rowing out at dawn — is untouched.
+   */
+  lend(household: number | null): void;
+  /** Villagers drawn out of doors last frame within `r` metres of a point: who could see an act (C45). */
+  watchers(x: number, y: number, r: number): number;
   /** The player's position last frame, planet-local metres: what `begin` is told (C44). */
   playerPosition(): { x: number; y: number } | null;
   /** The same village with new changes (C44): new people, new days, the same houses. */
@@ -144,6 +151,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   /** The player's last position (local metres) and the sky's last hour, for the calls between frames. */
   const playerAt = { x: Infinity, y: Infinity };
   let lastHour = 0.5;
+  let lent: number | null = null;
+  const zero = new THREE.Vector3(0, 0, 0);
 
   const refresh = (day: number) => {
     const v = village!;
@@ -215,7 +224,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         const [tx, ty] = frame!.fromLocalM(b.x, b.y);
         const h = mo.ashore ? Math.max(0, frame!.heightAtTile(tx, ty)) + 0.05 : 0.08 + Math.sin(seconds * 1.3 + i) * 0.03;
         q.setFromAxisAngle(up, b.heading);
-        m.compose(pos.set(tx * frame!.tileM, h, ty * frame!.tileM), q, one);
+        m.compose(pos.set(tx * frame!.tileM, h, ty * frame!.tileM), q, mo.household === lent ? zero : one);
         boatMesh!.setMatrixAt(i, m);
       });
       boatMesh.instanceMatrix.needsUpdate = true;
@@ -339,6 +348,19 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     plans: () => state.plans,
     nearest: () => near,
     playerPosition: () => (Number.isFinite(playerAt.x) ? { x: playerAt.x, y: playerAt.y } : null),
+    lend(household) {
+      lent = household;
+    },
+    watchers(x, y, r) {
+      // Children under eight see, and nobody asks them: the same rule the act route's witnesses keep.
+      const day = worldDayIndex(options.clock, Date.now());
+      let n = 0;
+      for (const [id, at] of lastAt) {
+        const p = people.get(id);
+        if (p && Math.hypot(at.x - x, at.y - y) <= r && (day - p.birthDay) / 365 >= 8) n++;
+      }
+      return n;
+    },
 
     apply(v) {
       if (!village) return;

@@ -62,6 +62,7 @@ import { skyLayer } from "./skyLayer";
 import { sliceLayer } from "./sliceLayer";
 import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
+import { interactLayer } from "./interactLayer";
 import type { TouchControlHandle } from "./touchInput";
 import type { ReactionReading } from "@/components/world/Inspector";
 import { WORLD_EPOCH, worldClock, type WorldClock } from "@echo/planet";
@@ -160,6 +161,8 @@ export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock =
   const player = layers.find(layer => layer.name === "player") as ReturnType<typeof playerLayer>;
   const playerTile = () => { const at = player.position(); return { x: at.x, y: at.y }; };
   layers.push(walkLayer({ chain, playerTile }));
+  // Everything within reach, and the marks acts have left (C45). Last, so it reads every layer above.
+  layers.push(interactLayer({ clock }));
   if (slice) layers.push(sliceLayer({ chain, playerTile, onReaction: slice.onReaction, onBeat: slice.onBeat }));
   return layers;
 }

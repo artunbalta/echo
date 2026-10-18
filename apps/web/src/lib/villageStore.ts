@@ -13,7 +13,7 @@
  */
 import "server-only";
 
-import type { LifeChange } from "@echo/planet";
+import type { Deed, LifeChange, WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 
@@ -36,7 +36,49 @@ export interface VillageStore {
   memoryOf(subject: string, cell: string, person: string): Promise<VillagerMemory | "none" | null>;
   remember(subject: string, cell: string, person: string, memory: VillagerMemory): Promise<boolean>;
   forget(subject: string, cell: string, person: string): Promise<boolean>;
+  /** The marks on a cell that have not healed by `day` (C45). Null: unreadable. */
+  effectsFor(cell: string, day: number): Promise<WorldEffect[] | null>;
+  addEffect(cell: string, effect: Omit<WorldEffect, "id">, subject: string): Promise<WorldEffect | null>;
+  /** One stranger's deeds in one cell (C45). Null: unreadable. */
+  deedsFor(subject: string, cell: string): Promise<Deed[] | null>;
+  addDeed(subject: string, cell: string, deed: Omit<Deed, "id">): Promise<Deed | null>;
 }
+
+interface EffectRow {
+  id: number;
+  thing: string;
+  kind: WorldEffect["kind"];
+  day: number;
+  until_day: number;
+}
+const effectFromRow = (r: EffectRow): WorldEffect => ({ id: `e${r.id}`, thing: r.thing, kind: r.kind, day: r.day, untilDay: r.until_day });
+
+interface DeedRow {
+  id: number;
+  verb: string;
+  kind: string;
+  thing: string;
+  thing_name: string;
+  reading: Deed["reading"];
+  weight: Deed["weight"];
+  day: number;
+  hour: number;
+  witnesses: string[];
+  owners: string[];
+}
+const deedFromRow = (r: DeedRow): Deed => ({
+  id: `d${r.id}`,
+  verb: r.verb,
+  kind: r.kind,
+  thing: r.thing,
+  thingName: r.thing_name,
+  reading: r.reading,
+  weight: r.weight,
+  day: r.day,
+  hour: r.hour,
+  witnesses: r.witnesses ?? [],
+  owners: r.owners ?? [],
+});
 
 /** Ids are compared as strings in `byMade`, so they are padded to sort the way they were made. */
 const changeId = (n: number | string) => `c${String(n).padStart(12, "0")}`;
@@ -128,6 +170,59 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("forget", error.message), false;
       return true;
     },
+    async effectsFor(cell, day) {
+      const { data, error } = await admin
+        .from("world_effects")
+        .select("id, thing, kind, day, until_day")
+        .eq("cell", cell)
+        .gt("until_day", day)
+        .order("id", { ascending: true })
+        .limit(5000);
+      if (error) return warn("effectsFor", error.message), null;
+      return (data as EffectRow[]).map(effectFromRow);
+    },
+    async addEffect(cell, e, subject) {
+      const { data, error } = await admin
+        .from("world_effects")
+        .insert({ cell, thing: e.thing, kind: e.kind, day: e.day, until_day: e.untilDay, subject })
+        .select("id, thing, kind, day, until_day")
+        .single();
+      if (error) return warn("addEffect", error.message), null;
+      return effectFromRow(data as EffectRow);
+    },
+    async deedsFor(subject, cell) {
+      const { data, error } = await admin
+        .from("village_deeds")
+        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners")
+        .eq("subject", subject)
+        .eq("cell", cell)
+        .order("id", { ascending: true })
+        .limit(2000);
+      if (error) return warn("deedsFor", error.message), null;
+      return (data as DeedRow[]).map(deedFromRow);
+    },
+    async addDeed(subject, cell, d) {
+      const { data, error } = await admin
+        .from("village_deeds")
+        .insert({
+          subject,
+          cell,
+          verb: d.verb,
+          kind: d.kind,
+          thing: d.thing,
+          thing_name: d.thingName,
+          reading: d.reading,
+          weight: d.weight,
+          day: d.day,
+          hour: d.hour,
+          witnesses: d.witnesses,
+          owners: d.owners,
+        })
+        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners")
+        .single();
+      if (error) return warn("addDeed", error.message), null;
+      return deedFromRow(data as DeedRow);
+    },
   };
 }
 
@@ -139,6 +234,8 @@ function supabaseStore(): VillageStore | null {
 interface MemoryState {
   changes: Map<string, LifeChange[]>;
   memories: Map<string, VillagerMemory>;
+  effects?: Map<string, WorldEffect[]>;
+  deeds?: Map<string, Deed[]>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -167,6 +264,24 @@ function memoryStore(): VillageStore {
       memory.memories.delete(key(subject, cell, person));
       return true;
     },
+    async effectsFor(cell, day) {
+      return (memory.effects?.get(cell) ?? []).filter((e) => e.untilDay > day);
+    },
+    async addEffect(cell, e) {
+      const effect: WorldEffect = { ...e, id: `e${memory.next++}` };
+      memory.effects ??= new Map();
+      memory.effects.set(cell, [...(memory.effects.get(cell) ?? []), effect]);
+      return effect;
+    },
+    async deedsFor(subject, cell) {
+      return [...(memory.deeds?.get(`${subject}|${cell}`) ?? [])];
+    },
+    async addDeed(subject, cell, d) {
+      const deed: Deed = { ...d, id: `d${memory.next++}` };
+      memory.deeds ??= new Map();
+      memory.deeds.set(`${subject}|${cell}`, [...(memory.deeds.get(`${subject}|${cell}`) ?? []), deed]);
+      return deed;
+    },
   };
 }
 
@@ -188,5 +303,7 @@ export function villageStore(): VillageStore | null {
 export function resetMemoryStore(): void {
   memory.changes.clear();
   memory.memories.clear();
+  memory.effects?.clear();
+  memory.deeds?.clear();
   memory.next = 1;
 }

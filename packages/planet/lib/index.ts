@@ -37,3 +37,7 @@ export * from "./schedule.js";
 // What conversations change about a life, and what a villager wants (C44).
 export * from "./changes.js";
 export * from "./goals.js";
+// Everything a person can do to anything, the village's things, and who knows what you did (C45).
+export * from "./affordances.js";
+export * from "./things.js";
+export * from "./deeds.js";

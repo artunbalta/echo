@@ -15,6 +15,13 @@
 
 ### Where this stands — 2026-09-14
 
+> **2026-10-18 — `C45`, everything can be acted on.** One registry of verbs for every scatter class,
+> every village thing, the villagers and the water, and a test that stops a new thing shipping without
+> them. Acts are measured under ingest.py's own labels (no `services/ml` change), leave shared healing
+> marks, and are deeds with witnesses: a household you wronged turns its back on you, and villagers
+> speak of what they saw. A mine where the ground has metal; boats you can row; a meter that no longer
+> freezes after the first act. The posterior's real movement under acts is unmeasured (`⚑40`).
+>
 > **2026-10-18 — `C43` + `C44`, lives that change.** The planet was re-rolled once: the society's
 > stream had been one number and its shifts (`⚑38`), and a person's id is now their lineage (`⚑33`
 > closed). Villagers remember each stranger (a private note in their own words), want things (a closed

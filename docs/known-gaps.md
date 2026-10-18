@@ -1815,3 +1815,30 @@ consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** OPEN, all of it, written down rather than discovered.
 
+---
+
+## ⚑ 40. What C45 does not do yet, and what it trusts (2026-10-18)
+
+- **Nothing here has moved a real posterior yet.** The ML service was offline for every browser run,
+  so the acts reached `/api/observe/behavioral` and came back `mocked`. Each named label's handler is
+  checked by a test to exist; what these acts actually do to μ and Σ is unmeasured. That needs an
+  individuation run in the embodied build's style: two contrasting players, two posteriors, an L2
+  distance.
+- **Many acts are unrouted, on purpose.** Trespass, theft, trampling, respect at a grave and play
+  have no feature whose definition they match (C30: the property-respect handlers route to
+  `consistency`, an exact zero column). They move the posterior through the label embedding and the
+  privacy bucket only, until the one-time re-anchor (C29) decides.
+- **The stranger's position is their browser's word**, as in ⚑39. Reach is checked against it, and
+  who saw the act is computed by the server's clock. A browser whose sky is frozen sees a different
+  audience from the server's witnesses (the measurement's `audience_size` is the browser's).
+- **Taking is not having.** What you carry lives in the page. It is gone on reload, and a gift is
+  trusted to have been carried. There is no inventory store.
+- **The boat is per-viewer.** Others see the family's boat at its mooring while you row it. Nothing
+  is synchronised in real time (C27's shared unit is the parcel, and this is a presentation).
+- **No violence toward people.** There is no verb that hurts a villager. That is deliberate in v1:
+  it is the one category whose consequence (C26) this world cannot yet carry.
+- **Grievance is family-deep and month-long, and those are dials.** Whether villagers forgive too
+  fast or know too little is unmeasured with real players.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
