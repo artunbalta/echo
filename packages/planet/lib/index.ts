@@ -48,3 +48,5 @@ export * from "./nav.js";
 export * from "./weather.js";
 // Who is close to whom, and what they say (C49).
 export * from "./social.js";
+// What a villager would ask a stranger for (C50).
+export * from "./needs.js";

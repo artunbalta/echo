@@ -2816,3 +2816,73 @@ three different villagers.
 
 **Not done.** Villagers do not walk over to friends during the day, only in the evening. The chatter
 is English templates; Turkish is feature 20.
+
+## C50 — what a villager would ask a stranger for, and what helping does
+
+Feature 5 of the twenty.
+
+**A need is a sentence, not a quest** (`lib/needs.ts`). Each week a villager may have one small
+thing on their mind that a stranger could do:
+
+- a child wants a shell, a flat stone or berries;
+- someone building a boat or a house is short of wood or stone for it;
+- a widow would be glad of help with her husband's grave;
+- an old person, or the one looking after them, wants berries;
+- a trade could use its tool (a fisher a hook and line, a farmer a basket);
+- a household whose crop a stranger trampled wants the field put right. This one comes first and
+  lasts as long as the mark does.
+
+It is drawn deterministically from the person, the week and their circumstances (goals, dead, trade,
+the marks on their things), so it is the same for everyone. About one person in four has one in a
+given week (0.250 over 7,299 person-weeks), and most people at work on a goal that takes time do.
+There is no list, no marker and no count (Design Law 1). The villager **says it once**, in a bubble,
+when the stranger comes within 5 m, and it is in what they say when spoken to.
+
+**Meeting it is everyone's.** The act route checks whether an act meets a need of anyone it touches:
+
+- the needed item handed to the villager, or left at their door;
+- the trampled field weeded;
+- the grave tidied.
+
+If it does, a sixth kind of life change is recorded, `met` (migration `0022_needs_met.sql`). The
+need is then gone for every stranger after. The deed remembers whose need it met (`village_deeds.met`).
+The villager says thank you in a bubble, or, if they are not there, the line says they will be glad
+of it. One need a week: whoever was helped asks for nothing else until the next.
+
+**Helping really moves a goal** (`goals.ts` `HELP`, `helpDays`). A goal that takes time comes
+nearer by 15% of its length for each need met for it. A boat comes six days nearer; a house, 22. A
+wish the seed could see is **begun** by help: wood brought to a man who wanted a boat is a boat he is
+now building. That is a goal of source `help`, and his evenings go to the dock. A met change is not
+the villager's decision, so it does not use up their one decision a day.
+
+**What the model is told.** The need rides in the note after the conversation, not in the day's
+cached facts, which it outlives. The note says what would meet it, and to ask in their own words
+"never as a bargain". Once the need is met, the note says what was done and **whether it was this
+stranger**.
+
+**Measured.**
+
+- `needs.test.ts`, 10 tests: the share, the same need all week, needs are things the world has,
+  children's wants, met for everyone from that day and not before, not a decision, `meets`, the
+  trampled field, wood for a boat, a wish begun, one a week.
+- Eight injected defects, all caught.
+- `worldActs` C50: a gift met for everyone and only once; the wrong item or person meets nothing; a
+  weeded field meets its household's needs.
+- `villagerTalk` C50: the need in the note, and both branches after it is met.
+- Real model, 7 calls, about $0.09. Offered help, 2 of 2 asked for the right thing in their own words
+  (a grave, a basket). Asked only "how is your day", 0 of 2 did. A need met by somebody else first
+  produced "did you manage to look at the stone?". The note now says it was not this stranger, and
+  the reply became "someone else cleaned it, it wasn't you — there's nothing left I'd ask of you".
+- Browser, Senstrand: a child, Stas, asks for a shell as the stranger comes near. The stranger cuts
+  one from the beach and hands it over. Stas says "For me? It's a good one!", and the need is gone.
+- `needsOn` costs 1.1 ms for Kamgull's 142 people, once per day, change or mark.
+
+**Fixed on the way: a race that refused every act's measurement.** The parcel page mints an identity
+from two places at once: the measure chain, with an injected fetch, and the act panel (C47), with the
+default. The injected caller skipped the memo, so two subjects were minted, and every
+`/api/observe/behavioral` was refused with `identity_mismatch` (the HUD's `http_403`). Mints are now
+queued (`lib/identity.ts`), and an injected caller still uses its own transport.
+`identityMint.test.mts` fails on the old code and passes on the new. The browser now mints once, and
+observe answers 200.
+
+**Not done.** See ⚑41.

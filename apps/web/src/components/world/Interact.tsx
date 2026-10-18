@@ -24,7 +24,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ITEMS, PACK_SIZE, RECIPES, canMake, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Pack, type Recipe, type Verb } from "@echo/planet";
+import { ITEMS, PACK_SIZE, RECIPES, canMake, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type LifeChange, type Pack, type Recipe, type Verb } from "@echo/planet";
 
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
@@ -160,7 +160,14 @@ export default function Interact({
           headers: identityHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ cell, thing: thing.ref, kind: thing.kind, verb: verb.id, at, ...(item ? { item } : {}) }),
         });
-        const data = (await res.json().catch(() => ({}))) as { seenBy?: string[]; effect?: { id: string; thing: string; kind: string; day: number; untilDay: number }; error?: string; pack?: Pack };
+        const data = (await res.json().catch(() => ({}))) as {
+          seenBy?: string[];
+          effect?: { id: string; thing: string; kind: string; day: number; untilDay: number };
+          error?: string;
+          pack?: Pack;
+          met?: { person: string; name: string; words: string }[];
+          changes?: LifeChange[];
+        };
         if (res.status === 429) {
           say("Enough. The village has seen enough of you for one day.");
           return;
@@ -194,6 +201,19 @@ export default function Interact({
         if (seen.length === 1) say(`${seen[0]} saw you.`, 5200);
         else if (seen.length <= 3 && seen.length > 1) say(`${seen.slice(0, -1).join(", ")} and ${seen.at(-1)} saw you.`, 5200);
         else if (seen.length > 3) say(`${seen.slice(0, 3).join(", ")} and ${seen.length - 3} others saw you.`, 5200);
+        // The very thing somebody needed (C50): they say so, to your face if they are there.
+        if (data.met?.length) {
+          const { villagers } = layers();
+          const w = worldRef.current();
+          const had = w?.region.village?.changes ?? [];
+          const fresh = (data.changes ?? []).filter((c) => !had.some((h) => h.id === c.id));
+          if (w && fresh.length) w.revillage([...had, ...fresh]);
+          for (const m of data.met) {
+            const d = villagers?.distanceTo(m.person) ?? null;
+            if (d !== null && d < 20) villagers?.say(m.person, m.words);
+            else say(`${m.name} will be glad of it.`, 5200);
+          }
+        }
       } catch {
         // The act happened; the village did not hear of it. Nothing to show the person.
       }

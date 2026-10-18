@@ -69,6 +69,7 @@ interface DeedRow {
   witnesses: string[];
   owners: string[];
   item?: string | null;
+  met?: string[] | null;
 }
 const deedFromRow = (r: DeedRow): Deed => ({
   id: `d${r.id}`,
@@ -83,6 +84,7 @@ const deedFromRow = (r: DeedRow): Deed => ({
   witnesses: r.witnesses ?? [],
   owners: r.owners ?? [],
   ...(r.item ? { item: r.item } : {}),
+  ...(r.met && r.met.length > 0 ? { met: r.met } : {}),
 });
 
 /** Ids are compared as strings in `byMade`, so they are padded to sort the way they were made. */
@@ -198,7 +200,7 @@ function supabaseStore(): VillageStore | null {
     async deedsFor(subject, cell) {
       const { data, error } = await admin
         .from("village_deeds")
-        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners, item")
+        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners, item, met")
         .eq("subject", subject)
         .eq("cell", cell)
         .order("id", { ascending: true })
@@ -223,8 +225,9 @@ function supabaseStore(): VillageStore | null {
           witnesses: d.witnesses,
           owners: d.owners,
           item: d.item ?? null,
+          met: d.met && d.met.length > 0 ? d.met : null,
         })
-        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners, item")
+        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners, item, met")
         .single();
       if (error) return warn("addDeed", error.message), null;
       return deedFromRow(data as DeedRow);

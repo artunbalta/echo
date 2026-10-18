@@ -1850,3 +1850,20 @@ consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** OPEN, all of it, written down rather than discovered.
 
+## ⚑ 41. What C50 does not do yet, and what it trusts (2026-10-18)
+
+- **Asked when, not asked or not.** Helping when asked and helping unprompted reach ingest.py as the
+  same label (`give_gift`, `help_at_cost`). They are different evidence — responsiveness against
+  initiative — and the protected ML boundary (C7) is why the request is not a feature yet.
+- **Villagers rarely bring it up unprompted in conversation.** It was 0 of 2 when asked about their
+  day, and 2 of 2 when help was offered. The bubble asks; the conversation waits to be asked. Whether
+  that is the right balance is unmeasured with real players.
+- **"Asked once" is this page's memory.** A villager who asked for a shell asks again after a
+  reload. It is not per stranger, and not stored.
+- **A gift at a door meets one need**, the first household member's whose need it is, in the order
+  the village lists them. A household where two people want the same thing is not tested.
+- **The need is in English templates**, as the chatter is; Turkish is feature 20. The model says it in
+  the stranger's language.
+- **Migration 0022 is applied nowhere**, like 0019–0021 (⚑37).
+
+**Status:** OPEN, all of it, written down rather than discovered.

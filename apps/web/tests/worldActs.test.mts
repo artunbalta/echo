@@ -14,6 +14,8 @@ import { createRequire } from "node:module";
 import { signIdentity } from "@echo/shared/identity";
 import {
   ageYears,
+  needOf,
+  needsOn,
   present,
   timeOfDay,
   verbOf,
@@ -260,4 +262,74 @@ test("C47: making something takes its makings out of the pack and puts the thing
   assert.equal((await packReq("POST", { op: "make", recipe: "gold" })).status, 404);
   const dropped = (await (await packReq("POST", { op: "drop", item: "basket" })).json()) as { pack: Record<string, number> };
   assert.deepEqual(dropped.pack, { reed: 1 });
+});
+
+// ── what a villager needs (C50) ─────────────────────────────────────────────────
+
+/** Someone of Senstrand out of doors at the hour, with an item they would ask a stranger for. */
+function needer(): { id: string; item: string; at: { x: number; y: number } } {
+  const { field: f, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, f, calibration, world.radiusKm, { commons: commons.cells, day: DAY })!;
+  const hour = timeOfDay(CLOCK, NOW);
+  for (const [id, n] of needsOn(v.settlement, v.plan, DAY)) {
+    if (!n.item) continue;
+    const p = v.settlement.people.find((q) => q.id === id)!;
+    const w = whereNow(v.settlement, v.plan, p, DAY, hour);
+    if (w && w.visible && w.boat === null) return { id, item: n.item, at: { x: w.x + 1, y: w.y } };
+  }
+  throw new Error("nobody in Senstrand who needs a thing is out this morning");
+}
+
+test("C50: the very thing a villager needs, handed to them, is met for everyone — and the same again is only a gift", async () => {
+  const n = needer();
+  await villageStore()!.setPack(SUBJECT, { [n.item]: 2 });
+  const give = { cell: CELL, thing: `villager:${n.id}`, kind: "villager", verb: "give", at: n.at, item: n.item };
+  const first = (await (await act(give)).json()) as { met?: { person: string; words: string }[]; changes?: { kind: string; person: string; goalId: string }[] };
+  assert.equal(first.met?.length, 1, "the thing they needed met nothing");
+  assert.equal(first.met![0].person, n.id);
+  assert.ok(first.met![0].words.length > 0);
+  assert.equal(first.changes?.[0].kind, "met");
+  // Everyone's: the public changes carry it, and the need is gone from the village as anyone rebuilds it.
+  const pub = (await (await CHANGES(new Request(`https://echo.test/api/village/changes?cell=${CELL}`))).json()) as { changes: { kind: string; person: string; subject?: string }[] };
+  assert.equal(pub.changes.filter((c) => c.kind === "met" && c.person === n.id).length, 1);
+  assert.equal(pub.changes[0].subject, undefined, "the public changes name who met the need");
+  const changes = (await villageStore()!.changesFor(CELL))!;
+  const { field: f, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, f, calibration, world.radiusKm, { commons: commons.cells, day: DAY, changes })!;
+  assert.equal(needOf(v.settlement, v.plan, v.settlement.people.find((p) => p.id === n.id)!, DAY, changes), null, "the need is still there");
+  const [deed] = (await villageStore()!.deedsFor(SUBJECT, CELL))!;
+  assert.deepEqual(deed.met, [n.id], "the deed does not remember whose need it met");
+  // The same thing again is a kindness and nothing more.
+  const second = (await (await act(give)).json()) as { met?: unknown };
+  assert.equal(second.met, undefined, "one need was met twice");
+  assert.equal((await villageStore()!.deedsFor(SUBJECT, CELL))![1].met, undefined);
+});
+
+test("C50: the wrong thing, or the right thing to the wrong person, meets nothing", async () => {
+  const n = needer();
+  const wrong = n.item === "stone" ? "reed" : "stone";
+  await villageStore()!.setPack(SUBJECT, { [wrong]: 1, [n.item]: 1 });
+  const other = (await (await act({ cell: CELL, thing: `villager:${n.id}`, kind: "villager", verb: "give", at: n.at, item: wrong })).json()) as { met?: unknown };
+  assert.equal(other.met, undefined, `${wrong} met a need for ${n.item}`);
+  // Somebody with no need for it: the field's owner if they are not the one who needs it.
+  const { field: f, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, f, calibration, world.radiusKm, { commons: commons.cells, day: DAY })!;
+  const needs = needsOn(v.settlement, v.plan, DAY);
+  const stranger = v.settlement.people.find((p) => present(v.settlement, p, DAY) && needs.get(p.id)?.item !== n.item && p.household !== v.settlement.people.find((q) => q.id === n.id)!.household)!;
+  const elsewhere = (await (await act({ cell: CELL, thing: `villager:${stranger.id}`, kind: "villager", verb: "give", at: n.at, item: n.item })).json()) as { met?: unknown };
+  assert.equal(elsewhere.met, undefined, "a gift to one villager met another's need");
+  assert.equal(((await villageStore()!.changesFor(CELL)) ?? []).filter((c) => c.kind === "met").length, 0);
+});
+
+test("C50: a field trampled is its household's need, and weeding it meets it for all of them", async () => {
+  await act({ cell: CELL, thing: field.ref, kind: "field", verb: "trample", at: { x: field.x, y: field.y } });
+  const res = (await (await act({ cell: CELL, thing: field.ref, kind: "field", verb: "tend", at: { x: field.x, y: field.y } })).json()) as { met?: { person: string }[] };
+  const { field: f, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, f, calibration, world.radiusKm, { commons: commons.cells, day: DAY })!;
+  const grown = field.owners.filter((id) => ageYears(v.settlement.people.find((p) => p.id === id)!, DAY) >= 16);
+  assert.ok(grown.length > 0);
+  assert.deepEqual(res.met?.map((m) => m.person).sort(), [...grown].sort(), "weeding the trampled field did not put it right for its household");
+  // Weeding it again is help, and no need.
+  const again = (await (await act({ cell: CELL, thing: field.ref, kind: "field", verb: "tend", at: { x: field.x, y: field.y } })).json()) as { met?: unknown };
+  assert.equal(again.met, undefined);
 });

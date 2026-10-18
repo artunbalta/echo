@@ -20,13 +20,22 @@
  * WHAT IS KEPT. The deed (`village_deeds`), private to the stranger and erased with them, and the mark
  * (`world_effects`), shared, healing, its subject cleared on erasure. Nothing typed — there is no text.
  * And the pack (C47): what was picked up is added to it, what was given comes out of it, both checked.
+ *
+ * A NEED MET (C50). If the act is the very thing somebody it touches needed this week (`needs.ts`:
+ * the shell handed to the child who wanted one, the trampled field weeded), it is recorded as a `met`
+ * change — shared, so the need is gone for every stranger after, and a goal it was for comes nearer —
+ * and the deed remembers whose need it met. The answer carries what they say about it.
  */
 import { NextResponse } from "next/server";
 import {
   WRONGS,
   add,
   activeEffects,
+  meets,
+  metChange,
+  needOf,
   remove,
+  thanksFor,
   parseScatterRef,
   present,
   thingName,
@@ -34,6 +43,8 @@ import {
   villageThings,
   witnessesOf,
   type Deed,
+  type LifeChange,
+  type Need,
 } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
@@ -132,6 +143,22 @@ export async function POST(req: Request) {
   }
 
   const witnesses = witnessesOf(s, village.plan, day, hour, place, changes, kind === "house" ? thing : undefined);
+  const standing = (await store.effectsFor(cell, day)) ?? [];
+
+  // Whose need this meets (C50): the villager handed it, or whoever the thing belongs to. One gift
+  // meets one need; weeding a household's field puts it right for all of them.
+  const byId = new Map(s.people.map((p) => [p.id, p]));
+  const toPerson = thing.startsWith("villager:") ? thing.slice(9) : null;
+  const act = { verb: verb.id, thing, item: gift, toPerson, owners: place.owners };
+  const metNeeds: Need[] = [];
+  for (const id of toPerson ? [toPerson] : place.owners) {
+    const p = byId.get(id);
+    const n = p ? needOf(s, village.plan, p, day, changes, standing) : null;
+    if (!n || !meets(n, act)) continue;
+    metNeeds.push(n);
+    if (n.item) break;
+  }
+
   let deed: Deed | null = null;
   if (verb.deed) {
     deed = await store.addDeed(caller.subject, cell, {
@@ -146,22 +173,31 @@ export async function POST(req: Request) {
       witnesses,
       owners: place.owners,
       ...(gift ? { item: gift } : {}),
+      ...(metNeeds.length > 0 ? { met: metNeeds.map((n) => n.person) } : {}),
     });
+  }
+  const met: { person: string; name: string; words: string }[] = [];
+  const recorded: LifeChange[] = [];
+  for (const n of metNeeds) {
+    const c = await store.addChange(cell, metChange(n, day), caller.subject);
+    if (!c) continue;
+    recorded.push(c);
+    met.push({ person: n.person, name: byId.get(n.person)?.given ?? "", words: thanksFor(n) });
   }
   if (pack !== null) await store.setPack(caller.subject, pack);
   let effect = null;
   if (verb.effect && verb.effect.lastsDays > 0) {
-    const standing = (await store.effectsFor(cell, day)) ?? [];
     const already = activeEffects(standing, day).get(thing);
     effect = already && already.kind === verb.effect.kind ? already : await store.addEffect(cell, { thing, kind: verb.effect.kind, day, untilDay: day + verb.effect.lastsDays }, caller.subject);
   }
 
-  const byId = new Map(s.people.map((p) => [p.id, p]));
   return NextResponse.json({
     recorded: deed !== null || effect !== null,
     // Who saw you, by name: the stranger learns it the way a person would, by being looked at.
     seenBy: witnesses.map((id) => byId.get(id)?.given).filter(Boolean),
     ...(effect ? { effect } : {}),
     ...(pack !== null ? { pack } : {}),
+    // The need met, and the change that says so, for the page to fold into its own village at once.
+    ...(met.length > 0 ? { met, changes: recorded } : {}),
   });
 }

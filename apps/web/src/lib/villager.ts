@@ -27,7 +27,9 @@ import {
   CHANGE_LIMITS,
   GOALS,
   GOAL_KINDS,
+  ITEMS,
   LIVING_MEMORY_YEARS,
+  NEEDS,
   OCCUPATIONS,
   ageYears,
   causeOfDeath,
@@ -37,6 +39,7 @@ import {
   goalFits,
   goalsOf,
   lives,
+  needOf,
   occupationOn,
   present,
   relation,
@@ -53,7 +56,9 @@ import {
   type Proposal,
   type Settlement,
   type VillagePlan,
+  type Deed,
   type Whereabouts,
+  type WorldEffect,
 } from "@echo/planet";
 
 // ── the preamble: the same for every villager on the planet ─────────────────────
@@ -323,8 +328,22 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
   // What they want, and what they have decided (C44).
   if (!child) {
     const goals = goalsOf(s, me, day, changes);
+    // A goal that takes time says how far along it is, and who helped (C50): the help is a fact, not a debt.
+    const left = (g: { doneDay: number | null }) => (g.doneDay !== null ? `, about ${g.doneDay - day} days' work left` : "");
+    const helped = (g: { helped: number; source: string }) =>
+      g.helped === 0
+        ? ""
+        : g.source === "help"
+          ? g.helped > 1
+            ? `; helped along ${g.helped - 1} more time${g.helped > 2 ? "s" : ""} since`
+            : ""
+          : `; somebody has helped you along with it${g.helped > 1 ? `, ${g.helped} times` : ""}`;
     const wants = goals.active.map((g) =>
-      g.source === "talk" ? `${g.text} (you decided this ${agoDays(day, g.since)}, after talking with a stranger)` : g.text,
+      g.source === "talk"
+        ? `${g.text} (you decided this ${agoDays(day, g.since)}, after talking with a stranger${left(g)}${helped(g)})`
+        : g.source === "help"
+          ? `${g.text} (you began it in earnest ${agoDays(day, g.since)}, when somebody brought you what you needed for it${left(g)}${helped(g)})`
+          : g.text,
     );
     if (wants.length) lines.push(`What you want: ${wants.join("; ")}.`);
     if (goals.done.length) lines.push(`What you set out to do and did: ${goals.done.map((g) => `${g.text}, done ${agoDays(day, g.doneDay!)}`).join("; ")}.`);
@@ -399,11 +418,12 @@ export function unknownNames(reply: string, allowed: Set<string>, said: readonly
 // ── without a key: a reply from the facts alone ─────────────────────────────────
 
 /** What a villager says when there is no model to say it: true, short, and drawn from their life. */
-export function mockReply(s: Settlement, me: Person, day: number, turn: number): string {
+export function mockReply(s: Settlement, me: Person, day: number, turn: number, need: string | null = null): string {
   const age = Math.floor(ageYears(me, day));
   const lines = [
     `I'm ${me.given}${age >= 13 ? `, ${occupationOn(me, day)} here in ${s.name}` : ` — I live in ${s.name}`}.`,
-    me.partner !== null && s.people[me.partner].deathDay > day ? `My ${s.people[me.partner].sex === "f" ? "wife" : "husband"} ${s.people[me.partner].given} will be wondering where I've got to.` : `It's a quiet place, ${s.name}. You get used to it.`,
+    // What they would ask for this week (C50), even without a model to say it in their own words.
+    need ? `${need}.`.replace(/([.?!])\.$/, "$1") : me.partner !== null && s.people[me.partner].deathDay > day ? `My ${s.people[me.partner].sex === "f" ? "wife" : "husband"} ${s.people[me.partner].given} will be wondering where I've got to.` : `It's a quiet place, ${s.name}. You get used to it.`,
     `I can't stand here all day, stranger. There's work.`,
   ];
   return lines[turn % lines.length];
@@ -639,7 +659,46 @@ export function changeWords(c: LifeChange, s: Settlement, day: number): string {
       const text = spec.text.replace("{name}", target?.given ?? "someone").replace("{trade}", c.occupation ?? "trade").replace(/\bmy\b/g, their).replace(/\bme\b/g, p?.sex === "f" ? "her" : "him");
       return `${name} has decided ${text.startsWith("to ") ? "" : "to want "}${text}.`;
     }
+    case "met": {
+      // A need met (C50): what the stranger did, from where the village stands.
+      const spec = c.goal ? GOALS[c.goal] : null;
+      if (!spec) return `${name} has what ${p?.sex === "f" ? "she" : "he"} needed.`;
+      const text = spec.text.replace("{name}", target?.given ?? "someone").replace("{trade}", c.occupation ?? "trade").replace(/\bmy\b/g, their).replace(/\bme\b/g, p?.sex === "f" ? "her" : "him");
+      return `${name}'s ${text.replace(/^(a |to )/, "")} is nearer for your help.`.replace("'s own", "'s");
+    }
   }
+}
+
+/**
+ * What this villager would ask a stranger for this week (C50), for the note that rides after the
+ * conversation: it changes when somebody meets it, so it is not in the day's cached facts.
+ */
+export function needLine(
+  s: Settlement,
+  plan: VillagePlan | null,
+  me: Person,
+  day: number,
+  changes: readonly LifeChange[],
+  effects: readonly WorldEffect[],
+  deeds: readonly Deed[] = [],
+): string {
+  const n = needOf(s, plan, me, day, changes, effects);
+  if (n) {
+    const what = n.item ? `${ITEMS[n.item]?.name ?? n.item}, handed to you or left at your door` : n.verb === "tend" ? "the field weeded" : "the grave tidied";
+    return `On your mind this week, and something you might ask a kind stranger for: "${n.text}". Only ${what} would meet it. Ask in your own words if it comes up, or if they offer — never as a bargain, and never offer anything for it.`;
+  }
+  // Met this week: say what was done and whether it was THIS stranger, or a villager who asked them
+  // asks after a thing somebody else already did (C50's real-model check, which is how it was found).
+  const week = Math.floor(day / NEEDS.weekDays);
+  const met = changes.find((c) => c.kind === "met" && c.person === me.id && c.goalId?.startsWith(`${me.id}/${week}/`) && c.madeDay <= day);
+  if (!met) return "";
+  const what = met.goalId!.split("/").pop()!.replace(/^goal:/, "");
+  const done =
+    what === "grave" ? "tidied the grave you had let go" : what === "field" ? "put your trampled field right" : what === "elder" ? "brought the berries you wanted to take round" : `brought you ${ITEMS[what]?.name ?? "what you needed"}`;
+  const theirs = deeds.some((d) => d.met?.includes(me.id) && d.day >= week * NEEDS.weekDays && d.day <= day);
+  return theirs
+    ? `This stranger ${done}, this week — the very thing you needed. You know it was them, and you are grateful.`
+    : `Somebody ${done} this week — not this stranger. It is done, and you are glad of it; there is nothing left to ask anyone for.`;
 }
 
 /** For the panel's first line: the oldest of a villager's memories of you, in words, or null. */

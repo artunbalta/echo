@@ -31,7 +31,8 @@ export interface Thing {
   name: string;
 }
 
-const fieldOwners = (s: Settlement, plan: VillagePlan, index: number, day: number): string[] => {
+/** Who works a field on a day: the households whose nearest field it is (age thirteen and up). */
+export const fieldOwners = (s: Settlement, plan: VillagePlan, index: number, day: number): string[] => {
   const f = plan.fields[index];
   const out: string[] = [];
   for (const { person, plot } of residentsOn(s, plan, day)) {
