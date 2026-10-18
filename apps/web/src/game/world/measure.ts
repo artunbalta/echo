@@ -224,6 +224,8 @@ export interface MeasureChain {
   armed(): boolean;
   /** Feed the mover's TILE position every frame. Before accept this is a no-op: not even sampled. */
   feedPosition(x: number, y: number, now?: number): void;
+  /** The positions fed from now on are in another frame (C57): end the path here. */
+  breakPath(): void;
   emitAction(action: string, opts?: EmitActionOptions): Promise<ActionResult>;
   /** The last LOG_SIZE events, oldest first. A copy. */
   log(): MeasureLogEntry[];
@@ -440,6 +442,9 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
 
     feedPosition(x, y, now = clock()) {
       sampler?.feed(x, y, now);
+    },
+    breakPath() {
+      sampler?.breakPath();
     },
 
     async emitAction(action, o = {}) {

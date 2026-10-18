@@ -250,6 +250,13 @@ export interface PlanetWorldOptions {
    * so the browser generates the same people the talk route does. Absent: the seed's village.
    */
   changes?: readonly LifeChange[];
+  /**
+   * Build without drawing (C57): the world that is being readied for the parcel a raft is crossing
+   * into. It takes no turn at the shared renderer and runs no frame until `wake()`, and it lets the
+   * world in front of the person draw between its layers' builds, so the crossing does not stall
+   * the crossing. Only `successor()` makes one.
+   */
+  dormant?: boolean;
 }
 
 /** What one layer cost in the frame that was sampled, split by pass. */
@@ -313,7 +320,7 @@ export interface RenderInfo {
 
 export type BuildPhase = "idle" | "building" | "ready" | "aborted" | "failed";
 
-const HOST_OWNER = "planet-world";
+let worldsMade = 0;
 
 /**
  * The lens, in degrees of VERTICAL field of view, which is what three's PerspectiveCamera takes.
@@ -333,7 +340,12 @@ export class PlanetWorld {
   readonly calibration: Calibration;
   readonly handle: RendererHandle;
 
-  private readonly ownsRenderer: boolean;
+  /** Whose turn at the shared renderer this world takes: its own name, so a successor is not it. */
+  private readonly owner = `planet-world#${++worldsMade}`;
+  /** Whether this world disposes the renderer when it goes; handed on to a successor (C57). */
+  private ownsRenderer: boolean;
+  /** Built but not yet drawing: a successor waiting for its crossing. */
+  private sleeping: boolean;
   private readonly layers: WorldLayer[] = [];
   private readonly byName = new Map<string, WorldLayer>();
   private abort: AbortController | null = null;
@@ -355,9 +367,13 @@ export class PlanetWorld {
   private readonly reporting: boolean;
   private readonly attributingLayers: boolean;
   private restoreInstrument: (() => void) | null = null;
+  private restoreScene: (() => void) | null = null;
+  private restoreRenderer: (() => void) | null = null;
   private readonly bufferSize = new THREE.Vector2();
   phase: BuildPhase = "idle";
   info: RenderInfo | null = null;
+  /** How long each layer's build ran, milliseconds, for the last build (C57: what a crossing costs the frame). */
+  readonly buildMs: Record<string, number> = {};
   /** Called on every phase change of the CURRENT build; a superseded build never reports. */
   onPhase: ((phase: BuildPhase, error?: unknown) => void) | null = null;
 
@@ -420,11 +436,14 @@ export class PlanetWorld {
     this.region = { cell: options.cell, k, bound, extentM: bound.radiusM, spawn, spawnTile: fromLocalM(spawn.x, spawn.y), village, geography };
 
     this.ownsRenderer = !options.handle;
+    this.sleeping = options.dormant === true;
     this.handle = options.handle ?? createRendererHandle(host);
-    this.acquire();
+    if (!this.sleeping) this.acquire();
     this.attributingLayers = options.devLayers === true;
     this.reporting = options.devInfo === true || this.attributingLayers;
-    if (this.reporting) this.instrument();
+    // A sleeping world tags what its layers add, but leaves the renderer's own counters to the world
+    // that is drawing until it wakes.
+    if (this.reporting) this.instrument(!this.sleeping);
 
     // Provisional light: one low western key and a cool fill, per the art bible's one rule. The
     // sky layer takes both over by name, "key" and "fill", and drives them with the hour.
@@ -450,14 +469,42 @@ export class PlanetWorld {
    */
   acquire(): void {
     if (this.disposed) return;
-    this.handle.acquire(HOST_OWNER);
+    this.handle.acquire(this.owner);
     this.handle.attach(this.host);
     this.resize();
   }
 
   /** Hand the context back to whoever had it before (the globe). Drawing stops until acquire(). */
   release(): void {
-    this.handle.release(HOST_OWNER);
+    this.handle.release(this.owner);
+  }
+
+  /**
+   * The world for the parcel next door (C57): the same host, the same renderer, the same planet and
+   * options, another cell — built asleep, so the world in front of the person keeps drawing until
+   * `handOver` and `wake`.
+   */
+  successor(options: Pick<PlanetWorldOptions, "cell"> & Partial<PlanetWorldOptions>): PlanetWorld {
+    return new PlanetWorld(this.host, { ...this.options, ...options, handle: this.handle, dormant: true });
+  }
+
+  /** Give the renderer to the successor, so this world can be disposed without taking it along. */
+  handOver(next: PlanetWorld): void {
+    next.ownsRenderer = this.ownsRenderer;
+    this.ownsRenderer = false;
+  }
+
+  /**
+   * Start drawing a successor. The world it succeeds is disposed FIRST, in the same task, so that
+   * world gives the renderer's counters back before this one takes them and no frame falls between.
+   */
+  wake(): void {
+    if (!this.sleeping || this.disposed) return;
+    this.sleeping = false;
+    this.acquire();
+    if (this.reporting) this.instrument(true);
+    this.lastT = 0;
+    if (this.phase === "ready") this.loop();
   }
 
   addLayer(layer: WorldLayer): this {
@@ -538,17 +585,27 @@ export class PlanetWorld {
       for (const layer of this.layers) {
         if (controller.signal.aborted) break;
         this.attributing = layer.name;
+        const began = performance.now();
         await layer.build(ctx, controller.signal);
+        this.buildMs[layer.name] = performance.now() - began;
         this.attributing = null;
+        // Asleep, the world in front of the person gets a frame between every layer.
+        if (this.sleeping) await new Promise((r) => setTimeout(r, 0));
       }
       if (controller.signal.aborted || generation !== this.generation) {
         // A superseded or disposed build: clean up whatever it managed to add, say nothing.
         if (this.disposed) this.disposeLayers();
         return;
       }
+      // Asleep: compile its shaders now, off the crossing's critical frame, and wait for `wake`.
+      if (this.sleeping) await this.handle.renderer.compileAsync?.(this.scene, this.camera).catch(() => undefined);
+      if (controller.signal.aborted || generation !== this.generation) {
+        if (this.disposed) this.disposeLayers();
+        return;
+      }
       this.setPhase(generation, "ready");
       this.lastT = 0;
-      this.loop();
+      if (!this.sleeping) this.loop();
     } catch (error) {
       if (controller.signal.aborted || generation !== this.generation) {
         if (this.disposed) this.disposeLayers();
@@ -577,7 +634,7 @@ export class PlanetWorld {
   private loop = () => {
     if (this.disposed || this.phase !== "ready") return;
     this.raf = requestAnimationFrame(this.loop);
-    if (this.handle.owner !== HOST_OWNER) return; // someone else is drawing with this context
+    if (this.handle.owner !== this.owner) return; // someone else is drawing with this context
     const now = performance.now();
     const dt = this.lastT === 0 ? 1 / 60 : Math.min(0.1, (now - this.lastT) / 1000);
     this.lastT = now;
@@ -644,27 +701,41 @@ export class PlanetWorld {
    *   `tests/e2e/scatterSplit.spec.ts` installs from the outside, moved inside so the page a person
    *   opens can answer without a harness attached.
    */
-  private instrument() {
-    if (this.restoreInstrument) return;
-    const renderer = this.handle.renderer;
-    const autoReset = renderer.info.autoReset;
-    renderer.info.autoReset = false;
-    const shadowMap = renderer.shadowMap;
-    const shadowRender = shadowMap.render.bind(shadowMap);
-    shadowMap.render = (lights, scene, camera) => {
-      shadowRender(lights, scene, camera);
-      this.shadowPass = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    };
-    const scene = this.scene as THREE.Object3D;
-    const add = scene.add.bind(scene);
-    scene.add = ((...objects: THREE.Object3D[]) => {
-      if (this.attributing) for (const object of objects) object.userData.echoLayer ??= this.attributing;
-      return add(...objects);
-    }) as THREE.Object3D["add"];
+  private instrument(withRenderer: boolean) {
+    // The scene's half (who added what) once; the renderer's half (its counters) only while this
+    // world is the one drawing, because a successor asleep beside it shares the renderer (C57).
+    if (!this.restoreScene) {
+      const scene = this.scene as THREE.Object3D;
+      const add = scene.add.bind(scene);
+      scene.add = ((...objects: THREE.Object3D[]) => {
+        if (this.attributing) for (const object of objects) object.userData.echoLayer ??= this.attributing;
+        return add(...objects);
+      }) as THREE.Object3D["add"];
+      this.restoreScene = () => {
+        scene.add = add;
+        this.restoreScene = null;
+      };
+    }
+    if (withRenderer && !this.restoreRenderer) {
+      const renderer = this.handle.renderer;
+      const autoReset = renderer.info.autoReset;
+      renderer.info.autoReset = false;
+      const shadowMap = renderer.shadowMap;
+      const shadowRender = shadowMap.render;
+      const bound = shadowRender.bind(shadowMap);
+      shadowMap.render = (lights, scene, camera) => {
+        bound(lights, scene, camera);
+        this.shadowPass = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+      };
+      this.restoreRenderer = () => {
+        renderer.info.autoReset = autoReset;
+        shadowMap.render = shadowRender;
+        this.restoreRenderer = null;
+      };
+    }
     this.restoreInstrument = () => {
-      renderer.info.autoReset = autoReset;
-      shadowMap.render = shadowRender;
-      scene.add = add;
+      this.restoreRenderer?.();
+      this.restoreScene?.();
       this.restoreInstrument = null;
     };
   }
@@ -783,7 +854,7 @@ export class PlanetWorld {
   }
 
   private resize = () => {
-    if (this.disposed || this.handle.owner !== HOST_OWNER) return;
+    if (this.disposed || this.handle.owner !== this.owner) return;
     // Measure the element the canvas actually lives in.
     const el = this.handle.host;
     const w = el.clientWidth || 1;
@@ -798,6 +869,10 @@ export class PlanetWorld {
     for (const layer of this.layers) layer.dispose?.();
     const doomed: THREE.Object3D[] = [];
     this.scene.traverse((o) => {
+      // A light's shadow map is the renderer's texture until disposed. One world a page never noticed;
+      // a crossing a world (C57) left one behind every time.
+      const light = o as THREE.DirectionalLight;
+      if (light.isLight && light.shadow?.map) light.shadow.dispose();
       const m = o as THREE.Mesh;
       if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).skeleton.dispose();
       if (m.geometry) m.geometry.dispose();
@@ -819,7 +894,7 @@ export class PlanetWorld {
     this.restoreInstrument?.();
     this.disposeLayers();
     this.scene.clear();
-    this.handle.release(HOST_OWNER);
+    this.handle.release(this.owner);
     if (this.ownsRenderer) this.handle.dispose();
     this.phase = "idle";
   }

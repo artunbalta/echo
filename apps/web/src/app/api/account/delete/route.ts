@@ -56,6 +56,8 @@ const USER_KEYED: [string, string][] = [
   ["village_deeds", "subject"],
   // C47. What they carried.
   ["player_items", "subject"],
+  // C57. Where they came ashore from the sea, and who saw it.
+  ["player_landings", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point

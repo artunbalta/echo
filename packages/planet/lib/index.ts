@@ -58,3 +58,7 @@ export * from "./moves.js";
 export * from "./interiors.js";
 // Goats, hens, dogs, birds and fish (C55).
 export * from "./animals.js";
+// From one parcel to the next across the water, and the travel stand in parcels (C57).
+export * from "./crossing.js";
+// A stranger come in from the sea, and who knows it (C57).
+export * from "./landings.js";

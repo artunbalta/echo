@@ -57,7 +57,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { LifeChange, WorldEffect } from "@echo/planet";
+import { CROSSING, cellAtLocal, outsideBy, type LifeChange, type WorldEffect } from "@echo/planet";
 
 import ConsentCard from "@/components/world/ConsentCard";
 import TouchControls from "@/components/world/TouchControls";
@@ -75,6 +75,7 @@ import { createTouchControls } from "@/game/world/touchInput";
 import { useCoarsePointer } from "@/lib/pointerKind";
 import type { InteractLayer } from "@/game/world/interactLayer";
 import type { PlayerLayer } from "@/game/world/playerLayer";
+import { carryHandoff } from "@/game/world/crossTo";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { WalkLayer } from "@/game/world/walkLayer";
@@ -184,6 +185,97 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
     };
   }, [manifest.cell, hasVillage]);
 
+  // ── crossing to the next parcel by raft (C57) ─────────────────────────────────────
+  // The parcel the person is in now. It starts as the page's and moves when a raft crosses; the
+  // world canvas keeps the page's, so it never rebuilds — the crossing hands it a successor instead.
+  const [here, setHere] = useState(manifest.cell);
+  /** Whose shore it is, once a raft has brought the person to one that is not the page's. */
+  const [hereName, setHereName] = useState<string | null>(null);
+  const adopt = useRef<((next: PlanetWorld) => void) | null>(null);
+  useEffect(() => {
+    type Job = { cell: string; next: PlanetWorld | null; dropped: boolean };
+    let job: Job | null = null;
+    let live = true;
+    const drop = () => {
+      if (!job) return;
+      job.dropped = true;
+      job.next?.dispose();
+      job = null;
+    };
+    const prepare = async (j: Job, from: PlanetWorld) => {
+      // The next parcel's village as conversations have changed it, and its marks, as on a first visit.
+      let changesThere: LifeChange[] = [];
+      let marksThere: WorldEffect[] = [];
+      try {
+        const r = await fetch(`/api/village/changes?cell=${encodeURIComponent(j.cell)}`);
+        const d = r.ok ? ((await r.json()) as { changes?: LifeChange[]; effects?: WorldEffect[] }) : null;
+        changesThere = Array.isArray(d?.changes) ? d.changes : [];
+        marksThere = Array.isArray(d?.effects) ? d.effects : [];
+      } catch {
+        // The seed's village: what a first visit would see if the store were down.
+      }
+      if (j.dropped || !live) return;
+      const next = from.successor({ cell: j.cell, changes: changesThere });
+      j.next = next;
+      for (const layer of parcelLayers({ chain, touch })) next.addLayer(layer);
+      try {
+        await next.start();
+      } catch {
+        if (job === j) drop();
+        return;
+      }
+      if (j.dropped || !live || job !== j || world.current !== from) {
+        if (job === j) drop();
+        else next.dispose();
+        return;
+      }
+      // The body, the raft, its speed and the eye behind it, carried into the next frame.
+      const fromPlayer = from.context().layer<PlayerLayer>("player");
+      const toPlayer = next.context().layer<PlayerLayer>("player");
+      const carried = fromPlayer && toPlayer ? carryHandoff(fromPlayer.handOff(), from.frame, next.frame) : null;
+      if (!carried || !toPlayer || !fromPlayer?.onRaft()) {
+        drop();
+        return;
+      }
+      toPlayer.adopt(carried);
+      next.context().layer<InteractLayer>("interact")?.setMarks(marksThere);
+      job = null;
+      // In one task: the old world gives up the renderer and goes, the new one starts drawing.
+      from.handOver(next);
+      from.dispose();
+      chain.breakPath();
+      next.wake();
+      adopt.current?.(next);
+      setHere(j.cell);
+      setHereName(next.region.village?.settlement.name ?? "Another shore");
+      try {
+        window.history.replaceState(window.history.state, "", `/parcel/${j.cell}${window.location.search}`);
+      } catch {
+        // The address is a convenience; the crossing has happened either way.
+      }
+    };
+    const watch = setInterval(() => {
+      const from = world.current;
+      if (!from || from.phase !== "ready") return;
+      const ctx = from.context();
+      const player = ctx.layer<PlayerLayer>("player");
+      if (!player) return;
+      const at = player.position();
+      const [xm, ym] = ctx.frame.toLocalM(at.x, at.y);
+      // Only the stranger's own raft crosses, and only once it is well past the line.
+      const want = player.onRaft() && outsideBy(ctx.frame.patch, xm, ym) >= CROSSING.intoM ? cellAtLocal(ctx.frame.patch, xm, ym) : null;
+      if (job && job.cell !== want) drop();
+      if (!want || job) return;
+      job = { cell: want, next: null, dropped: false };
+      void prepare(job, from);
+    }, 400);
+    return () => {
+      live = false;
+      clearInterval(watch);
+      drop();
+    };
+  }, [chain, touch]);
+
   if (changes === null) return <div className="relative h-full w-full" data-phase="changes" />;
 
   return (
@@ -191,9 +283,12 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       {...manifest}
       changes={changes}
       layers={layers}
-      onWorld={(w) => {
+      onWorld={(w, adoptNext) => {
+        const first = world.current === null;
         world.current = w;
-        w?.context().layer<InteractLayer>("interact")?.setMarks(marks.current);
+        adopt.current = adoptNext;
+        // The page's own marks go on the page's own world; a crossed-into world brought its own.
+        if (first) w?.context().layer<InteractLayer>("interact")?.setMarks(marks.current);
       }}
       className="relative h-full w-full"
     >
@@ -211,8 +306,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
         data-stations={stations ?? "none"}
         className="pointer-events-none absolute bottom-6 left-6 rounded-2xl border border-white/15 bg-[#192a20]/75 px-5 py-4 text-xs text-[#f4f2e4]/80 backdrop-blur-xl max-sm:bottom-auto max-sm:left-3 max-sm:top-[5.5rem] max-sm:w-[58vw] max-sm:rounded-xl max-sm:px-3 max-sm:py-2"
       >
-        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">Your corner of the world</p>
-        <p className="mt-1 text-[10px] tracking-widest text-white/40">{manifest.cell}</p>
+        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">{here === manifest.cell ? "Your corner of the world" : hereName}</p>
+        <p className="mt-1 text-[10px] tracking-widest text-white/40" data-here={here}>{here}</p>
         {/* The legend has to be true on the device reading it. It said Shift and Space to people
             holding a phone, which is the one instruction on the route. */}
         <p className="mt-2 text-[#f4e9d0]/45 max-sm:text-[10px] max-sm:leading-relaxed">
@@ -242,12 +337,12 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
 
       {/* Talking to a villager, where the cell has a village (C42). It reads the villagers layer out of
           the same ref the minimap does, so a parcel with no village simply never shows it. */}
-      <VillagerTalk world={() => world.current} cell={manifest.cell} consent={consent} coarse={coarse} />
+      <VillagerTalk world={() => world.current} cell={here} consent={consent} coarse={coarse} />
 
       {/* Everything within reach, and the act (C45): one prompt, the registry's verbs, the echo and
           the village told. It opens the conversation above with `T`. */}
-      <Interact world={() => world.current} cell={manifest.cell} consent={consent} chain={chain} coarse={coarse} />
-      <Gatherings world={() => world.current} cell={manifest.cell} consent={consent} chain={chain} />
+      <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} />
+      <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* The sound of the place (C56), and the person's say over it. */}
       <SoundToggle world={() => world.current} />
 

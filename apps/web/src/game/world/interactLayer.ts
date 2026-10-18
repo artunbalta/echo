@@ -71,8 +71,14 @@ interface ScatterLike extends WorldLayer {
 /** The farthest any verb reaches, plus the biggest thing: beyond this nothing is considered. */
 const LOOK_M = 9;
 const GRID_M = 8;
-/** How close the water must be to be a thing, metres. */
-const WATER_M = 3;
+/**
+ * How close the water must be to be a thing, metres: inside the water verbs' 3 m reach, not on it. At
+ * exactly 3 m the point is a rounding away from the reach. Measured from a body at (84.4, −707.7),
+ * as on Drurnscree's beach, the diagonals come out 3.000000000000014 m and are out of reach, and the
+ * first water found ended the search. Wherever the sea lay on a diagonal, the water's edge was not
+ * there, and the raft could not be launched (found launching it, C57).
+ */
+const WATER_M = 2.5;
 
 export function interactLayer(options: { clock: WorldClock }): InteractLayer {
   let frame: WorldFrame | null = null;

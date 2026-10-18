@@ -21,7 +21,12 @@ export interface WorldCanvasProps extends Omit<PlanetWorldOptions, "handle"> {
   /** Follow target, e.g. the player layer's position getter. */
   follow?: (world: PlanetWorld) => () => { x: number; y: number; liftM?: number };
   onPhase?: (phase: BuildPhase, error?: unknown) => void;
-  onWorld?: (world: PlanetWorld | null) => void;
+  /**
+   * The world, once made, and null when it goes. `adopt` hands this canvas a successor (C57): the
+   * world for the parcel a raft has crossed into, built asleep beside this one. From then on that is
+   * the world this canvas reports, measures and disposes.
+   */
+  onWorld?: (world: PlanetWorld | null, adopt: (next: PlanetWorld) => void) => void;
   className?: string;
   children?: ReactNode;
 }
@@ -84,14 +89,24 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
             setReading(info);
           }, 1000);
         }
-        world.onPhase = (p, err) => {
+        const report = (p: BuildPhase, err?: unknown) => {
           setPhase(p);
           if (p === "failed") setError(message(err));
           onPhase?.(p, err);
         };
+        world.onPhase = report;
+        const adopt = (next: PlanetWorld) => {
+          if (!live) {
+            next.dispose();
+            return;
+          }
+          world = next;
+          next.onPhase = report;
+          onWorld?.(next, adopt);
+        };
         for (const layer of layers(world)) world.addLayer(layer);
         if (follow) world.setFollow(follow(world));
-        onWorld?.(world);
+        onWorld?.(world, adopt);
         world.start().catch(fail);
       } catch (e) {
         fail(e);
@@ -101,7 +116,7 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
       live = false;
       clearInterval(diagnostics);
       world?.dispose();
-      onWorld?.(null);
+      onWorld?.(null, () => undefined);
     };
     // The world is rebuilt only when the manifest or the frame changes; layer and callback
     // identity is not a reason to rebuild a planet. devInfo is read once at construction.

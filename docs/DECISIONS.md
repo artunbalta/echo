@@ -3374,3 +3374,143 @@ the person playing. No deed, no change, no echo signal.
   390 px.
 
 **Not done.** See ⚑46.
+
+## C57 — a raft to other shores, without a seam; the travel stand said in parcels
+
+Feature 11 of the twenty. What was promised: a raft made from the wood you gather; across the sea
+into neighbouring parcels and villages without a break; and real data for the sail-out cue, A11.
+
+**Where there is to sail to** (a census, before anything was built):
+
+- From Senstrand, no other village shares its sea within eight rings, about 12 km. Its shores are
+  empty.
+- Of 321 villages sampled across the planet, 12 have a dock.
+- Docked villages that share water do exist:
+  - Drurnscree and Jerreef, neighbours, 1,125 m apart by water;
+  - Faessoulford, Juboscale and Ruimslate, 4,050–4,900 m;
+  - Tromslate and Laeldfowick, 5,025 m;
+  - Tasskerry and Lelfeanford, 5,800 m.
+
+So most crossings end on an empty coast. That is the planet, not a shortcoming of the raft.
+Drurnscree and Jerreef are the fixture for the tests and the browser.
+
+**The raft.**
+
+- It has its own form: six driftwood logs and two lashings, with a mast and a square sail.
+- It is paddled at 1.6 m/s; a village boat is rowed at 1.4.
+- Shift raises the sail, and then the day's wind decides: 1.6 + 7 × wind m/s (`lib/raft.ts`).
+  Measured: 4.46 m/s in Drurnscree's 0.41 wind.
+- The weather has no direction, so the sail draws from any quarter (⚑47).
+
+**The crossing, without a seam.** Once the raft is 40 m past its parcel's edge (`crossing.ts`
+`outsideBy`), the next parcel's world is built asleep:
+
+- in the same canvas, on the same renderer (`PlanetWorld.successor`);
+- layer by layer, with a frame of the world in front of the person between each, and its shaders
+  compiled before it is needed.
+
+Then, in one task:
+
+- the body, the raft, its speed, the keys held down and the camera are carried through the sphere
+  into the new frame (`crossTo.ts` `carryHandoff`);
+- the old world gives up the renderer and is disposed;
+- the new one wakes.
+
+After that:
+
+- the address becomes the new parcel's;
+- the corner card names the shore;
+- the minimap redraws;
+- the echo's walk path is broken, so no window spans the jump.
+
+Turning back before the next world is ready throws it away. Only the stranger's own raft crosses.
+
+Measured in the browser, Drurnscree to Jerreef:
+
+- **Continuity.** The raft was carried within 0.065 m, one frame's travel at 4 m/s. The camera's
+  angle to the heading changed by 7 × 10⁻¹⁵ rad.
+- **Build cost.** The successor built in about 0.8 s: the terrain 309 ms, the scatter 468 ms.
+- **Frames.** The three worst were 299, 214 and 152 ms (⚑47); the 95th percentile was 9 ms.
+- **Abandoned crossing.** GPU memory was left as it was: 69 geometries before and after.
+- **Four crossings back and forth.** Geometries ran 75, 95, 75, 95, and textures held at 5 once a
+  leak was fixed (below).
+
+**Coming ashore.** Q drags the raft up. `POST /api/world/landing` checks three things:
+
+- the landing is a shore, dry ground within 12 m of water, or alongside the village's dock;
+- it is in the parcel it names;
+- the launch was within 12 parcels.
+
+It then gives the trip's verdict and counts `dest_occupants` itself: the people living in that
+parcel, 0 on an empty coast. It records the landing with the villagers who saw the raft come in.
+`player_landings` is migration 0024. It is personal data, erased with the stranger.
+
+**The travel stand, said in parcels (C27).** C27 retired `travel_far`/`travel_near`'s basis, the
+archipelago's distances, and asked for the pair to be re-derived at parcel scale, measured on the
+same paths at both scales before either side moved. Here it is:
+
+- **far**: ashore in another parcel;
+- **near**: back ashore in the parcel set out from.
+
+Both sides come from the same raft trip, so neither moves alone (⚑9's rule).
+
+The measurement (`crossing.test.ts`): 200 trips from Drurnscree's shore to every shore reachable by
+water within 3 km.
+
+| Rule | Share called far |
+|---|---|
+| The old one (past 38 m) | 99.5% |
+| Parcels | 91.5% |
+
+The old threshold no longer discriminates anything at this scale.
+
+**What the echo hears.** No ML change (C7). Each is sent under a label ingest.py already routes by
+name:
+
+- `travel_far` (A11), with the server's `dest_occupants`. ingest.py reads 0 as a bare shore, the
+  purest novelty read.
+- `travel_near` (K4).
+- `prepare_before_travel` (C7): setting out with food in the pack.
+
+Measured: `travel_far cue=A11 raw={"dest_occupants":29,"distance_m":995,"rings":1}`.
+
+**The village knows** (`landings.ts`):
+
+- whoever saw the raft come in knows at once. A raft on open water is seen from 150 m, against a
+  deed's 30;
+- everyone has heard by the next day;
+- a stranger coming home from a paddle is news only to whoever saw it.
+
+Real model, Jerreef:
+
+- Tustta, who saw it: "I saw you come in on that raft, from out Drurnscree way. Sit a while if your
+  legs are shaking."
+- Skaind, the next morning: "Only that you came in off the sea on a raft yesterday, from the
+  Drurnscree way — that's what went round."
+
+**Found on the way.**
+
+- **The water's edge could be out of reach.** It was sampled at exactly the water verbs' 3 m reach.
+  From a body at (84.4, −707.7), as on Drurnscree's beach, the diagonals measured 3.000000000000014 m,
+  and the search stopped at the first water. So wherever the sea lay on a diagonal there was no
+  water's edge, and the raft C47 made could not be launched. It is now sampled at 2.5 m, and a test
+  checks every direction at real coordinates.
+- **A world's shadow map was never disposed.** With one world to a page nobody noticed. Every
+  crossing left a texture behind.
+- **The keys held down did not cross.** The new world never saw W go down, and a key held still
+  does not repeat into it. The raft stopped dead at the line until the keys were carried across.
+- **The memory store's reset forgot landings.** The route tests caught it.
+- **`erasureTables.test.mts`** now holds every table with a `subject` column to the delete route,
+  C44–C55's included.
+
+**Measured, tests.**
+
+- `crossing.test.ts`, 6 tests.
+- `landings.test.ts`, 3 tests.
+- `raft.test.mts`, 6 tests.
+- `landing.test.mts`, 6 tests.
+- `erasureTables.test.mts`, 1 test.
+- 23 injected defects, all caught. The first run missed one, a flipped sign on the frame's turn: the
+  round-trip test cancels it out either way. It is now pinned.
+
+**Not done.** See ⚑47.
