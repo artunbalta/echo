@@ -44,3 +44,5 @@ export * from "./deeds.js";
 // What a stranger carries and makes (C47), and how villagers walk round things (C46).
 export * from "./items.js";
 export * from "./nav.js";
+// The weather and the year (C48).
+export * from "./weather.js";

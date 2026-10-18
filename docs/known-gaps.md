@@ -1724,6 +1724,8 @@ ORDINARY parcel's (C28, C31) with a village on top. A bigger town, smoke, more p
 
 **Re-measured 2026-10-18 after C43's re-roll:** the biggest village is now Kamgull, 84 people —
 **112 calls / 526k triangles**, worst of 12 headings at dusk and at morning. Eight calls of headroom.
+**And after C48:** weather adds one call while it rains or snows; a stormy midday on `8414d53ffffffff`
+read **115 of 120**. About five calls of headroom on a big village in bad weather.
 
 **Status:** OPEN. The levers on record: SOC-4.C's person impostor (fewer crowd calls at distance),
 thinning the scatter inside a settled cell (realistic, and cuts scatter calls), and C38's mid band

@@ -63,6 +63,7 @@ import { sliceLayer } from "./sliceLayer";
 import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
 import { interactLayer } from "./interactLayer";
+import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
 import type { ReactionReading } from "@/components/world/Inspector";
 import { WORLD_EPOCH, worldClock, type WorldClock } from "@echo/planet";
@@ -153,6 +154,8 @@ export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch, clo
     playerLayer({ inputEnabled, touch }),
     villagersLayer({ clock }),
     meadowLayer(),
+    // The weather over all of it (C48): last, so it leans on a sky every other layer has already read.
+    weatherLayer({ clock }),
   ];
 }
 

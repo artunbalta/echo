@@ -23,6 +23,7 @@ import {
   createSceneHeight,
   createTangentPatch,
   createTerrain,
+  geographySampler,
   regionBound,
   spawnPointFor,
   villageAt,
@@ -35,6 +36,7 @@ import {
   type Calibration,
   type LifeChange,
   type RegionBound,
+  type SettlementGeography,
   type SettledParcel,
   type SpawnPoint,
   type TangentPatch,
@@ -166,6 +168,8 @@ export interface RegionInfo {
    * edge of a settlement, looking in, not in the empty middle of the land it farms.
    */
   readonly village?: SettledParcel | null;
+  /** The cell's six numbers (C48), for the weather. Null where they cannot be measured. */
+  readonly geography?: SettlementGeography | null;
 }
 
 export interface LayerContext {
@@ -406,7 +410,14 @@ export class PlanetWorld {
       toLocalM,
       fromLocalM,
     };
-    this.region = { cell: options.cell, k, bound, extentM: bound.radiusM, spawn, spawnTile: fromLocalM(spawn.x, spawn.y), village };
+    // The cell's geography (C48), for the weather: the village's, or measured the census's way; null
+    // without the commons, which trade access needs.
+    const geography = village
+      ? village.settlement.geography
+      : options.commons
+        ? geographySampler(this.field, this.calibration, options.radiusKm, { commons: options.commons })(options.cell)
+        : null;
+    this.region = { cell: options.cell, k, bound, extentM: bound.radiusM, spawn, spawnTile: fromLocalM(spawn.x, spawn.y), village, geography };
 
     this.ownsRenderer = !options.handle;
     this.handle = options.handle ?? createRendererHandle(host);
