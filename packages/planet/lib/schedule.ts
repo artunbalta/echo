@@ -30,6 +30,7 @@ import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./
 import type { LifeChange } from "./changes.js";
 import { eveningOf, type GoalPlace } from "./goals.js";
 import { navGraph, pathLength, route } from "./nav.js";
+import { weatherOn } from "./weather.js";
 import { temperaments } from "./life.js";
 import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
@@ -258,7 +259,10 @@ export function dayPlans(
   changes: readonly LifeChange[] = [],
 ): { plans: DayPlan[]; boats: (BoatDay | null)[]; moorings: Mooring[] } {
   const moorings = mooringsOn(s, plan, day);
-  const boats = moorings.map((m, i) => boatDay(plan, m, i, day));
+  // The day's weather (C48): in a storm no boat goes out, and rain or snow sends everyone in early.
+  const weather = weatherOn(s.seed, s.cell, s.geography, day, s);
+  const wet = weather.kind === "rain" || weather.kind === "snow" || weather.kind === "storm" ? weather.fall : 0;
+  const boats = moorings.map((m, i) => (weather.kind === "storm" ? null : boatDay(plan, m, i, day)));
   const boatOf = new Map(moorings.map((m, i) => [m.household, i]));
   const away = plan.dock ? toward(plan.dock.root, plan.centre) : toward(plan.arrival, plan.centre) + Math.PI;
   const fieldFor = (plot: Plot) =>
@@ -325,15 +329,15 @@ export function dayPlans(
     let boat: number | null = null;
     if (age < SCHEDULE.childYears) {
       go(greenSpot(plan, p.id, 0.55));
-      stay(SCHEDULE.childBed + j("play"), 0, "play", plan.greenRadiusM * 0.45);
+      stay(SCHEDULE.childBed + j("play") - 0.08 * wet, 0, "play", plan.greenRadiusM * 0.45);
       bed();
     } else if (age >= SCHEDULE.elderYears) {
       const seat = benchSeat(plan, p.id);
       go(seat.at);
-      stay(SCHEDULE.elderBed + j("bed"), seat.heading, "sit");
+      stay(SCHEDULE.elderBed + j("bed") - 0.1 * wet, seat.heading, "sit");
       bed();
     } else {
-      const work = SCHEDULE.workEnd + j("end");
+      const work = SCHEDULE.workEnd + j("end") - 0.06 * wet;
       if (rows) {
         boat = boatIndex!;
         const b = boats[boat]!;
@@ -392,7 +396,7 @@ export function dayPlans(
       }
       // The evening: on the green with everyone, unless a conversation has sent it somewhere (C44).
       const evening = changed.has(p.id) ? eveningOf(s, p, day, changes) : null;
-      const until = SCHEDULE.gatherEnd + j("bed") + (age < 30 ? 0.03 : 0);
+      const until = SCHEDULE.gatherEnd + j("bed") + (age < 30 ? 0.03 : 0) - 0.06 * wet;
       const about = evening?.target ?? null;
       const spot = evening === null ? null : eveningSpot(plan, p.id, plot, evening.place, about ? (doorOfPerson.get(about) ?? null) : null, about ? (graves.get(about) ?? null) : null);
       if (spot === null) {

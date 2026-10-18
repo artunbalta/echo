@@ -2696,3 +2696,59 @@ Feature 2 of the twenty.
 - **Measured in a browser** (Senstrand): four reeds cut by their own verb, the pack at 4/8, a basket
   woven in eight seconds, and the pack left holding `{basket: 1}`. One bug was found on the way: the
   hand kept showing a reed that had gone into the basket.
+
+## C48 — the weather and the year
+
+Feature 3 of the twenty.
+
+**A pure function, the same for everyone** (`lib/weather.ts`).
+
+- **The draw.** The day's weather is drawn from a stream keyed on the region (the cell's
+  resolution-2 parent, about 150 km) and the world day, so neighbouring parcels share a sky. The hour
+  only shapes it: a wet day rains for part of the day, and fog lifts by mid-morning.
+- **Nothing is stored.** The server's "where is she" and every browser see the same rain.
+
+**Climate from what is known**, stated as a dial:
+
+- **Latitude** sets the year's swing and which half is winter; the south's winter is the north's
+  summer.
+- **Geography:** the coast brings fog and storms, high ground and high latitudes bring snow in the
+  cold quarter, and ground with no trees, crops or sea near it is drier.
+
+**The weather agrees with the dead.** The chronicle calls a year a storm year because someone was
+lost at sea, and events explain deaths and never cause them (C40). So the day a village's fisher died
+at sea is a storm on that village, whatever the stream drew. The sky and the chronicle tell one story,
+and a stranger there that day saw the weather that killed him.
+
+**What it changes.**
+
+- **Storms:** no boat goes out, and the fishers mend nets on the dock.
+- **Rain or snow:** fields are left, the green empties, children are called in and the old go home,
+  all earlier, by how hard it falls.
+- **Talk:** a villager's hour line says what the sky is doing ("A storm is blowing in off the sea;
+  nobody has gone out in a boat").
+- **In the browser:**
+  - `sky.setWeather` greys the hour's own colours, dims the sun and pulls the fog in.
+  - `weatherLayer` falls rain streaks or snow in a box that travels with the camera, one draw call
+    while it falls.
+  - Lightning is this browser's own presentation, never a fact about the world.
+
+**Measured.**
+
+- `weather.test.ts` checks, on real cells:
+  - one region shares one sky every day for 60 days;
+  - a northern winter has snow, a northern summer none, the tropics none;
+  - the south is in winter while the north is in summer;
+  - the coast is wetter and stormier than dry ground;
+  - every drowning in sample villages fell on a storm day;
+  - on a storm day no boat sails;
+  - a wet day's evenings end earlier than a dry day's.
+- Three defects were injected (no drowning storms, boats in storms, no southern flip), and each was
+  caught.
+- In a browser, a village in a storm at midday reads as one. That frame was 115 of 120 draw calls on
+  that village. The weather adds one, and the headroom ⚑36 warns about is now about five calls on a
+  large stormy village.
+
+**Not done.** There is no snow cover on the ground and no wet sheen, because the terrain shader is
+untouched. Weather does not reach the measurement context (`mood_proxy`, `scarcity_level`). Rain has
+no sound; that is feature 10.

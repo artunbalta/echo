@@ -14,6 +14,7 @@ import { villagePlan, type VillageGround, type VillagePlan, type VillageSite } f
 import { SCHEDULE, boatAt, dayPlans, whereabouts } from "../lib/schedule.js";
 import { WORLD_DAY_S } from "../lib/worldclock.js";
 import { pathLength } from "../lib/nav.js";
+import { weatherOn } from "../lib/weather.js";
 
 const SEED = "echo-planet-0001";
 const COAST: SettlementGeography = {
@@ -140,10 +141,12 @@ test("at noon the boats are out, the fishers are in them, and the children are o
 test("a boat is moored before it sails and after it returns, and rides at its ground between", () => {
   for (const { s, plan } of villages(COAST, SHORE, SHORE_SITE, 6, "boat")) {
     const { boats, moorings } = dayPlans(s, plan, 0);
+    // A storm keeps every boat in (C48); otherwise only one drawn up ashore stays.
+    const storm = weatherOn(s.seed, s.cell, s.geography, 0, s).kind === "storm";
     boats.forEach((b, i) => {
       const m = moorings[i];
       if (b === null) {
-        assert.ok(m.ashore, "only a boat drawn up ashore has no day");
+        assert.ok(m.ashore || storm, "only a boat drawn up ashore, or any boat in a storm, has no day");
         return;
       }
       for (const t of [b.t[0] - 0.01, b.t[3] + 0.01]) {

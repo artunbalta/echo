@@ -42,6 +42,8 @@ import {
   relation,
   settlementSummary,
   temperamentOf,
+  weatherAt,
+  weatherWords,
   whereabouts,
   type GoalKind,
   type LifeChange,
@@ -237,7 +239,9 @@ export function nowLine(s: Settlement, plan: VillagePlan, me: Person, day: numbe
     else if (Math.hypot(w.x - plan.arrival.x, w.y - plan.arrival.y) < 12) doing = "at the edge of the village, looking out along the way in";
     else doing = onGreen ? "on the green with your neighbours" : onDock ? "on the dock" : "by your door";
   }
-  return `It is ${part} in ${s.name}. Right now you are ${doing}, and the stranger has stopped to talk to you. Keep to that.`;
+  // The weather is everybody's (C48): the same sky the stranger is standing under.
+  const sky = weatherWords(weatherAt(s.seed, s.cell, s.geography, day, hour, s));
+  return `It is ${part} in ${s.name}. ${sky}. Right now you are ${doing}, and the stranger has stopped to talk to you. Keep to that.`;
 }
 
 // ── everything a villager knows ─────────────────────────────────────────────────

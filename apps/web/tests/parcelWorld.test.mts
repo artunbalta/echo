@@ -78,8 +78,8 @@ test("a parcel and the demo build one list, in one order, differing only in the 
   const parcel = parcelLayers({ chain, slice: sliceOptionsFor(undefined, {}) }).map((l) => l.name);
   const demo = parcelLayers({ chain, slice: sliceOptionsFor("slice", {}) }).map((l) => l.name);
 
-  assert.deepEqual(parcel, ["sky", "terrain", "settlement", "scatter", "canopy-closure", "detail", "player", "villagers", "meadow", "walk", "interact"]);
-  assert.deepEqual(demo, ["sky", "terrain", "settlement", "scatter", "canopy-closure", "detail", "player", "villagers", "meadow", "walk", "interact", "slice"]);
+  assert.deepEqual(parcel, ["sky", "terrain", "settlement", "scatter", "canopy-closure", "detail", "player", "villagers", "meadow", "weather", "walk", "interact"]);
+  assert.deepEqual(demo, ["sky", "terrain", "settlement", "scatter", "canopy-closure", "detail", "player", "villagers", "meadow", "weather", "walk", "interact", "slice"]);
 
   // The rationales that are load-bearing, stated as the relations they are, so that a reordering
   // fails here with the reason and not merely with a different array.
@@ -91,6 +91,8 @@ test("a parcel and the demo build one list, in one order, differing only in the 
   assert.ok(parcel.indexOf("player") < parcel.indexOf("villagers"), "the nameplate is for whoever is nearest the player THIS frame");
   // C45: what is within reach is read off the scatter's placement and the villagers' last frame.
   assert.ok(parcel.indexOf("scatter") < parcel.indexOf("interact") && parcel.indexOf("villagers") < parcel.indexOf("interact"), "the interact layer reads the scatter and the villagers, so it is built after both");
+  // C48: the weather leans on the sky the frame has already computed.
+  assert.ok(parcel.indexOf("sky") < parcel.indexOf("weather"), "the weather leans on the sky, so it comes after it");
   assert.ok(demo.indexOf("player") < demo.indexOf("walk"), "the walk layer reports the position the mover committed this frame");
   // DECISIONS C17: the closure darkens the ground the TERRAIN uploaded by the crowns the SCATTER
   // placed, so it is the one layer that has two predecessors and both of them are hard.
