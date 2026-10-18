@@ -52,3 +52,5 @@ export * from "./social.js";
 export * from "./needs.js";
 // A village's burials, weddings and new children, on the day (C52).
 export * from "./events.js";
+// Between villages: going, coming home, marrying someone from elsewhere (C53).
+export * from "./moves.js";

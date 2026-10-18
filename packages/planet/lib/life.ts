@@ -173,13 +173,15 @@ export type LifeEventKind =
   | "rift" | "reconciled"
   // C44: what a change made happen. Never emitted for a village nobody has changed.
   | "took-up-trade" | "left-village" | "relative-left"
+  // C53: came from another village, or came home to this one.
+  | "came-home"
   | "died";
 
 /** Same-day events sort in the order they happen in a life: you are born before anything else. */
 const KIND_ORDER: readonly LifeEventKind[] = [
   "born", "arrived", "learned-trade", "taught", "befriended", "left-home", "married",
   "child-born", "sibling-born", "grandchild-born", "rift", "reconciled", "took-up-trade",
-  "parent-died", "sibling-died", "child-died", "friend-died", "widowed", "relative-left", "left-village", "died",
+  "parent-died", "sibling-died", "child-died", "friend-died", "widowed", "relative-left", "left-village", "came-home", "died",
 ];
 
 export interface LifeEvent {
@@ -220,7 +222,10 @@ export interface VillageEvent {
  */
 export function present(s: Settlement, p: Person, day: number): boolean {
   if (!alive(p, day)) return false;
-  if (p.leftDay <= day) return false;
+  // Gone, unless they came home (C53).
+  if (p.leftDay <= day && !(p.backDay <= day)) return false;
+  // Came from another village (C53): here from the day they came, married or not.
+  if (p.fromCell !== null) return p.arrivedDay <= day;
   if (p.founder) return s.foundedDay <= day;
   if (p.incomer) return p.partnerDay !== null && p.partnerDay <= day;
   return true;
@@ -377,7 +382,8 @@ export function lives(s: Settlement): Map<string, LifeEvent[]> {
     emit(p, "born", p.birthDay, parents, p.founder || p.incomer ? "elsewhere" : null);
 
     if (p.founder && partner !== null) emit(p, "arrived", s.foundedDay, [partner], "founded");
-    if (p.incomer && partner !== null && p.partnerDay !== null) emit(p, "arrived", p.partnerDay, [partner], "married-in");
+    if (p.fromCell !== null) emit(p, "arrived", p.arrivedDay, partner !== null && partner.arrivedDay === p.arrivedDay ? [partner] : [], `${p.visiting ? "visit" : "from"}:${p.fromCell}`);
+    else if (p.incomer && partner !== null && p.partnerDay !== null) emit(p, "arrived", p.partnerDay, [partner], "married-in");
 
     if (partner !== null && p.partnerDay !== null) {
       emit(p, "married", p.partnerDay, [partner], null);
@@ -416,8 +422,9 @@ export function lives(s: Settlement): Map<string, LifeEvent[]> {
     for (const t of p.trades) emit(p, "took-up-trade", t.day, [], t.occupation, String(t.day));
     if (p.leftDay < p.deathDay && p.leftDay <= horizon) {
       const withThem = [...(partner !== null ? [partner] : []), ...p.children.map((i) => people[i])].filter((q) => q.leftDay === p.leftDay);
-      emit(p, "left-village", p.leftDay, withThem, null);
+      emit(p, "left-village", p.leftDay, withThem, p.toCell ? `to:${p.toCell}` : null);
     }
+    if (p.backDay !== Infinity && p.backDay <= horizon) emit(p, "came-home", p.backDay, [], null);
     const kin = [...parents, ...(partner !== null ? [partner] : []), ...p.children.map((i) => people[i])];
     if (parents.length > 0) for (const si of parents[0].children) if (si !== p.index) kin.push(people[si]);
     for (const q of kin) {
@@ -650,6 +657,8 @@ export function temperamentOf(s: Settlement, p: Person): readonly number[] {
 }
 
 function temperamentFrom(s: Settlement, p: Person, known: Map<string, readonly number[]>): readonly number[] {
+  // Someone who came from another village is who their own village made them (C53).
+  if (p.temperament) return p.temperament;
   const r = stream(`${p.id}/temperament`);
   const h = TEMPERAMENT.heritability;
   const noiseWeight = Math.sqrt(1 - (h * h) / 2);

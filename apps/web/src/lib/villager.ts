@@ -269,7 +269,15 @@ export interface VillagerContext {
   names: Set<string>;
 }
 
-export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, day: number, changes: readonly LifeChange[] = []): VillagerContext {
+export function villagerContext(
+  s: Settlement,
+  plan: VillagePlan,
+  me: Person,
+  day: number,
+  changes: readonly LifeChange[] = [],
+  /** Another village's name, by cell (C53): where someone went, came from, or sent word from. */
+  placeName: (cell: string) => string | null = () => null,
+): VillagerContext {
   const people = new Map(s.people.map((p) => [p.id, p]));
   const summary = settlementSummary(s, day);
   const age = Math.floor(ageYears(me, day));
@@ -317,6 +325,66 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
     family.push("Your own people are far away; you have not seen them in years.");
   }
   if (family.length) lines.push(family.join(" "));
+
+  // Between villages (C53): where they came from, where they went and came back from, and word sent.
+  // Other villages' names, and the people of them named here, are names a reply may use.
+  const elsewhere = new Set<string>();
+  const placeName_ = placeName;
+  placeName = (cell: string) => {
+    const n = placeName_(cell);
+    if (n) elsewhere.add(n);
+    return n;
+  };
+  const away: string[] = [];
+  if (me.fromCell !== null) {
+    const home = placeName(me.fromCell) ?? "another village";
+    away.push(`You came to ${s.name} from ${home} ${agoDays(day, me.arrivedDay)}; your own people are there, and you grew up there, not here`);
+  }
+  if (me.backDay !== Infinity && me.backDay <= day) {
+    away.push(`You went away${me.toCell ? ` to ${placeName(me.toCell) ?? "another village"}` : ""} and came home ${agoDays(day, me.backDay)}`);
+  }
+  const mine = changes.filter((c) => c.kind === "court" && c.person === me.id && c.madeDay <= day && day - c.madeDay <= 60);
+  for (const c of mine) {
+    const them = c.toCell === s.cell ? s.people.find((q) => q.id === c.target) : null;
+    const where = c.toCell && c.toCell !== s.cell ? ` of ${placeName(c.toCell) ?? "another village"}` : "";
+    away.push(`You sent word ${agoDays(day, c.madeDay)}, by a stranger, that you would marry ${them?.given ?? "someone"}${where}, and you are waiting to hear`);
+  }
+  for (const c of changes.filter((c) => c.kind === "court" && c.target === me.id && c.madeDay <= day && day - c.madeDay <= 60)) {
+    const suitor = s.people.find((q) => q.id === c.person);
+    const spec = c.spec;
+    const name = suitor?.given ?? spec?.given ?? "someone";
+    if (spec) {
+      elsewhere.add(spec.given);
+      elsewhere.add(spec.family);
+    }
+    const age = suitor ? Math.floor(ageYears(suitor, day)) : spec ? Math.floor((day - spec.birthDay) / 365) : null;
+    const trade = suitor ? occupationOn(suitor, day) : spec?.occupation;
+    const where = c.fromCell ? ` of ${placeName(c.fromCell) ?? "another village"}` : "";
+    away.push(`${name}${age !== null ? `, ${age},` : ""}${trade ? ` a ${trade}` : ""}${where}, sent word by a stranger ${agoDays(day, c.madeDay)} that they would marry you, if you will have them`);
+  }
+  // A visit to meet someone (C53): coming, or come and gone.
+  for (const c of changes.filter((c) => c.kind === "arrive" && c.spec?.visiting && c.spec.hostOf === me.id)) {
+    const where = c.fromCell ? placeName(c.fromCell) ?? "another village" : "another village";
+    if (c.spec) elsewhere.add(c.spec.given);
+    away.push(
+      c.day > day
+        ? `${c.spec!.given} of ${where} is coming to visit you in ${c.day - day} days, to meet you, with a mind to marry if you take to each other; they will stay with your family for the day`
+        : c.day === day
+          ? `${c.spec!.given} of ${where} has come to visit you today, to meet you; they are staying with your family, and you will spend the evening together on the green`
+          : `${c.spec!.given} of ${where} came to visit you ${agoDays(day, c.day)}, to meet you, and you spent the evening together on the green`,
+    );
+  }
+  const went = changes.find((c) => c.kind === "leave" && c.person === me.id && c.toCell && changes.some((d) => d.kind === "arrive" && d.person === me.id && d.day === c.day + 1));
+  if (went && went.toCell) {
+    const where = placeName(went.toCell) ?? "another village";
+    const host = changes.find((c) => c.kind === "court" && c.target === me.id && c.fromCell === went.toCell)?.spec?.given ?? "someone";
+    away.push(went.day > day ? `You are going to ${where} in ${went.day - day} days, for a day, to meet ${host}` : `You went to ${where} for a day ${agoDays(day, went.day)}, to meet ${host}, and spent the evening with them on their green`);
+  }
+  if (me.leftDay > day && me.leftDay !== Infinity && me.toCell) {
+    const word = changes.find((c) => c.kind === "court" && c.target === me.id && c.fromCell === me.toCell);
+    if (word) away.push(`You are going to ${placeName(me.toCell) ?? "another village"} in ${me.leftDay - day} days, to marry ${word.spec?.given ?? "them"} there`);
+  }
+  if (away.length) lines.push(`${away.join(". ")}.`);
 
   // A life, oldest first, at most the twenty-five things worth telling.
   const life = (lives(s).get(me.id) ?? []).filter((e) => e.day <= day);
@@ -374,7 +442,7 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
     else if (g.places.has(me.id)) today.push(`This afternoon is ${gatheringName(s, g)}, and you are going`);
     else today.push(`This afternoon is ${gatheringName(s, g)}; you are not going`);
   }
-  for (const c of comingOn(s, plan, day)) {
+  for (const c of comingOn(s, plan, day, changes)) {
     if (c.day === day && c.kind !== "expecting") continue;
     if (c.kind === "expecting" && c.about.includes(me.id)) today.push("You are expecting a child, any day now");
     else if (c.kind === "wedding" && c.about.includes(me.id)) {
@@ -395,12 +463,14 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
 
   // What everybody in the village knows has been decided lately, by others.
   const lately = changes
-    .filter((c) => c.person !== me.id && day - c.madeDay <= 90 && (c.kind === "leave" || c.kind === "stay" || c.kind === "trade"))
+    .filter((c) => c.person !== me.id && day - c.madeDay <= 90 && (c.kind === "leave" || c.kind === "stay" || c.kind === "trade" || (c.kind === "arrive" && c.day <= day)))
     .map((c) => {
       const p = people.get(c.person);
       if (!p) return null;
       const ago = agoDays(day, c.madeDay);
-      if (c.kind === "leave") return p.leftDay <= day ? `${p.given} ${p.family} left ${s.name} for good ${agoDays(day, p.leftDay)}` : `${p.given} ${p.family} decided ${ago} to leave ${s.name}`;
+      const to = c.kind === "leave" && c.toCell ? ` for ${placeName(c.toCell) ?? "another village"}` : "";
+      if (c.kind === "leave") return p.leftDay <= day ? `${p.given} ${p.family} left ${s.name} for good${to} ${agoDays(day, p.leftDay)}` : `${p.given} ${p.family} decided ${ago} to leave ${s.name}${to}`;
+      if (c.kind === "arrive") return `${p.given} ${p.family} came to ${s.name}${c.fromCell ? ` from ${placeName(c.fromCell) ?? "another village"}` : ""} ${agoDays(day, c.day)}`;
       if (c.kind === "stay") return `${p.given} ${p.family} decided ${ago} to stay after all`;
       return `${p.given} ${p.family} took up the ${c.occupation} trade ${ago}`;
     })
@@ -417,7 +487,7 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
   const graves = s.people.filter((p) => p.deathDay <= day && present(s, p, p.deathDay - 1)).length;
   lines.push(`There are ${graves} graves in the yard beyond the houses.`);
 
-  const names = new Set<string>([s.name]);
+  const names = new Set<string>([s.name, ...elsewhere]);
   for (const p of s.people) {
     names.add(p.given);
     names.add(p.family);
@@ -499,7 +569,9 @@ export type SaidChange =
   | { kind: "stay" }
   | { kind: "trade"; trade: string }
   | { kind: "goal"; goal: string; about: string | null; trade: string | null }
-  | { kind: "drop"; goal: string };
+  | { kind: "drop"; goal: string }
+  | { kind: "court"; about: string }
+  | { kind: "return" };
 
 export interface Offer {
   /** The JSON the model would return for it. */
@@ -509,7 +581,21 @@ export interface Offer {
 }
 
 /** Strangers need to have met a villager before for these, however moving the conversation. */
-const TRUSTED_KINDS = new Set(["leave", "trade"]);
+const TRUSTED_KINDS = new Set(["leave", "trade", "court", "return"]);
+
+/** Someone a stranger could tell this villager of (C53): met by the stranger, unmarried, a possible match. */
+export interface Introducible {
+  person: Person;
+  cell: string;
+  village: string;
+  km: number;
+  /** They have already sent word (since they met, if they have) that they would meet, or marry, this villager. */
+  asked: boolean;
+  /** The day one came to visit the other, or null; people of one village have always met. */
+  met: number | null;
+  /** Their village, for reading their temperament where it was drawn. */
+  parcel?: { settlement: Settlement };
+}
 
 /**
  * Every decision this villager could make today, as offers for the model. Each was run through
@@ -517,7 +603,15 @@ const TRUSTED_KINDS = new Set(["leave", "trade"]);
  * gates what a near stranger could talk anyone into: leaving and taking up a trade want a second
  * meeting at least.
  */
-export function decisionsOffered(s: Settlement, me: Person, day: number, changes: readonly LifeChange[], meetings: number): Offer[] {
+export function decisionsOffered(
+  s: Settlement,
+  me: Person,
+  day: number,
+  changes: readonly LifeChange[],
+  meetings: number,
+  /** C53: whom the stranger could tell them of, and the village they came from (by name), if any. */
+  between: { singles?: readonly Introducible[]; home?: string | null } = {},
+): Offer[] {
   const offers: Offer[] = [];
   const fits = (p: Proposal) => checkChange(s, me, day, p, changes).ok;
   const full = (p: Person) => `${p.given} ${p.family}`;
@@ -559,13 +653,43 @@ export function decisionsOffered(s: Settlement, me: Person, day: number, changes
     });
   }
   if (fits({ kind: "stay" })) offers.push({ change: { kind: "stay" }, means: "not to leave after all" });
+  // C53: word sent by the stranger to someone they could marry; going home to where they came from.
+  if (trusted) {
+    for (const x of between.singles ?? []) {
+      const them = { id: x.person.id, sex: x.person.sex, birthDay: x.person.birthDay };
+      if (!fits({ kind: "court", target: x.person.id, toCell: x.cell, them })) continue;
+      const where = x.km === 0 ? `here in ${s.name}` : `of ${x.village}, ${Math.round(x.km)} km off`;
+      const age = Math.floor(ageYears(x.person, day));
+      const nature = temperamentWords(temperamentOf(x.parcel?.settlement ?? s, x.person)).slice(0, 2).join(" and ");
+      const who = `${x.person.given} ${x.person.family} (${age}, a ${occupationOn(x.person, day)}, ${where}${nature ? `; by the stranger's account ${nature}` : ""})`;
+      // Two steps between villages (C53): to meet first — one comes to visit — and only then to marry.
+      if (x.met === null && x.km > 0) {
+        offers.push({
+          change: { kind: "court", about: `${x.person.given} ${x.person.family}` },
+          means: x.asked
+            ? `to send word back that you would like to meet ${who} too: they have sent word that they would like to meet you — they would come to visit you in two days`
+            : `to send word by the stranger that you would like to meet ${who}, with a mind to marry if you take to each other — someone the stranger has met; nothing is promised by it`,
+        });
+        continue;
+      }
+      offers.push({
+        change: { kind: "court", about: `${x.person.given} ${x.person.family}` },
+        means: x.asked
+          ? `to send word back that you will marry ${who}, who has sent word that they would marry you${x.met !== null ? ` — you met ${agoDays(day, x.met)}, when one of you came to visit` : ""}; the wedding would be a week from now`
+          : `to send word by the stranger that you would marry ${who}, if they will have you${x.met !== null ? ` — you met ${agoDays(day, x.met)}, when one of you came to visit` : ""}`,
+      });
+    }
+    if (me.fromCell !== null && between.home && fits({ kind: "return" })) {
+      offers.push({ change: { kind: "return" }, means: `to go home to ${between.home}, where you came from, for good, in ${CHANGE_LIMITS.leaveNoticeMinDays} days` });
+    }
+  }
   return offers;
 }
 
 /** The late note's list of decisions, or the sentence that there are none worth offering. */
 export function decisionsLine(offers: readonly Offer[], meetings: number): string {
   const lines = offers.map((o) => `- ${JSON.stringify(o.change)} — ${o.means}`);
-  const trust = meetings >= 2 ? "" : " Leaving this place or taking up another trade is not something you would decide with someone you have only just met.";
+  const trust = meetings >= 2 ? "" : " Leaving this place, taking up another trade or deciding whom to marry is not something you would do on the word of someone you have only just met.";
   return lines.length === 0
     ? `There is nothing you could decide about your life today: "change" is null.${trust}`
     : `What you could decide today, if this conversation truly moves you — otherwise "change" is null:\n${lines.join("\n")}${trust}`;
@@ -614,6 +738,13 @@ export const REPLY_SCHEMA = {
           required: ["kind", "goal"],
           additionalProperties: false,
         },
+        {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["court"] }, about: { type: "string" } },
+          required: ["kind", "about"],
+          additionalProperties: false,
+        },
+        { type: "object", properties: { kind: { type: "string", enum: ["return"] } }, required: ["kind"], additionalProperties: false },
       ],
     },
   },
@@ -642,13 +773,13 @@ export function parseReply(text: string): Reply | null {
   let change: SaidChange | null = null;
   if (c && typeof c === "object") {
     const k = (c as { kind?: unknown }).kind;
-    if (k === "leave" || k === "stay" || k === "trade" || k === "goal" || k === "drop") change = c as SaidChange;
+    if (k === "leave" || k === "stay" || k === "trade" || k === "goal" || k === "drop" || k === "court" || k === "return") change = c as SaidChange;
   }
   return { say: o.say.trim(), remember: o.remember.trim(), change };
 }
 
 /** A decision the model made, as a `Proposal` the world can check: names resolved to ids. */
-export function proposalFrom(change: SaidChange, s: Settlement): Proposal | null {
+export function proposalFrom(change: SaidChange, s: Settlement, singles: readonly Introducible[] = []): Proposal | null {
   const isTrade = (t: string | null | undefined): t is Occupation => !!t && (OCCUPATIONS as readonly string[]).includes(t);
   switch (change.kind) {
     case "leave":
@@ -671,18 +802,41 @@ export function proposalFrom(change: SaidChange, s: Settlement): Proposal | null
       }
       return { kind: "goal", goal, target, occupation: isTrade(change.trade) ? change.trade : null };
     }
+    case "court": {
+      // Only someone the stranger could tell them of: the offered list, by full name, exactly one.
+      const name = (change.about ?? "").trim().toLowerCase();
+      const m = singles.filter((x) => `${x.person.given} ${x.person.family}`.toLowerCase() === name);
+      if (m.length !== 1) return null;
+      const x = m[0];
+      return { kind: "court", target: x.person.id, toCell: x.cell, them: { id: x.person.id, sex: x.person.sex, birthDay: x.person.birthDay } };
+    }
+    case "return":
+      return { kind: "return" };
   }
 }
 
 /** A recorded change, in words for the panel: "Senka has decided to build a boat of her own." */
-export function changeWords(c: LifeChange, s: Settlement, day: number): string {
+export function changeWords(c: LifeChange, s: Settlement, day: number, placeName: (cell: string) => string | null = () => null): string {
   const p = s.people.find((q) => q.id === c.person);
   const name = p ? p.given : "They";
   const their = p?.sex === "f" ? "her" : "his";
   const target = c.target ? s.people.find((q) => q.id === c.target) : undefined;
   switch (c.kind) {
-    case "leave":
-      return `${name} has decided to leave ${s.name} for good, in ${c.day - day} days.`;
+    case "leave": {
+      const to = c.toCell ? placeName(c.toCell) : null;
+      if (p?.fromCell && c.toCell === p.fromCell) return `${name} has decided to go home to ${to ?? "where they came from"}, in ${c.day - day} days.`;
+      return `${name} has decided to leave ${s.name} for good, in ${c.day - day} days${to ? `, for ${to}` : ""}.`;
+    }
+    case "court": {
+      const to = c.toCell ? placeName(c.toCell) : null;
+      return `${name} has sent word by you${to && c.toCell !== s.cell ? ` to ${to}` : ""}: ${p?.sex === "f" ? "she" : "he"} would marry them, if they will have ${p?.sex === "f" ? "her" : "him"}.`;
+    }
+    case "arrive":
+      return `${c.spec?.given ?? name} has come to ${s.name}${c.fromCell ? ` from ${placeName(c.fromCell) ?? "another village"}` : ""}.`;
+    case "pair": {
+      const other = s.people.find((q) => q.id === c.target)?.given ?? "them";
+      return `${name} and ${other} are to be married, in ${c.day - day} days.`;
+    }
     case "stay":
       return `${name} has decided to stay in ${s.name} after all.`;
     case "trade":

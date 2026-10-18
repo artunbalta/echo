@@ -100,7 +100,7 @@ export function needOf(
   changes: readonly LifeChange[] = [],
   effects: readonly WorldEffect[] = [],
 ): Need | null {
-  if (!present(s, p, day)) return null;
+  if (!present(s, p, day) || p.visiting) return null; // a visitor (C53) asks this village for nothing
   const age = ageYears(p, day);
   if (age < NEEDS.minAgeYears) return null;
   const week = Math.floor(day / NEEDS.weekDays);

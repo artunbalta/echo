@@ -1890,3 +1890,27 @@ consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** OPEN, all of it, written down rather than discovered.
 
+## ⚑ 43. What C53 does not do yet, and what it trusts (2026-10-18)
+
+- **Two writes, two cells, no transaction.** A move is a row in each village. If the second write
+  fails, the person has left and arrived nowhere. That is C44's world, not a broken one, but it is
+  not what was decided.
+- **Coming home is for the unmarried.** Someone who married where they went cannot go home in v1:
+  their partner, and children born there, would have to come too, as people the home village has
+  never had. A person who came home cannot leave again (`already-leaving`).
+- **The house a returner comes home to stands in between.** `closeHouseholds` counts it lived in
+  from the day they left until they come back, even if nobody was in it.
+- **A newcomer family's house is the build day's (⚑35).** They have a plot in the plan, and until a
+  reload the drawing is the one before they came.
+- **Introductions read the stranger's last forty conversations** and load each village they were
+  in. That is a cost per conversation, paid only from the second meeting.
+- **Who speaks first goes.** The visitor and the one who moves are always the one who sent word
+  first. Whether the man, the woman, or the smaller village's should go is not modelled.
+- **Weddings are between a man and a woman**, because the generator's pairing is (C40). Nothing in
+  C53 requires it, and nothing in C53 changes it.
+- **The other village does not hear of a refusal.** Word sent and never answered stays waiting for
+  sixty days, and then is forgotten.
+- **Migration 0023 is applied nowhere** (⚑37).
+
+**Status:** OPEN, all of it, written down rather than discovered.
+

@@ -309,7 +309,7 @@ test("a real caller is answered, and the request is the one C42 and C44 describe
   assert.equal(messages.at(-2)?.content, "Good morning!");
   assert.equal(messages.at(-1)?.role, "system", "the hour and the stranger ride after the conversation, not in the cached prefix");
   assert.match(lateNote(call), /You have never met this stranger before\./);
-  assert.match(lateNote(call), /not something you would decide with someone you have only just met/);
+  assert.match(lateNote(call), /not something you would do on the word of someone you have only just met/);
 });
 
 test("C44: a villager remembers you — the note they kept comes back next time, and they say they know you", async () => {

@@ -3007,3 +3007,122 @@ one cell in seven of the planet found five burials due within ten real minutes.
   bubble). Nobody at a gathering now asks for anything while it holds.
 
 **Not done.** See ⚑42.
+
+## C53 — between villages: going somewhere, coming home, and a marriage a stranger brings about
+
+Feature 7 of the twenty.
+
+**The problem.** Every village is generated alone, from its seed and its own changes (L1). Making a
+person who leaves one village the same person who arrives in another seems to need one village to
+generate the other, or the whole planet together. Either way the closed form is gone.
+
+**The answer is C44's own move: the ledgers carry it.** A move is written into both villages
+(`lib/moves.ts`):
+
+- **The village left** gets a `leave` that names where they went (`toCell`).
+- **The village gone to** gets one `arrive` per person. Each carries the person as their own village
+  made them (`PortablePerson`): name, dates, trade, temperament, partner, parents, and how many
+  children they had already had.
+- The village they come to has them from that day without knowing anything else about the other
+  village (`society.ts` `addArrival`). Nobody is two people: on any day each is present in exactly
+  one of the two villages.
+
+**In the generator,** arrivals and promised weddings are events in the same chronological walk as
+every pairing. They are taken in their turn, so:
+
+- the village generated to any day before them is the village without them, field for field;
+- the prefix property (L2) holds with them in it.
+
+**People who come:**
+
+- **A family** stays a family: a household of its own here from the day it came. Children still to
+  come are born here under a key no child of theirs at home could have, so no child is born twice.
+- **Someone on their own** lodges with whoever they came for, or with the quietest house. From then
+  on they may marry here like anyone.
+- **Someone coming home** is the person the village already has, present again from `backDay`, in
+  the house they grew up in.
+
+**A leaving goes somewhere.** C44's `leave` now chooses a village round the one left, in the
+nearest of three H3 rings that has one, by a draw on the person and the day. The family's arrivals
+are written there. It is "far away" only if there is nowhere.
+
+**Coming home** is a decision offered to someone who came from elsewhere: `return`, held to the
+leave rules.
+
+**A marriage a stranger brings about, in two steps.** The stranger can tell a villager of an
+unmarried person **the stranger has met**. The list is the store's (`metBy`), never the
+conversation's, so a name made up is refused. It covers this village and the villages round it
+only.
+
+1. **To meet.** Word that they would like to meet, "nothing promised by it". When both have sent it,
+   the one who spoke first comes to visit two days later, for a day:
+   - in along the way in before noon, then at the host's door;
+   - beside them on the green in the evening, then away;
+   - home the next morning.
+   
+   It is four changes, two in each village, and the visitor pairs with nobody there.
+2. **To marry,** once they have met. When both have said yes, the one who spoke first goes two days
+   before the wedding, lodges with the other's family, and the wedding is a week after the second
+   yes. C52 then shows it on the green, and the village's news tells it a week ahead.
+
+**Why two steps: measured.** With a single step ("send word that you would marry them") the real
+model declined both times, in character. Rur: "I can't promise anything to a man I've never seen;
+send my greetings." Kol (then 329 km away): "I've never seen her, and my mother's grave is here."
+
+So two things changed:
+
+- introductions are limited to villages round this one (2–4 km apart on this planet);
+- the first step is to meet.
+
+Then Rur: "one meeting does no harm; tell him he'll find me by the nets". Gighcuan: "tell her to
+come; in two days there's hot soup at the inn". The visit was written in both villages.
+
+**What villagers know** (`villager.ts`):
+
+- where they came from;
+- where they went, and when they came home;
+- word sent, and word received (by whom, how old, what trade, from where);
+- a visit coming, made, or gone;
+- that they are going away to marry;
+- who left "for Kamgull", and who came "from Senstrand".
+
+Other villages' names, and the people named in that word, are names a reply may use. The first
+version refused them as invented: a test found it.
+
+**Fixed in C52 on the way.** A village is generated to today, and pairings exist only to the
+horizon. So the news never told of a seed wedding ahead in a live village, although the C52 test,
+which generated a year ahead, could not see it. `comingOn` now reads a week ahead off the same
+village generated to a later horizon (L2 makes it the same people, plus the week).
+
+**Measured.**
+
+- `moves.test.ts`, 10 tests:
+  - the same person on the road;
+  - the past does not move;
+  - a family that stays a family, never born twice, and housed;
+  - lodging;
+  - coming home;
+  - a promised wedding on its day;
+  - the promised married to nobody else, even someone the seed would have married to another that
+    week;
+  - the rules;
+  - rings and distance;
+  - a visit.
+- `betweenVillages.test.mts`, 5 tests, through the real talk route:
+  - a leaving that arrives;
+  - word, visit, word and wedding between Senstrand and Dragcrachadit;
+  - going home;
+  - no match 329 km off;
+  - nobody unmet, and nothing at a first meeting.
+- Thirteen injected defects; eleven caught. Two are redundant guards and are left in as defence:
+  the generator's arrival-day check (arrivals are created on their day anyway), and the route's
+  first-meeting gate (the offers are already empty).
+- Real model: 9 calls, about $0.11.
+- Browser, Senstrand:
+  - a visitor from Dragcrachadit stands 0.7 m from Rur on the evening green. Their plate reads "Here
+    for the day from another village, visiting Rur."; it said "Leaving Senstrand in 1 day" until
+    that was fixed.
+  - a family of five from Dragcrachadit is in the village ("Came here from another village this
+    year"), and the chatter is about them ("Megtrin still doesn't know where anything is").
+
+**Not done.** See ⚑43.

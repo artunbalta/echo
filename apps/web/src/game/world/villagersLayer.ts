@@ -141,6 +141,12 @@ export function lifeLine(events: readonly LifeEvent[], day: number, names: Map<s
   };
   const who = (e: LifeEvent) => names.get(e.with[0] ?? "") ?? "someone";
   const last = (kind: LifeEvent["kind"]) => [...events].reverse().find((e) => e.kind === kind && e.day <= day);
+  // Between villages (C53), the most telling thing about anyone while it is recent.
+  const home = last("came-home");
+  if (home && day - home.day < 5 * 365) return `Went away, and came home ${ago(home.day)}.`;
+  const came = last("arrived");
+  if (came && came.detail?.startsWith("visit:") && came.day === day) return "Here for the day from another village, visiting.";
+  if (came && came.detail?.startsWith("from:") && day - came.day < 10 * 365) return `Came here from another village ${ago(came.day)}.`;
   const widowed = last("widowed");
   if (widowed) return `Widowed ${ago(widowed.day)}; ${who(widowed)} lies in the graveyard.`;
   const lost = last("child-died");
@@ -394,8 +400,10 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           const line = document.createElement("div");
           line.style.cssText = "margin-top:3px;color:#e8c98a";
           // A decision to go is the most telling thing about anyone, and everyone can see it (C44).
-          line.textContent =
-            p.leftDay !== Infinity && p.leftDay > day
+          // A visitor's leaving is going home after the day (C53), not leaving for good.
+          line.textContent = p.visiting
+            ? `Here for the day from another village, visiting ${names.get(p.visiting) ?? "someone"}.`
+            : p.leftDay !== Infinity && p.leftDay > day
               ? `Leaving ${village!.settlement.name} in ${p.leftDay - day} day${p.leftDay - day === 1 ? "" : "s"}.`
               : lifeLine(life.get(p.id) ?? [], day, names);
           label.append(title, sub, line);
@@ -535,7 +543,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     },
     needs: () => needs,
     gatherings: () => (village ? gatheringsOn(village.settlement, village.plan, state.day) : []),
-    coming: () => (village ? comingOn(village.settlement, village.plan, state.day) : []),
+    coming: () => (village ? comingOn(village.settlement, village.plan, state.day, village.changes) : []),
     say(id, text, seconds = SAY_S) {
       spoken = { id, text, until: performance.now() / 1000 + seconds };
       chatterClock = 1; // shown at the next frame, not the next tick

@@ -291,7 +291,7 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
         options.push(`Have you been to see the new baby?`);
       }
     }
-    for (const c of comingOn(s, ctx.plan, day)) {
+    for (const c of comingOn(s, ctx.plan, day, ctx.changes ?? [])) {
       if (c.day === day && c.kind !== "expecting") continue; // today's gatherings are above
       if (c.about.includes(speaker.id)) continue;
       options.push(`${c.words}.`);
@@ -301,7 +301,8 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
   for (const c of ctx.changes ?? []) {
     const p = byId.get(c.person);
     if (!p || day - c.madeDay > 30 || p.id === speaker.id) continue;
-    if (c.kind === "leave" && p.leftDay > day) options.push(`${p.given}'s leaving, they say.`);
+    if (c.kind === "leave" && p.leftDay > day) options.push(c.toCell ? `${p.given}'s off to another village, they say.` : `${p.given}'s leaving, they say.`);
+    if (c.kind === "arrive" && c.day <= day && p.fromCell !== null) options.push(`Have you met ${p.given}? Come from another village.`, `${p.given} still doesn't know where anything is.`);
     if (c.kind === "trade") options.push(`${p.given}'s gone and taken up the ${c.occupation}'s trade, of all things.`);
     if (c.kind === "met" && c.goal === "own-boat") options.push(`${p.given}'s boat is coming on. Somebody brought wood for it.`);
     if (c.kind === "met" && c.goal === "own-house") options.push(`${p.given}'s walls are going up. Somebody's been bringing stone.`);

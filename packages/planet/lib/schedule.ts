@@ -33,7 +33,7 @@ import { navGraph, pathLength, route } from "./nav.js";
 import { weatherOn } from "./weather.js";
 import { friendCircles } from "./social.js";
 import { gatheringsOn, type Gathering } from "./events.js";
-import { temperaments } from "./life.js";
+import { present, temperaments } from "./life.js";
 import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
 // ── the dials ───────────────────────────────────────────────────────────────────
@@ -168,9 +168,7 @@ export function mooringsOn(s: Settlement, plan: VillagePlan, day: number): Moori
     const fishes = s.people.some(
       (p) =>
         occupationOn(p, day) === "fisher" &&
-        p.birthDay <= day &&
-        p.deathDay > day &&
-        p.leftDay > day &&
+        present(s, p, day) &&
         (p.household === h.index || p.bornInto === h.index),
     );
     if (fishes) owners.push(h.index);
@@ -367,6 +365,25 @@ export function dayPlans(
     if (!rows) stay(clock + 0.006, plot.facing, "stand");
 
     let boat: number | null = null;
+    // Here for the day to meet someone (C53): in along the way in before noon, at their door, beside
+    // them on the green in the evening, and away the way they came. Nobody else's day changes.
+    if (p.visiting) {
+      const host = s.people.find((q) => q.id === p.visiting);
+      legs.length = 0;
+      stays.length = 0;
+      clock = 0.42 + j("visit");
+      here = plan.arrival;
+      go(door);
+      stay(SCHEDULE.workEnd - 0.02, plot.facing, "stand", 0.3);
+      const spot = host ? eveningSpotOf(host.id) : greenSpot(plan, p.id, 0.9);
+      const beside = along(spot, toward(spot, plan.centre) + Math.PI / 2, 0.7);
+      go(beside);
+      stay(SCHEDULE.gatherEnd + j("bed") - 0.06 * wet, toward(beside, spot), "stand", 0.1);
+      go(plan.arrival);
+      stays.push({ t0: clock, t1: clock + 0.004, at: plan.arrival, heading: toward(plan.centre, plan.arrival), activity: "stand", wander: 0 });
+      plans.push({ person: p.id, legs, stays, pace, boat: null });
+      continue;
+    }
     const gathering = going.get(p.id) ?? null;
     /**
      * To the gathering and through it (C52). A village is a hundred metres and more across and a

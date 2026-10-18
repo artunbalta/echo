@@ -20,9 +20,10 @@
  * Pure.
  */
 
+import type { LifeChange } from "./changes.js";
 import { present } from "./life.js";
 import { socialGraph } from "./social.js";
-import { ageYears, hash01, type Person, type Settlement } from "./society.js";
+import { ageYears, hash01, settlementAt, type Person, type Settlement } from "./society.js";
 import { gravesOn, residentsOn, type Point, type VillagePlan } from "./village.js";
 
 export type GatheringKind = "funeral" | "wedding" | "naming";
@@ -235,7 +236,25 @@ export const COMING = {
  * weddings of the coming week, the children due any day. What is known is what people know: a wedding
  * is planned, a birth is expected, and a death is never foretold — it is news on the day it happens.
  */
-export function comingOn(s: Settlement, plan: VillagePlan, day: number): Coming[] {
+const aheadMemo = new WeakMap<Settlement, Map<number, Settlement | null>>();
+
+/**
+ * The village a week on, for what is planned in it: who pairs in the coming days is decided by the
+ * generator only as far as the horizon, and a village is built to today (C52 found this: the news
+ * never told of a wedding ahead in a live village). Same seed, same changes, a later horizon — the
+ * prefix property (L2) makes it the same people, plus what the week brings.
+ */
+function aheadOf(s: Settlement, day: number, changes: readonly LifeChange[]): Settlement | null {
+  let byDay = aheadMemo.get(s);
+  if (!byDay) {
+    byDay = new Map();
+    aheadMemo.set(s, byDay);
+  }
+  if (!byDay.has(day)) byDay.set(day, settlementAt(s.seed, s.cell, s.geography, Math.max(s.throughDay, day + COMING.weddingDays), changes));
+  return byDay.get(day) ?? null;
+}
+
+export function comingOn(s: Settlement, plan: VillagePlan, day: number, changes: readonly LifeChange[] = []): Coming[] {
   const WORDS = ["", "", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
   const inDays = (n: number) => (n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${WORDS[n] ?? n} days`);
   const out: Coming[] = [];
@@ -247,11 +266,22 @@ export function comingOn(s: Settlement, plan: VillagePlan, day: number): Coming[
       out.push({ kind: "funeral", day: day + 1, about: [p.id], words: `${p.given} died today; the burial is tomorrow afternoon` });
     }
   }
-  for (const p of s.people) {
-    if (p.partner === null || p.partnerDay === null || p.partnerDay <= day || p.partnerDay - day > COMING.weddingDays) continue;
-    const q = s.people[p.partner];
-    if (p.index > q.index || !present(s, p, day) || !present(s, q, p.partnerDay)) continue;
-    out.push({ kind: "wedding", day: p.partnerDay, about: [p.id, q.id], words: `${p.given} and ${q.given} are to be married ${inDays(p.partnerDay - day)}, on the green` });
+  // Weddings ahead, read off the village a week on: the seed's, and those a stranger brought about (C53).
+  const week = aheadOf(s, day, changes);
+  if (week) {
+    for (const p of week.people) {
+      if (p.partner === null || p.partnerDay === null || p.partnerDay <= day || p.partnerDay - day > COMING.weddingDays) continue;
+      const q = week.people[p.partner];
+      if (p.index > q.index || !present(week, p, p.partnerDay) || !present(week, q, p.partnerDay)) continue;
+      // Someone from elsewhere who has not come yet is known here by word only.
+      const from = [p, q].find((x) => x.fromCell !== null && x.arrivedDay > day);
+      out.push({
+        kind: "wedding",
+        day: p.partnerDay,
+        about: [p.id, q.id],
+        words: `${p.given} and ${q.given} are to be married ${inDays(p.partnerDay - day)}, on the green${from ? ` — ${from.given} is coming from another village for it` : ""}`,
+      });
+    }
   }
   for (const c of s.people) {
     if (c.parents === null || c.birthDay <= day || c.birthDay - day > COMING.expectingDays) continue;
