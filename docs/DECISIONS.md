@@ -2886,3 +2886,33 @@ queued (`lib/identity.ts`), and an injected caller still uses its own transport.
 observe answers 200.
 
 **Not done.** See ⚑41.
+
+## C51 — half the village is women, and now it looks it
+
+Reported by the user: "there are no women in the village, only men walking about". The society was
+right: Senstrand is 28 women and 22 men, Kamgull 42 and 41, all out of doors by day. The drawing was
+wrong. `lookFor` never read `Person.sex`, so every woman wore trousers and a cropped head.
+
+**Now** (`crowd.ts`):
+
+- A woman or girl from three wears a dress to below the knee, and her hair long.
+- Some grown women wear a linen kerchief.
+- Women are a little shorter on average.
+- A dress is its own dye (madder, woad, weld, linen) mixed with the trade's colour, so a
+  fisherwoman still reads as the sea's.
+- A guard turns any mix that lands on violet to blue, because violet is the echo's (art bible §8).
+  The guard was found by a test: woad over an innkeeper's madder-brown came out mauve.
+
+**For no draw call.** The crowd is drawn by part, nine meshes for everybody (C41), and the frame has
+about ten calls left (⚑36). So nothing new is a mesh:
+
+- the long hair is a second instance of the hair part, stretched down behind the head and set back
+  off the face;
+- the skirt is the pelvis part, now a short flared frustum for everyone, drawn long and wide for her.
+
+The browser frame was 90 calls before and after. `villagers.test.mts` pins it: a dress and long hair
+for women and girls, neither for men or babies, nine meshes still, and no dress violet across ten
+trades.
+
+**Also fixed.** The C44 evening test read the real clock. On a stormy world day (4966) the evening is
+cut short (C48) and the test failed. It is now pinned to a dry day.
