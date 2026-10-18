@@ -26,8 +26,80 @@
 
 import type { Occupation } from "./society.js";
 
-/** `met`: a need (C50) was met, by `goalId` = the need's id. Shared, like every change. */
-export type ChangeKind = "leave" | "stay" | "trade" | "goal" | "drop" | "met";
+/** A move or a marriage between villages, as one village's generator reads it (C53). */
+export interface Arrival {
+  day: number;
+  fromCell: string;
+  people: PortablePerson[];
+}
+
+/**
+ * The arrivals in a cell's changes, by day: the `arrive` changes made on one day from one village are
+ * one party (a family comes together). Only changes that have taken effect by their own day count.
+ */
+export function arrivalsOf(changes: readonly LifeChange[]): Arrival[] {
+  const by = new Map<string, Arrival>();
+  for (const c of [...changes].sort(byMade)) {
+    if (c.kind !== "arrive" || !c.spec || !c.fromCell || c.day < c.madeDay) continue;
+    const k = `${c.day}|${c.fromCell}|${c.madeDay}`;
+    const a = by.get(k) ?? { day: c.day, fromCell: c.fromCell, people: [] };
+    if (!a.people.some((p) => p.id === c.spec!.id)) a.people.push(c.spec);
+    by.set(k, a);
+  }
+  return [...by.values()].sort((a, b) => a.day - b.day || (a.fromCell < b.fromCell ? -1 : 1));
+}
+
+/** Marriages a stranger brought about (C53): `pair` changes, the first for each person winning. */
+export function pairsOf(changes: readonly LifeChange[]): { a: string; b: string; day: number; madeDay: number }[] {
+  const out: { a: string; b: string; day: number; madeDay: number }[] = [];
+  const taken = new Set<string>();
+  for (const c of [...changes].sort(byMade)) {
+    if (c.kind !== "pair" || !c.target || c.day < c.madeDay) continue;
+    if (taken.has(c.person) || taken.has(c.target)) continue;
+    taken.add(c.person);
+    taken.add(c.target);
+    out.push({ a: c.person, b: c.target, day: c.day, madeDay: c.madeDay });
+  }
+  return out.sort((x, y) => x.day - y.day);
+}
+
+/**
+ * `met`: a need (C50) was met, by `goalId` = the need's id. Shared, like every change.
+ * `arrive`, `court`, `pair` (C53): someone came here from another village (or came home); someone
+ * here has said they would marry someone a stranger told them of; and a marriage that came of it.
+ */
+export type ChangeKind = "leave" | "stay" | "trade" | "goal" | "drop" | "met" | "arrive" | "court" | "pair";
+
+/**
+ * A person as another village needs them (C53): everything the generator would have drawn for them
+ * at home, carried in the change that brings them, so the village they come to can have them without
+ * generating the one they left. Nothing here is free text; every field is the home village's own.
+ */
+export interface PortablePerson {
+  id: string;
+  seedKey: string;
+  given: string;
+  family: string;
+  sex: "f" | "m";
+  birthDay: number;
+  deathDay: number;
+  pairAgeDays: number;
+  /** What they did on the day they left. */
+  occupation: Occupation;
+  /** The eight axes, as their home village drew them (`life.ts`). */
+  temperament: readonly number[];
+  /** A partner coming with them, by id, and the day they paired. */
+  partner?: string;
+  partnerDay?: number;
+  /** For a child coming with their parents: [mother, father], by id. */
+  parents?: readonly [string, string];
+  /** How many children they had already had: the cap on children still to come. */
+  children?: number;
+  /** For someone coming to marry: whom, by id. They stay in that family's house until the wedding. */
+  hostOf?: string;
+  /** Here for a day, to meet `hostOf` (C53): they pair with nobody here, and go home the next morning. */
+  visiting?: boolean;
+}
 
 /** What a person can come to want, from a closed list (`goals.ts`). */
 export type GoalKind =
@@ -58,12 +130,20 @@ export interface LifeChange {
   target?: string;
   /** `drop`: the id of the goal given up (`goals.ts` {@link goalId}). `met`: the need's id (`needs.ts`). */
   goalId?: string;
+  /** `leave` and `court`: the village they go to, or the one the person courted lives in (C53). */
+  toCell?: string;
+  /** `arrive`: the village they came from. */
+  fromCell?: string;
+  /** `arrive`: who came. */
+  spec?: PortablePerson;
 }
 
 /** The demographic half of a person's changes: everything `settlementAt` has to know. */
 export interface Resolved {
   /** The day they leave for good, or `Infinity`. */
   leftDay: number;
+  /** Where they went, if it is known (C53). */
+  toCell: string | null;
   /** Trades taken up, oldest first. */
   trades: { day: number; occupation: Occupation }[];
 }
@@ -85,7 +165,7 @@ export function resolveChanges(changes: readonly LifeChange[]): Map<string, Reso
   const of = (person: string): Resolved => {
     let r = out.get(person);
     if (r === undefined) {
-      r = { leftDay: Infinity, trades: [] };
+      r = { leftDay: Infinity, toCell: null, trades: [] };
       out.set(person, r);
     }
     return r;
@@ -96,9 +176,13 @@ export function resolveChanges(changes: readonly LifeChange[]): Map<string, Reso
       const r = of(c.person);
       if (r.leftDay <= c.madeDay) continue; // already gone
       r.leftDay = c.day;
+      r.toCell = c.toCell ?? null;
     } else if (c.kind === "stay") {
       const r = out.get(c.person);
-      if (r !== undefined && r.leftDay > c.madeDay) r.leftDay = Infinity;
+      if (r !== undefined && r.leftDay > c.madeDay) {
+        r.leftDay = Infinity;
+        r.toCell = null;
+      }
     } else if (c.kind === "trade" && c.occupation !== undefined) {
       const r = of(c.person);
       if (r.leftDay <= c.madeDay) continue;

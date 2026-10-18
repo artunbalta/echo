@@ -33,6 +33,7 @@
 import { byMade, resolveChanges, type GoalKind, type LifeChange } from "./changes.js";
 import { LIVING_MEMORY_YEARS, OCCUPATIONS, ageYears, occupationOn, stream, type Occupation, type Person, type Settlement } from "./society.js";
 import { present, temperamentOf } from "./life.js";
+import { couldMarry, mayCourt } from "./moves.js";
 import { yearsToDays } from "./worldclock.js";
 
 /** Where an evening goes while a talk goal is wanted. `work` means staying at it until dark. */
@@ -331,7 +332,11 @@ export type Proposal =
   | { kind: "stay" }
   | { kind: "trade"; occupation: Occupation }
   | { kind: "goal"; goal: GoalKind; target?: string | null; occupation?: Occupation | null }
-  | { kind: "drop"; goalId: string };
+  | { kind: "drop"; goalId: string }
+  // C53: word sent, by the stranger, that they would marry someone the stranger has met — here or in
+  // another village — and going home to the village they came from.
+  | { kind: "court"; target: string; toCell: string; them: { id: string; sex: "f" | "m"; birthDay: number } }
+  | { kind: "return" };
 
 export type Verdict = { ok: true; change: Omit<LifeChange, "id"> } | { ok: false; reason: string };
 
@@ -396,6 +401,22 @@ export function checkChange(s: Settlement, p: Person, day: number, proposal: Pro
       const goals = goalsOf(s, p, day, changes);
       if (!goals.active.some((g) => g.id === proposal.goalId)) return { ok: false, reason: "not-wanted" };
       return { ok: true, change: { ...base, kind: "drop", day, goalId: proposal.goalId } };
+    }
+    case "court": {
+      if (!mayCourt(s, p, day, changes, proposal.target)) return { ok: false, reason: "may-not-court" };
+      if (!couldMarry(p, proposal.them)) return { ok: false, reason: "could-not-marry" };
+      // Nobody marries their own: in the same village, kin are kin.
+      if (proposal.toCell === s.cell && kinOf(s, p).some((q) => q.id === proposal.target)) return { ok: false, reason: "kin" };
+      return { ok: true, change: { ...base, kind: "court", day, target: proposal.target, toCell: proposal.toCell } };
+    }
+    case "return": {
+      if (p.fromCell === null) return { ok: false, reason: "from-here" };
+      if (p.partner !== null) return { ok: false, reason: "married-here" };
+      if (age < CHANGE_LIMITS.minLeaveAgeYears || age > CHANGE_LIMITS.maxLeaveAgeYears) return { ok: false, reason: "age" };
+      if (p.leftDay !== Infinity) return { ok: false, reason: "already-leaving" };
+      const recent = changes.some((c) => c.kind === "leave" && day - c.madeDay < CHANGE_LIMITS.leaveEveryDays);
+      if (recent) return { ok: false, reason: "village-leave-cap" };
+      return { ok: true, change: { ...base, kind: "leave", day: day + CHANGE_LIMITS.leaveNoticeMinDays, toCell: p.fromCell } };
     }
   }
 }

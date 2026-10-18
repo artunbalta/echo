@@ -36,6 +36,8 @@ export interface VillageStore {
   memoryOf(subject: string, cell: string, person: string): Promise<VillagerMemory | "none" | null>;
   remember(subject: string, cell: string, person: string, memory: VillagerMemory): Promise<boolean>;
   forget(subject: string, cell: string, person: string): Promise<boolean>;
+  /** Everyone, in every village, this stranger has talked to (C53): newest first, at most `limit`. Null: unreadable. */
+  metBy(subject: string, limit: number): Promise<{ cell: string; person: string; meetings: number; lastDay: number }[] | null>;
   /** The marks on a cell that have not healed by `day` (C45). Null: unreadable. */
   effectsFor(cell: string, day: number): Promise<WorldEffect[] | null>;
   addEffect(cell: string, effect: Omit<WorldEffect, "id">, subject: string): Promise<WorldEffect | null>;
@@ -100,6 +102,9 @@ interface ChangeRow {
   goal: string | null;
   target: string | null;
   goal_id: string | null;
+  to_cell?: string | null;
+  from_cell?: string | null;
+  spec?: LifeChange["spec"] | null;
 }
 
 function fromRow(r: ChangeRow): LifeChange {
@@ -113,6 +118,9 @@ function fromRow(r: ChangeRow): LifeChange {
     ...(r.goal ? { goal: r.goal as LifeChange["goal"] } : {}),
     ...(r.target ? { target: r.target } : {}),
     ...(r.goal_id ? { goalId: r.goal_id } : {}),
+    ...(r.to_cell ? { toCell: r.to_cell } : {}),
+    ...(r.from_cell ? { fromCell: r.from_cell } : {}),
+    ...(r.spec ? { spec: r.spec } : {}),
   };
 }
 
@@ -125,7 +133,7 @@ function supabaseStore(): VillageStore | null {
     async changesFor(cell) {
       const { data, error } = await admin
         .from("village_changes")
-        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id")
+        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec")
         .eq("cell", cell)
         .order("id", { ascending: true })
         .limit(5000);
@@ -145,9 +153,12 @@ function supabaseStore(): VillageStore | null {
           goal: c.goal ?? null,
           target: c.target ?? null,
           goal_id: c.goalId ?? null,
+          to_cell: c.toCell ?? null,
+          from_cell: c.fromCell ?? null,
+          spec: c.spec ?? null,
           subject,
         })
-        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id")
+        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec")
         .single();
       if (error) return warn("addChange", error.message), null;
       return fromRow(data as ChangeRow);
@@ -176,6 +187,16 @@ function supabaseStore(): VillageStore | null {
       const { error } = await admin.from("villager_memories").delete().eq("subject", subject).eq("cell", cell).eq("person", person);
       if (error) return warn("forget", error.message), false;
       return true;
+    },
+    async metBy(subject, limit) {
+      const { data, error } = await admin
+        .from("villager_memories")
+        .select("cell, person, meetings, last_day")
+        .eq("subject", subject)
+        .order("updated_at", { ascending: false })
+        .limit(limit);
+      if (error) return warn("metBy", error.message), null;
+      return (data as { cell: string; person: string; meetings: number; last_day: number }[]).map((r) => ({ cell: r.cell, person: r.person, meetings: r.meetings, lastDay: r.last_day }));
     },
     async effectsFor(cell, day) {
       const { data, error } = await admin
@@ -283,6 +304,14 @@ function memoryStore(): VillageStore {
     async forget(subject, cell, person) {
       memory.memories.delete(key(subject, cell, person));
       return true;
+    },
+    async metBy(subject, limit) {
+      const out: { cell: string; person: string; meetings: number; lastDay: number }[] = [];
+      for (const [k, m] of memory.memories) {
+        const [sub, cell, person] = k.split("|");
+        if (sub === subject) out.push({ cell, person, meetings: m.meetings, lastDay: m.lastDay });
+      }
+      return out.sort((a, b) => b.lastDay - a.lastDay).slice(0, limit);
     },
     async effectsFor(cell, day) {
       return (memory.effects?.get(cell) ?? []).filter((e) => e.untilDay > day);

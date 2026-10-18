@@ -31,7 +31,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { ageYears, checkChange, deedWords, knownDeeds, needOf, present, type LifeChange } from "@echo/planet";
+import { ageYears, checkChange, deedWords, homeChanges, knownDeeds, metOn, moveChanges, needOf, portable, present, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -49,8 +49,10 @@ import {
   strangerLine,
   unknownNames,
   villagerContext,
+  type Introducible,
   type StrangerMemory,
 } from "@/lib/villager";
+import { destinationFor, singlesMet, villageNamed, writeMove } from "@/lib/moves";
 import { loadVillage, verifyConversation } from "@/lib/villageTalk";
 
 export const runtime = "nodejs";
@@ -64,8 +66,8 @@ const FALLBACKS = !MODEL.startsWith("claude-haiku");
 /** The stranger's line, and the conversation so far: both bounded before anything is spent. */
 const TALK_LIMITS = { messageChars: 400, turns: 12, turnChars: 800, replyChars: 700, noteChars: 600 } as const;
 
-/** Leaving and taking up a trade are not decided with someone you met five minutes ago (C44). */
-const TRUSTED = new Set(["leave", "trade"]);
+/** Leaving, a trade, a marriage, going home: not decided with someone you met five minutes ago (C44, C53). */
+const TRUSTED = new Set(["leave", "trade", "court", "return"]);
 
 const CELL = /^[0-9a-f]{15}$/;
 const PERSON = /^[0-9a-f]{16}$/;
@@ -137,9 +139,82 @@ export async function POST(req: Request) {
   const meetings = memory?.meetings ?? 1;
   // Nothing is offered against a world the server could not read, or into a store it cannot write.
   const canDecide = store !== null && readable;
-  const offers = canDecide ? decisionsOffered(s, me, day, changes, meetings) : [];
+  // Between villages (C53): whom the stranger could tell them of — people the stranger has met — and home.
+  const placeName = (c: string) => villageNamed(c)?.name ?? null;
+  let singles: (Introducible & { parcel: SettledParcel })[] = [];
+  if (canDecide && meetings >= 2) {
+    const found = await singlesMet(store!, caller.subject, me, cell, day, async (c) => {
+      if (c === cell) return { village, changes };
+      const l = await loadVillage(c, now);
+      return l ? { village: l.village, changes: l.changes } : null;
+    });
+    singles = found.map((f) => {
+      // Met: one came to visit the other (the visit is written in the village visited). One village: always.
+      const met = f.cell === cell ? day - 1 : metOn([...changes, ...f.changes], me.id, f.person.id, day);
+      // Their word to this villager counts if it was sent since they met — to meet first, then to marry.
+      const asked = changes.some((c) => c.kind === "court" && c.person === f.person.id && c.target === me.id && (met === null || f.cell === cell || c.madeDay > met));
+      return { person: f.person, cell: f.cell, village: f.village, km: f.km, asked, met: f.cell === cell ? null : met, parcel: f.parcel };
+    });
+  }
+  const offers = canDecide ? decisionsOffered(s, me, day, changes, meetings, { singles, home: me.fromCell ? placeName(me.fromCell) : null }) : [];
 
-  const { facts, names } = villagerContext(s, village.plan, me, day, changes);
+  /** The panel's sentence: word sent to meet, or to marry, says which (C53); anything else as `changeWords`. */
+  const decidedWords = (c: LifeChange): string => {
+    const t = c.kind === "court" ? singles.find((x) => x.person.id === c.target) : undefined;
+    if (!t) return changeWords(c, s, day, placeName);
+    const pronoun = me.sex === "f" ? "she" : "he";
+    const to = t.cell !== cell ? ` to ${t.village}` : "";
+    return t.cell !== cell && t.met === null
+      ? `${me.given} has sent word by you${to}: ${pronoun} would like to meet ${t.person.given}.`
+      : `${me.given} has sent word by you${to}: ${pronoun} would marry ${t.person.given}, if ${t.person.sex === "f" ? "she" : "he"} will have ${me.sex === "f" ? "her" : "him"}.`;
+  };
+
+  /**
+   * The other village's half of a decision (C53), once this village's is written: the family's arrival
+   * where they go, the arrival home, or the word sent — and, if it answers word already sent, the move
+   * and the wedding. Returns a sentence for the panel when a wedding came of it.
+   */
+  const between = async (c: LifeChange, kind: string, dest: string | null): Promise<string | null> => {
+    if (kind === "leave" && dest) {
+      for (const a of moveChanges(s, me, c.day, day, dest).there) await store!.addChange(dest, a, caller.subject);
+      return null;
+    }
+    if (kind === "return" && me.fromCell) {
+      const back = homeChanges(s, me, c.day, day);
+      if (back) for (const a of back.there) await store!.addChange(me.fromCell, a, caller.subject);
+      return null;
+    }
+    if (kind !== "court" || !c.target || !c.toCell) return null;
+    const them = singles.find((x) => x.person.id === c.target);
+    if (!them) return null;
+    // The word reaches them: in their own village, a note of who sent it.
+    if (c.toCell !== cell) {
+      await store!.addChange(c.toCell, { person: me.id, kind: "court", madeDay: day, day, target: them.person.id, fromCell: cell, spec: portable(s, me, day) }, caller.subject);
+    }
+    if (!them.asked) return null;
+    // Both would like to meet, and they never have: the one who spoke first comes to visit, in two days.
+    if (them.cell !== cell && them.met === null) {
+      const visit = visitChanges(them.parcel.settlement, them.person, day + 2, day, cell, me.id);
+      if (!(await writeMove(store!, them.cell, cell, visit, caller.subject))) return null;
+      return `${them.person.given} will come from ${them.village} to visit in two days, and they will spend the evening together on the green.`;
+    }
+    // Both have said yes. The one who spoke first goes to the other: they come here, and marry in a week.
+    const { arrive, wedding } = weddingDays(day);
+    if (them.cell !== cell) {
+      const move = moveChanges(them.parcel.settlement, them.person, arrive, day, cell, me.id);
+      if (!(await writeMove(store!, them.cell, cell, move, caller.subject))) return null;
+    }
+    await store!.addChange(cell, { person: them.person.id, kind: "pair", madeDay: day, day: wedding, target: me.id }, caller.subject);
+    return `${them.person.given} will come${them.cell !== cell ? ` from ${them.village}` : ""}, and they will be married on the green in ${wedding - day} days.`;
+  };
+
+  const { facts, names } = villagerContext(s, village.plan, me, day, changes, placeName);
+  // Whom the stranger could tell them of, and where those live, are names they may say (C53).
+  for (const x of singles) for (const n of [x.person.given, x.person.family, x.village]) names.add(n);
+  if (me.fromCell) {
+    const home = placeName(me.fromCell);
+    if (home) names.add(home);
+  }
   const said = [message, ...history.filter((t) => t.role === "stranger").map((t) => t.text)];
   const conversation: Anthropic.Beta.BetaMessageParam[] = [
     ...history.map((t): Anthropic.Beta.BetaMessageParam => ({ role: t.role === "stranger" ? "user" : "assistant", content: t.text })),
@@ -201,16 +276,21 @@ export async function POST(req: Request) {
     // The decision, if there was one: offered, possible, and trusted — or not taken.
     let recorded: LifeChange | null = null;
     let declined: string | null = null;
+    let married: string | null = null;
     if (reply.change && canDecide) {
-      const proposal = proposalFrom(reply.change, s);
+      const proposal = proposalFrom(reply.change, s, singles);
       if (proposal === null) declined = "unreadable";
       else if (TRUSTED.has(proposal.kind) && meetings < 2) declined = "first-meeting";
       else {
         const verdict = checkChange(s, me, day, proposal, changes);
         if (!verdict.ok) declined = verdict.reason;
         else {
+          // Leaving goes somewhere (C53): the village it goes to is chosen before the change is written.
+          const dest = proposal.kind === "leave" ? destinationFor(cell, me.id, verdict.change.day) : null;
+          if (dest) verdict.change.toCell = dest.cell;
           recorded = await store!.addChange(cell, verdict.change, caller.subject);
           if (recorded === null) declined = "not-recorded";
+          else married = await between(recorded, proposal.kind, dest?.cell ?? null);
         }
       }
     } else if (reply.change) declined = "store-unavailable";
@@ -233,7 +313,7 @@ export async function POST(req: Request) {
       reply: reply.say.slice(0, TALK_LIMITS.replyChars),
       source: "claude",
       ...(unknown.length ? { unverified: unknown } : {}),
-      ...(recorded ? { change: recorded, decided: changeWords(recorded, s, day) } : {}),
+      ...(recorded ? { change: recorded, decided: `${decidedWords(recorded)}${married ? ` ${married}` : ""}` } : {}),
     });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) console.warn("[villager] the model is rate limited");
