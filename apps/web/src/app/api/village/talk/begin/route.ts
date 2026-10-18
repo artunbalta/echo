@@ -7,12 +7,15 @@
  * there is no model call here. See `lib/villageTalk.ts` for why the check is at the beginning and
  * what it does not prove.
  *
+ * A VILLAGER YOU HAVE WRONGED TURNS AWAY (C45): if they know of a wrong you did to their household in
+ * the last month and you have not made it good, there is no conversation (409 `turns_away`).
+ *
  * THE LIMIT FAILS OPEN HERE, and only here. This route spends nothing and writes one row per stranger
  * per villager (an upsert on its key), so "the counter is down" is not a cost; the line that calls a
  * model is still closed when the counter is.
  */
 import { NextResponse } from "next/server";
-import { ageYears, present } from "@echo/planet";
+import { ageYears, grievance, present } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -65,6 +68,12 @@ export async function POST(req: Request) {
   if (w.boat !== null) return bad("at_sea", 409);
   const distanceM = Math.hypot(w.x - pos.x, w.y - pos.y);
   if (distanceM > TALK_REACH_M) return bad("too_far", 403);
+
+  // A wrong done to their own household, that they know of and that you have not made good (C45):
+  // they will not talk to you. Said as what they do, never as a number.
+  const deeds = store ? ((await store.deedsFor(caller.subject, cell)) ?? []) : [];
+  const held = grievance(s, me, deeds, day);
+  if (held) return NextResponse.json({ error: "turns_away", deed: held.verb }, { status: 409 });
 
   const conv = signConversation(caller.subject, cell, person, now);
   if (!conv) return bad("identity_unconfigured", 503);

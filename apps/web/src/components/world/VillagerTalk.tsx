@@ -39,11 +39,6 @@ interface Turn {
 /** Beyond this many metres a conversation is over: they have walked on with their day. */
 const PARTING_M = 12;
 
-const typing = () => {
-  const el = document.activeElement;
-  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
-};
-
 /** What a refusal from the routes means, in the villager's world rather than the server's. */
 function trouble(status: number, error: string | undefined, name: string): string {
   if (status === 429) return `${name} has had enough talk for now. Come back in a while.`;
@@ -82,6 +77,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
   const first = (talking ?? near)?.name.split(" ")[0];
 
   const end = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("echo:talking", { detail: false }));
     layer()?.hold(null);
     hush();
     conv.current = null;
@@ -127,6 +123,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     const who = v?.nearest();
     if (!v || !who) return;
     v.hold(who.id);
+    window.dispatchEvent(new CustomEvent("echo:talking", { detail: true }));
     setTalking(who);
     setTurns([]);
     setNote(null);
@@ -153,20 +150,24 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     return () => clearInterval(id);
   }, [layer, talking, end]);
 
+  // Escape ends a conversation; beginning one is `Interact`'s (C45): one prompt for everything within
+  // reach, `T` for whoever is near enough to talk to, and an `echo:talk` event to open this panel.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === "Escape" && talking) {
         e.preventDefault();
         end();
-        return;
-      }
-      if (e.code === "KeyE" && !talking && !typing() && near) {
-        e.preventDefault();
-        start();
       }
     };
+    const onTalk = () => {
+      if (!talking && near) start();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("echo:talk", onTalk);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("echo:talk", onTalk);
+    };
   }, [near, talking, start, end]);
 
   useEffect(() => {
@@ -255,23 +256,8 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     if (!on) hush();
   }, [voice]);
 
-  if (!talking) {
-    if (!near) return null;
-    return coarse ? (
-      <button
-        type="button"
-        onClick={start}
-        data-talk-prompt
-        className="absolute bottom-40 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#e2edc8] px-5 py-2 text-sm font-medium text-[#213522] shadow-lg"
-      >
-        Talk to {first}
-      </button>
-    ) : (
-      <p data-talk-prompt className="pointer-events-none absolute bottom-28 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#16241f]/80 px-4 py-1.5 text-xs text-[#f4e9d0]/85">
-        <span className="mr-2 rounded bg-[#f4e9d0]/15 px-1.5 py-0.5 font-mono">E</span>Talk to {first}
-      </p>
-    );
-  }
+  // The prompt to talk is `Interact`'s now (C45); this is only the conversation.
+  if (!talking) return null;
 
   return (
     <section

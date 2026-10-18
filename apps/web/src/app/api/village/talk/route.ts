@@ -31,7 +31,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { ageYears, checkChange, present, type LifeChange } from "@echo/planet";
+import { ageYears, checkChange, deedWords, knownDeeds, present, type LifeChange } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -141,7 +141,13 @@ export async function POST(req: Request) {
     ...history.map((t): Anthropic.Beta.BetaMessageParam => ({ role: t.role === "stranger" ? "user" : "assistant", content: t.text })),
     { role: "user", content: message },
   ];
-  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), decisionsLine(offers, meetings)].join("\n\n");
+  // What this villager knows of what the stranger has DONE here (C45): seen, found, or heard from family.
+  const deeds = store ? ((await store.deedsFor(caller.subject, cell)) ?? []) : [];
+  const seen = knownDeeds(s, me, deeds, day).slice(-8);
+  const doings = seen.length
+    ? `What you know of this stranger's doings in ${s.name}:\n- ${seen.map((k) => deedWords(s, me, k, day)).join("\n- ")}\nLet it colour how you speak to them, as it would anyone's.`
+    : "";
+  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
   // Constructed per request, with fetch looked up at call time, so a test's recorder sees the call.
   const client = new Anthropic({ apiKey: KEY, timeout: 25_000, maxRetries: 1, fetch: (url, init) => globalThis.fetch(url, init) });
 

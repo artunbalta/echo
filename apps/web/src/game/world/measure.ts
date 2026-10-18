@@ -346,14 +346,25 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     const at = clock();
     let next: Posterior;
     try {
+      // The read is signed like the sends are, so it waits for the same settled subject; read under a
+      // provisional id it was refused (403) on every first arm, and only the next re-read got through.
+      await identitySettled.catch(() => undefined);
       const r = await doFetch(`/api/agent/persona?uid=${encodeURIComponent(userId)}`, { headers: identityHeaders() });
       next = posteriorFromSnapshot((await r.json()) as PersonaRouteResponse, at);
     } catch (err) {
       next = { mu: zeros(), var: null, version: null, mocked: true, reason: `network_failed: ${(err as Error).message}`, source: "seed", at };
     }
     inFlight = false;
-    // An event may have answered while the read was in flight; the event is newer and wins.
-    if (disposed || posterior?.source === "event") return;
+    if (disposed) return;
+    // An event may have answered while the read was in flight, and then whichever is NEWER wins, by the
+    // engine's own version. This was `posterior?.source === "event"`, which held for the rest of the
+    // session once any act had answered, so after the first act the walking re-reads were thrown away
+    // and the meter stopped moving with the body. C45 makes acts frequent, which made that permanent.
+    const current = posterior;
+    if (current?.source === "event") {
+      if (next.mocked && !current.mocked) return; // a failed read never replaces a real answer
+      if (!current.mocked && (next.version === null || current.version === null || next.version <= current.version)) return;
+    }
     posterior = next;
     notify();
   }

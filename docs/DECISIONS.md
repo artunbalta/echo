@@ -2509,3 +2509,129 @@ in-process store had to live on `globalThis` or the changes route would never se
 **Not built, on purpose or not yet** (⚑39): no conversation changes when anyone dies; there is no
 matchmaking change; a leaver is gone, not living somewhere else on the planet; houses are still the
 build day's (⚑35); migration 0019 is applied nowhere yet.
+
+## C45 — everything in the world can be acted on, and what you do is what the echo and the village know of you
+
+Taken 2026-10-18, on the user's direction. In their words: if there is a raft you should be able to
+go out and do something; if there is a field you should be able to ruin it or help; a bench, sit; a
+mine, pick something up; a house, try to force your way in. These were "only simple examples" of a
+rule: EVERYTHING, now and added later, can be acted on, and what you do changes how well the echo
+knows you and what the villagers think of you.
+
+**One registry, and a test that will not let anything ship without verbs** (`lib/affordances.ts`,
+`affordances.test.ts`).
+
+- **What has verbs.** Every scatter class (all 29), every village thing (house, ruin, field, bench,
+  well, dock, boat, grave, mine), the villagers and the water.
+- **What a verb says.**
+  - `label`, `holdS` (how long the act takes) and `pose`.
+  - `measure`: the cue-catalog line, plus the action label and route ingest.py already has.
+  - `effect`: the shared mark the act leaves, and how many world days it lasts. Every mark heals.
+  - `deed`: how the people it touches read it (help, kindness, respect, harm, theft, trespass,
+    disrespect), with a weight from 1 to 3. Nobody ever sees the number (Design Law 1).
+  - `owner`: whose the thing is.
+- **The mechanism for "everything later".** The coverage test iterates `ASSET_CLASSES` and the
+  village's list. A class or thing with no verb fails the build. Shown by removing `shell`: it fails.
+
+**Measurement without touching `services/ml` (C7's protected boundary; `git diff services/ml` is
+empty).** Each act is sent under a label whose handler in ingest.py has the act's own definition:
+
+| Act | Label sent |
+|---|---|
+| sitting | `sit_still` (`still_ms`) |
+| looking closely | `study_marker` |
+| collecting shells | `collect` |
+| gathering driftwood | `gather_driftwood` |
+| climbing | `climb_hill` |
+| eating berries | `eat_now` |
+| weeding a field, tidying a grave | `help_at_cost`, walked away from → `pass_by` |
+| working a mine shift | `work_shift`, walked away from → `shirk_work` |
+| going into a mine | `enter_cave`, backing out → `stay_safe` |
+
+Some acts take a generic route instead:
+
+- Saving berries goes to the F1 route.
+- A gift goes to the F7 route.
+- Knocking, and starting a conversation (`initiate`), go to G approach. Knocking carries `distance`.
+
+Acts with no definitional match are sent under their own label and marked `unrouted`. These are
+trespass, theft, trampling, respect at a grave, and play. They move the posterior through the label
+embedding and the privacy-conditioned bucket. They are never attached to a "nearest plausible"
+feature (⚑13 / rule #1).
+
+The test reads ingest.py and fails if a `named` label has no handler, or if an `unrouted` one does.
+It was shown to catch a misnamed label.
+
+The manner is measured, not judged (`lib/acts.ts`):
+
+- `dwell_ms`, `decision_latency_ms` and `thoroughness01`.
+- `audience_size`: the villagers out of doors within 30 m. The same act watched and unwatched is a
+  different datum (G3).
+- Walking off before an act is done sends its refusal twin, or the same label with
+  `polarity: refuse`.
+
+Acts are consent-gated by the chain, like walking.
+
+**The world, shared and healing** (`world_effects`, migration 0020).
+
+- **Marks.** A trampled field (3 days), a weeded one (2), a forced door (1), a tidied grave (5) and a
+  worked mine (1) are drawn as one merged mesh over the village. Taken things are hidden in the
+  scatter: shells, stones, reeds, driftwood and berries (3–5 days).
+- **Reference.** The thing is looked up in the village rebuilt from seed and changes
+  (`villageThings`), never taken from the request.
+- **Reach.** The stranger must be within the verb's reach.
+- **Idempotence.** A thing already marked is not marked again.
+- **Bound.** Six wrongs per stranger per village per world day, then 429.
+
+**The people** (`lib/deeds.ts`, `village_deeds`). A deed is recorded with WHO SAW IT, using the
+closed form: villagers out of doors within 30 m, plus the household inside a house whose door is
+being forced, even at midnight. It is also recorded with whose it was. There are three ways to know:
+
+- **Saw it:** a witness knows at once.
+- **Theirs:** the household finds out the next morning.
+- **Heard:** their family hears the day after that, and word goes no further.
+
+Two consequences follow, both said in words and never as a number:
+
+1. **They turn their back.** A villager who knows of a wrong of weight 2 or more done to their own
+   household in the last 30 days, not made good, will not begin a conversation (`talk/begin` 409
+   `turns_away`). A help or kindness of weight 2 to them makes it good.
+2. **They speak of it.** What they know rides in the conversation's late note, for example "You saw
+   the stranger force the door of the Pinskerry house, yesterday." The model lets it colour their
+   voice, and their note about you records it.
+
+The browser says who saw you: "Rur, Hoomnost and Stivir saw you."
+
+**New in the world.**
+
+- **A mine.** 129 of the top 145 mining villages now have one: a timbered mouth landward of the
+  houses, wherever miners and stonecutters weigh at least 10% of what the ground raises. It is the
+  same on every day (L2), and it is laid after the houses, so no house moved. Miners and stonecutters
+  work in front of it instead of walking "over the hill".
+- **Boats.** Take a household's boat out (a theft of weight 2), row it on any water in the region,
+  fish over the side, and bring it back to its mooring. Bringing it back is respect of weight 2, which
+  makes the taking good. Leaving it on a beach does not.
+- **New poses.** Sit, kneel, push, climb and row.
+- **One prompt.** `Interact.tsx`: E and 2–4 for the nearest thing's verbs, T to talk, G to put down
+  what you carry, Q to step ashore.
+
+**Found and fixed while building.**
+
+- **The meter froze after the first act.** A real bug: `seed()` threw away every posterior
+  re-read once any act had answered, so the meter stopped following the walk after the first act.
+  Acts make that every session. Now the newer engine version wins.
+- **The first posterior read was refused (403).** It ran before the signed id settled.
+- **Boats ran aground at their own mooring.** The water there is 7–24 cm deep and the threshold
+  required 25 cm.
+- **Miners were placed inside the hill**, behind the mouth. A test now pins them in front of it.
+
+**Measured in a browser** (Senstrand, Murnhollow, `VILLAGE_STORE=memory`):
+
+- Sitting on a bench sent `sit_still` with `still_ms` and an audience of 17.
+- Weeding then trampling a field marked it both ways.
+- Forcing a door drew it open, and three people inside were named as witnesses.
+- A boat rowed; a mine shift sent `work_shift` and marked the mine.
+- ML was offline locally, so every event came back `mocked`: the posterior's actual movement under
+  these acts is **not yet measured**.
+
+Limits are in ⚑40.

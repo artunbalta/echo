@@ -142,6 +142,53 @@ export function poseCharacter(p: CharacterParts, s: PoseInput) {
   p.elbowL.rotation.x = -.18 - run * .8 - Math.max(0, Math.cos(phase)) * .2 * amount;
   p.elbowR.rotation.x = -.18 - run * .8 - Math.max(0, -Math.cos(phase)) * .2 * amount;
   p.handL.rotation.x = p.handR.rotation.x = .08;
+  // C45's acts. Seated and kneeling bodies are lowered by the hip; the root stays on the ground. They
+  // return early, so whatever is carried is shown first.
+  p.carry.visible = s.carrying;
+  if (s.activity === 'sit' || s.activity === 'row') {
+    p.body.position.y -= .16;
+    p.legL.rotation.x = p.legR.rotation.x = -1.45;
+    p.kneeL.rotation.x = p.kneeR.rotation.x = 1.5;
+    p.footL.rotation.x = p.footR.rotation.x = -.05;
+    p.torso.rotation.x = .04;
+    if (s.activity === 'row') {
+      const pull = Math.sin(now * Math.PI * 2 * .7);
+      p.torso.rotation.x = .1 + pull * .22;
+      p.armL.rotation.x = p.armR.rotation.x = -1.1 - pull * .5;
+      p.elbowL.rotation.x = p.elbowR.rotation.x = -.6 + pull * .4;
+    } else {
+      p.armL.rotation.x = p.armR.rotation.x = -.35;
+      p.elbowL.rotation.x = p.elbowR.rotation.x = -.5;
+    }
+    return;
+  }
+  if (s.activity === 'kneel') {
+    p.body.position.y -= .14;
+    p.legL.rotation.x = -.15; p.kneeL.rotation.x = 1.75; p.footL.rotation.x = .3;
+    p.legR.rotation.x = -1.35; p.kneeR.rotation.x = 1.45; p.footR.rotation.x = -.1;
+    p.torso.rotation.x = .28; p.head.rotation.x = .3;
+    p.armL.rotation.x = p.armR.rotation.x = -.5; p.elbowL.rotation.x = p.elbowR.rotation.x = -.6;
+    return;
+  }
+  if (s.activity === 'push') {
+    const shove = Math.sin(now * Math.PI * 2 * 1.1);
+    p.torso.rotation.x = .38 + shove * .06;
+    p.armL.rotation.x = p.armR.rotation.x = -1.35 + shove * .1;
+    p.elbowL.rotation.x = p.elbowR.rotation.x = -.25;
+    p.legL.rotation.x = -.35; p.kneeL.rotation.x = .45;
+    p.legR.rotation.x = .3; p.kneeR.rotation.x = .1;
+    return;
+  }
+  if (s.activity === 'climb') {
+    const reach = Math.sin(now * Math.PI * 2 * .9);
+    p.body.position.y += .05 + Math.max(0, reach) * .04;
+    p.armL.rotation.x = -2.7 + reach * .3; p.armR.rotation.x = -2.7 - reach * .3;
+    p.elbowL.rotation.x = p.elbowR.rotation.x = -.3;
+    p.legL.rotation.x = -.6 - reach * .4; p.kneeL.rotation.x = .9 + reach * .4;
+    p.legR.rotation.x = -.6 + reach * .4; p.kneeR.rotation.x = .9 - reach * .4;
+    p.torso.rotation.x = -.05;
+    return;
+  }
   if (s.activity && s.activity !== 'still') {
     const work = Math.sin(now * Math.PI * 2 * (s.activity === 'dig' ? 1.8 : 1.3));
     const low = ['plant', 'gather', 'dig'].includes(s.activity);

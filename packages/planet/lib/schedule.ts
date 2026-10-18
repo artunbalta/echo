@@ -343,6 +343,14 @@ export function dayPlans(
         } else {
           stay(work, plot.facing, "work", 1);
         }
+      } else if ((trade === "miner" || trade === "stonecutter") && plan.mine) {
+        // To the mine, where there is one (C45): in front of the mouth, on the village side (the mine's
+        // heading points at the green), at the spoil and the cart, facing the rock, all day.
+        const m = plan.mine;
+        const a = m.heading + (hash01(`${p.id}/face`) - 0.5) * 2.2;
+        const r = 3 + hash01(`${p.id}/face-r`) * 2.5;
+        go({ x: m.x + Math.cos(a) * r, y: m.y + Math.sin(a) * r });
+        stay(work, a + Math.PI, "work", 0.6);
       } else if (OUTBOUND.has(trade)) {
         // Out inland and over the hill: gone until the evening, then back the way they went.
         const out = along(plan.centre, away + (hash01(`${p.id}/out`) - 0.5) * 1.6, SCHEDULE.outboundM);

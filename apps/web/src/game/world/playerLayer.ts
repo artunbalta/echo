@@ -24,6 +24,8 @@ import type { ColliderIndex } from "@echo/planet";
 import { cylinderBoomLimit } from "./cameraObstacles";
 
 import { buildCharacter, gaitFootTarget, poseCharacter, reachCharacter, type CharacterParts } from "../three/character";
+import type { ActivityKind } from "../WorldCore";
+import { boatForm } from "./villageGeometry";
 import { initialMover, jumpHeightM, parcelMovement, stepMover, type MoveInput, type MoverState } from "./controller";
 import {
   initialFollowCamera,
@@ -77,7 +79,28 @@ export interface PlayerLayer extends WorldLayer {
   mover(): MoverState;
   camera(): FollowCameraState;
   setInputEnabled(enabled: boolean): void;
+  /**
+   * Do an act (C45): the body takes a pose, turns to face the thing (tile coordinates), and stops
+   * walking until `release`. Walking is how a person stops doing something, so the input is still
+   * read: `wantsToMove` says when they have asked to go, and the act ends there.
+   */
+  perform(pose: ActivityKind, face: { x: number; y: number } | null): void;
+  release(): void;
+  wantsToMove(): boolean;
+  /** Show something carried in the hands (C45). */
+  setCarrying(on: boolean): void;
+  /**
+   * Into a boat (C45): the body sits in it at a tile position, facing `heading` (the boat's, in this
+   * layer's convention), and moves on water only, at a rower's speed, until `ashore`.
+   */
+  board(at: { x: number; y: number }, heading: number): void;
+  /** Out of the boat, onto the tile given. */
+  ashore(at: { x: number; y: number }): void;
+  aboard(): boolean;
 }
+
+/** A rower's pace on open water, metres per second: slower than a walk, and it does not run. */
+const ROW_MPS = 1.4;
 
 const NEUTRAL: MoveInput = { dx: 0, dy: 0, run: false, jump: false, activity: null };
 
@@ -112,6 +135,12 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
   let contactSide: -1 | 1 = 1;
   const tmp = new THREE.Vector3();
   const look = new THREE.Vector3();
+  let acting: { pose: ActivityKind; heading: number | null } | null = null;
+  let wants = false;
+  let carrying = false;
+  let boating = false;
+  let boat: THREE.Mesh | null = null;
+  let boatMovement = parcelMovement(1.6);
 
   return {
     name: "player",
@@ -178,6 +207,13 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       }
       ctx.scene.add(built.root);
       parts = built;
+      // The boat a person can take out (C45): one hull, the villagers' own form, hidden until boarded.
+      boat = new THREE.Mesh(boatForm(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+      boat.name = "player:boat";
+      boat.visible = false;
+      boat.castShadow = true;
+      ctx.scene.add(boat);
+      boatMovement = { ...parcelMovement(ctx.frame.tileM), walk: ROW_MPS / ctx.frame.tileM, run: ROW_MPS / ctx.frame.tileM };
       input = createInput(ctx.renderer.domElement, { touch: options.touch });
       input.setEnabled(inputEnabled);
     },
@@ -185,8 +221,20 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     update(dt, ctx) {
       if (!parts) return;
       const frame = input?.read(cam.yaw);
-      const move = inputEnabled && frame ? frame.move : NEUTRAL;
-      state = stepMover(state, move, dt, ctx.frame.walkableTile, blocked ?? undefined, movement);
+      const asked = inputEnabled && frame ? frame.move : NEUTRAL;
+      wants = Math.hypot(asked.dx, asked.dy) > 0.1 || asked.jump;
+      // While acting the body holds its pose and the mover is told so; the ask is kept for wantsToMove.
+      // In a boat the ground is the water: anything deep enough, inside the region, and no jumping.
+      const move = acting ? { ...NEUTRAL, activity: acting.pose } : boating ? { ...asked, jump: false, run: false } : asked;
+      if (boating) {
+        const extent = ctx.region.extentM / ctx.frame.tileM;
+        // Any water floats a small boat; a mooring in a hand's depth of it is still afloat.
+        const water = (x: number, y: number) => ctx.frame.heightAtTile(x, y) < -0.02 && Math.hypot(x, y) < extent;
+        state = stepMover(state, move, dt, water, undefined, boatMovement);
+      } else {
+        state = stepMover(state, move, dt, ctx.frame.walkableTile, blocked ?? undefined, movement);
+      }
+      if (acting && acting.heading !== null) state = { ...state, heading: acting.heading };
 
       const moving = state.state === "walk" || state.state === "run";
       const velocity = Math.hypot(state.vx, state.vy);
@@ -196,6 +244,13 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       if (moving) animTime += dt * (1 + runBlend * .7);
       ctx.frame.toScene(state.x, state.y, jumpHeightM(state), tmp);
       parts.root.position.copy(tmp);
+      if (boating && boat) {
+        // The hull rides the sea sheet; the rower sits on its thwart.
+        const t = performance.now() / 1000;
+        boat.position.set(tmp.x, 0.08 + Math.sin(t * 1.3) * 0.03, tmp.z);
+        boat.rotation.set(0, -state.heading, 0);
+        parts.root.position.y = 0.32 + Math.sin(t * 1.3) * 0.03;
+      }
       const yaw = yawFromHeading(state.heading);
       const footGround = (side: number) => {
         const foot = gaitFootTarget(animTime * 9 + (side > 0 ? Math.PI : 0), speed, runBlend);
@@ -203,8 +258,8 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         const y = state.y - Math.sin(yaw) * side * .087 + Math.cos(yaw) * foot.forward;
         return (ctx.frame.heightAtTile(x, y) - ctx.frame.heightAtTile(state.x, state.y)) / ctx.frame.tileM;
       };
-      poseCharacter(parts, { facing: state.facing, moving, animTime, bob: 0, lean: 0, carrying: false,
-        activity: state.activity, speed, runBlend,
+      poseCharacter(parts, { facing: state.facing, moving: moving && !boating, animTime, bob: 0, lean: 0, carrying,
+        activity: boating && !acting ? (moving ? "row" : "sit") : state.activity, speed: boating ? 0 : speed, runBlend,
         airborne: state.jumpT >= 0, groundL: footGround(-1), groundR: footGround(1) });
       parts.root.rotation.y = yawFromHeading(state.heading);
 
@@ -249,7 +304,35 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       ctx.camera.lookAt(look.set(result.lookAt[0], result.lookAt[1], result.lookAt[2]));
     },
 
+    perform(pose, face) {
+      acting = { pose, heading: face ? Math.atan2(face.y - state.y, face.x - state.x) : null };
+    },
+    release() {
+      acting = null;
+    },
+    wantsToMove: () => wants,
+    setCarrying(on) {
+      carrying = on;
+    },
+    board(at, heading) {
+      boating = true;
+      acting = null;
+      state = { ...initialMover(at.x, at.y, heading) };
+      if (boat) boat.visible = true;
+    },
+    ashore(at) {
+      boating = false;
+      state = { ...initialMover(at.x, at.y, state.heading) };
+      if (boat) boat.visible = false;
+    },
+    aboard: () => boating,
+
     dispose() {
+      if (boat) {
+        boat.geometry.dispose();
+        (boat.material as THREE.Material).dispose();
+        boat = null;
+      }
       input?.dispose();
       input = null;
       blocked = null;
