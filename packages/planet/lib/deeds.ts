@@ -8,12 +8,13 @@
  * people it was done TO. Nothing here is a score (Design Law 1): a deed is a sentence a villager can
  * say, and a reason they might turn their back.
  *
- * WHO KNOWS. Three ways, each a day apart from the last:
+ * WHO KNOWS. Three ways:
  *   saw it    — a witness knows at once;
  *   theirs    — the household it was done to finds out the next morning (the trampled rows, the door);
- *   heard     — a witness's or a victim's own family hears of it the day after that.
- * Knowledge never spreads further than family in v1. A village of strangers who all know your business
- * by noon would be a different world, and a less true one.
+ *   heard     — and from them word travels along the village's ties, one a day (C49, `social.ts`):
+ *               a small thing among family, a thing that matters to friends as well, and a thing
+ *               nobody forgets round the whole village in a few days. C45 had it stop at family; a
+ *               forced door that only two households ever heard of was the less true world.
  *
  * Pure. The route hands in one stranger's deeds; nothing here knows who the stranger is.
  */
@@ -26,6 +27,7 @@ import type { LifeChange } from "./changes.js";
 import { dayPlans, whereabouts } from "./schedule.js";
 import { ageYears, occupationOn, type Person, type Settlement } from "./society.js";
 import { residentsOn, type VillagePlan } from "./village.js";
+import { spread } from "./social.js";
 
 export const DEEDS = {
   /** How far a villager out of doors can see what someone is doing, metres. */
@@ -66,29 +68,20 @@ export interface Known {
   from?: string;
 }
 
-const familyOf = (s: Settlement, p: Person): Person[] => {
-  const out: Person[] = [];
-  if (p.partner !== null) out.push(s.people[p.partner]);
-  if (p.parents) {
-    out.push(s.people[p.parents[0]], s.people[p.parents[1]]);
-    for (const i of s.people[p.parents[0]].children) if (i !== p.index) out.push(s.people[i]);
-  }
-  for (const i of p.children) out.push(s.people[i]);
-  return out;
-};
-
-/** What one villager knows today of one stranger's deeds, oldest first. */
-export function knownDeeds(s: Settlement, me: Person, deeds: readonly Deed[], day: number): Known[] {
+/**
+ * What one villager knows today of one stranger's deeds, oldest first: seen, found (it was theirs), or
+ * heard — along the village's ties, one a day, as far as the deed's weight carries it (C49,
+ * `social.ts` `spread`). The plan adds neighbours to the ties; without it, family, friends and workmates.
+ */
+export function knownDeeds(s: Settlement, me: Person, deeds: readonly Deed[], day: number, plan: VillagePlan | null = null): Known[] {
   const out: Known[] = [];
-  const family = familyOf(s, me).filter((q) => present(s, q, day) || q.deathDay > day);
   for (const d of [...deeds].sort((a, b) => a.day - b.day || a.hour - b.hour)) {
     if (d.day > day) continue;
+    const k = spread(s, d, day, plan).get(me.id);
+    if (!k) continue;
     if (d.witnesses.includes(me.id)) out.push({ deed: d, how: "saw" });
-    else if (d.owners.includes(me.id) && day >= d.day + 1) out.push({ deed: d, how: "theirs" });
-    else if (day >= d.day + 2) {
-      const told = family.find((q) => d.witnesses.includes(q.id) || d.owners.includes(q.id));
-      if (told) out.push({ deed: d, how: "heard", from: told.id });
-    }
+    else if (d.owners.includes(me.id)) out.push({ deed: d, how: "theirs" });
+    else out.push({ deed: d, how: "heard", ...(k.from ? { from: k.from } : {}) });
   }
   return out;
 }
@@ -98,8 +91,8 @@ export function knownDeeds(s: Settlement, me: Person, deeds: readonly Deed[], da
  * more done to them or their household within {@link DEEDS}.grievanceDays, that they know of, and that
  * no later kindness to them has made good. Null means they will talk.
  */
-export function grievance(s: Settlement, me: Person, deeds: readonly Deed[], day: number): Deed | null {
-  const known = knownDeeds(s, me, deeds, day);
+export function grievance(s: Settlement, me: Person, deeds: readonly Deed[], day: number, plan: VillagePlan | null = null): Deed | null {
+  const known = knownDeeds(s, me, deeds, day, plan);
   let held: Deed | null = null;
   for (const k of known) {
     const d = k.deed;

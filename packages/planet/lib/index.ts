@@ -46,3 +46,5 @@ export * from "./items.js";
 export * from "./nav.js";
 // The weather and the year (C48).
 export * from "./weather.js";
+// Who is close to whom, and what they say (C49).
+export * from "./social.js";

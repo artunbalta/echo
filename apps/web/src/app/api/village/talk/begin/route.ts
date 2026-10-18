@@ -72,7 +72,7 @@ export async function POST(req: Request) {
   // A wrong done to their own household, that they know of and that you have not made good (C45):
   // they will not talk to you. Said as what they do, never as a number.
   const deeds = store ? ((await store.deedsFor(caller.subject, cell)) ?? []) : [];
-  const held = grievance(s, me, deeds, day);
+  const held = grievance(s, me, deeds, day, village.plan);
   if (held) return NextResponse.json({ error: "turns_away", deed: held.verb }, { status: 409 });
 
   const conv = signConversation(caller.subject, cell, person, now);

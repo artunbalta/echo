@@ -31,6 +31,7 @@ import type { LifeChange } from "./changes.js";
 import { eveningOf, type GoalPlace } from "./goals.js";
 import { navGraph, pathLength, route } from "./nav.js";
 import { weatherOn } from "./weather.js";
+import { friendCircles } from "./social.js";
 import { temperaments } from "./life.js";
 import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
@@ -289,6 +290,26 @@ export function dayPlans(
   const residents = residentsOn(s, plan, day);
   const doorOfPerson = new Map(residents.map(({ person, plot }) => [person.id, doorOf(plot)]));
   const graves = changed.size > 0 ? new Map(gravesOn(s, plan, day).map((g) => [g.person, { x: g.x, y: g.y }])) : new Map<string, Point>();
+  // Friends stand together in the evening (C49): each circle of friends gathers at one spot on the
+  // green, named by its least id, and its members stand round it.
+  const circle = friendCircles(s, day);
+  const members = new Map<string, string[]>();
+  for (const { person } of residents) {
+    const k = circle.get(person.id) ?? person.id;
+    const list = members.get(k);
+    if (list) list.push(person.id);
+    else members.set(k, [person.id]);
+  }
+  const eveningSpotOf = (id: string): Point => {
+    const k = circle.get(id) ?? id;
+    const group = members.get(k) ?? [id];
+    if (group.length <= 1) return greenSpot(plan, id, 0.9);
+    const centre = greenSpot(plan, k, 0.9);
+    const i = group.indexOf(id);
+    const a = (i / group.length) * Math.PI * 2 + hash01(`${k}/circle`) * Math.PI;
+    const r = 0.55 + 0.12 * group.length;
+    return { x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r };
+  };
   for (const { person: p, plot } of residents) {
     const age = ageYears(p, day);
     if (age < SCHEDULE.infantYears) continue;
@@ -400,8 +421,12 @@ export function dayPlans(
       const about = evening?.target ?? null;
       const spot = evening === null ? null : eveningSpot(plan, p.id, plot, evening.place, about ? (doorOfPerson.get(about) ?? null) : null, about ? (graves.get(about) ?? null) : null);
       if (spot === null) {
-        go(greenSpot(plan, p.id, 0.9));
-        stay(until, toward(here, plan.centre), "stand", 0.4);
+        const mine = eveningSpotOf(p.id);
+        go(mine);
+        // Facing in, toward the middle of the circle they are in, or the well if they are alone.
+        const k = circle.get(p.id) ?? p.id;
+        const faceTo = (members.get(k)?.length ?? 1) > 1 ? greenSpot(plan, k, 0.9) : plan.centre;
+        stay(until, toward(here, faceTo), "stand", 0.15);
       } else if (spot !== "here") {
         go(spot.at);
         stay(until, spot.heading, spot.activity, spot.wander);
