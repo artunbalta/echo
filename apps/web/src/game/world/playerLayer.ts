@@ -178,7 +178,10 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       const gates = [obstacles, ctx.layer<ObstacleSource>("settlement")].filter(
         (o): o is ObstacleSource => !!o && typeof o.blockedTile === "function",
       );
-      blocked = gates.length > 0 ? (x, y) => gates.some((g) => g.blockedTile(x, y, bodyRadiusM)) : null;
+      // People stop a body too (C46). The villagers layer is built after this one, so it is asked for
+      // by name at each step rather than found now.
+      const people = () => ctx.layer<ObstacleSource>("villagers");
+      blocked = (x, y) => gates.some((g) => g.blockedTile(x, y, bodyRadiusM)) || (people()?.blockedTile(x, y, bodyRadiusM) ?? false);
 
       const colliderIndex = obstacles?.colliders?.();
       colliders = colliderIndex ?? null;

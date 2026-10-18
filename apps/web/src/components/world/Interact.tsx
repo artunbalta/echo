@@ -122,7 +122,8 @@ export default function Interact({
         if (data.effect) interact?.addMark(data.effect as never);
         const seen = data.seenBy ?? [];
         if (seen.length === 1) say(`${seen[0]} saw you.`, 5200);
-        else if (seen.length > 1) say(`${seen.slice(0, -1).join(", ")} and ${seen.at(-1)} saw you.`, 5200);
+        else if (seen.length <= 3 && seen.length > 1) say(`${seen.slice(0, -1).join(", ")} and ${seen.at(-1)} saw you.`, 5200);
+        else if (seen.length > 3) say(`${seen.slice(0, 3).join(", ")} and ${seen.length - 3} others saw you.`, 5200);
       } catch {
         // The act happened; the village did not hear of it. Nothing to show the person.
       }

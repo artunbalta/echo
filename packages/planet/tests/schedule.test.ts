@@ -13,6 +13,7 @@ import { temperaments } from "../lib/life.js";
 import { villagePlan, type VillageGround, type VillagePlan, type VillageSite } from "../lib/village.js";
 import { SCHEDULE, boatAt, dayPlans, whereabouts } from "../lib/schedule.js";
 import { WORLD_DAY_S } from "../lib/worldclock.js";
+import { pathLength } from "../lib/nav.js";
 
 const SEED = "echo-planet-0001";
 const COAST: SettlementGeography = {
@@ -70,7 +71,8 @@ test("everyone walks at their own pace, in metres per real second, and nobody ru
   for (const { s, plan } of villages(VALLEY, INLAND, INLAND_SITE, 4, "pace")) {
     for (const d of dayPlans(s, plan, 0).plans) {
       for (const l of d.legs) {
-        const metres = Math.hypot(l.to.x - l.from.x, l.to.y - l.from.y);
+        // The way walked, round the houses (C46), not the straight line.
+        const metres = pathLength([l.from, ...l.via, l.to]);
         if (metres < 1) continue;
         const mps = metres / ((l.t1 - l.t0) * WORLD_DAY_S);
         assert.ok(Math.abs(mps - SCHEDULE.walkMps * d.pace) < 1e-6, `${d.person}: ${mps.toFixed(3)} m/s against a pace of ${d.pace.toFixed(3)}`);
@@ -100,7 +102,9 @@ test("at midnight the village is asleep: nobody is out", () => {
   for (const { s, plan } of villages(COAST, SHORE, SHORE_SITE, 6, "night")) {
     const { plans, boats, moorings } = dayPlans(s, plan, 0);
     for (const d of plans) {
-      for (const t of [0.02, 0.1, 0.17, 0.92, 0.98]) {
+      // 0.95 and not 0.92: since C46 the young walk home round the houses, and the last of them is at
+      // their door just after 0.917 — ten past ten. Midnight is the claim, and midnight is checked.
+      for (const t of [0.02, 0.1, 0.17, 0.95, 0.98]) {
         assert.equal(whereabouts(d, t, boats, moorings).visible, false, `${d.person} is out at ${t}`);
       }
     }

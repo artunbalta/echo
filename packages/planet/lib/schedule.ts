@@ -29,6 +29,7 @@ import { WORLD_DAY_S } from "./worldclock.js";
 import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./society.js";
 import type { LifeChange } from "./changes.js";
 import { eveningOf, type GoalPlace } from "./goals.js";
+import { navGraph, pathLength, route } from "./nav.js";
 import { temperaments } from "./life.js";
 import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
@@ -90,6 +91,8 @@ interface Leg {
   t1: number;
   from: Point;
   to: Point;
+  /** The way round, between `from` and `to` (C46): empty when the straight walk is clear. */
+  via: Point[];
 }
 
 /** A still part of a day: at `at`, doing `activity`, facing `heading`, from `t0` to `t1`. */
@@ -265,6 +268,19 @@ export function dayPlans(
   const temper = temperaments(s);
   const seats = new Map<number, number>();
   const changed = new Set(changes.map((c) => c.person));
+  // Every leg goes round the houses, not through them (C46): one graph for the village, many walks.
+  const nav = navGraph(plan);
+  const ways = new Map<string, Point[]>();
+  const way = (a: Point, b: Point): Point[] => {
+    const k = `${a.x.toFixed(2)},${a.y.toFixed(2)}>${b.x.toFixed(2)},${b.y.toFixed(2)}`;
+    let w = ways.get(k);
+    if (w === undefined) {
+      w = route(nav, a, b);
+      ways.set(k, w);
+    }
+    return w;
+  };
+  const walkLength = (a: Point, b: Point) => pathLength([a, ...way(a, b), b]);
   // Whose door and whose grave a moved evening may go to: the person it is about (C44).
   const residents = residentsOn(s, plan, day);
   const doorOfPerson = new Map(residents.map(({ person, plot }) => [person.id, doorOf(plot)]));
@@ -283,8 +299,9 @@ export function dayPlans(
     let clock = SCHEDULE.wake + j("wake") - 0.01 * t[6];
     let here = door;
     const go = (to: Point) => {
-      const dur = dist(here, to) / v;
-      legs.push({ t0: clock, t1: clock + dur, from: here, to });
+      const via = way(here, to);
+      const dur = pathLength([here, ...via, to]) / v;
+      legs.push({ t0: clock, t1: clock + dur, from: here, to, via });
       clock += dur;
       here = to;
     };
@@ -322,7 +339,7 @@ export function dayPlans(
         const b = boats[boat]!;
         const m = moorings[boat];
         // Walk down to the dock in time for the boat, go out in it, come back, walk up.
-        clock = Math.min(clock, b.t[0] - dist(door, m) / v - 0.004);
+        clock = Math.min(clock, b.t[0] - walkLength(door, m) / v - 0.004);
         go({ x: m.x, y: m.y });
         stay(b.t[0], m.heading, "stand");
         const seat = seats.get(boat) ?? 0;
@@ -358,9 +375,10 @@ export function dayPlans(
         // Back so as to be in by the end of work, but never before they got there: a slow walker on
         // a long road would otherwise be on the way back while still on the way out.
         const back = greenSpot(plan, p.id, 1.15);
-        const dur = dist(out, back) / v;
+        const via = way(out, back);
+        const dur = pathLength([out, ...via, back]) / v;
         const t0 = Math.max(clock, work - dur);
-        legs.push({ t0, t1: t0 + dur, from: out, to: back });
+        legs.push({ t0, t1: t0 + dur, from: out, to: back, via });
         here = back;
         clock = t0 + dur;
       } else if (GREEN.has(trade)) {
@@ -440,15 +458,37 @@ function eveningSpot(
   }
 }
 
+/** A point a fraction `k` of the way along a leg, by distance, and the way it faces there. */
+function alongPath(leg: Leg, k: number): { x: number; y: number; heading: number } {
+  if (leg.via.length === 0) {
+    return { x: leg.from.x + (leg.to.x - leg.from.x) * k, y: leg.from.y + (leg.to.y - leg.from.y) * k, heading: toward(leg.from, leg.to) };
+  }
+  const pts = [leg.from, ...leg.via, leg.to];
+  let left = pathLength(pts) * k;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = dist(pts[i - 1], pts[i]);
+    if (left <= seg || i === pts.length - 1) {
+      const f = seg === 0 ? 0 : Math.min(1, left / seg);
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f, heading: toward(pts[i - 1], pts[i]) };
+    }
+    left -= seg;
+  }
+  return { x: leg.to.x, y: leg.to.y, heading: toward(leg.from, leg.to) };
+}
+
 /** Where a person is at hour `t` of their day plan. */
 export function whereabouts(d: DayPlan, t: number, boats: readonly (BoatDay | null)[], moorings: readonly Mooring[]): Whereabouts {
   for (const leg of d.legs) {
     if (t >= leg.t0 && t < leg.t1) {
       const k = (t - leg.t0) / (leg.t1 - leg.t0);
+      const at = alongPath(leg, k);
+      // Each person walks a little to one side of the line (C46), so two on the same lane are not one
+      // body; the offset is nothing at either end, where a leg meets a door or a seat.
+      const lane = (hash01(`${d.person}/lane`) - 0.5) * 0.8 * Math.sin(Math.PI * k);
       return {
-        x: leg.from.x + (leg.to.x - leg.from.x) * k,
-        y: leg.from.y + (leg.to.y - leg.from.y) * k,
-        heading: toward(leg.from, leg.to),
+        x: at.x - Math.sin(at.heading) * lane,
+        y: at.y + Math.cos(at.heading) * lane,
+        heading: at.heading,
         activity: "walk",
         speed: d.pace,
         // Past the outbound distance a person is over the hill; the fog hides the rest.
