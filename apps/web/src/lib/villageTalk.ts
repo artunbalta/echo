@@ -55,6 +55,35 @@ export function verifyConversation(token: unknown, subject: string, cell: string
   });
 }
 
+/** How long a villager's line may be spoken after it was said, real milliseconds (C60). */
+export const LINE_MS = 10 * 60 * 1000;
+const LINE_DOMAIN = "echo-villager-line/v1";
+const lineMac = (secret: string, subject: string, cell: string, person: string, text: string, at: number) =>
+  createHmac("sha256", secret).update(`${LINE_DOMAIN}|${subject}|${cell}|${person}|${at}|${text}`).digest("base64url");
+
+/**
+ * A token for one line a villager said to one stranger (C60): what lets the voice route speak those
+ * words in that villager's voice, and no others. Without it the route would speak anything anyone
+ * sent it, on this project's account.
+ */
+export function signLine(subject: string, cell: string, person: string, text: string, at: number): string | null {
+  const [secret] = identitySecrets();
+  if (!secret) return null;
+  return `${at}.${lineMac(secret, subject, cell, person, text, at)}`;
+}
+
+export function verifyLine(token: unknown, subject: string, cell: string, person: string, text: string, now: number): boolean {
+  if (typeof token !== "string" || token.length > 200) return false;
+  const dot = token.indexOf(".");
+  const at = Number(token.slice(0, dot));
+  if (dot < 1 || !Number.isFinite(at) || now - at > LINE_MS || at - now > 60_000) return false;
+  const given = Buffer.from(token.slice(dot + 1));
+  return identitySecrets().some((secret) => {
+    const want = Buffer.from(lineMac(secret, subject, cell, person, text, at));
+    return want.length === given.length && timingSafeEqual(want, given);
+  });
+}
+
 export interface LoadedVillage {
   village: SettledParcel;
   changes: LifeChange[];

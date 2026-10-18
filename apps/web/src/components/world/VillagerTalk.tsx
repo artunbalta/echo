@@ -29,7 +29,7 @@ import type { ConsentState } from "@/game/world/measure";
 import type { PlanetWorld } from "@/game/world/PlanetWorld";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
-import { canSpeak, hush, setVoiceWanted, speak, voiceWanted } from "@/lib/villagerVoice";
+import { canRecord, canSpeak, cloudWanted, hearIt, hush, hushCloud, recorder, setCloudWanted, setVoiceWanted, speak, speakCloud, unlockCloud, voiceWanted } from "@/lib/villagerVoice";
 
 interface Turn {
   role: "stranger" | "villager" | "decided";
@@ -67,7 +67,19 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
   const input = useRef<HTMLInputElement>(null);
   const log = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setVoice(voiceWanted() && canSpeak()), []);
+  /** Whether this stranger said yes to ElevenLabs (C60): yes, no, or never asked. */
+  const [cloud, setCloud] = useState<boolean | null>(null);
+  /** The question about ElevenLabs is showing. */
+  const [asking, setAsking] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const rec = useRef(recorder());
+  /** The key or the button is down: what a late microphone is checked against. */
+  const holding = useRef(false);
+  useEffect(() => {
+    const c = cloudWanted();
+    setCloud(c);
+    setVoice(voiceWanted() && (canSpeak() || c === true));
+  }, []);
 
   // The parent hands a fresh getter every render; held in a ref, so the four-a-second poll below is
   // set up once rather than torn down and rebuilt on every render it causes.
@@ -81,6 +93,10 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     window.dispatchEvent(new CustomEvent("echo:talking", { detail: false }));
     layer()?.hold(null);
     hush();
+    hushCloud();
+    holding.current = false;
+    rec.current.cancel();
+    setRecording(false);
     conv.current = null;
     setTalking(null);
     setTurns([]);
@@ -182,9 +198,10 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     if (w && !had.some((c) => c.id === change.id)) w.revillage([...had, change]);
   }, []);
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
+  const send = useCallback(async (spoken?: string) => {
+    const text = (spoken ?? draft).trim();
     if (!talking || !text || pending) return;
+    if (voice && cloud) unlockCloud();
     if (consent === "unset") {
       setNote("Answer the card first: talking needs the answer, either way.");
       return;
@@ -206,7 +223,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
         headers: identityHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ cell, person: talking.id, message: text, history, conv: conv.current }),
       });
-      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; change?: LifeChange; decided?: string; invited?: string };
+      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; change?: LifeChange; decided?: string; invited?: string; voice?: string | null };
       if (!res.ok || !data.reply) {
         if (data.error === "no_conversation") conv.current = null;
         setTurns(before);
@@ -225,8 +242,14 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
         }
         setTurns(next);
         if (voice) {
+          // In their own voice when the stranger said yes to ElevenLabs (C60); in this browser's
+          // local voice otherwise, or when the cloud does not answer.
           const p = personOf(talking.id);
-          if (p) speak(data.reply, { id: p.id, sex: p.sex, age: talking.age });
+          const local = () => {
+            if (p) speak(data.reply!, { id: p.id, sex: p.sex, age: talking.age });
+          };
+          if (cloud) void speakCloud({ cell, person: talking.id, text: data.reply, token: data.voice ?? null }, identityHeaders()).then((ok) => ok || local());
+          else local();
         }
       }
     } catch {
@@ -237,7 +260,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       setPending(false);
       setTimeout(() => input.current?.focus(), 0);
     }
-  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf]);
+  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf, cloud]);
 
   const forget = useCallback(async () => {
     if (!talking || consent === "unset") return;
@@ -257,10 +280,93 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
 
   const toggleVoice = useCallback(() => {
     const on = !voice;
+    // Asked once, before anything goes to ElevenLabs (C60).
+    if (on && cloud === null) {
+      setAsking(true);
+      return;
+    }
     setVoice(on);
     setVoiceWanted(on);
-    if (!on) hush();
-  }, [voice]);
+    if (!on) {
+      hush();
+      hushCloud();
+    }
+  }, [voice, cloud]);
+  const answer = useCallback((yes: boolean) => {
+    if (yes) unlockCloud();
+    setCloudWanted(yes);
+    setCloud(yes);
+    setAsking(false);
+    setVoice(yes || canSpeak());
+    setVoiceWanted(yes || canSpeak());
+  }, []);
+  /** Taking the yes back: nothing more goes to ElevenLabs from this browser. */
+  const withdraw = useCallback(() => {
+    setCloudWanted(false);
+    setCloud(false);
+    hushCloud();
+    holding.current = false;
+    rec.current.cancel();
+    setRecording(false);
+    if (!canSpeak()) setVoice(false);
+  }, []);
+
+  // Speaking aloud (C60): hold the button, or Ctrl alone, and let go to send what was said.
+  const talkStart = useCallback(async () => {
+    if (!cloud || pending || holding.current) return;
+    holding.current = true;
+    hush();
+    hushCloud();
+    const got = await rec.current.start();
+    if (got === "on" && holding.current) setRecording(true);
+    else if (got === "denied") {
+      holding.current = false;
+      setNote("The microphone is not allowed on this page.");
+    }
+  }, [cloud, pending]);
+  const talkCancel = useCallback(() => {
+    holding.current = false;
+    rec.current.cancel();
+    setRecording(false);
+  }, []);
+  const talkStop = useCallback(async () => {
+    if (!holding.current) return;
+    holding.current = false;
+    if (voice) unlockCloud();
+    setRecording(false);
+    const blob = await rec.current.stop();
+    if (!blob) return;
+    setNote(`${talking?.name.split(" ")[0] ?? "They"} listens…`);
+    await ensureIdentity();
+    const heard = await hearIt(blob, identityHeaders());
+    if ("text" in heard && heard.text) {
+      setNote(null);
+      void send(heard.text);
+    } else setNote("That did not come through. Say it again, or type it.");
+  }, [talking, send, voice]);
+  useEffect(() => {
+    if (!talking || !cloud) return;
+    const down = (e: KeyboardEvent) => {
+      if ((e.code === "ControlLeft" || e.code === "ControlRight") && !e.repeat) void talkStart();
+      // Ctrl with another key is a shortcut, not speech.
+      else if (holding.current && e.key !== "Control") talkCancel();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "ControlLeft" || e.code === "ControlRight") void talkStop();
+    };
+    // A window left with the key down never hears it come up: what was being said is dropped.
+    const away = () => {
+      if (holding.current) talkCancel();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", away);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", away);
+    };
+  }, [talking, cloud, talkStart, talkStop, talkCancel]);
 
   // The prompt to talk is `Interact`'s now (C45); this is only the conversation.
   if (!talking) return null;
@@ -279,7 +385,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
           </span>
         </p>
         <div className="flex shrink-0 items-baseline gap-3 text-xs text-white/50">
-          {canSpeak() ? (
+          {canSpeak() || canRecord() ? (
             <button type="button" onClick={toggleVoice} aria-pressed={voice} data-talk-voice className="hover:text-white">
               {voice ? "Voice on" : "Voice off"}
             </button>
@@ -292,6 +398,23 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
           </button>
         </div>
       </header>
+      {asking ? (
+        <div data-voice-question className="mx-5 mt-3 rounded-xl border border-[#e8c98a]/30 bg-[#e8c98a]/10 px-4 py-3 text-xs leading-relaxed text-[#f4e9d0]/85">
+          <p>
+            Hear villagers in voices of their own, and speak to them aloud? Their replies are sent to ElevenLabs to be spoken. What you
+            say aloud — recorded only while you hold the microphone, or Ctrl — is sent to ElevenLabs to be written down. Nothing of your
+            voice is kept here, and nothing about how you sound is read into your echo.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" data-voice-yes onClick={() => answer(true)} className="rounded-full bg-[#e2edc8] px-3 py-1 font-medium text-[#213522]">
+              Yes, with ElevenLabs
+            </button>
+            <button type="button" data-voice-no onClick={() => answer(false)} className="rounded-full border border-white/20 px-3 py-1">
+              Only this browser&apos;s voice
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div ref={log} className="mt-2 max-h-[38vh] space-y-2 overflow-y-auto px-5">
         {greeting ? <p className="text-sm italic text-[#e8c98a]/80">{greeting}</p> : null}
         {turns.length === 0 && !pending ? <p className="text-sm italic text-white/45">{first} stops and looks at you.</p> : null}
@@ -331,6 +454,23 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
           maxLength={400}
           className="min-w-0 flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/35 focus:border-[#e2edc8]/60 focus:outline-none"
         />
+        {cloud && canRecord() ? (
+          <button
+            type="button"
+            data-talk-mic={recording ? "on" : "off"}
+            aria-label="Hold to speak"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              void talkStart();
+            }}
+            onPointerUp={() => void talkStop()}
+            onPointerLeave={() => void talkStop()}
+            disabled={pending}
+            className={`rounded-full px-3 py-2 text-sm ${recording ? "bg-[#e8c98a] text-[#213522]" : "border border-white/20 text-white/70"} disabled:opacity-40`}
+          >
+            {recording ? "Listening…" : "Hold to speak"}
+          </button>
+        ) : null}
         <button type="submit" disabled={pending || !draft.trim()} className="rounded-full bg-[#e2edc8] px-4 py-2 text-sm font-medium text-[#213522] disabled:opacity-40">
           Say
         </button>
@@ -338,6 +478,17 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       <p className="px-5 pb-3 text-[10px] leading-snug text-white/35">
         What you say goes to Claude to be answered and is not stored. {first} keeps a short note of your talk in their own words, so they
         remember you — “Forget me” erases it. None of it is read into your echo. What {first} decides about their own life, everyone can see.
+        {cloud ? " Replies you hear spoken, and what you say aloud, also go to ElevenLabs, to be spoken and written down; nothing of your voice is kept here or measured." : ""}
+        {cloud && canRecord() ? " Hold the microphone, or Ctrl, to speak." : ""}{" "}
+        {cloud ? (
+          <button type="button" data-voice-withdraw onClick={withdraw} className="underline decoration-white/30 hover:text-white">
+            Stop using ElevenLabs
+          </button>
+        ) : cloud === false ? (
+          <button type="button" data-voice-ask onClick={() => setAsking(true)} className="underline decoration-white/30 hover:text-white">
+            Use ElevenLabs voices
+          </button>
+        ) : null}
       </p>
     </section>
   );

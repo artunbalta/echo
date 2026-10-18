@@ -3765,3 +3765,124 @@ Real model, Senstrand:
     `customize_home`, `customize_self`, and on stepping out `stack_tidy` (J5, 0.77, orderly).
 
 **Not done.** See ⚑49.
+
+## C60 — villagers' own voices, and talking to them aloud
+
+Feature 14 of the twenty. What was promised: talk by microphone, with consent, and every villager has
+a voice of their own (cloud speech).
+
+**This changes C44's promise, behind a question.** C44 kept replies in the browser's local voices and
+had no speech-to-text, because the panel promised that words went to Claude and nowhere else. C60
+sends two things to ElevenLabs:
+
+- a villager's reply, to be spoken;
+- what the stranger says aloud, to be written down.
+
+Neither happens until the stranger has said yes to exactly that. The question comes the first time
+they turn voice on. "Only this browser's voice" keeps C44 as it was. The answer is kept in this
+browser (`echo.voiceCloud`), and the panel's footer changes it either way: "Stop using ElevenLabs",
+or "Use ElevenLabs voices".
+
+**What is not done with the stranger's voice.**
+
+- It is recorded only while the button or Ctrl is held, at most 15 s. The microphone is let go of
+  however recording ends.
+- The recording goes through `/api/village/hear` to ElevenLabs and is not kept here.
+- Nothing about how the stranger sounds (pitch, pace, hesitation) reaches the echo. What comes back
+  is text, sent exactly as typed words are. Reading the voice would be a new channel the consent
+  card never asked about.
+
+**A voice of their own** (`voices.ts` `pickVoice`, pure). The voices are the account's own list, read
+from ElevenLabs with its `gender`, `age` and `use_case` labels and kept for an hour.
+
+- **Sex and age.** Under 30 is young, under 60 middle-aged, then old.
+- **Within that**, every voice gets a number from the person's id and its own, and the highest wins.
+  The same person sounds the same on every visit. A voice added to the account takes only the
+  villagers it now wins, and a voice removed moves only its own.
+- **Thin ages widen.** With fewer than three voices for a sex and age, the nearest age's voices join
+  them, so an old woman gets a middle-aged voice before a girl's.
+- **A voice made for social media or advertising** is passed over while another of that age will do.
+- **Never a cloned voice.** A cloned voice is somebody's own. The account this was built on holds
+  one, and no villager ever speaks in it.
+- **Pace** is 1.08 for a child and 0.9 for the old. The temperament's "lively and quick" axis adds up
+  to ±0.05 and makes the voice less even (stability 0.5 ∓ 0.15).
+
+On the real account (27 voices, the cloned one left out), 400 villagers drawn:
+
+| Who | Voices they get |
+|---|---|
+| young women | 3 young women's voices |
+| middle-aged women | 5 |
+| old women | the 5 middle-aged women's: there is no old woman's voice |
+| young men | 3 |
+| middle-aged men | 8: the social-media voices passed over |
+| old men | the one old voice (13 of 59) and the 8 middle-aged |
+
+**Only their words.** Without a check, the voice route would read anything anyone sent it aloud, on
+this project's account. So every talk reply now carries a `voice` token (`signLine`):
+
+- an HMAC over the stranger, the cell, the villager, the words and the time;
+- domain `echo-villager-line/v1`, keyed by the identity secret;
+- good for ten minutes.
+
+The voice route speaks only words that have a token:
+
+- at most 900 characters;
+- rate bucket `voice`, 80 per 10 minutes, shared with hearing;
+- the same line in the same voice is made once (the last 64 are kept).
+
+**Speaking aloud.** Hold "Hold to speak", or Ctrl alone.
+
+- Ctrl with another key is a shortcut, and drops the recording. So does leaving the window.
+- On letting go, the recording (webm/opus) goes to `/api/village/hear`:
+  - audio only, 800 B to 1.5 MB;
+  - `?lang=` taken from the browser's language.
+- The text that comes back is sent as if typed.
+- Without a key, or when ElevenLabs does not answer:
+  - the voice route says 503 `no_voice`, and the reply is spoken in the browser's local voice;
+  - the hear route says 503 `no_ears`, and the panel asks the stranger to say it again or type it.
+
+**Found on the way.**
+
+- **The cloned voice on the account.** Unlabelled, it sat in the last-resort pool, one empty list
+  away from being a villager.
+- **Old women were given girls' voices**, through "any woman's voice", and **every old man got the one
+  old voice** (59 of 59). Thin ages now widen.
+- **A social-media voice for a 41-year-old** ("High-Energy … for Reels & Shorts"). `use_case` now
+  counts.
+- **The voice route passed no temperament**, so every villager was equally even.
+- **The pick was an index into the pool.** One voice added would have re-voiced most of a village.
+  The highest number now wins.
+- **Three recorder bugs:**
+  - a key let go before the microphone came kept recording, with nothing held;
+  - the 15-second cap stopped the recorder but kept the microphone;
+  - after the cap, letting go waited forever for a stop that had already happened.
+- **The yes could not be taken back.**
+- **Safari plays sound only from inside a press**, and a reply arrives seconds after it. Now one audio
+  element plays every reply, unlocked by the press that sent the words (not tried in Safari, ⚑50).
+
+**Measured.**
+
+- `voice.test.mts`, 6 tests:
+  - the choice of voice, full and thin;
+  - stability when voices come and go;
+  - the line token;
+  - the voice route against a recording ElevenLabs: only signed words, made once, 503 without a key;
+  - the hear route: 415, 422, 503 and the text;
+  - every talk reply carries a token for its own words.
+- 24 injected defects, all caught. The first pass missed one, list order on a pool of one voice, now
+  pinned.
+- Real ElevenLabs:
+  - the list read in 350 ms;
+  - a line spoken in 1.2 s (33.7 KB at 64 kbps), and from memory the second time;
+  - written back in 0.5 s, word for word bar the full stop, and still right when told it was
+    Turkish.
+- Browser, Senstrand, Chrome with a fake microphone playing a recorded "Good morning. What is the name
+  of this village?":
+  - the question came first, and nothing was sent before the yes;
+  - the button held 2.9 s: heard, sent, answered, and the reply played in Noo's voice (17 KB);
+  - Ctrl held: the same. Ctrl tapped: nothing heard, microphone let go. Ctrl+A: dropped;
+  - "Stop using ElevenLabs": the microphone button gone, no more voice calls, replies in the local
+    voice.
+
+**Not done.** See ⚑50.
