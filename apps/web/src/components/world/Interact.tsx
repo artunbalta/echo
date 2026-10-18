@@ -24,9 +24,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ITEMS, PACK_SIZE, RECIPES, bondWith, canMake, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type LifeChange, type Pack, type Recipe, type Verb } from "@echo/planet";
+import { DYES, ITEMS, PACK_SIZE, RECIPES, STAGES, bondWith, canBuild, canMake, nextStage, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type Home, type LifeChange, type Look, type Pack, type Recipe, type Verb } from "@echo/planet";
 
 import type { AnimalsLayer } from "@/game/world/animalsLayer";
+import type { HomeLayer } from "@/game/world/homeLayer";
+import { arrangementMeasurement, homeMeasurement } from "@/lib/homeMeasure";
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
@@ -52,12 +54,45 @@ const SELF: NearThing = { ref: "self", kind: "self", x: 0, y: 0, sizeM: 0, owner
 const KEYS = ["KeyE", "Digit2", "Digit3", "Digit4"] as const;
 const KEY_LABEL = ["E", "2", "3", "4"];
 
+/** What the home route's refusals say, in words (C59). */
+const HOME_REFUSALS: Record<string, string> = {
+  not_your_land: "This is not your land.",
+  have_one: "You have a house already.",
+  water: "Too wet to build on here.",
+  steep: "The ground falls away too much here.",
+  village: "Too close to the village's own houses and fields.",
+  "not-yours": "That would run onto land that is not yours.",
+  short: "You have not got what that takes.",
+  not_carried: "You are not carrying that.",
+  too_far: "Closer.",
+  not_inside: "Inside the house.",
+  not_at_home: "Inside the house.",
+  not_built: "Not until it is built.",
+  full: "There is no room for more.",
+  pack_full: "Your pack is full.",
+};
+
+/** A house's verbs as its state allows (C59): the next stage if you have what it takes, paint and placing where they can be done. */
+function homeVerbs(near: NearThing, verbs: Verb[], home: Home | null, inside: boolean, pack: Pack): Verb[] {
+  if (near.kind !== "home") return verbs;
+  if (!home) return [];
+  const stage = nextStage(home);
+  return verbs.flatMap((v) => {
+    if (v.id === "build") return stage && canBuild(pack, stage) ? [{ ...v, label: stage.label, holdS: stage.holdS, beat: stage.beat }] : [];
+    if (v.id === "paint-door") return !inside && home.stage >= 4 ? [v] : [];
+    if (v.id === "paint-walls") return home.stage >= 2 ? [v] : [];
+    if (v.id === "dress" || v.id.startsWith("place")) return inside && home.stage >= 2 ? [v] : [];
+    return [v];
+  });
+}
+
 const typing = () => {
   const el = document.activeElement;
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 };
 
-const title = (t: NearThing) => (t.kind === "villager" || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind));
+const title = (t: NearThing) =>
+  t.kind === "villager" || t.kind === "home" || t.kind === "land" || t.kind === "furnishing" || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind);
 
 export default function Interact({
   world,
@@ -286,6 +321,69 @@ export default function Interact({
     [cell, layers, say, refreshDeeds, chain],
   );
 
+  /** Set something down, turned it or took it up since stepping in (C59): the room is read on the way out. */
+  const arranging = useRef(false);
+  const wasInside = useRef(false);
+  /** Your own house (C59): the home route does it, and answers with the house as it now is. */
+  const homeIt = useCallback(
+    async (verb: Verb, thing: NearThing, heldMs: number) => {
+      const { ctx, player, interact } = layers();
+      const home = ctx?.layer<HomeLayer>("home") ?? null;
+      if (!ctx || !player || !home) return;
+      const at = interact?.bodyAt() ?? { x: thing.x, y: thing.y };
+      const facing = -player.mover().heading;
+      const held = carryingRef.current;
+      const index = thing.ref.startsWith("furnishing:") ? Number(thing.ref.slice(11)) : null;
+      const request: Record<string, unknown> =
+        verb.id === "stake" ? { op: "stake", facing }
+        : verb.id === "build" ? { op: "build" }
+        : verb.id === "paint-door" ? { op: "paint", part: "door", dye: held }
+        : verb.id === "paint-walls" ? { op: "paint", part: "walls", dye: held }
+        : verb.id === "dress" ? { op: "dress", dye: held }
+        : verb.id === "place-square" ? { op: "place", kind: held, mode: "square", facing }
+        : verb.id === "place-loose" ? { op: "place", kind: held, mode: "loose", facing }
+        : { op: verb.id, index };
+      const was = home.home();
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/home", { method: "POST", headers: identityHeaders({ "content-type": "application/json" }), body: JSON.stringify({ cell, at, ...request }) });
+        const data = (await res.json().catch(() => ({}))) as { home?: Home; pack?: Pack; look?: Look; error?: string };
+        if (!res.ok || !data.home) {
+          say(HOME_REFUSALS[data.error ?? ""] ?? "It will not go.");
+          return;
+        }
+        home.setHome({ home: data.home, owner: true });
+        if (data.pack) {
+          setPack(data.pack);
+          if (held && !((data.pack[held] ?? 0) > 0)) {
+            setCarrying(null);
+            player.setCarrying(false);
+          }
+        }
+        if (data.look) player.setLook(data.look);
+        const dye = held ? (DYES[held]?.name ?? held) : "";
+        const built = verb.id === "build" && was ? STAGES[was.stage] : null;
+        const words =
+          verb.id === "stake" ? verb.beat
+          : built ? built.beat
+          : verb.id === "paint-door" ? `The door is ${dye} now.`
+          : verb.id === "paint-walls" ? `The walls are ${dye} now.`
+          : verb.id === "dress" ? `Your shirt is ${dye} now.`
+          : null;
+        if (words) say(words);
+        const op = verb.id === "stake" || verb.id === "build" || verb.id === "dress" ? verb.id : verb.id.startsWith("paint") ? "paint" : null;
+        if (op && chain.armed()) {
+          const m = homeMeasurement(op, heldMs);
+          void chain.emitAction(m.action, m.opts);
+        }
+        if (verb.id.startsWith("place") || verb.id === "turn" || verb.id === "lift") arranging.current = true;
+      } catch {
+        say("It will not go.");
+      }
+    },
+    [cell, layers, say, chain],
+  );
+
   const finish = useCallback(
     (abandoned: boolean) => {
       const a = actingRef.current;
@@ -296,6 +394,11 @@ export default function Interact({
       setProgress(0);
       const heldMs = performance.now() - a.startedAt;
       const done = !abandoned;
+      // Your own land, house and things (C59): the home route.
+      if (a.thing.kind === "land" || a.thing.kind === "home" || a.thing.kind === "furnishing") {
+        if (done) void homeIt(a.verb, a.thing, heldMs);
+        return;
+      }
       // A trade comes back with something (C58): its own route, its own measurement.
       if (a.verb.id === "trade" || a.verb.id === "ask-back") {
         if (done) void tradeIt(a.verb, a.thing);
@@ -341,7 +444,7 @@ export default function Interact({
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
       if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
-    [chain, consent, layers, record, say, tradeIt],
+    [chain, consent, layers, record, say, tradeIt, homeIt],
   );
 
   const begin = useCallback(
@@ -505,6 +608,15 @@ export default function Interact({
       const n = interact?.nearest() ?? null;
       if (n && seenSince.current?.ref !== n.ref) seenSince.current = { ref: n.ref, at: performance.now() };
       setNear(n);
+      // Out of your own house after arranging it (C59): the room, read once, as the echo hears it.
+      const home = layers().ctx?.layer<HomeLayer>("home") ?? null;
+      const insideNow = home?.inside() ?? false;
+      if (wasInside.current && !insideNow && arranging.current) {
+        arranging.current = false;
+        const m = arrangementMeasurement(home?.home()?.items ?? []);
+        if (m && chain.armed()) void chain.emitAction(m.action, m.opts);
+      }
+      wasInside.current = insideNow;
       setTalkable(villagers?.nearest() ?? null);
     }, 120);
     return () => clearInterval(id);
@@ -512,11 +624,15 @@ export default function Interact({
 
   // In a boat the verbs are the boat's own (bringing it back) and fishing over the side.
   const fishing = aboard ? verbOf("dock", "fish") : null;
+  const homeNow = layers().ctx?.layer<HomeLayer>("home") ?? null;
   const verbs = aboard
     ? [...(near && !aboard.own ? verbsInHand(near.verbs, carrying, true) : []), ...(fishing ? [{ ...fishing, label: "Fish over the side" }] : [])].slice(0, 4)
     : near
-      ? verbsInHand(near.verbs, carrying, false, packCount(pack) < PACK_SIZE).slice(0, 4)
+      ? homeVerbs(near, verbsInHand(near.verbs, carrying, false, packCount(pack) < PACK_SIZE), homeNow?.home() ?? null, homeNow?.inside() ?? false, pack).slice(0, 4)
       : [];
+  // What the next stage of your house takes, when it is to hand and you have not got it (C59).
+  const shortFor = near?.kind === "home" && homeNow?.home() ? nextStage(homeNow.home()!) : null;
+  const short = shortFor && !canBuild(pack, shortFor) ? `${shortFor.label}: ${Object.entries(shortFor.needs).map(([id, n]) => `${n} × ${ITEMS[id]?.name.replace(/^(a|an|some) /, "") ?? id}`).join(", ")}` : null;
   // Your own raft, at the water's edge (C47): R launches it.
   const canLaunch = !aboard && (pack.raft ?? 0) > 0 && near?.kind === "water";
   const launch = useCallback(() => {
@@ -691,6 +807,11 @@ export default function Interact({
                 <span className="mr-1.5 rounded bg-[#f4e9d0]/15 px-1.5 py-0.5 font-mono">T</span>Talk to {talkHint}
               </span>
             )
+          ) : null}
+          {short ? (
+            <span data-home-short className="rounded-full bg-[#16241f]/60 px-3 py-1 text-xs text-[#f4e9d0]/60">
+              {short}
+            </span>
           ) : null}
         </div>
       ) : null}

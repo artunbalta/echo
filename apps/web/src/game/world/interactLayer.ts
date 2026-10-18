@@ -34,6 +34,7 @@ import {
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { VillagersLayer } from "./villagersLayer";
 import type { InteriorLayer } from "./interiorLayer";
+import type { HomeLayer } from "./homeLayer";
 import type { AnimalsLayer } from "./animalsLayer";
 import { buildMarks } from "./villageGeometry";
 
@@ -199,6 +200,10 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
         if (d > reach) return;
         if (!best || d < best.distanceM) best = { ...t, verbs, distanceM: d };
       };
+      // Your own land, your house, and what is set down in it (C59). First, so that a tuft of grass at
+      // your feet does not stand between you and the house you mean to mark out: a tie goes to the first.
+      const homeNow = ctx.layer<HomeLayer>("home");
+      for (const t of homeNow?.things(mx, my) ?? []) consider(t);
       // Inside a house (C54), its own door is behind you: you do not knock on it from within.
       const within = ctx.layer<InteriorLayer>("interior")?.inside()?.plot;
       for (const t of things) if (Math.hypot(t.x - mx, t.y - my) < LOOK_M + t.sizeM && t.ref !== `house:${within}`) consider(t);
@@ -207,6 +212,7 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
       for (let i = -1; i <= 1; i++) {
         for (let j = -1; j <= 1; j++) {
           for (const p of grid.get(`${gx + i},${gy + j}`) ?? []) {
+            if (homeNow?.clears(p.x, p.y)) continue;
             const ref = scatterRef(p.classId, p.x, p.y);
             if (marks.get(ref)?.kind === "taken") continue;
             consider({ ref, kind: p.classId, x: p.x, y: p.y, sizeM: 0.4, owners: [], name: p.classId });

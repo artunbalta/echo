@@ -57,10 +57,22 @@ test("an act sent under a NAMED label has that handler in ingest.py; a GENERIC o
           (channel === "F" && (cue.startsWith("F1") || cue.startsWith("F7") || /save|give/.test(action))) ||
           (channel === "G" && ["approach", "initiate", "greet"].includes(action)) ||
           (channel === "G" && action === "knock_door") || // carries `distance`, which the G branch reads
-          (channel === "D" && cue.startsWith("D11")); // the pet branch: `pet_attach` from raw.amount (C55)
+          (channel === "D" && cue.startsWith("D11")) || // the pet branch: `pet_attach` from raw.amount (C55)
+          (channel === "F" && cue.startsWith("F9")) || // the bargaining branch: `risk_index` from raw.amount (C58)
+          (channel === "F" && cue.startsWith("F3")) || // the risk branch: `risk_index` from raw.variance, 0.8 without (C45's push_through, relabelled in C59)
+          action === "build_home"; // carries dwell_ms at a `structure`, which the dwell branch reads as ts_build (C59)
         assert.ok(ok, `${k}/${verb.id}: "${action}" on ${cue} would not take the generic route it claims`);
       } else {
         assert.ok(!new RegExp(`"${action}"`).test(ingest), `${k}/${verb.id}: "${action}" has a handler in ingest.py; call it named`);
+        // Nor may an "unrouted" act fall into a generic branch by its cue or its name: C58's barter
+        // did (F9 → risk_index at 0.6) while its entry said it moved nothing but the embedding.
+        const generic =
+          (channel === "F" && (/^F(1|3|7|9)$/.test(cue) || /save|spend|wager|bet|give|tip|share|bargain/.test(action))) ||
+          (channel === "D" && cue.startsWith("D11")) ||
+          /queue/.test(action) ||
+          cue.startsWith("H1") ||
+          cue.startsWith("G11");
+        assert.ok(!generic, `${k}/${verb.id}: "${action}" on ${cue} is called unrouted and takes a generic branch`);
       }
     }
   }
@@ -77,4 +89,10 @@ test("marks heal, wrongs weigh, and only what you carry can be given", () => {
       assert.ok(verb.label.length > 0 && verb.label.length <= 40);
     }
   }
+});
+
+test("C59: nothing the ground offers — a scatter class, the water — is a deed, so land with no village needs nobody to see it", () => {
+  // The act route's path for a parcel with no village (most of them) records no deed and has no
+  // witnesses to compute. A deed on a scatter verb would need both: give it one, and that path too.
+  for (const k of [...ASSET_CLASSES.map((c) => c.id), "water" as const]) for (const verb of verbsOf(k)) assert.equal(verb.deed, null, `${k}/${verb.id} is a deed`);
 });

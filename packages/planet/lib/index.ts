@@ -66,3 +66,5 @@ export * from "./landings.js";
 export * from "./markets.js";
 // Barter and labour for labour, with no price (C58).
 export * from "./trade.js";
+// A stranger's own house on their own land (C59).
+export * from "./homes.js";

@@ -40,6 +40,7 @@ import type { TouchControlHandle } from "./touchInput";
 import { SPAWN_HORIZON_MARGIN_DEG, spawnView, yawBehindHeading } from "./spawnView";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 import type { WeatherLayer } from "./weatherLayer";
+import { DYES, type Look } from "@echo/planet";
 
 export interface PlayerLayerOptions {
   /** Seeds the body's look, so it is the same person every visit. */
@@ -91,6 +92,8 @@ export interface PlayerLayer extends WorldLayer {
   wantsToMove(): boolean;
   /** Show something carried in the hands (C45). */
   setCarrying(on: boolean): void;
+  /** Whether something is in the hands: what you hold decides what you are reaching for (C59). */
+  holding(): boolean;
   /**
    * Into a boat (C45): the body sits in it at a tile position, facing `heading` (the boat's, in this
    * layer's convention), and moves on water only, at a rower's speed, until `ashore`.
@@ -107,6 +110,8 @@ export interface PlayerLayer extends WorldLayer {
   handOff(): PlayerHandoff;
   /** Carry on as the body a hand-off describes, already in this world's tiles. */
   adopt(h: PlayerHandoff): void;
+  /** Dress the body as the stranger has dyed their clothes (C59). */
+  setLook(look: Look): void;
   /**
    * How many times a foot has come down since the page opened, as the gait draws it: a foot lands
    * each time the gait's phase passes a half turn (`gaitFootTarget`'s stance begins at 0.5 of the
@@ -124,6 +129,9 @@ export interface PlayerHandoff {
   /** The keys held down at the crossing: a sail held across the line stays up. */
   keys?: string[];
 }
+
+/** The user's shirt as `buildCharacter` makes it, undyed. */
+const SHIRT = 0xe9e7db;
 
 /** A rower's pace on open water, metres per second: slower than a walk, and it does not run. */
 const ROW_MPS = 1.4;
@@ -168,6 +176,12 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
   let rafting = false;
   let underSail = false;
   let boat: THREE.Mesh | null = null;
+  /** The shirt's materials, found once the body is built, and the look to dress it in. */
+  let shirt: THREE.MeshLambertMaterial[] = [];
+  let worn: Look = {};
+  const dress = () => {
+    for (const m of shirt) m.color.setHex(worn.shirt && DYES[worn.shirt] ? DYES[worn.shirt]!.hex : SHIRT);
+  };
   let raft: THREE.Mesh | null = null;
   let sail: THREE.Mesh | null = null;
   let boatMovement = parcelMovement(1.6);
@@ -213,15 +227,22 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       const people = () => ctx.layer<ObstacleSource>("villagers");
       // And a market stall, on market day (C58): built after this layer too.
       const stall = () => ctx.layer<ObstacleSource>("market");
+      // And a house of your own, and what is set down in it (C59).
+      const home = () => ctx.layer<ObstacleSource & { clears(x: number, y: number): boolean }>("home");
+      // Where the house has cleared the ground, the trees that stood there stop nothing.
+      const cleared = (x: number, y: number) => home()?.clears(x * ctx.frame.tileM, -y * ctx.frame.tileM) ?? false;
       blocked = (x, y) =>
-        gates.some((g) => g.blockedTile(x, y, bodyRadiusM)) || (people()?.blockedTile(x, y, bodyRadiusM) ?? false) || (stall()?.blockedTile(x, y, bodyRadiusM) ?? false);
+        gates.some((g) => !(g === obstacles && cleared(x, y)) && g.blockedTile(x, y, bodyRadiusM)) ||
+        (people()?.blockedTile(x, y, bodyRadiusM) ?? false) ||
+        (stall()?.blockedTile(x, y, bodyRadiusM) ?? false) ||
+        (home()?.blockedTile(x, y, bodyRadiusM) ?? false);
 
       const colliderIndex = obstacles?.colliders?.();
       colliders = colliderIndex ?? null;
       contactWeight = 0;
       cameraObstacles = colliderIndex ? (anchor, direction, wanted) => {
         const endX = anchor[0] + direction[0] * wanted, endZ = anchor[2] + direction[2] * wanted;
-        const nearby = colliderIndex.querySegment([anchor[0], -anchor[2]], [endX, -endZ], .18);
+        const nearby = colliderIndex.querySegment([anchor[0], -anchor[2]], [endX, -endZ], .18).filter((c) => !(ctx.layer<ObstacleSource & { clears(x: number, y: number): boolean }>("home")?.clears(c.x, c.y) ?? false));
         return cylinderBoomLimit(anchor, direction, wanted, nearby.map(c => ({
           x: c.x, z: -c.y, y: ctx.frame.heightAtTile(c.x / ctx.frame.tileM, -c.y / ctx.frame.tileM),
           radius: c.radiusM, height: c.heightM,
@@ -243,6 +264,13 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       }
       ctx.scene.add(built.root);
       parts = built;
+      // The stranger's own shirt is the one material the rig colours for the user (`buildCharacter`).
+      shirt = [];
+      built.root.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.MeshLambertMaterial | undefined;
+        if (m && !Array.isArray(m) && m.color?.getHex() === SHIRT && !shirt.includes(m)) shirt.push(m);
+      });
+      dress();
       // The boat a person can take out (C45): one hull, the villagers' own form, hidden until boarded.
       boat = new THREE.Mesh(boatForm(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
       boat.name = "player:boat";
@@ -369,6 +397,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     setCarrying(on) {
       carrying = on;
     },
+    holding: () => carrying,
     board(at, heading, kind = "boat") {
       boating = true;
       rafting = kind === "raft";
@@ -444,6 +473,10 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       return state;
     },
     footfalls: () => Math.floor((animTime * 9) / Math.PI),
+    setLook(next) {
+      worn = { ...next };
+      dress();
+    },
     camera() {
       return cam;
     },

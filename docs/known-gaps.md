@@ -2029,3 +2029,25 @@ consecutive salts anywhere this matters has **not** been audited.
   and the server find the same one.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 49. What C59 does not do yet, and what it trusts (2026-10-18)
+
+- **Nobody can visit.** A visitor sees your house but cannot knock or go in: there are no verbs on
+  someone else's house.
+- **One house a stranger, where it was staked.** It cannot be moved or taken down. Erasure removes it.
+- **The parcel registry is in memory** unless `DATABASE_URL` is set. A restart can reassign parcels,
+  while houses are kept in the store under the cell they stand on. A house can outlive its owner's
+  claim to the land: it stays visible, and nobody can change it.
+- **Villagers do not know your walls are walls.** The site keeps clear of the village's paths, but
+  someone wandering could still walk through a house.
+- **Only a shirt.** No hair, no trousers. J1's other side, never customising at all
+  (`keeps_default`), is not sent.
+- **J5's thresholds are a choice.** 0.65 and 0.4 are not calibrated against anything. One thing set
+  down is no arrangement, and the room is read only on stepping out.
+- **Labour returned as labour** (villagers helping to build) is still not done. Helpers would have to
+  live in the parcel's village, and most parcels have none.
+- **Nothing happens in your house at night.** No hearth, no sleep, no light.
+- **Not tried on a phone.** Placing things by touch is untested.
+- **Playable parcels only.** The landing preview does not show houses.
+
+**Status:** OPEN, all of it, written down rather than discovered.

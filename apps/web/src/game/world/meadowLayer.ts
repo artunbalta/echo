@@ -43,7 +43,12 @@ const GREEN = new Set(['grassland', 'forest', 'rainforest', 'savanna', 'taiga', 
 export function meadowSeed(seed: string, cell: string, x: number, z: number): number {
   return Math.floor(hashStr(`${seed}:${cell}:meadow:${x}:${z}`) * 0xffffffff) >>> 0;
 }
-export function meadowLayer(): WorldLayer {
+export interface MeadowLayer extends WorldLayer {
+  /** Drop every patch, to be grown again round the player: the ground under them has changed (C59). */
+  regrow(): void;
+}
+
+export function meadowLayer(): MeadowLayer {
   const patches = new Map<string, THREE.InstancedMesh>();
   const time = { value: 0 }, player = { value: new THREE.Vector3(0, -1000, 0) };
   let geometry: THREE.BufferGeometry;
@@ -52,6 +57,7 @@ export function meadowLayer(): WorldLayer {
   let context: LayerContext;
   const buildPatch = (gx: number, gz: number) => {
     const key = `${gx}:${gz}`;
+    const cleared = context.layer<WorldLayer & { clears(x: number, y: number): boolean }>('home');
     let seed = meadowSeed(context.seed, context.region.cell, gx, gz);
     const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
     const mesh = new THREE.InstancedMesh(geometry, material, BLADES);
@@ -66,6 +72,8 @@ export function meadowLayer(): WorldLayer {
         const tx = (gx * SIZE + x) / context.frame.tileM, ty = (gz * SIZE + z) / context.frame.tileM;
         const y = context.frame.heightAtTile(tx, ty);
         if (y <= .03 || !context.frame.walkableTile(tx, ty)) continue;
+        // No grass through the floor of a house of your own (C59), nor round its walls.
+        if (cleared?.clears(gx * SIZE + x, -(gz * SIZE + z))) continue;
         matrix.position.set(x, y - .025, z);
         matrix.rotation.set(0, random() * Math.PI * 2, 0);
         matrix.scale.set(1. + random() * .7, .65 + random() * .8, 1);
@@ -156,6 +164,10 @@ export function meadowLayer(): WorldLayer {
       for (let ring = 0; ring <= RADIUS; ring++) for (let x = -ring; x <= ring; x++) for (let z = -ring; z <= ring; z++) {
         if (!patches.has(`${gx+x}:${gz+z}`)) { buildPatch(gx+x, gz+z); return; }
       }
+    },
+    regrow() {
+      for (const mesh of patches.values()) { mesh.removeFromParent(); mesh.dispose(); }
+      patches.clear();
     },
     dispose() {
       for (const mesh of patches.values()) { mesh.removeFromParent(); mesh.dispose(); }

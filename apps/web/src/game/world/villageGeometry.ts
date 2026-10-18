@@ -24,7 +24,7 @@
  */
 
 import * as THREE from "three";
-import { gravesOn, plotState, type Plot, type PlotState, type SettledParcel, type VillageStyle } from "@echo/planet";
+import { DYES, HOME, PLACEABLE, gravesOn, plotState, type Home, type Plot, type PlotState, type SettledParcel, type VillageStyle } from "@echo/planet";
 
 import { PALETTE } from "../three/palette";
 import type { WorldFrame } from "./PlanetWorld";
@@ -366,6 +366,121 @@ export function sailForm(): THREE.BufferGeometry {
   m.quad([0.44, 0.75, 0.8], [0.44, 2.15, 0.8], [0.44, 2.15, -0.8], [0.44, 0.75, -0.8], cloth);
   m.quad([0.42, 0.75, -0.8], [0.42, 2.15, -0.8], [0.42, 2.15, 0.8], [0.42, 0.75, 0.8], cloth);
   return m.geometry();
+}
+
+/**
+ * A stranger's own house (C59), in its own frame: the floor's middle at the origin, the door toward
+ * +x, the house's left (`v`) toward −z, as `homeLayer` turns it by its facing. Three pieces, so the
+ * roof can be lifted off while the stranger is inside and the furniture rebuilt alone:
+ *
+ * - the shell: stakes and string, or the foundation, the walls and the door, by stage;
+ * - the roof;
+ * - what is set down inside.
+ */
+export function homeForms(home: Home, cutM?: number): { shell: THREE.BufferGeometry; roof: THREE.BufferGeometry | null; furniture: THREE.BufferGeometry | null } {
+  const D = HOME.depthM;
+  const W = HOME.widthM;
+  const T = HOME.wallM;
+  // Cut down to `cutM` while the stranger is inside, so the camera behind them sees over the walls.
+  const H = cutM ?? HOME.wallHeightM;
+  const wood = rgb(PALETTE.wood);
+  const light = rgb(PALETTE.woodLight);
+  const stone = mix(PALETTE.rockLight, PALETTE.sand, 0.2);
+  const s = new Mesher();
+  if (home.stage === 0) {
+    for (const [x, z] of [[D / 2, W / 2], [D / 2, -W / 2], [-D / 2, W / 2], [-D / 2, -W / 2]]) s.box(x, 0.3, z, 0.06, 0.6, 0.06, wood);
+    const string = mix(PALETTE.cloth, PALETTE.sand, 0.6);
+    s.box(D / 2, 0.45, 0, 0.015, 0.015, W, string);
+    s.box(-D / 2, 0.45, 0, 0.015, 0.015, W, string);
+    s.box(0, 0.45, W / 2, D, 0.015, 0.015, string);
+    s.box(0, 0.45, -W / 2, D, 0.015, 0.015, string);
+  } else {
+    // The foundation: a stone footing round the edge, and a boarded floor inside it.
+    s.box(D / 2 - T / 2, 0.1, 0, T, 0.24, W, stone);
+    s.box(-D / 2 + T / 2, 0.1, 0, T, 0.24, W, stone);
+    s.box(0, 0.1, W / 2 - T / 2, D - 2 * T, 0.24, T, stone);
+    s.box(0, 0.1, -W / 2 + T / 2, D - 2 * T, 0.24, T, stone);
+    s.box(0, 0.11, 0, D - 2 * T, 0.02, W - 2 * T, mix(PALETTE.wood, PALETTE.woodLight, 0.4));
+  }
+  if (home.stage >= 2) {
+    const wall = home.colours.walls ? rgb(DYES[home.colours.walls]!.hex) : mix(PALETTE.woodLight, PALETTE.sand, 0.35);
+    const y = 0.22 + H / 2;
+    const gap = HOME.doorM;
+    // The back wall, the two sides, and the front either side of the doorway, with a lintel over it.
+    s.box(-D / 2 + T / 2, y, 0, T, H, W, wall);
+    s.box(0, y, W / 2 - T / 2, D, H, T, wall);
+    s.box(0, y, -W / 2 + T / 2, D, H, T, wall);
+    const side = (W - gap) / 2;
+    s.box(D / 2 - T / 2, y, gap / 2 + side / 2, T, H, side, wall);
+    s.box(D / 2 - T / 2, y, -gap / 2 - side / 2, T, H, side, wall);
+    if (cutM === undefined) s.box(D / 2 - T / 2, 0.22 + H - 0.2, 0, T, 0.4, gap, wall);
+  }
+  if (home.stage >= 4 && cutM === undefined) {
+    // The door, standing open against the wall inside: hinged at the left of the doorway.
+    const door = home.colours.door ? rgb(DYES[home.colours.door]!.hex) : wood;
+    s.box(D / 2 - T - HOME.doorM / 2 + 0.05, 0.22 + (H - 0.42) / 2, -HOME.doorM / 2 - 0.04, HOME.doorM - 0.1, H - 0.42, 0.05, door);
+  }
+  let roof: THREE.BufferGeometry | null = null;
+  if (home.stage >= 3) {
+    const r = new Mesher();
+    const thatch = mix(PALETTE.woodLight, PALETTE.sand, 0.15);
+    const under = mix(PALETTE.woodLight, PALETTE.shadow, 0.4);
+    const eave = 0.22 + H;
+    const ridge = eave + 1.5;
+    const o = 0.35;
+    // Two slopes along the depth, the ridge running front to back, and the two gables.
+    r.quad([-D / 2 - o, eave - 0.1, W / 2 + o], [D / 2 + o, eave - 0.1, W / 2 + o], [D / 2 + o, ridge, 0], [-D / 2 - o, ridge, 0], thatch);
+    r.quad([-D / 2 - o, ridge, 0], [D / 2 + o, ridge, 0], [D / 2 + o, eave - 0.1, -W / 2 - o], [-D / 2 - o, eave - 0.1, -W / 2 - o], thatch);
+    r.quad([-D / 2 - o, ridge - 0.02, 0], [D / 2 + o, ridge - 0.02, 0], [D / 2 + o, eave - 0.12, W / 2 + o], [-D / 2 - o, eave - 0.12, W / 2 + o], under);
+    r.quad([-D / 2 - o, eave - 0.12, -W / 2 - o], [D / 2 + o, eave - 0.12, -W / 2 - o], [D / 2 + o, ridge - 0.02, 0], [-D / 2 - o, ridge - 0.02, 0], under);
+    const gable = home.colours.walls ? rgb(DYES[home.colours.walls]!.hex) : mix(PALETTE.woodLight, PALETTE.sand, 0.35);
+    for (const x of [D / 2 - T / 2, -D / 2 + T / 2]) {
+      r.tri([x, eave, W / 2], [x, eave, -W / 2], [x, ridge - 0.05, 0], gable);
+      r.tri([x, eave, -W / 2], [x, eave, W / 2], [x, ridge - 0.05, 0], gable);
+    }
+    roof = r.geometry();
+  }
+  let furniture: THREE.BufferGeometry | null = null;
+  if (home.items.length > 0) {
+    const f = new Mesher();
+    const at = new THREE.Matrix4();
+    for (const it of home.items) {
+      const p = PLACEABLE[it.kind] ?? { du: 0.4, dv: 0.4, dy: 0.4, solid: false };
+      at.makeRotationY(it.turn).setPosition(it.u, 0.22, -it.v);
+      f.setTransform(at);
+      const { du, dv, dy } = p;
+      switch (it.kind) {
+        case "bed":
+          f.box(0, 0.15, 0, du, 0.3, dv, wood);
+          f.box(0.05, 0.36, 0, du - 0.2, 0.12, dv - 0.08, mix(PALETTE.cloth, PALETTE.sand, 0.3));
+          f.box(-du / 2 + 0.25, 0.44, 0, 0.35, 0.08, dv - 0.25, mix(PALETTE.sand, 0xffffff, 0.4));
+          break;
+        case "table":
+          f.box(0, dy - 0.03, 0, du, 0.06, dv, light);
+          for (const [x, z] of [[du / 2 - 0.08, dv / 2 - 0.08], [du / 2 - 0.08, -dv / 2 + 0.08], [-du / 2 + 0.08, dv / 2 - 0.08], [-du / 2 + 0.08, -dv / 2 + 0.08]]) f.box(x, (dy - 0.06) / 2, z, 0.06, dy - 0.06, 0.06, wood);
+          break;
+        case "stool":
+          f.box(0, dy - 0.03, 0, du, 0.06, dv, light);
+          f.box(0, (dy - 0.06) / 2, 0, 0.08, dy - 0.06, 0.08, wood);
+          break;
+        case "shelf":
+          f.box(0, dy / 2, -dv / 2 + 0.03, du, dy, 0.04, wood);
+          for (const y of [0.35, 0.8, 1.25]) f.box(0, y, 0, du, 0.04, dv, light);
+          break;
+        case "cloth":
+          f.box(0, 0.01, 0, du, 0.02, dv, rgb(GOOD_COLOUR.cloth!));
+          break;
+        case "torch":
+          f.box(0, dy / 2, 0, 0.06, dy, 0.06, wood);
+          f.box(0, dy + 0.06, 0, 0.12, 0.12, 0.12, rgb(0xffb050));
+          break;
+        default:
+          f.box(0, dy / 2, 0, du, dy, dv, rgb(GOOD_COLOUR[it.kind] ?? (it.kind === "basket" ? 0xb59660 : PALETTE.woodLight)));
+      }
+    }
+    furniture = f.geometry();
+  }
+  return { shell: s.geometry(), roof, furniture };
 }
 
 /** What each good looks like piled on a stall (C58): its colour, roughly. */

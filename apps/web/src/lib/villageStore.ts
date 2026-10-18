@@ -13,7 +13,7 @@
  */
 import "server-only";
 
-import type { Deed, Landing, LifeChange, Pack, WorldEffect } from "@echo/planet";
+import type { Deed, Home, Landing, LifeChange, Look, Pack, WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 
@@ -50,7 +50,28 @@ export interface VillageStore {
   /** Where one stranger has come ashore from the sea in one cell (C57), oldest first. Null: unreadable. */
   landingsIn(subject: string, cell: string): Promise<Landing[] | null>;
   addLanding(subject: string, cell: string, landing: Omit<Landing, "id">): Promise<Landing | null>;
+  /** A stranger's own house (C59): theirs, wherever it is; null for none, undefined when unreadable. */
+  homeOf(subject: string): Promise<Home | null | undefined>;
+  /** The house on a parcel, whoever's it is (a parcel has one owner). Never says whose. */
+  homeIn(cell: string): Promise<Home | null | undefined>;
+  saveHome(subject: string, home: Home): Promise<boolean>;
+  /** A stranger's own look (C59): {} for none yet, null when unreadable. */
+  lookOf(subject: string): Promise<Look | null>;
+  setLook(subject: string, look: Look): Promise<boolean>;
 }
+
+interface HomeRow {
+  cell: string;
+  x: number;
+  y: number;
+  facing: number;
+  stage: number;
+  colours: Home["colours"] | null;
+  items: Home["items"] | null;
+  made_day: number;
+}
+const homeFromRow = (r: HomeRow): Home => ({ cell: r.cell, x: r.x, y: r.y, facing: r.facing, stage: r.stage, colours: r.colours ?? {}, items: r.items ?? [], madeDay: r.made_day });
+const HOME_COLUMNS = "cell, x, y, facing, stage, colours, items, made_day";
 
 interface LandingRow {
   id: number;
@@ -287,6 +308,33 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("landingsIn", error.message), null;
       return (data as LandingRow[]).map(landingFromRow);
     },
+    async homeOf(subject) {
+      const { data, error } = await admin.from("player_homes").select(HOME_COLUMNS).eq("subject", subject).maybeSingle();
+      if (error) return warn("homeOf", error.message), undefined;
+      return data ? homeFromRow(data as HomeRow) : null;
+    },
+    async homeIn(cell) {
+      const { data, error } = await admin.from("player_homes").select(HOME_COLUMNS).eq("cell", cell).limit(1).maybeSingle();
+      if (error) return warn("homeIn", error.message), undefined;
+      return data ? homeFromRow(data as HomeRow) : null;
+    },
+    async saveHome(subject, h) {
+      const { error } = await admin
+        .from("player_homes")
+        .upsert({ subject, cell: h.cell, x: h.x, y: h.y, facing: h.facing, stage: h.stage, colours: h.colours, items: h.items, made_day: h.madeDay, updated_at: new Date().toISOString() }, { onConflict: "subject" });
+      if (error) return warn("saveHome", error.message), false;
+      return true;
+    },
+    async lookOf(subject) {
+      const { data, error } = await admin.from("player_looks").select("look").eq("subject", subject).maybeSingle();
+      if (error) return warn("lookOf", error.message), null;
+      return (data?.look as Look | undefined) ?? {};
+    },
+    async setLook(subject, look) {
+      const { error } = await admin.from("player_looks").upsert({ subject, look, updated_at: new Date().toISOString() }, { onConflict: "subject" });
+      if (error) return warn("setLook", error.message), false;
+      return true;
+    },
     async addLanding(subject, cell, l) {
       const { data, error } = await admin
         .from("player_landings")
@@ -316,6 +364,8 @@ interface MemoryState {
   deeds?: Map<string, Deed[]>;
   packs?: Map<string, Pack>;
   landings?: Map<string, Landing[]>;
+  homes?: Map<string, Home>;
+  looks?: Map<string, Look>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -381,6 +431,27 @@ function memoryStore(): VillageStore {
     async landingsIn(subject, cell) {
       return [...(memory.landings?.get(`${subject}|${cell}`) ?? [])];
     },
+    async homeOf(subject) {
+      const h = memory.homes?.get(subject);
+      return h ? structuredClone(h) : null;
+    },
+    async homeIn(cell) {
+      for (const h of memory.homes?.values() ?? []) if (h.cell === cell) return structuredClone(h);
+      return null;
+    },
+    async saveHome(subject, h) {
+      memory.homes ??= new Map();
+      memory.homes.set(subject, structuredClone(h));
+      return true;
+    },
+    async lookOf(subject) {
+      return { ...(memory.looks?.get(subject) ?? {}) };
+    },
+    async setLook(subject, look) {
+      memory.looks ??= new Map();
+      memory.looks.set(subject, { ...look });
+      return true;
+    },
     async addLanding(subject, cell, l) {
       const landing: Landing = { ...l, id: `l${memory.next++}` };
       memory.landings ??= new Map();
@@ -412,5 +483,7 @@ export function resetMemoryStore(): void {
   memory.deeds?.clear();
   memory.packs?.clear();
   memory.landings?.clear();
+  memory.homes?.clear();
+  memory.looks?.clear();
   memory.next = 1;
 }

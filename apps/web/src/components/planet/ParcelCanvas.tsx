@@ -57,7 +57,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { CROSSING, cellAtLocal, outsideBy, type LifeChange, type WorldEffect } from "@echo/planet";
+import { CROSSING, cellAtLocal, outsideBy, type Home, type LifeChange, type Look, type WorldEffect } from "@echo/planet";
 
 import ConsentCard from "@/components/world/ConsentCard";
 import TouchControls from "@/components/world/TouchControls";
@@ -76,6 +76,8 @@ import { useCoarsePointer } from "@/lib/pointerKind";
 import type { InteractLayer } from "@/game/world/interactLayer";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import { carryHandoff } from "@/game/world/crossTo";
+import type { HomeLayer } from "@/game/world/homeLayer";
+import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { WalkLayer } from "@/game/world/walkLayer";
@@ -276,6 +278,38 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
     };
   }, [chain, touch]);
 
+  // ── your own land and house (C59) ─────────────────────────────────────────────────
+  // Whose land this is and what stands on it, asked of the home route for the parcel the person is
+  // on now, and handed to whichever world is showing it. Before the consent card is answered there
+  // is no identity to ask with, so it asks again once there is.
+  const homeState = useRef<{ cell: string; home: Home | null; owner: boolean; look: Look | null } | null>(null);
+  const [owned, setOwned] = useState(false);
+  const applyHome = useCallback((w: PlanetWorld | null) => {
+    const st = homeState.current;
+    if (!w || !st || w.region.cell !== st.cell) return;
+    w.context().layer<HomeLayer>("home")?.setHome({ home: st.home, owner: st.owner });
+    if (st.look) w.context().layer<PlayerLayer>("player")?.setLook(st.look);
+  }, []);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        if (consent !== "unset") await ensureIdentity();
+        const r = await fetch(`/api/home?cell=${encodeURIComponent(here)}`, { headers: consent !== "unset" ? identityHeaders() : {} });
+        const d = r.ok ? ((await r.json()) as { owner?: boolean; home?: Home | null; look?: Look | null }) : null;
+        if (!live || !d) return;
+        homeState.current = { cell: here, home: d.home ?? null, owner: Boolean(d.owner), look: d.look ?? null };
+        setOwned(Boolean(d.owner));
+        applyHome(world.current);
+      } catch {
+        // No house to show; the land is still the land.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [here, consent, applyHome]);
+
   if (changes === null) return <div className="relative h-full w-full" data-phase="changes" />;
 
   return (
@@ -289,6 +323,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
         adopt.current = adoptNext;
         // The page's own marks go on the page's own world; a crossed-into world brought its own.
         if (first) w?.context().layer<InteractLayer>("interact")?.setMarks(marks.current);
+        if (first && w) setHereName(w.region.village?.settlement.name ?? null);
+        applyHome(w);
       }}
       className="relative h-full w-full"
     >
@@ -306,7 +342,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
         data-stations={stations ?? "none"}
         className="pointer-events-none absolute bottom-6 left-6 rounded-2xl border border-white/15 bg-[#192a20]/75 px-5 py-4 text-xs text-[#f4f2e4]/80 backdrop-blur-xl max-sm:bottom-auto max-sm:left-3 max-sm:top-[5.5rem] max-sm:w-[58vw] max-sm:rounded-xl max-sm:px-3 max-sm:py-2"
       >
-        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">{here === manifest.cell ? "Your corner of the world" : hereName}</p>
+        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">{owned ? "Your corner of the world" : (hereName ?? "Open land")}</p>
         <p className="mt-1 text-[10px] tracking-widest text-white/40" data-here={here}>{here}</p>
         {/* The legend has to be true on the device reading it. It said Shift and Space to people
             holding a phone, which is the one instruction on the route. */}
