@@ -1573,13 +1573,13 @@ also the highest-signal measurement moment the world can offer.
 ledger, no server-side transaction. The trader is an entity whose only fields are `role: "trader"`
 and `status: "peer"`; `bargain_hard` and the fairness-split cues exist purely as measurement labels.
 
-### SOC-7.A — Simulation-visible, player-inert, first ☐
+### SOC-7.A — Simulation-visible, player-inert, first ◑ *(C58: markets between neighbouring villages, closed-form and player-inert; no development yet)*
 
 Prices move, trade routes matter, a village visibly gets rich — and players do **not** arbitrage it.
 Opening it later is easy; closing it later is impossible. The land registry is already a scarce-good
 market with a waitlist, and a player-exploitable economy touches it.
 
-### SOC-7.B — The Design Law 1 exemption ☐
+### SOC-7.B — The Design Law 1 exemption ✓ *(C58, 2026-10-18: the different shape — valueless barter, no exemption written)*
 
 No XP, no score, no levels, no points — with a grep-able CI invariant. Wealth ladders and reputation
 scores need an **explicit written exemption or a different shape**. Do not let an economy quietly

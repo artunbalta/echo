@@ -368,6 +368,45 @@ export function sailForm(): THREE.BufferGeometry {
   return m.geometry();
 }
 
+/** What each good looks like piled on a stall (C58): its colour, roughly. */
+const GOOD_COLOUR: Record<string, number> = {
+  fish: 0x9fb4c0,
+  "a handful of grain": 0xd8b25a,
+  cheese: 0xe9d68a,
+  "dry branch": 0x7a5a3a,
+  ore: 0x6e4b44,
+  stone: 0x9a978f,
+  knife: 0xb8bcc2,
+  pot: 0xb5643c,
+  cloth: 0x8f6fa8,
+  bowl: 0xa47a4c,
+  herbs: 0x6f9a4e,
+  bread: 0xb98a4e,
+};
+
+/**
+ * A market stall (C58): a trestle table under an awning, with a pile of each good the traders
+ * brought, centred on the origin and facing +x (where the buyers stand). One geometry, one draw.
+ */
+export function stallForm(goods: readonly string[]): THREE.BufferGeometry {
+  const m = new Mesher();
+  const wood = rgb(PALETTE.wood);
+  const light = rgb(PALETTE.woodLight);
+  m.box(0, 0.78, 0, 0.9, 0.06, 2.4, light);
+  for (const z of [-1.05, 1.05]) for (const x of [-0.35, 0.35]) m.box(x, 0.38, z, 0.07, 0.76, 0.07, wood);
+  // The awning: two tall posts at the back, a cloth sloping to the front.
+  for (const z of [-1.2, 1.2]) m.box(-0.5, 1.1, z, 0.08, 2.2, 0.08, wood);
+  const cloth = mix(PALETTE.cloth, PALETTE.sand, 0.15);
+  m.quad([-0.5, 2.2, -1.3], [-0.5, 2.2, 1.3], [0.75, 1.75, 1.3], [0.75, 1.75, -1.3], cloth);
+  m.quad([0.75, 1.75, -1.3], [0.75, 1.75, 1.3], [-0.5, 2.2, 1.3], [-0.5, 2.2, -1.3], cloth);
+  goods.forEach((g, i) => {
+    const z = (i - (goods.length - 1) / 2) * 0.7;
+    const c = rgb(GOOD_COLOUR[g] ?? PALETTE.woodLight);
+    m.box(0.05, 0.93, z, 0.42, 0.24, 0.5, c, mix(GOOD_COLOUR[g] ?? PALETTE.woodLight, 0xffffff, 0.15));
+  });
+  return m.geometry();
+}
+
 export function buildVillage(frame: WorldFrame, v: SettledParcel, day: number): VillageForms {
   const { plan, settlement } = v;
   const sw = swatch(plan.style);

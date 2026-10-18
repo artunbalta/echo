@@ -29,7 +29,7 @@ export interface LandingAnswer {
 }
 
 /** The things that are food for a crossing (`items.ts`). */
-const PROVISIONS = new Set(["berries", "a handful of grain"]);
+const PROVISIONS = new Set(["berries", "a handful of grain", "fish", "bread", "cheese"]);
 
 /** Whether a pack set out with something to eat on the water. */
 export function provisioned(pack: Record<string, number>): boolean {

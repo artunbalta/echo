@@ -55,8 +55,10 @@ export interface Deed {
   witnesses: string[];
   /** `Person.id`s of whoever it was done to. */
   owners: string[];
-  /** For a gift: what it was, by item id (C47). */
+  /** For a gift: what it was, by item id (C47). For a trade, what the stranger gave (C58). */
   item?: string;
+  /** For a trade or a return for help (C58): what the villager gave the stranger, by item id. */
+  got?: string;
   /** `Person.id`s whose need it met (C50, `needs.ts`): it was the very thing they wanted. */
   met?: string[];
 }
@@ -138,6 +140,9 @@ export function deedWords(s: Settlement, me: Person, k: Known, day: number): str
         : d.kind === "villager"
           ? `came to ${ours ? "your wedding" : d.thingName}`
           : `came to ${d.thingName}`,
+    // A trade, and a return for help (C58): one thing for another, and nothing counted.
+    "trade": `traded ${ITEMS[d.item ?? ""]?.name ?? "something"} with ${ours ? "you" : d.thingName} for ${ITEMS[d.got ?? ""]?.name ?? "something"}`,
+    "ask-back": `asked ${ours ? "you" : d.thingName} for something for their help, and was given ${ITEMS[d.got ?? ""]?.name ?? "something"}`,
   };
   let act = what[d.verb] ?? `did something to ${thing}`;
   // A gift of what this villager is especially glad of — a hook to a fisher, a shell to a child (C47).

@@ -35,6 +35,7 @@ import { friendCircles } from "./social.js";
 import { gatheringsOn, type Gathering } from "./events.js";
 import { present, temperaments } from "./life.js";
 import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
+import { isMarketDay, isTravelDay, stallOf } from "./markets.js";
 
 // ── the dials ───────────────────────────────────────────────────────────────────
 
@@ -286,6 +287,15 @@ export function dayPlans(
   const fieldFor = (plot: Plot) =>
     plan.fields.length === 0 ? null : plan.fields.reduce((best, f) => (dist(f, plot) < dist(best, plot) ? f : best), plan.fields[0]);
 
+  // The market (C58): the day before it the traders and carters are on the road to the partner and
+  // away overnight; on the day they come in from that road and stand at the stall.
+  const market = plan.market ?? null;
+  const travelling = market !== null && isTravelDay(market, day);
+  const selling = market !== null && isMarketDay(market, day);
+  const road = market ? along(plan.centre, market.partner.bearing, SCHEDULE.outboundM) : null;
+  const stall = selling ? stallOf(plan) : null;
+  const goers = market ? market.goers : [];
+
   const plans: DayPlan[] = [];
   const temper = temperaments(s);
   const seats = new Map<number, number>();
@@ -442,7 +452,25 @@ export function dayPlans(
       bed();
     } else {
       const work = SCHEDULE.workEnd + j("end") - 0.06 * wet;
-      if (rows) {
+      const goer = road !== null && goers.includes(p.id);
+      if (goer && travelling) {
+        // Off to the partner after the morning's step, out along its road and gone until tomorrow.
+        go(road!);
+        plans.push({ person: p.id, legs, stays, pace, boat: null });
+        continue;
+      }
+      if (goer && selling) {
+        // In from the road at first light with what they fetched, and at the stall until work ends.
+        legs.length = 0;
+        stays.length = 0;
+        clock = SCHEDULE.wake + j("market");
+        here = road!;
+        const k = goers.indexOf(p.id);
+        const side = (k - (goers.length - 1) / 2) * 1.1;
+        const spot = along(along(stall!, stall!.heading, -0.9), stall!.heading + Math.PI / 2, side);
+        go(spot);
+        stay(work, stall!.heading, "stand", 0.25);
+      } else if (rows) {
         boat = boatIndex!;
         const b = boats[boat]!;
         const m = moorings[boat];
@@ -691,8 +719,12 @@ export function homeState(d: DayPlan | undefined, t: number, door: Point): HomeS
     at = s.at;
   }
   if (at === null) {
-    // The night before the day began — and, the last moments of it, up and getting ready.
+    // The night before the day began — and, the last moments of it, up and getting ready. Unless the
+    // day begins somewhere else: a trader coming in from the road on market day (C58) spent the
+    // night away.
     const first = Math.min(...d.legs.map((l) => l.t0), ...d.stays.map((s) => s.t0));
+    const start = d.legs.find((l) => l.t0 === first)?.from ?? d.stays.find((s) => s.t0 === first)?.at ?? door;
+    if (Math.hypot(start.x - door.x, start.y - door.y) > 1.5) return "away";
     return first - t < AT_HOME.rising ? "awake" : "asleep";
   }
   for (const l of d.legs) if (l.t0 >= lastEnd) isLast = false;

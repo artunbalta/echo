@@ -214,12 +214,17 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
   villager: [
     v({ id: "talk", label: "Talk", holdS: 0, pose: "still", reachM: 7, stakes: "low", measure: m("G1", "initiate", "generic"), effect: null, deed: null, owner: "none", beat: "" }),
     v({ id: "give", label: "Give what you carry", holdS: 1, pose: "gather", reachM: 3, stakes: "low", measure: m("F7", "give_gift", "generic"), effect: null, deed: { reading: "kindness", weight: 2 }, owner: "household", needs: "carrying", beat: "They take it, surprised." }),
+    // Barter and labour (C58), with no price anywhere: the villager takes what they want or need, or
+    // takes it from someone they like, and gives what their own work leaves them to spare
+    // (`trade.ts`). Done through the trade route, never the act route, because something comes back.
+    v({ id: "trade", label: "Offer it in trade", holdS: 1.5, pose: "gather", reachM: 3, stakes: "low", measure: m("F9", "barter", "unrouted"), effect: null, deed: { reading: "respect", weight: 1 }, owner: "household", needs: "carrying", beat: "" }),
+    v({ id: "ask-back", label: "Ask for something for your help", holdS: 1, pose: "still", reachM: 3, stakes: "low", measure: m("G12", "ask_return", "unrouted"), effect: null, deed: { reading: "respect", weight: 1 }, owner: "household", beat: "" }),
   ],
   // C55. A dog: the one creature here a stranger can make a friend of. D11 is the catalogue's pet cue,
   // which ingest.py reads into `pet_attach` by its amount (`acts.ts` sends the bond as it).
   dog: [
     v({ id: "stroke", label: "Stroke the dog", holdS: 3, pose: "kneel", reachM: 1.8, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", beat: "It leans into your hand." }),
-    v({ id: "feed", label: "Give it something to eat", holdS: 1.5, pose: "kneel", reachM: 1.8, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", needs: "carrying", takes: ["berries", "a handful of grain"], beat: "Gone in a moment, and it looks for more." }),
+    v({ id: "feed", label: "Give it something to eat", holdS: 1.5, pose: "kneel", reachM: 1.8, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", needs: "carrying", takes: ["berries", "a handful of grain", "fish", "bread", "cheese"], beat: "Gone in a moment, and it looks for more." }),
     v({ id: "play", label: "Play with it", holdS: 4, pose: "gather", reachM: 2.5, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", beat: "It runs rings round you, and comes back for more." }),
     v({ id: "shoo", label: "Shoo it away", holdS: 1, pose: "push", reachM: 2.5, stakes: "low", measure: m("D11", "shoo_pet", "generic"), effect: null, deed: { reading: "disrespect", weight: 1 }, owner: "household", beat: "It backs off, and watches you from further away." }),
   ],

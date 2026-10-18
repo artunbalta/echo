@@ -211,7 +211,10 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       // People stop a body too (C46). The villagers layer is built after this one, so it is asked for
       // by name at each step rather than found now.
       const people = () => ctx.layer<ObstacleSource>("villagers");
-      blocked = (x, y) => gates.some((g) => g.blockedTile(x, y, bodyRadiusM)) || (people()?.blockedTile(x, y, bodyRadiusM) ?? false);
+      // And a market stall, on market day (C58): built after this layer too.
+      const stall = () => ctx.layer<ObstacleSource>("market");
+      blocked = (x, y) =>
+        gates.some((g) => g.blockedTile(x, y, bodyRadiusM)) || (people()?.blockedTile(x, y, bodyRadiusM) ?? false) || (stall()?.blockedTile(x, y, bodyRadiusM) ?? false);
 
       const colliderIndex = obstacles?.colliders?.();
       colliders = colliderIndex ?? null;

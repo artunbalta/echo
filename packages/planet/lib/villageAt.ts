@@ -16,9 +16,10 @@
  * settlement (2–12 ms), a shore search out to {@link VILLAGE}.shoreMaxM, and the plan (~2 ms).
  */
 
-import { latLngToCell, getResolution } from "h3-js";
+import { cellToLatLng, gridDisk, latLngToCell, getResolution } from "h3-js";
 
-import { vec3ToLatLng } from "./geo.js";
+import { latLngToVec3, vec3ToLatLng } from "./geo.js";
+import { goodsOf, marketOf, MARKETS, type MarketCandidate } from "./markets.js";
 import { geographySampler } from "./geography.js";
 import { createSceneHeight, createTangentPatch, DEFAULT_REGION_OPTIONS, DEFAULT_SCENE_OPTIONS, type TangentPatch } from "./scene.js";
 import { settlementAt, type Settlement } from "./society.js";
@@ -40,6 +41,8 @@ export interface VillageAtOptions {
   changes?: readonly LifeChange[];
   /** Region rings. The parcel route's k. */
   k?: number;
+  /** Find the village's market (C58): a look at its neighbours, about 50 ms. On unless false. */
+  market?: boolean;
   heightScaleM?: number;
   resolutionM?: number;
 }
@@ -108,6 +111,7 @@ export function villageAt(
   const shore = sea !== null && sea.distanceM > 0 ? { x: sea.x, y: sea.y } : null;
   const plan = villagePlan(settlement, ground, { origin: { x: 0, y: 0 }, shore });
   if (plan === null) return null;
+  plan.market = options.market === false ? null : marketOf(settlement, marketNeighbours(seed, cell, field, calibration, radiusKm, options), options.day);
 
   const direction = patch.toDirection(plan.arrival.x, plan.arrival.y);
   const [lat, lng] = vec3ToLatLng(...direction);
@@ -123,4 +127,39 @@ export function villageAt(
     y: plan.arrival.y,
   };
   return { settlement, plan, ground, spawn, changes };
+}
+
+const neighbourCache = new Map<string, MarketCandidate[]>();
+
+/**
+ * The settled neighbours a village might trade with (C58): every settled cell within
+ * {@link MARKETS}.rings, as its people are on the day — the seed's people, without the neighbour's
+ * conversations, so the browser and the server find the same market — and where it is from here.
+ * Only the settlement is made, never the plan: what it has to spare is what its people do.
+ */
+export function marketNeighbours(
+  seed: string,
+  cell: string,
+  field: TerrainField,
+  calibration: Calibration,
+  radiusKm: number,
+  options: Pick<VillageAtOptions, "commons" | "day">,
+): MarketCandidate[] {
+  const key = `${seed}|${cell}|${options.day}|${options.commons.length}`;
+  const cached = neighbourCache.get(key);
+  if (cached) return cached;
+  const patch = createTangentPatch(cell, radiusKm);
+  const geographyOf = geographySampler(field, calibration, radiusKm, { commons: options.commons });
+  const out: MarketCandidate[] = [];
+  for (const c of gridDisk(cell, MARKETS.rings)) {
+    if (c === cell) continue;
+    const s = settlementAt(seed, c, geographyOf(c), options.day);
+    if (s === null) continue;
+    const at = patch.toLocal(latLngToVec3(...cellToLatLng(c)));
+    if (!at) continue;
+    out.push({ cell: c, name: s.name, goods: goodsOf(s, options.day), x: at[0], y: at[1], km: Math.hypot(at[0], at[1]) / 1000 });
+  }
+  if (neighbourCache.size > 256) neighbourCache.clear();
+  neighbourCache.set(key, out);
+  return out;
 }

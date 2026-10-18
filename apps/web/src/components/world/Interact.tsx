@@ -35,6 +35,7 @@ import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
+import { tradeMeasurement, type TradeReply } from "@/lib/barter";
 
 interface Acting {
   verb: Verb;
@@ -240,6 +241,51 @@ export default function Interact({
     [cell, layers, say, refreshDeeds],
   );
 
+  /** Who has turned the stranger down today (C58), so asking them again is pressing a bargain. */
+  const refused = useRef(new Map<string, number>());
+  /** A trade, or asking for something back for help (C58): the trade route answers, in the villager's words. */
+  const tradeIt = useCallback(
+    async (verb: Verb, thing: NearThing) => {
+      const { interact, villagers } = layers();
+      const at = interact?.bodyAt() ?? { x: thing.x, y: thing.y };
+      const person = thing.ref.slice(9);
+      const offered = verb.id === "trade" ? carryingRef.current : null;
+      const pressing = (refused.current.get(person) ?? 0) > 0;
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/village/trade", {
+          method: "POST",
+          headers: identityHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ cell, person, at, offered, asked: null }),
+        });
+        const data = (await res.json().catch(() => ({}))) as TradeReply;
+        if (data.words) {
+          const d = villagers?.distanceTo(person) ?? null;
+          if (d !== null && d < 20) villagers?.say(person, data.words);
+          else say(`${thing.name}: “${data.words}”`, 5200);
+        }
+        if (data.pack) {
+          setPack(data.pack);
+          const held = carryingRef.current;
+          if (held && !((data.pack[held] ?? 0) > 0)) {
+            setCarrying(null);
+            layers().player?.setCarrying(false);
+          }
+        }
+        if (data.ok) {
+          refused.current.delete(person);
+          void refreshDeeds();
+          const w = worldRef.current();
+          if (w && data.changes?.length) w.revillage([...(w.region.village?.changes ?? []), ...data.changes]);
+        } else refused.current.set(person, (refused.current.get(person) ?? 0) + 1);
+        for (const m of tradeMeasurement(verb.id as "trade" | "ask-back", data, pressing, interact?.audience(at.x, at.y) ?? 0, person)) if (chain.armed()) void chain.emitAction(m.action, m.opts);
+      } catch {
+        say("They do not seem to hear you.");
+      }
+    },
+    [cell, layers, say, refreshDeeds, chain],
+  );
+
   const finish = useCallback(
     (abandoned: boolean) => {
       const a = actingRef.current;
@@ -250,7 +296,14 @@ export default function Interact({
       setProgress(0);
       const heldMs = performance.now() - a.startedAt;
       const done = !abandoned;
+      // A trade comes back with something (C58): its own route, its own measurement.
+      if (a.verb.id === "trade" || a.verb.id === "ask-back") {
+        if (done) void tradeIt(a.verb, a.thing);
+        return;
+      }
       if (done && a.verb.beat) say(a.verb.beat);
+      // Something done for a villager changes the terms: asking them again is not pressing (C58).
+      if (done && a.thing.ref.startsWith("villager:") && a.verb.deed && !["harm", "theft", "trespass", "disrespect"].includes(a.verb.deed.reading)) refused.current.delete(a.thing.ref.slice(9));
       // What goes into the pack, or out of it, is the server's to say (see `record`); making something is too.
       if (done && a.recipe) void makeIt(a.recipe);
       const { ctx, villagers } = layers();
@@ -288,7 +341,7 @@ export default function Interact({
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
       if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
-    [chain, consent, layers, record, say],
+    [chain, consent, layers, record, say, tradeIt],
   );
 
   const begin = useCallback(
