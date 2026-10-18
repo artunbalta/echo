@@ -14,17 +14,20 @@
  * `society.ts` reads a change before its own day, so the village generated to any day before the
  * earliest change is the seed's village exactly (L2, restated for a world with a delta in it).
  *
- * A CLOSED GRAMMAR, NO FREE TEXT. Five kinds, each with a structured payload: a trade from the
- * declared list, a goal from `goals.ts`'s catalogue, a goal id. Nothing a stranger typed and nothing
- * a model wrote is stored here, because what is stored here is shown to every other visitor. What a
- * conversation was ABOUT is the stranger's own memory (the talk route's), private to them.
+ * A CLOSED GRAMMAR, NO FREE TEXT. Six kinds, each with a structured payload: a trade from the
+ * declared list, a goal from `goals.ts`'s catalogue, a goal id, a need's id (`met`, C50: somebody
+ * brought what a villager wanted, and the stranger who comes after finds it brought). Nothing a
+ * stranger typed and nothing a model wrote is stored here, because what is stored here is shown to
+ * every other visitor. What a conversation was ABOUT is the stranger's own memory (the talk route's),
+ * private to them.
  *
  * Pure. No clock, no I/O, and only type imports, so `society.ts` can read it without a cycle.
  */
 
 import type { Occupation } from "./society.js";
 
-export type ChangeKind = "leave" | "stay" | "trade" | "goal" | "drop";
+/** `met`: a need (C50) was met, by `goalId` = the need's id. Shared, like every change. */
+export type ChangeKind = "leave" | "stay" | "trade" | "goal" | "drop" | "met";
 
 /** What a person can come to want, from a closed list (`goals.ts`). */
 export type GoalKind =
@@ -49,11 +52,11 @@ export interface LifeChange {
   day: number;
   /** `trade`: what they take up. `goal` of kind `learn-trade`: what they want to learn. */
   occupation?: Occupation;
-  /** `goal`: which. */
+  /** `goal`: which. `met`: the goal the need was for, if it was for one (C50). */
   goal?: GoalKind;
   /** `goal`: who it is about, by `Person.id`, for the goals that are about somebody. */
   target?: string;
-  /** `drop`: the id of the goal given up (`goals.ts` {@link goalId}). */
+  /** `drop`: the id of the goal given up (`goals.ts` {@link goalId}). `met`: the need's id (`needs.ts`). */
   goalId?: string;
 }
 

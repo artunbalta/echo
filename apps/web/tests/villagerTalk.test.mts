@@ -18,6 +18,8 @@ import { createRequire } from "node:module";
 import { signIdentity } from "@echo/shared/identity";
 import {
   ageYears,
+  metChange,
+  needsOn,
   present,
   settlementAt,
   timeOfDay,
@@ -26,6 +28,7 @@ import {
   worldClock,
   WORLD_DAY_S,
   WORLD_EPOCH,
+  ITEMS,
   type Settlement,
   type SettlementGeography,
   type VillageGround,
@@ -47,9 +50,9 @@ const { POST: BEGIN } = await import("../src/app/api/village/talk/begin/route");
 const { GET: CHANGES } = await import("../src/app/api/village/changes/route");
 const { DELETE: FORGET } = await import("../src/app/api/village/memory/route");
 const { planet } = await import("../src/lib/planet");
-const { resetMemoryStore } = await import("../src/lib/villageStore");
+const { resetMemoryStore, villageStore } = await import("../src/lib/villageStore");
 const { signConversation } = await import("../src/lib/villageTalk");
-const { VILLAGER_PREAMBLE, REPLY_SCHEMA, nowLine, parseReply, temperamentWords, unknownNames, villagerContext, whereNow } = await import("../src/lib/villager");
+const { VILLAGER_PREAMBLE, REPLY_SCHEMA, mockReply, needLine, nowLine, parseReply, temperamentWords, unknownNames, villagerContext, whereNow } = await import("../src/lib/villager");
 
 // ── the prompt ──────────────────────────────────────────────────────────────────
 
@@ -358,7 +361,7 @@ test("C44: a decision the world allows is recorded, shown to everyone, and part 
   const after = await talk({ cell: CELL, person: villager, message: "What are you up to?", conv: other.conv }, token(OTHER));
   assert.equal(after.status, 200, JSON.stringify(await after.clone().json()));
   const facts = (spend()[0].body!.system as Array<{ text: string }>)[1].text;
-  assert.match(facts, /a house of my own \(you decided this today, after talking with a stranger\)/);
+  assert.match(facts, /a house of my own \(you decided this today, after talking with a stranger, about 150 days' work left\)/);
 });
 
 test("C44: leaving is not decided with a stranger met five minutes ago, whatever the model says", async () => {
@@ -398,4 +401,58 @@ test("a refusal stays in the world: the villager says nothing, and the route say
   const data = (await res.json()) as { reply: string; source: string };
   assert.equal(data.source, "refusal");
   assert.match(data.reply, /looks at you for a long moment, and says nothing\./);
+});
+
+test("C50: what a villager would ask for rides after the conversation, and once somebody has met it, they are glad", async () => {
+  // Somebody of Senstrand out of doors this morning with something on their mind.
+  const { field, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, field, calibration, world.radiusKm, { commons: commons.cells, day: DAY })!;
+  const hour = timeOfDay(CLOCK, NOW);
+  const found = [...needsOn(v.settlement, v.plan, DAY)].find(([id]) => {
+    const p = v.settlement.people.find((q) => q.id === id)!;
+    const w = whereNow(v.settlement, v.plan, p, DAY, hour);
+    return ageYears(p, DAY) >= 13 && w !== null && w.visible && w.boat === null;
+  });
+  assert.ok(found, "nobody out this morning has a need");
+  const [id, need] = found;
+  const p = v.settlement.people.find((q) => q.id === id)!;
+  const w = whereNow(v.settlement, v.plan, p, DAY, hour)!;
+  const open = async () => (await (await begin({ cell: CELL, person: id, at: { x: w.x + 2, y: w.y } })).json()) as { conv: string };
+  const { conv } = await open();
+  await talk({ cell: CELL, person: id, message: "Good morning.", conv });
+  assert.ok(lateNote(spend()[0]).includes(need.text), `the need is not in the note:\n${lateNote(spend()[0])}`);
+  assert.ok(!(spend()[0].body!.system as Array<{ text: string }>)[1].text.includes(need.text), "the need is in the day's cached facts, which it outlives");
+  // Somebody meets it; the next conversation knows.
+  await villageStore()!.addChange(CELL, metChange(need, DAY), OTHER);
+  calls = [];
+  const again = await open();
+  await talk({ cell: CELL, person: id, message: "Good morning again.", conv: again.conv });
+  const note = lateNote(spend()[0]);
+  assert.ok(!note.includes(need.text), "the need is still on their mind after it was met");
+  assert.match(note, /this week — not this stranger\. It is done/, "a need somebody else met reads as if this stranger might still do it");
+});
+
+test("C50: without a key, the mock reply still says what they need, on the second line", () => {
+  const { field, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, field, calibration, world.radiusKm, { commons: commons.cells, day: DAY })!;
+  const [id, need] = [...needsOn(v.settlement, v.plan, DAY)][0];
+  const me = v.settlement.people.find((q) => q.id === id)!;
+  assert.equal(mockReply(v.settlement, me, DAY, 1, need.text), need.text.endsWith("?") ? need.text : `${need.text}.`);
+  assert.notEqual(mockReply(v.settlement, me, DAY, 1, null), mockReply(v.settlement, me, DAY, 1, need.text));
+});
+
+test("C50: a need met says what was done, and whether it was this stranger or somebody else", () => {
+  const { field, calibration, commons, world } = planet();
+  const v = villageAt(world.seed, CELL, field, calibration, world.radiusKm, { commons: commons.cells, day: DAY })!;
+  const [id, need] = [...needsOn(v.settlement, v.plan, DAY)].find(([, n]) => n.item)!;
+  const me = v.settlement.people.find((q) => q.id === id)!;
+  const met = [{ id: "c1", ...metChange(need, DAY) }];
+  const gift = { id: "d1", verb: "give", kind: "villager" as const, thing: `villager:${id}`, thingName: me.given, reading: "kindness" as const, weight: 2 as const, day: DAY, hour: 0.4, witnesses: [], owners: [id], item: need.item, met: [id] };
+  const ours = needLine(v.settlement, v.plan, me, DAY, met, [], [gift]);
+  assert.match(ours, /^This stranger brought you /);
+  assert.ok(ours.includes(ITEMS[need.item!].name), ours);
+  const theirs = needLine(v.settlement, v.plan, me, DAY, met, [], [{ ...gift, met: undefined }]);
+  assert.match(theirs, /not this stranger/);
+  // The next week, nothing of it: a new week's need, or none.
+  assert.ok(!needLine(v.settlement, v.plan, me, need.until + 1, met, [], [gift]).includes("This stranger"));
 });

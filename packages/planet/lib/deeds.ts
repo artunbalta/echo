@@ -57,6 +57,8 @@ export interface Deed {
   owners: string[];
   /** For a gift: what it was, by item id (C47). */
   item?: string;
+  /** `Person.id`s whose need it met (C50, `needs.ts`): it was the very thing they wanted. */
+  met?: string[];
 }
 
 export type How = "saw" | "theirs" | "heard";
@@ -126,7 +128,8 @@ export function deedWords(s: Settlement, me: Person, k: Known, day: number): str
   };
   let act = what[d.verb] ?? `did something to ${thing}`;
   // A gift of what this villager is especially glad of — a hook to a fisher, a shell to a child (C47).
-  if (d.verb === "give" && d.item && ours && gladOf(d.item, occupationOn(me, day), ageYears(me, day))) act += " — something you were glad of";
+  if (d.met?.includes(me.id)) act += " — the very thing you had been needing";
+  else if (d.verb === "give" && d.item && ours && gladOf(d.item, occupationOn(me, day), ageYears(me, day))) act += " — something you were glad of";
   const source =
     k.how === "saw" ? "You saw the stranger" : k.how === "theirs" ? "The stranger" : `${s.people.find((p) => p.id === k.from)?.given ?? "Your family"} told you the stranger`;
   return `${source} ${act}, ${ago}.`;

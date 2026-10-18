@@ -189,17 +189,28 @@ export async function ensureIdentity(fetchImpl: typeof fetch = fetch): Promise<s
   // transport, so the recorder records nothing and the test passes anyway. That is this repo's own
   // "a check that cannot fail" shape, introduced by the fix for a different one. The memo exists to
   // stop StrictMode's double-invoke racing itself; those are the default-transport callers.
-  if (fetchImpl !== fetch) return mintIdentity(fetchImpl);
-  if (!identityInFlight) {
-    identityInFlight = mintIdentity(fetchImpl).finally(() => {
-      identityInFlight = null;
-    });
-  }
+  //
+  // BUT NO MINT RACES ANOTHER, WHATEVER ITS TRANSPORT. The parcel page has both kinds of caller at
+  // once — the measure chain's `arm()` with its injected fetch, and the act panel (`Interact`, C47)
+  // with the default — and an injected caller skipping the memo raced the default one exactly as
+  // StrictMode had: two subjects, and every act's measurement refused with identity_mismatch (seen
+  // in the browser at C50, in the HUD as http_403). So mints are queued: each waits for the one
+  // before it, and then finds both keys stored and needs no request at all, or makes its own with
+  // its own transport. A recorder still sees every request that is made through it.
+  if (fetchImpl === fetch && identityInFlight) return identityInFlight;
+  const run = mintQueue.then(() => mintIdentity(fetchImpl));
+  mintQueue = run.catch(() => undefined);
+  if (fetchImpl !== fetch) return run;
+  identityInFlight = run.finally(() => {
+    identityInFlight = null;
+  });
   return identityInFlight;
 }
 
-/** The module-level in-flight mint. Cleared when it settles, so a later failure can retry. */
+/** The module-level in-flight mint (default transport). Cleared when it settles, so a later failure can retry. */
 let identityInFlight: Promise<string> | null = null;
+/** Every mint, in order: the next starts when the last has settled. */
+let mintQueue: Promise<unknown> = Promise.resolve();
 
 async function mintIdentity(fetchImpl: typeof fetch): Promise<string> {
   let existing = "";

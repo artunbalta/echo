@@ -15,6 +15,11 @@
  * THE NAMEPLATE. Walk up to someone and their name, age, trade and one line of the life they have
  * lived (`life.ts`) appear over them. Identity is gated by distance, as the design always had it: a
  * stranger across the green is a figure, and only close enough to speak is a name.
+ *
+ * WHAT THEY WOULD ASK (C50). Someone with a need this week (`needsOn`) says it, once, when the
+ * stranger comes within {@link ASK_M} of them — a child after a shell, a man short of wood for his
+ * boat — in a bubble over them, as a person would; and says thank you the same way when it is met.
+ * Nothing else marks them out: no icon, no list (Design Law 1).
  */
 
 import * as THREE from "three";
@@ -25,6 +30,7 @@ import {
   weatherAt,
   dayPlans,
   lives,
+  needsOn,
   occupationOn,
   timeOfDay,
   whereabouts,
@@ -35,12 +41,14 @@ import {
   type Deed,
   type LifeEvent,
   type Mooring,
+  type Need,
   type Person,
   type SettledParcel,
   type WorldClock,
 } from "@echo/planet";
 
 import { Crowd, hashUnit, lookFor, type Look } from "./crowd";
+import type { InteractLayer } from "./interactLayer";
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { SkyLayer } from "./skyLayer";
 import { BOAT_PAINT, boatForm } from "./villageGeometry";
@@ -53,6 +61,10 @@ const SPEAKING_M = 7;
 const STEP_ASIDE_M = 0.8;
 /** A villager's half-width, for the player's gate. */
 const BODY_M = 0.3;
+/** Within this many metres, someone with a need asks the stranger for it (C50), once. */
+const ASK_M = 5;
+/** How long a villager's own line to the stranger stays over them, seconds. */
+const SAY_S = 7;
 
 /** The person close enough to speak to, as the talk panel needs them. */
 export interface NearVillager {
@@ -74,6 +86,10 @@ export interface VillagersLayer extends WorldLayer {
   distanceTo(id: string): number | null;
   /** The stranger's own deeds here (C49): what the villagers may be saying about them, once word has spread. */
   setDeeds(deeds: readonly Deed[]): void;
+  /** What each villager would ask for this week (C50), as this page has the village: for tests and the HUD. */
+  needs(): ReadonlyMap<string, Need>;
+  /** One villager says something to the stranger, in a bubble over them, for `seconds` (C50: thanks). */
+  say(id: string, text: string, seconds?: number): void;
   /**
    * A household's boat is out with the stranger (C45): its mooring is drawn empty, in this view only,
    * until `lend(null)`. The schedule — the family's fisher rowing out at dawn — is untouched.
@@ -161,6 +177,13 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   let deeds: Deed[] = [];
   const bubbles: { el: HTMLDivElement; at: THREE.Vector3 | null; key: string }[] = [];
   let chatterClock = 0;
+  /** Needs this week (C50), recomputed when the day, the changes or the marks change. */
+  let needs: ReadonlyMap<string, Need> = new Map();
+  let needsKey = "";
+  /** Needs already said aloud to this stranger on this page: a person asks once, not every time you pass. */
+  const asked = new Set<string>();
+  /** A villager's own line to the stranger, held over them for a few seconds. */
+  let spoken: { id: string; text: string; until: number } | null = null;
   let near: NearVillager | null = null;
   let held: { id: string; x: number; y: number; activity: string } | null = null;
   let released: { id: string; x: number; y: number; at: number } | null = null;
@@ -171,6 +194,9 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   let lastHour = 0.5;
   let lent: number | null = null;
   const zero = new THREE.Vector3(0, 0, 0);
+
+  /** Where a bubble sits over someone: a hand above their head, a child's lower than a man's. */
+  const overHead = (id: string) => (1.95 * (looks.get(id)?.scale ?? 1) + 0.45) * ((frame?.tileM ?? 1.6) / 1.6);
 
   const refresh = (day: number) => {
     const v = village!;
@@ -370,12 +396,41 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         if (!labelled) label.style.display = "none";
       }
 
+      // A villager's own line to the stranger follows them as they walk (C50).
+      if (spoken && bubbles[0]?.key === `say:${spoken.id}:${spoken.text}`) {
+        const at = lastAt.get(spoken.id);
+        if (at && bubbles[0].at) bubbles[0].at.set(at.sx, at.sy + overHead(spoken.id), at.sz);
+      }
+
       // Two people standing together talk (C49). Every so often: the pairs near the stranger, what one
       // says to the other this half-hour (the same for every passer-by), three bubbles at most.
       chatterClock += _dt;
       if (chatterClock > 0.8 && bubbles.length > 0) {
         chatterClock = 0;
         const s = village.settlement;
+        // What everyone would ask for this week (C50): again only when the day, the changes or the marks move.
+        const marks = ctx.layer<InteractLayer>("interact")?.marks();
+        const key = `${day}|${village.changes.length}|${village.changes.at(-1)?.id ?? ""}|${marks ? [...marks.values()].map((e) => e.id).join(",") : ""}`;
+        if (key !== needsKey) {
+          needsKey = key;
+          needs = needsOn(s, village.plan, day, village.changes, marks ? [...marks.values()] : []);
+        }
+        // Someone near the stranger with a need says it, once (C50). Not while a conversation holds anyone.
+        if (!held && (!spoken || spoken.until < seconds)) {
+          let asker: { id: string; d: number } | null = null;
+          for (const [id, at] of lastAt) {
+            const n = needs.get(id);
+            if (!n || asked.has(n.id) || at.activity === "row") continue;
+            const d = Math.hypot(at.x - mx, at.y - my);
+            if (d < ASK_M && (!asker || d < asker.d)) asker = { id, d };
+          }
+          if (asker) {
+            const n = needs.get(asker.id)!;
+            asked.add(n.id);
+            spoken = { id: asker.id, text: n.text, until: seconds + SAY_S };
+          }
+        }
+        if (spoken && (spoken.until < seconds || !lastAt.has(spoken.id))) spoken = null;
         const weather = ctx.region.geography ? weatherAt(ctx.seed, ctx.region.cell, ctx.region.geography, day, hour, s) : null;
         const idle = [...lastAt].filter(([id, at]) => (at.activity === "stand" || at.activity === "sit" || at.activity === "work") && id !== held?.id && Math.hypot(at.x - mx, at.y - my) < 28);
         const said: { key: string; at: THREE.Vector3; text: string; d: number }[] = [];
@@ -389,8 +444,9 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
             if (!pa || !pb || ageYears(pa, day) < 6 || ageYears(pb, day) < 6) continue;
             const first = hashUnit(`${ia}+${ib}/${day}/${Math.floor(hour * 48)}`) < 0.5;
             const [speaker, listener, at] = first ? [pa, pb, a] : [pb, pa, b];
-            const text = chatter(s, speaker, listener, day, hour, { weather, deeds, changes: village.changes, plan: village.plan });
-            if (text) said.push({ key: `${speaker.id}:${text}`, at: new THREE.Vector3(at.sx, at.sy + 2.3 * (frame.tileM / 1.6), at.sz), text: `${speaker.given}: ${text}`, d: Math.hypot(at.x - mx, at.y - my) });
+            if (spoken && (speaker.id === spoken.id || listener.id === spoken.id)) continue;
+            const text = chatter(s, speaker, listener, day, hour, { weather, deeds, changes: village.changes, plan: village.plan, needs });
+            if (text) said.push({ key: `${speaker.id}:${text}`, at: new THREE.Vector3(at.sx, at.sy + overHead(speaker.id), at.sz), text: `${speaker.given}: ${text}`, d: Math.hypot(at.x - mx, at.y - my) });
           }
         }
         said.sort((p, q) => p.d - q.d);
@@ -403,6 +459,12 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           return true;
         });
         said.length = 0;
+        // A line said to the stranger comes before anything said between neighbours.
+        if (spoken) {
+          const at = lastAt.get(spoken.id)!;
+          const who = people.get(spoken.id);
+          said.push({ key: `say:${spoken.id}:${spoken.text}`, at: new THREE.Vector3(at.sx, at.sy + overHead(spoken.id), at.sz), text: `${who?.given ?? ""}: ${spoken.text}`, d: 0 });
+        }
         said.push(...unique);
         bubbles.forEach((b, k) => {
           const next = said[k];
@@ -458,6 +520,11 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     },
     setDeeds(list) {
       deeds = [...list];
+    },
+    needs: () => needs,
+    say(id, text, seconds = SAY_S) {
+      spoken = { id, text, until: performance.now() / 1000 + seconds };
+      chatterClock = 1; // shown at the next frame, not the next tick
     },
     blockedTile(x, y, radiusM) {
       if (!frame) return false;

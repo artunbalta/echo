@@ -29,6 +29,7 @@ import { lives, present } from "./life.js";
 import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./society.js";
 import type { VillagePlan } from "./village.js";
 import type { Deed } from "./deeds.js";
+import type { Need } from "./needs.js";
 import type { Weather } from "./weather.js";
 
 export type TieKind = "family" | "friend" | "neighbour" | "workmate";
@@ -202,6 +203,8 @@ export interface ChatterContext {
   deeds?: readonly Deed[];
   changes?: readonly LifeChange[];
   plan?: VillagePlan | null;
+  /** What each villager would ask a stranger for this week (C50, `needsOn`): it is on their mind with friends too. */
+  needs?: ReadonlyMap<string, Need>;
 }
 
 const pickOf = <T>(xs: readonly T[], u: number): T => xs[Math.min(xs.length - 1, Math.floor(u * xs.length))];
@@ -262,12 +265,20 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
     else if (trade === "miner" || trade === "stonecutter") options.push("Another seam gone dry.");
     else if (trade === "smith") options.push("The forge went out twice.");
   }
-  // The village's news: who has decided to leave, who is new, who is gone.
+  // What is on their mind this week (C50): the thing they would ask a stranger for.
+  const need = ctx.needs?.get(speaker.id);
+  if (need) {
+    const line = need.goal?.kind === "own-boat" ? "Still short of wood for the boat." : need.goal?.kind === "own-house" ? "The walls are eating stone faster than I can find it." : need.verb === "tend" ? "Have you seen what was done to our field?" : need.verb === "tidy" ? "I've let the grave go. I must get up there." : need.item ? `I could do with ${ITEMS[need.item]?.name ?? "a hand"}.` : null;
+    if (line) options.push(line);
+  }
+  // The village's news: who has decided to leave, who is new, who is gone, whose boat is coming on.
   for (const c of ctx.changes ?? []) {
     const p = byId.get(c.person);
     if (!p || day - c.madeDay > 30 || p.id === speaker.id) continue;
     if (c.kind === "leave" && p.leftDay > day) options.push(`${p.given}'s leaving, they say.`);
     if (c.kind === "trade") options.push(`${p.given}'s gone and taken up the ${c.occupation}'s trade, of all things.`);
+    if (c.kind === "met" && c.goal === "own-boat") options.push(`${p.given}'s boat is coming on. Somebody brought wood for it.`);
+    if (c.kind === "met" && c.goal === "own-house") options.push(`${p.given}'s walls are going up. Somebody's been bringing stone.`);
   }
   const recent = s.people.filter((p) => p.deathDay <= day && day - p.deathDay < 30 && present(s, p, p.deathDay - 1));
   for (const p of recent.slice(-2)) options.push(`I keep thinking about ${p.given}.`);

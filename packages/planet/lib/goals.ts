@@ -16,6 +16,12 @@
  * finish on their own after a while (a boat takes forty days to build); a wish like seeing the world
  * stays a wish until the person leaves, and leaving is its own change.
  *
+ * HELP MOVES IT (C50). A goal that takes time — a boat, a house, a trade learnt or passed on — is
+ * brought nearer by help: when somebody meets a need it gave rise to (`needs.ts`), the day it will be
+ * done comes {@link HELP}.share of the way nearer, and a wish the seed could see becomes a thing
+ * begun, from the day of the help. The help is a `met` change, so it is everyone's: the next stranger
+ * meets a man who is building the boat, and knows who brought him the wood for it.
+ *
  * NO LADDER (Design Law 1). No goal is a score, a rank or an amount, and none can be "won".
  *
  * THE VALIDATOR IS HERE, NOT IN THE ROUTE. Whether a change is possible is a fact about the world
@@ -56,6 +62,15 @@ export const GOALS: Record<GoalKind, GoalSpec> = {
 
 export const GOAL_KINDS = Object.keys(GOALS) as GoalKind[];
 
+/** How much one met need brings a goal nearer (C50): this share of the time it takes, at least a day. */
+export const HELP = { share: 0.15 } as const;
+
+/** The days one met need takes off a goal of this kind; zero for a goal that does not finish. */
+export const helpDays = (kind: GoalKind): number => {
+  const takes = GOALS[kind].takesDays;
+  return takes === null ? 0 : Math.max(1, Math.round(takes * HELP.share));
+};
+
 /** The bounds a change is held to. Each is a design dial, and each is in a test. */
 export const CHANGE_LIMITS = {
   /** One decision per person per world day: nobody remakes their life twice before supper. */
@@ -87,10 +102,13 @@ export interface Goal {
   occupation: Occupation | null;
   /** The day it began to be wanted. */
   since: number;
-  source: "seed" | "talk";
+  /** `help`: a wish the seed saw, begun the day somebody helped with it (C50). */
+  source: "seed" | "talk" | "help";
   place: GoalPlace;
   /** For a talk goal that finishes: the day it will be (or was) done. */
   doneDay: number | null;
+  /** How many times somebody has helped with it (C50): met needs that were for it. */
+  helped: number;
 }
 
 export function goalId(kind: GoalKind, target: string | null, occupation: Occupation | null): string {
@@ -211,6 +229,7 @@ function seedGoals(s: Settlement, p: Person, day: number): Goal[] {
       source: "seed",
       place: spec.place,
       doneDay: null,
+      helped: 0,
     });
   }
   return out;
@@ -253,7 +272,32 @@ export function goalsOf(s: Settlement, p: Person, day: number, changes: readonly
         source: "talk",
         place: spec.place,
         doneDay: spec.takesDays === null ? null : c.day + spec.takesDays,
+        helped: 0,
       });
+    } else if (c.kind === "met" && c.goal) {
+      // Help with a goal (C50): a goal under way comes nearer; a wish that finishes is begun by it.
+      const target = c.target ? (people.get(c.target) ?? null) : null;
+      const occupation = c.goal === "learn-trade" ? (c.occupation ?? null) : null;
+      const id = goalId(c.goal, target?.id ?? null, occupation);
+      const g = talk.get(id);
+      if (g) {
+        if (g.doneDay !== null && g.doneDay > c.day) g.doneDay = Math.max(c.day + 1, g.doneDay - helpDays(c.goal));
+        if (g.doneDay === null || g.doneDay > c.day) g.helped++;
+      } else if (!dropped.has(id) && GOALS[c.goal].takesDays !== null) {
+        const spec = GOALS[c.goal];
+        talk.set(id, {
+          id,
+          kind: c.goal,
+          text: fill(spec, target, occupation),
+          target: target?.id ?? null,
+          occupation,
+          since: c.day,
+          source: "help",
+          place: spec.place,
+          doneDay: c.day + (spec.takesDays ?? 0) - helpDays(c.goal),
+          helped: 1,
+        });
+      }
     }
   }
   const active: Goal[] = [];
@@ -273,7 +317,7 @@ export function eveningOf(s: Settlement, p: Person, day: number, changes: readon
     const decided = changes.some((c) => c.person === p.id && c.kind === "leave" && c.madeDay <= day);
     if (decided) return { place: "edge", target: null };
   }
-  const talk = goalsOf(s, p, day, changes).active.filter((g) => g.source === "talk");
+  const talk = goalsOf(s, p, day, changes).active.filter((g) => g.source !== "seed");
   if (talk.length === 0) return null;
   const g = talk[talk.length - 1];
   return { place: g.place, target: g.target };
@@ -301,7 +345,8 @@ export function checkChange(s: Settlement, p: Person, day: number, proposal: Pro
   const age = ageYears(p, day);
   if (!present(s, p, day)) return { ok: false, reason: "not-here" };
   if (age < CHANGE_LIMITS.minAgeYears) return { ok: false, reason: "too-young" };
-  const today = changes.filter((c) => c.person === p.id && c.madeDay === day);
+  // A need met (C50) is somebody else's doing, not a decision of theirs: it does not use up the day.
+  const today = changes.filter((c) => c.person === p.id && c.madeDay === day && c.kind !== "met");
   if (today.length >= CHANGE_LIMITS.perPersonPerDay) return { ok: false, reason: "decided-today" };
   const base = { person: p.id, madeDay: day };
 
