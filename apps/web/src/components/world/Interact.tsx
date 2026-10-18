@@ -24,14 +24,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Verb } from "@echo/planet";
+import { ITEMS, PACK_SIZE, RECIPES, canMake, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Pack, type Recipe, type Verb } from "@echo/planet";
 
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
-import { measurementFor, touchesTheWorld, verbsInHand } from "@/lib/acts";
+import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 
 interface Acting {
@@ -39,7 +39,12 @@ interface Acting {
   thing: NearThing;
   startedAt: number;
   decisionMs: number;
+  /** For making something: which recipe (C47). */
+  recipe?: Recipe;
 }
+
+/** The stranger themself, as the target of making something. */
+const SELF: NearThing = { ref: "self", kind: "self", x: 0, y: 0, sizeM: 0, owners: [], name: "yourself", verbs: [], distanceM: 0 };
 
 const KEYS = ["KeyE", "Digit2", "Digit3", "Digit4"] as const;
 const KEY_LABEL = ["E", "2", "3", "4"];
@@ -68,12 +73,15 @@ export default function Interact({
   const [talkable, setTalkable] = useState<NearVillager | null>(null);
   const [acting, setActing] = useState<Acting | null>(null);
   const [progress, setProgress] = useState(0);
+  // The pack is the server's (C47); the hand is which thing in it is held out, for a gift.
+  const [pack, setPack] = useState<Pack>({});
   const [carrying, setCarrying] = useState<string | null>(null);
+  const [packOpen, setPackOpen] = useState(false);
   const [line, setLine] = useState<string | null>(null);
   // While a conversation is open the panel owns the keys and the bottom of the screen.
   const [talking, setTalking] = useState(false);
   /** The boat the stranger is out in (C45): whose, and where it is moored. */
-  const [aboard, setAboard] = useState<{ thing: NearThing; household: number } | null>(null);
+  const [aboard, setAboard] = useState<{ thing: NearThing; household: number; own?: boolean } | null>(null);
   const aboardRef = useRef(aboard);
   aboardRef.current = aboard;
   /** While aboard: land within reach to step onto, tile coordinates, or null. */
@@ -83,6 +91,32 @@ export default function Interact({
   const seenSince = useRef<{ ref: string; at: number } | null>(null);
   const actingRef = useRef<Acting | null>(null);
   actingRef.current = acting;
+  const carryingRef = useRef<string | null>(null);
+  carryingRef.current = carrying;
+
+  /** Make something (C47): the pack is checked and changed by the server. */
+  const makeIt = useCallback(async (recipe: Recipe) => {
+    try {
+      await ensureIdentity();
+      const res = await fetch("/api/player/pack", {
+        method: "POST",
+        headers: identityHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ op: "make", recipe: recipe.id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { pack?: Pack };
+      if (data.pack) {
+        setPack(data.pack);
+        // What was held may have gone into the making.
+        const held = carryingRef.current;
+        if (held && !((data.pack[held] ?? 0) > 0)) {
+          setCarrying(null);
+          worldRef.current()?.context().layer<WorldLayer & PlayerLayer>("player")?.setCarrying(false);
+        }
+      }
+    } catch {
+      // The making happened in the hands; the pack did not hear of it.
+    }
+  }, []);
   const lineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const layers = useCallback(() => {
@@ -103,8 +137,8 @@ export default function Interact({
 
   /** Tell the world: the deed and the mark, and who saw it. */
   const record = useCallback(
-    async (verb: Verb, thing: NearThing) => {
-      const { interact } = layers();
+    async (verb: Verb, thing: NearThing, item: string | null) => {
+      const { interact, player } = layers();
       const at = interact?.bodyAt();
       if (!at) return;
       try {
@@ -112,15 +146,38 @@ export default function Interact({
         const res = await fetch("/api/world/act", {
           method: "POST",
           headers: identityHeaders({ "content-type": "application/json" }),
-          body: JSON.stringify({ cell, thing: thing.ref, kind: thing.kind, verb: verb.id, at }),
+          body: JSON.stringify({ cell, thing: thing.ref, kind: thing.kind, verb: verb.id, at, ...(item ? { item } : {}) }),
         });
-        const data = (await res.json().catch(() => ({}))) as { seenBy?: string[]; effect?: { id: string; thing: string; kind: string; day: number; untilDay: number }; error?: string };
+        const data = (await res.json().catch(() => ({}))) as { seenBy?: string[]; effect?: { id: string; thing: string; kind: string; day: number; untilDay: number }; error?: string; pack?: Pack };
         if (res.status === 429) {
           say("Enough. The village has seen enough of you for one day.");
           return;
         }
+        if (data.error === "pack_full") {
+          say(`Your pack is full: ${PACK_SIZE} things. Put something down first (I).`);
+          return;
+        }
+        if (data.error === "not_carried") {
+          say("You are not carrying that any more.");
+          setCarrying(null);
+          player?.setCarrying(false);
+          return;
+        }
+        // The pack, as the server now has it: the new thing in the hand, or the hand empty after a gift.
+        if (data.pack) {
+          setPack(data.pack);
+          if (verb.gives) {
+            setCarrying(verb.gives);
+            player?.setCarrying(true);
+          } else if (verb.needs === "carrying") {
+            const left = item && (data.pack[item] ?? 0) > 0 ? item : null;
+            setCarrying(left);
+            player?.setCarrying(left !== null);
+          }
+        }
         if (data.effect) interact?.addMark(data.effect as never);
-        const seen = data.seenBy ?? [];
+        // Who saw it matters only for what somebody would think about: cutting a reed is nobody's business.
+        const seen = verb.deed ? (data.seenBy ?? []) : [];
         if (seen.length === 1) say(`${seen[0]} saw you.`, 5200);
         else if (seen.length <= 3 && seen.length > 1) say(`${seen.slice(0, -1).join(", ")} and ${seen.at(-1)} saw you.`, 5200);
         else if (seen.length > 3) say(`${seen.slice(0, 3).join(", ")} and ${seen.length - 3} others saw you.`, 5200);
@@ -142,14 +199,8 @@ export default function Interact({
       const heldMs = performance.now() - a.startedAt;
       const done = !abandoned;
       if (done && a.verb.beat) say(a.verb.beat);
-      if (done && a.verb.gives) {
-        setCarrying(a.verb.gives);
-        player?.setCarrying(true);
-      }
-      if (done && a.verb.needs === "carrying") {
-        setCarrying(null);
-        player?.setCarrying(false);
-      }
+      // What goes into the pack, or out of it, is the server's to say (see `record`); making something is too.
+      if (done && a.recipe) void makeIt(a.recipe);
       const { ctx, villagers } = layers();
       if (done && a.verb.id === "board" && ctx) {
         // Into the boat, at its mooring, bow to the sea: the dock's heading, in the player's frame.
@@ -178,7 +229,7 @@ export default function Interact({
       const at = interact?.bodyAt() ?? { x: a.thing.x, y: a.thing.y };
       const m = measurementFor(a.verb, a.thing, { heldMs, decisionMs: a.decisionMs, abandoned, distanceM: a.thing.distanceM }, interact?.audience(at.x, at.y) ?? 0);
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
-      if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing);
+      if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
     [chain, consent, layers, record, say],
   );
@@ -205,12 +256,69 @@ export default function Interact({
     [consent, layers, say],
   );
 
+  /** Put what is in the hand back in the pack. */
+  /** Making something is an act on yourself: a pose, a length, a measurement (C47). */
+  const beginMaking = useCallback(
+    (r: Recipe) => {
+      if (actingRef.current || consent === "unset") {
+        if (consent === "unset") say("Answer the card first: what you carry is kept, and that needs the answer, either way.");
+        return;
+      }
+      const { player } = layers();
+      if (!player) return;
+      player.perform("build", null);
+      setActing({ verb: recipeVerb(r), thing: SELF, startedAt: performance.now(), decisionMs: 0, recipe: r });
+      say(null);
+    },
+    [consent, layers, say],
+  );
+
   const drop = useCallback(() => {
     if (!carrying) return;
     layers().player?.setCarrying(false);
-    say(`You put down the ${carrying}.`);
+    say(`You put ${ITEMS[carrying]?.name ?? "it"} away.`);
     setCarrying(null);
   }, [carrying, layers, say]);
+
+  /** Throw something out of the pack for good. */
+  const discard = useCallback(
+    async (item: string) => {
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/player/pack", { method: "POST", headers: identityHeaders({ "content-type": "application/json" }), body: JSON.stringify({ op: "drop", item }) });
+        const data = (await res.json().catch(() => ({}))) as { pack?: Pack };
+        if (data.pack) {
+          setPack(data.pack);
+          if (carrying === item && !(data.pack[item] > 0)) {
+            setCarrying(null);
+            layers().player?.setCarrying(false);
+          }
+        }
+      } catch {
+        // nothing to say
+      }
+    },
+    [carrying, layers],
+  );
+
+  // The pack, once there is an id to read it under (the card answered, either way).
+  useEffect(() => {
+    if (consent === "unset") return;
+    let live = true;
+    void (async () => {
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/player/pack", { headers: identityHeaders() });
+        const data = (await res.json().catch(() => ({}))) as { pack?: Pack };
+        if (live && data.pack) setPack(data.pack);
+      } catch {
+        // no pack to show
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [consent]);
 
   // What is within reach, a few times a second; and the act's clock.
   useEffect(() => {
@@ -257,17 +365,29 @@ export default function Interact({
   // In a boat the verbs are the boat's own (bringing it back) and fishing over the side.
   const fishing = aboard ? verbOf("dock", "fish") : null;
   const verbs = aboard
-    ? [...(near ? verbsInHand(near.verbs, carrying, true) : []), ...(fishing ? [{ ...fishing, label: "Fish over the side" }] : [])].slice(0, 4)
+    ? [...(near && !aboard.own ? verbsInHand(near.verbs, carrying, true) : []), ...(fishing ? [{ ...fishing, label: "Fish over the side" }] : [])].slice(0, 4)
     : near
-      ? verbsInHand(near.verbs, carrying).slice(0, 4)
+      ? verbsInHand(near.verbs, carrying, false, packCount(pack) < PACK_SIZE).slice(0, 4)
       : [];
+  // Your own raft, at the water's edge (C47): R launches it.
+  const canLaunch = !aboard && (pack.raft ?? 0) > 0 && near?.kind === "water";
+  const launch = useCallback(() => {
+    const { player, ctx } = layers();
+    if (!near || near.kind !== "water" || !player || !ctx) return;
+    const [tx, ty] = ctx.frame.fromLocalM(near.x, near.y);
+    const body = layers().interact?.bodyAt();
+    const heading = body ? Math.atan2(-(near.y - body.y), near.x - body.x) : 0;
+    player.board({ x: tx, y: ty }, heading);
+    setAboard({ thing: { ...near, ref: "raft", kind: "boat", name: "your raft" }, household: -1, own: true });
+    say("It floats. You did not think it would.");
+  }, [near, layers, say]);
   const stepAshore = useCallback(() => {
     if (!aboard || !shore) return;
     const { player, villagers } = layers();
     player?.ashore(shore);
     villagers?.lend(null);
     setAboard(null);
-    say(`You leave the ${aboard.thing.name.replace(/^the /, "")} on the shore. Someone will have to fetch it.`);
+    say(aboard.own ? "You drag the raft up the shore." : `You leave the ${aboard.thing.name.replace(/^the /, "")} on the shore. Someone will have to fetch it.`);
   }, [aboard, shore, layers, say]);
 
   useEffect(() => {
@@ -276,6 +396,16 @@ export default function Interact({
       if (e.code === "KeyT" && talkable && !actingRef.current) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("echo:talk"));
+        return;
+      }
+      if (e.code === "KeyI" && !actingRef.current) {
+        e.preventDefault();
+        setPackOpen((o) => !o);
+        return;
+      }
+      if (e.code === "KeyR" && canLaunch && !actingRef.current) {
+        e.preventDefault();
+        launch();
         return;
       }
       if (e.code === "KeyQ" && aboard && shore && !actingRef.current) {
@@ -297,7 +427,7 @@ export default function Interact({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [near, verbs, talkable, carrying, talking, aboard, shore, begin, drop, stepAshore]);
+  }, [near, verbs, talkable, carrying, talking, aboard, shore, begin, drop, stepAshore, canLaunch, launch]);
 
   useEffect(() => {
     const on = (e: Event) => setTalking(Boolean((e as CustomEvent<boolean>).detail));
@@ -379,11 +509,71 @@ export default function Interact({
           ) : null}
         </div>
       ) : null}
-      {carrying ? (
+      {carrying || packCount(pack) > 0 ? (
         <p data-carrying className="pointer-events-none absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#16241f]/70 px-3 py-1 text-[11px] text-[#f4e9d0]/70">
-          Carrying {carrying}
-          {coarse ? "" : " · G to put it down"}
+          {carrying ? `In your hand: ${ITEMS[carrying]?.name ?? carrying}${coarse ? "" : " · G to put it away"} · ` : ""}
+          {packCount(pack)}/{PACK_SIZE} in your pack{coarse ? "" : " · I to open it"}
+          {canLaunch ? (coarse ? "" : " · R to launch your raft") : ""}
         </p>
+      ) : null}
+      {packOpen ? (
+        <section data-pack className="absolute bottom-28 left-1/2 z-40 w-[min(460px,92vw)] -translate-x-1/2 rounded-2xl border border-white/15 bg-[#16241f]/90 p-4 text-[#f4e9d0] shadow-2xl backdrop-blur-xl">
+          <header className="mb-2 flex items-baseline justify-between">
+            <p className="font-serif text-lg text-[#e4edcd]">Your pack</p>
+            <button type="button" onClick={() => setPackOpen(false)} className="text-xs text-white/50 hover:text-white">
+              I · close
+            </button>
+          </header>
+          {packCount(pack) === 0 ? <p className="text-sm italic text-white/45">Nothing yet. Pick things up as you go.</p> : null}
+          <ul className="space-y-1">
+            {Object.entries(pack).map(([id, n]) => (
+              <li key={id} className="flex items-center justify-between text-sm">
+                <span>
+                  {ITEMS[id]?.name ?? id}
+                  {n > 1 ? ` ×${n}` : ""}
+                </span>
+                <span className="flex gap-2 text-xs">
+                  <button type="button" data-hold={id} onClick={() => { setCarrying(id); layers().player?.setCarrying(true); setPackOpen(false); }} className="rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20">
+                    Hold
+                  </button>
+                  <button type="button" onClick={() => void discard(id)} className="rounded-full px-2 py-0.5 text-white/50 hover:text-white">
+                    Throw away
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs uppercase tracking-widest text-white/40">Make</p>
+          <ul className="mt-1 space-y-1">
+            {RECIPES.map((r) => {
+              const ok = canMake(pack, r);
+              return (
+                <li key={r.id} className="flex items-center justify-between text-sm">
+                  <span className={ok ? "" : "text-white/40"}>
+                    {ITEMS[r.makes]?.name ?? r.makes}
+                    <span className="ml-2 text-xs text-white/40">{Object.entries(r.needs).map(([id, k]) => `${k} ${id}`).join(", ")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    data-make={r.id}
+                    disabled={!ok}
+                    onClick={() => {
+                      if (r.atWater && near?.kind !== "water") {
+                        say("That is made at the water's edge.");
+                        return;
+                      }
+                      setPackOpen(false);
+                      beginMaking(r);
+                    }}
+                    className="rounded-full bg-[#e2edc8] px-2.5 py-0.5 text-xs font-medium text-[#213522] disabled:opacity-30"
+                  >
+                    Make
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       ) : null}
       {line ? (
         <p data-act-line className="pointer-events-none absolute bottom-44 left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-[#f4e9d0] [text-shadow:0_1px_10px_rgba(0,0,0,.75)]">

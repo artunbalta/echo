@@ -43,6 +43,7 @@ const PLACES = new Set(["field", "grave", "water"]);
 
 /** What kind of target an act was done to, in the event schema's terms. */
 export function targetKindOf(kind: ThingKind): TargetKind {
+  if (kind === "self") return "self"; // making something (C47)
   if (kind === "villager") return "npc";
   if (STRUCTURES.has(kind)) return "structure";
   if (PLACES.has(kind)) return "place";
@@ -87,11 +88,19 @@ export function touchesTheWorld(verb: Verb): boolean {
   return verb.deed !== null || (verb.effect !== null && verb.effect.lastsDays > 0);
 }
 
-/** The verbs a person can do right now, given what is in their hands and whether they are in a boat. */
-export function verbsInHand(verbs: readonly Verb[], carrying: string | null, aboard = false): Verb[] {
+/**
+ * The verbs a person can do right now: a gift needs something in the hand, a pick-up needs room in the
+ * pack (C47: "empty-handed" means the pack has room), and from a boat you can only bring it back.
+ */
+export function verbsInHand(verbs: readonly Verb[], held: string | null, aboard = false, room = held === null): Verb[] {
   return verbs.filter((v) => {
     if (v.needs === "aboard") return aboard;
-    if (aboard) return false; // from a boat you can only bring it back
-    return v.needs === "carrying" ? carrying !== null : v.needs === "empty-handed" ? carrying === null : true;
+    if (aboard) return false;
+    return v.needs === "carrying" ? held !== null : v.needs === "empty-handed" ? room : true;
   });
+}
+
+/** A recipe as a verb, so making something is an act like any other: a pose, a length, a measurement. */
+export function recipeVerb(r: { id: string; label: string; holdS: number; measure: Verb["measure"]; beat: string }): Verb {
+  return { id: `make:${r.id}`, label: r.label, holdS: r.holdS, pose: "build", reachM: 0, stakes: "low", measure: r.measure, effect: null, deed: null, owner: "none", beat: r.beat };
 }

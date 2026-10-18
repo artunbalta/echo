@@ -19,11 +19,14 @@
  *
  * WHAT IS KEPT. The deed (`village_deeds`), private to the stranger and erased with them, and the mark
  * (`world_effects`), shared, healing, its subject cleared on erasure. Nothing typed — there is no text.
+ * And the pack (C47): what was picked up is added to it, what was given comes out of it, both checked.
  */
 import { NextResponse } from "next/server";
 import {
   WRONGS,
+  add,
   activeEffects,
+  remove,
   parseScatterRef,
   present,
   thingName,
@@ -56,7 +59,7 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
-  let body: { cell?: unknown; thing?: unknown; kind?: unknown; verb?: unknown; at?: unknown };
+  let body: { cell?: unknown; thing?: unknown; kind?: unknown; verb?: unknown; at?: unknown; item?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -104,6 +107,25 @@ export async function POST(req: Request) {
   }
   if (Math.hypot(place.x - pos.x, place.y - pos.y) > verb.reachM + place.sizeM + SLACK_M) return bad("too_far", 403);
 
+  // The pack (C47): what is picked up goes into it, and a gift comes out of it — checked here, so a
+  // gift is of something actually carried, before anything about the act is recorded.
+  let pack = verb.gives || verb.needs === "carrying" ? await store.packOf(caller.subject) : null;
+  let gift: string | null = null;
+  if (verb.gives) {
+    if (pack === null) return bad("pack_unavailable", 503);
+    const next = add(pack, verb.gives);
+    if (!next) return bad("pack_full", 409);
+    pack = next;
+  }
+  if (verb.needs === "carrying") {
+    if (pack === null) return bad("pack_unavailable", 503);
+    if (typeof body.item !== "string") return bad("bad_item");
+    const next = remove(pack, body.item);
+    if (!next) return bad("not_carried", 409);
+    pack = next;
+    gift = body.item;
+  }
+
   const mine = (await store.deedsFor(caller.subject, cell)) ?? [];
   if (verb.deed && WRONGS.has(verb.deed.reading) && mine.filter((d) => d.day === day && WRONGS.has(d.reading)).length >= WRONGS_PER_DAY) {
     return bad("enough", 429);
@@ -123,8 +145,10 @@ export async function POST(req: Request) {
       hour,
       witnesses,
       owners: place.owners,
+      ...(gift ? { item: gift } : {}),
     });
   }
+  if (pack !== null) await store.setPack(caller.subject, pack);
   let effect = null;
   if (verb.effect && verb.effect.lastsDays > 0) {
     const standing = (await store.effectsFor(cell, day)) ?? [];
@@ -138,5 +162,6 @@ export async function POST(req: Request) {
     // Who saw you, by name: the stranger learns it the way a person would, by being looked at.
     seenBy: witnesses.map((id) => byId.get(id)?.given).filter(Boolean),
     ...(effect ? { effect } : {}),
+    ...(pack !== null ? { pack } : {}),
   });
 }
