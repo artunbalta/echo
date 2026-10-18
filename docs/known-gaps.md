@@ -2051,3 +2051,26 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Playable parcels only.** The landing preview does not show houses.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 50. What C60 does not do yet, and what it trusts (2026-10-18)
+
+- **Tried only in Chrome, with a fake microphone.** Not tried in Safari (the unlocked audio element is
+  written for it), Firefox, or on a phone, where holding to speak is a touch on the button.
+- **The voices are only as good as the account's list.**
+  - No old women's voices, and one old man's.
+  - Mostly American and British English, in a world without either.
+  - Children speak in young adults' voices, a little faster.
+  - Voices added from ElevenLabs' library are picked up within the hour.
+- **A voice is not stored per villager.** It is worked out from the list each time. A voice added
+  takes only those it wins, but a thin age crossing three voices regroups that age.
+- **ElevenLabs' own keeping of what is sent is under its terms.** The panel says nothing of your voice
+  is kept *here*, which is true. Zero-retention is an ElevenLabs enterprise setting, not used.
+- **A reply can be spoken only within ten minutes** of being said. There is no replay.
+- **No silence detection.** What was held is what is sent, pauses and all.
+- **The hear route reads a body sent without a length** before measuring it. The platform's own body
+  limit is what bounds that.
+- **The cache of spoken lines is per server instance**, in memory.
+- **The echo hears nothing of voice.** That is on purpose, and it stays that way unless the consent
+  card is changed to ask.
+
+**Status:** OPEN, all of it, written down rather than discovered.

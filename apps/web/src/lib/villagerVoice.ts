@@ -93,3 +93,189 @@ export function speak(text: string, p: Speaker): boolean {
 export function hush(): void {
   if (canSpeak()) window.speechSynthesis.cancel();
 }
+
+// ── voices from the cloud, and the stranger's own (C60) ─────────────────────────────
+
+/**
+ * C60 adds what C44 left out on purpose, and asks first. Villagers' replies can be spoken by
+ * ElevenLabs in a voice of each person's own, and the stranger can talk aloud: held down, the key
+ * records, and ElevenLabs writes it down. Both send something to a service the C44 panel promised
+ * nothing went to, so neither happens until the stranger has said yes to exactly that, here, once.
+ * The answer is kept in this browser. A no keeps C44: this browser's local voices and the keyboard.
+ */
+const CLOUD_KEY = "echo.voiceCloud";
+
+/** Yes, no, or never asked. */
+export function cloudWanted(): boolean | null {
+  try {
+    const v = localStorage.getItem(CLOUD_KEY);
+    return v === "on" ? true : v === "off" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCloudWanted(on: boolean): void {
+  try {
+    localStorage.setItem(CLOUD_KEY, on ? "on" : "off");
+  } catch {
+    // a private window: the answer holds for this page
+  }
+}
+
+/**
+ * One element for every reply, so that a browser which plays sound only from inside a click or a key
+ * (Safari) still plays a reply that arrives seconds after it: `unlockCloud`, called from the press
+ * that sent the words, plays silence through it, and later replies play through the same element.
+ */
+let player: HTMLAudioElement | null = null;
+let lastUrl: string | null = null;
+const SILENCE = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+/** From a click or a key, before anything is awaited. */
+export function unlockCloud(): void {
+  if (typeof Audio === "undefined") return;
+  if (player) return;
+  player = new Audio();
+  player.src = SILENCE;
+  void player.play().catch(() => {});
+}
+
+/** A villager's line in their own voice. False when it could not be had, so the caller can fall back. */
+export async function speakCloud(line: { cell: string; person: string; text: string; token: string | null }, headers: Record<string, string>): Promise<boolean> {
+  if (!line.token || typeof Audio === "undefined") return false;
+  try {
+    const res = await fetch("/api/village/voice", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(line) });
+    if (!res.ok) return false;
+    const url = URL.createObjectURL(await res.blob());
+    hushCloud();
+    if (lastUrl) URL.revokeObjectURL(lastUrl);
+    lastUrl = url;
+    player ??= new Audio();
+    player.src = url;
+    await player.play();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function hushCloud(): void {
+  player?.pause();
+}
+
+/** Whether this browser can record at all. */
+export function canRecord(): boolean {
+  return typeof window !== "undefined" && typeof MediaRecorder !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+}
+
+/** At most this long a held key records, milliseconds. */
+export const RECORD_MS = 15_000;
+
+/**
+ * A recorder for one held key: `start` on the press, `stop` on the release. The microphone is asked
+ * for on each press and let go of whenever recording ends, so the browser's recording light is on
+ * only while the key is down, and at most `RECORD_MS`.
+ *
+ * A key let go of before the browser has handed over the microphone wins: the start that resolves
+ * after it lets the microphone go at once and answers `"let-go"`, rather than recording a stranger
+ * who is no longer holding anything.
+ */
+export function recorder() {
+  let rec: MediaRecorder | null = null;
+  let stream: MediaStream | null = null;
+  let chunks: Blob[] = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let began = 0;
+  /** Bumped by every stop and cancel; a start from an earlier turn is stale when it resolves. */
+  let turn = 0;
+  const release = () => {
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+    if (timer) clearTimeout(timer);
+    timer = null;
+  };
+  /** Stop a recorder and wait for its last data, whether or not it has stopped already. */
+  const ended = (r: MediaRecorder) =>
+    r.state === "inactive"
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => {
+          r.addEventListener("stop", () => resolve(), { once: true });
+          r.stop();
+        });
+  return {
+    async start(): Promise<"on" | "denied" | "let-go"> {
+      if (rec) return "on";
+      const mine = ++turn;
+      let s: MediaStream;
+      try {
+        s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        return "denied";
+      }
+      if (mine !== turn) {
+        s.getTracks().forEach((t) => t.stop());
+        return "let-go";
+      }
+      try {
+        stream = s;
+        const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t));
+        const r = new MediaRecorder(s, type ? { mimeType: type } : undefined);
+        chunks = [];
+        r.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        // However it ends — let go, cancelled, or the time run out — the microphone is let go of.
+        r.addEventListener("stop", () => {
+          if (stream === s) release();
+          else s.getTracks().forEach((t) => t.stop());
+        });
+        r.start();
+        rec = r;
+        began = performance.now();
+        timer = setTimeout(() => {
+          if (r.state === "recording") r.stop();
+        }, RECORD_MS);
+        return "on";
+      } catch {
+        rec = null;
+        release();
+        return "denied";
+      }
+    },
+    /** The recording, or null for one too short to be anything, or none at all. */
+    async stop(): Promise<Blob | null> {
+      turn++;
+      const r = rec;
+      rec = null;
+      if (!r) return null;
+      const long = performance.now() - began;
+      await ended(r);
+      release();
+      if (long < 400 || chunks.length === 0) return null;
+      return new Blob(chunks, { type: r.mimeType || "audio/webm" });
+    },
+    cancel() {
+      turn++;
+      if (rec?.state === "recording") rec.stop();
+      rec = null;
+      release();
+    },
+    /** Whether the microphone is held just now: for tests, and the light on the button. */
+    live(): boolean {
+      return stream !== null;
+    },
+  };
+}
+
+/** What was said in a recording, written down by the hear route; null when it could not be. */
+export async function hearIt(blob: Blob, headers: Record<string, string>): Promise<{ text: string } | { error: string }> {
+  try {
+    const lang = (typeof navigator !== "undefined" ? navigator.language : "en").slice(0, 2).toLowerCase();
+    const res = await fetch(`/api/village/hear?lang=${encodeURIComponent(lang)}`, { method: "POST", headers: { ...headers, "content-type": blob.type.split(";")[0] || "audio/webm" }, body: blob });
+    const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+    return res.ok && typeof data.text === "string" ? { text: data.text } : { error: data.error ?? String(res.status) };
+  } catch {
+    return { error: "unreachable" };
+  }
+}

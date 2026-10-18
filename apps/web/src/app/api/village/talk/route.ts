@@ -54,7 +54,7 @@ import {
   type StrangerMemory,
 } from "@/lib/villager";
 import { destinationFor, singlesMet, villageNamed, writeMove } from "@/lib/moves";
-import { loadVillage, verifyConversation } from "@/lib/villageTalk";
+import { loadVillage, signLine, verifyConversation } from "@/lib/villageTalk";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +114,8 @@ export async function POST(req: Request) {
   if (!verifyConversation(body.conv, caller.subject, cell, person, now)) return bad("no_conversation", 403);
 
   // The village as it now is: the seed's, with every change made to it.
+  // Every answer carries a token for its own words (C60): the voice route speaks those, and only those.
+  const answer = (body: { reply: string } & Record<string, unknown>) => NextResponse.json({ ...body, voice: signLine(caller.subject, cell, person, body.reply, Date.now()) });
   const loaded = await loadVillage(cell, now);
   if (!loaded) return bad("no_village", 404);
   const { village, changes, readable, store, day, hour } = loaded;
@@ -125,7 +127,7 @@ export async function POST(req: Request) {
   const turn = history.length / 2;
   if (!KEY) {
     const effects = store ? ((await store.effectsFor(cell, day)) ?? []) : [];
-    return NextResponse.json({ reply: mockReply(s, me, day, turn, needOf(s, village.plan, me, day, changes, effects)?.text ?? null), source: "mock" });
+    return answer({ reply: mockReply(s, me, day, turn, needOf(s, village.plan, me, day, changes, effects)?.text ?? null), source: "mock" });
   }
 
   const rate = await rateLimit(req, { bucket: "villager", windowMs: 10 * 60 * 1000, max: 40, onUnavailable: "deny" });
@@ -281,7 +283,7 @@ export async function POST(req: Request) {
   try {
     let r = await ask(late);
     if (r.stop_reason === "refusal") {
-      return NextResponse.json({ reply: `${me.given} looks at you for a long moment, and says nothing.`, source: "refusal" });
+      return answer({ reply: `${me.given} looks at you for a long moment, and says nothing.`, source: "refusal" });
     }
     const textOf = (m: typeof r) =>
       m.content
@@ -300,7 +302,7 @@ export async function POST(req: Request) {
     }
     if (!reply || !reply.say) {
       console.info(`[villager] ${cell} ${me.id}: no usable reply (${r.stop_reason})`);
-      return NextResponse.json({ reply: mockReply(s, me, day, turn), source: "empty" });
+      return answer({ reply: mockReply(s, me, day, turn), source: "empty" });
     }
 
     // The decision, if there was one: offered, possible, and trusted — or not taken.
@@ -344,7 +346,7 @@ export async function POST(req: Request) {
       `[villager] ${cell} ${me.id}: in ${u.input_tokens} cached ${u.cache_read_input_tokens ?? 0} written ${u.cache_creation_input_tokens ?? 0} out ${u.output_tokens}` +
         `${unknown.length ? ` unverified ${unknown.length}` : ""}${recorded ? ` decided ${recorded.kind}` : ""}${declined ? ` declined ${declined}` : ""}`,
     );
-    return NextResponse.json({
+    return answer({
       reply: reply.say.slice(0, TALK_LIMITS.replyChars),
       source: "claude",
       ...(unknown.length ? { unverified: unknown } : {}),
@@ -356,6 +358,6 @@ export async function POST(req: Request) {
     else if (err instanceof Anthropic.APIError) console.warn(`[villager] model error ${err.status}: ${err.message}`);
     else console.warn("[villager] failed:", (err as Error).message);
     // The villager does not vanish because the model did: they answer from their facts.
-    return NextResponse.json({ reply: mockReply(s, me, day, turn), source: "unavailable" });
+    return answer({ reply: mockReply(s, me, day, turn), source: "unavailable" });
   }
 }
