@@ -14,6 +14,13 @@
  * low-poly segments where the player's are skinned: at the distance a crowd is seen from, that is the
  * only difference, and it is the one that makes forty of them affordable.
  *
+ * WOMEN AND MEN, FOR NO EXTRA CALL. A village is half women (the society draws them so), and for a
+ * while every one of them was drawn in trousers with a cropped head, so a village read as all men.
+ * A woman here wears a dress and her hair long, and neither is a mesh of its own: the long hair is a
+ * SECOND instance of the hair part, stretched down the back of the head, and the skirt is the pelvis
+ * part, which is a short flared frustum for everyone and, for her, drawn long and wide to below the
+ * knee. Same nine meshes, same draw calls; only instances and their matrices differ.
+ *
  * COLOUR IS PER INSTANCE. Every part geometry carries a vertex colour that is a MULTIPLIER — white
  * for the part's own material, dark for the eyes — and the instance colour supplies the person's skin,
  * clothes or hair. So a face has eyes without an eye mesh, and nobody's clothes need a material.
@@ -27,9 +34,9 @@ import { gaitFootTarget, solveLeg } from "../three/character";
 
 export type PartName = "torso" | "head" | "hair" | "pelvis" | "thigh" | "shin" | "foot" | "upperArm" | "forearm";
 
-/** How many of each part a body has. */
+/** How many of each part a body has, at most: hair is two for long hair (the cap, and what falls behind). */
 const PER_BODY: Record<PartName, 1 | 2> = {
-  torso: 1, head: 1, hair: 1, pelvis: 1, thigh: 2, shin: 2, foot: 2, upperArm: 2, forearm: 2,
+  torso: 1, head: 1, hair: 2, pelvis: 1, thigh: 2, shin: 2, foot: 2, upperArm: 2, forearm: 2,
 };
 /** Only the big masses cast: the shadow of a shin is a cost nobody would see paid. */
 const CASTS: ReadonlySet<PartName> = new Set(["torso", "head"]);
@@ -96,7 +103,8 @@ function partGeometry(name: PartName): THREE.BufferGeometry {
       // A cap over the crown and the back of the head.
       return paint(ellipsoid(0.36, 0.22, 0.345, 0, 0.27, -0.015, 9), WHITE);
     case "pelvis":
-      return paint(ellipsoid(0.3, 0.17, 0.21, 0, -0.025, 0), WHITE);
+      // A short flared frustum where the trousers meet the shirt — and, drawn long, a skirt.
+      return paint(new THREE.CylinderGeometry(0.135, 0.16, 0.17, 9, 1).scale(1, 1, 0.72).translate(0, -0.025, 0), WHITE);
     case "thigh":
       return paint(segment(0.205, 0.072, 0.062), WHITE);
     case "shin":
@@ -121,6 +129,10 @@ export interface Look {
   scale: number;
   /** A forward stoop, radians, for the old. */
   stoop: number;
+  /** Hair to the shoulders and below, behind. */
+  longHair: boolean;
+  /** A skirt to below the knee: the pelvis drawn long, in `cloth`. */
+  skirt: boolean;
 }
 
 /** The pose a body is in. Everything here is the crowd's own short list, never the player's input. */
@@ -168,6 +180,11 @@ export class Crowd {
   private readonly one = new THREE.Vector3(1, 1, 1);
   private readonly scaleV = new THREE.Vector3();
   private readonly at0 = new THREE.Vector3();
+  private readonly k = new THREE.Matrix4();
+  /** Long hair: the cap, stretched to fall from the crown to below the nape and set back off the face. */
+  private static readonly LONG_HAIR = new THREE.Matrix4().compose(new THREE.Vector3(0, -0.404, -0.06), new THREE.Quaternion(), new THREE.Vector3(1.05, 2.09, 1));
+  /** A skirt: the pelvis frustum from the waist to below the knee, wide enough for a stride. */
+  private static readonly SKIRT = new THREE.Matrix4().compose(new THREE.Vector3(0, -0.067, 0), new THREE.Quaternion(), new THREE.Vector3(1.18, 2.12, 1.35));
   private static readonly HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
   constructor(capacity: number, private readonly unitM: number) {
@@ -226,7 +243,8 @@ export class Crowd {
     const bobY = (speed > 0 ? Math.cos(phase * 2) * 0.009 * amount : Math.sin(p.time * 1.7 + p.phase0) * 0.002) - 0.035 * amount - 0.055 * run - (sitting ? 0.2 : 0);
     this.at(this.root, 0, bobY, 0, 0, 0, Math.sin(phase) * 0.022 * amount, this.body);
     this.at(this.body, 0, 0.455, 0, 0, Math.sin(phase) * 0.055 * amount, 0, this.hips);
-    this.put("pelvis", this.hips, look.trousers);
+    if (look.skirt) this.put("pelvis", this.k.multiplyMatrices(this.hips, Crowd.SKIRT), look.cloth);
+    else this.put("pelvis", this.hips, look.trousers);
 
     let torsoX = run * 0.12 + look.stoop;
     let headX = -run * 0.06;
@@ -239,6 +257,7 @@ export class Crowd {
     this.at(this.spine, 0, 0.36, 0, headX, Math.sin(phase) * 0.025 * amount, 0, this.neck);
     this.put("head", this.neck, look.skin);
     this.put("hair", this.neck, look.hair);
+    if (look.longHair) this.put("hair", this.k.multiplyMatrices(this.neck, Crowd.LONG_HAIR), look.hair);
 
     // Legs: the player's gait and the player's solver, or folded under for sitting and rowing.
     for (const side of [-1, 1]) {
@@ -262,7 +281,7 @@ export class Crowd {
         }
       }
       this.at(this.hips, side * 0.087, 0, 0, hip, 0, 0, this.j1);
-      this.put("thigh", this.j1, look.trousers);
+      this.put("thigh", this.j1, look.skirt ? look.cloth : look.trousers);
       this.at(this.j1, 0, -0.205, 0, knee, 0, 0, this.j2);
       this.put("shin", this.j2, look.trousers);
       this.at(this.j2, 0, -0.205, 0, ankle, 0, 0, this.j3);
@@ -323,6 +342,10 @@ export class Crowd {
 // ── looks ───────────────────────────────────────────────────────────────────────
 
 const SKIN = [0xc98f6a, 0xa8724f, 0xe0b088, 0x8a5a3c, 0xd9a173] as const;
+/** What a dress is dyed with, before the trade's own colour is mixed in: madder, woad, weld, undyed linen. */
+const DRESS = [0x8a4f45, 0x4f5f7a, 0x7a7a4a, 0xa89a7e, 0x7a5a40] as const;
+/** A kerchief over the hair, for some grown women: linen. */
+const KERCHIEF = [0xd8ccb2, 0xc9b99a, 0x8a4f45] as const;
 const HAIR = [0x2e2620, 0x4a3426, 0x6b4a2e, 0x8a6a3a, 0x3a3a3a] as const;
 /**
  * Clothes by trade, muted to sit inside the art bible's palette. Never echo-violet: §8 keeps violet
@@ -342,15 +365,24 @@ export function hashUnit(s: string): number {
   return (h >>> 0) / 4294967296;
 }
 
-export function lookFor(id: string, occupation: string, age: number): Look {
+export function lookFor(id: string, occupation: string, age: number, sex: "f" | "m" = "m"): Look {
+  const female = sex === "f";
   const skin = new THREE.Color(SKIN[Math.floor(hashUnit(`${id}/skin`) * SKIN.length)]);
   const cloth = new THREE.Color(TRADE_CLOTH[occupation] ?? 0x7a6a50).offsetHSL(0, 0, (hashUnit(`${id}/cloth`) - 0.5) * 0.1);
-  const trousers = new THREE.Color(0x4a3e30).offsetHSL(0, 0, (hashUnit(`${id}/trousers`) - 0.5) * 0.08);
-  const hair = new THREE.Color(age >= 60 ? 0x9a958c : HAIR[Math.floor(hashUnit(`${id}/hair`) * HAIR.length)]);
-  let scale = 0.94 + hashUnit(`${id}/height`) * 0.12;
+  // A dress is its own dye with the trade's colour in it, so a fisherwoman still reads as the sea's.
+  if (female) cloth.lerp(new THREE.Color(DRESS[Math.floor(hashUnit(`${id}/dress`) * DRESS.length)]), 0.55);
+  // Woad over a madder-brown trade makes mauve, and violet is the echo's (art bible §8): turn it blue.
+  const hsl = { h: 0, s: 0, l: 0 };
+  cloth.getHSL(hsl);
+  if (Math.abs(hsl.h - 0.75) <= 0.08 && hsl.s >= 0.12) cloth.setHSL(0.62, hsl.s, hsl.l);
+  const trousers = new THREE.Color(female ? 0x3a302a : 0x4a3e30).offsetHSL(0, 0, (hashUnit(`${id}/trousers`) - 0.5) * 0.08);
+  let hair = new THREE.Color(age >= 60 ? 0x9a958c : HAIR[Math.floor(hashUnit(`${id}/hair`) * HAIR.length)]);
+  // Some grown women cover their hair: a kerchief is the hair part in linen.
+  if (female && age >= 18 && hashUnit(`${id}/kerchief`) < 0.3) hair = new THREE.Color(KERCHIEF[Math.floor(hashUnit(`${id}/kerchief/colour`) * KERCHIEF.length)]);
+  let scale = (female ? 0.91 : 0.95) + hashUnit(`${id}/height`) * 0.11;
   if (age < 13) scale *= 0.5 + age * 0.038;
   else if (age < 17) scale *= 0.92 + (age - 13) * 0.02;
   if (age < 13) cloth.offsetHSL(0, 0.05, 0.08);
   const stoop = age >= 68 ? 0.12 + (age - 68) * 0.006 : 0;
-  return { skin, cloth, trousers, hair, scale, stoop };
+  return { skin, cloth, trousers, hair, scale, stoop, longHair: female && age >= 3, skirt: female && age >= 3 };
 }

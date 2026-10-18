@@ -205,7 +205,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     for (const d of next.plans) {
       if (!looks.has(d.person)) {
         const p = people.get(d.person)!;
-        looks.set(d.person, lookFor(p.id, occupationOn(p, day), ageYears(p, day)));
+        looks.set(d.person, lookFor(p.id, occupationOn(p, day), ageYears(p, day), p.sex));
       }
     }
   };

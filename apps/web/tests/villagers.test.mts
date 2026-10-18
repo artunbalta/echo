@@ -110,9 +110,15 @@ test("C44: a changed village is swapped in without a rebuild, and the change mov
   const P = await import("@echo/planet");
   const { villagersLayer } = await import("../src/game/world/villagersLayer");
   const clock = P.worldClock(P.WORLD_EPOCH);
-  const day = P.worldDayIndex(clock, Date.now());
   const { field, calibration, commons, world } = planet();
   const cell = "843f6a1ffffffff";
+  // A dry day, pinned: a wet evening is cut short (C48), so on the real clock this test failed on any
+  // stormy day — it did, on day 4966. The layer reads the clock, so the clock is what is pinned.
+  const probe = P.villageAt(world.seed, cell, field, calibration, world.radiusKm, { commons: commons.cells, day: 4960 })!;
+  let day = 4960;
+  while (!["clear", "cloudy"].includes(P.weatherOn(world.seed, cell, probe.settlement.geography, day, probe.settlement).kind)) day++;
+  const realNow = Date.now;
+  Date.now = () => clock.epochMs + (day + 0.3) * P.WORLD_DAY_S * 1000;
   const v0 = P.villageAt(world.seed, cell, field, calibration, world.radiusKm, { commons: commons.cells, day })!;
   const s = v0.settlement;
   // Someone grown, with a parent of sixty-five or more living in another house.
@@ -144,4 +150,43 @@ test("C44: a changed village is swapped in without a rebuild, and the change mov
   assert.ok(Math.hypot(after.x - door.x, after.y - door.y) < 2, `after the change the evening is ${Math.hypot(after.x - door.x, after.y - door.y).toFixed(1)} m from ${pick.elder.given}'s door`);
   assert.ok(Math.hypot(before.x - door.x, before.y - door.y) > 2, "the evening was at the door before anyone decided anything");
   layer.dispose?.();
+  Date.now = realNow;
+});
+
+test("women wear dresses and their hair long, men neither — and it costs instances, not draw calls", () => {
+  const woman = lookFor("w", "fisher", 34, "f");
+  const man = lookFor("w", "fisher", 34, "m");
+  const girl = lookFor("g", "farmer", 6, "f");
+  const baby = lookFor("b", "farmer", 1, "f");
+  assert.ok(woman.skirt && woman.longHair, "a woman in trousers with cropped hair");
+  assert.ok(!man.skirt && !man.longHair);
+  assert.ok(girl.skirt && girl.longHair, "a girl of six dressed as a boy");
+  assert.ok(!baby.skirt, "a baby in a skirt");
+  const crowd = new Crowd(4, 1.6);
+  assert.equal(crowd.meshes.size, 9, "a dress or long hair added a mesh, and a draw call with it");
+  crowd.begin();
+  crowd.pose({ x: 0, y: 0, z: 0, yaw: 0, activity: "walk", speed: 0.8, time: 1, phase0: 0 }, woman);
+  crowd.pose({ x: 2, y: 0, z: 0, yaw: 0, activity: "walk", speed: 0.8, time: 1, phase0: 0 }, man);
+  crowd.end();
+  const hair = crowd.meshes.get("hair")!;
+  assert.equal(hair.count, 3, "her hair is the cap and what falls behind it; his is the cap");
+  // Her skirt is the pelvis drawn long: from the waist to below the knee.
+  const pelvis = crowd.meshes.get("pelvis")!;
+  const [hers, his] = [0, 1].map((i) => {
+    const m = new THREE.Matrix4();
+    pelvis.getMatrixAt(i, m);
+    return new THREE.Vector3().setFromMatrixScale(m);
+  });
+  assert.ok(hers.y > his.y * 1.8, `her skirt is ${(hers.y / his.y).toFixed(2)}× his trousers' top`);
+  crowd.dispose();
+});
+
+test("half of every village is women, and nobody's dress is echo-violet", () => {
+  for (const trade of ["fisher", "farmer", "smith", "trader", "healer", "weaver", "miner", "potter", "innkeeper", "teacher"]) {
+    for (let i = 0; i < 12; i++) {
+      const hsl = { h: 0, s: 0, l: 0 };
+      lookFor(`p/${trade}/${i}`, trade, 30, "f").cloth.getHSL(hsl);
+      assert.ok(Math.abs(hsl.h - 0.75) > 0.06 || hsl.s < 0.15, `a ${trade}'s dress is violet (h ${hsl.h.toFixed(2)}, s ${hsl.s.toFixed(2)})`);
+    }
+  }
 });
