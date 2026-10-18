@@ -46,6 +46,10 @@ import { BOAT_PAINT, boatForm } from "./villageGeometry";
 const PLAYER_WALK_MPS = 1.65;
 /** Close enough to speak: the nameplate shows inside this many metres. */
 const SPEAKING_M = 7;
+/** How far a villager keeps from the stranger's middle when their way crosses (C46). */
+const STEP_ASIDE_M = 0.8;
+/** A villager's half-width, for the player's gate. */
+const BODY_M = 0.3;
 
 /** The person close enough to speak to, as the talk panel needs them. */
 export interface NearVillager {
@@ -70,6 +74,11 @@ export interface VillagersLayer extends WorldLayer {
    * until `lend(null)`. The schedule — the family's fisher rowing out at dawn — is untouched.
    */
   lend(household: number | null): void;
+  /**
+   * Would a body of `radiusM` at this TILE position stand inside a villager (C46)? The player's gate:
+   * nobody walks through a person. Read off where everyone was drawn last frame.
+   */
+  blockedTile(x: number, y: number, radiusM: number): boolean;
   /** Villagers drawn out of doors last frame within `r` metres of a point: who could see an act (C45). */
   watchers(x: number, y: number, r: number): number;
   /** The player's position last frame, planet-local metres: what `begin` is told (C44). */
@@ -267,6 +276,15 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           lastAt.delete(d.person);
           continue;
         }
+        // Nobody walks through the stranger (C46): a villager whose way crosses where you stand steps
+        // round you. Presentation only, and only here; the schedule everyone else sees is untouched.
+        if (!(held && held.id === d.person) && w.boat === null) {
+          const gap = Math.hypot(w.x - mx, w.y - my);
+          if (gap < STEP_ASIDE_M && gap > 1e-6) {
+            w.x = mx + ((w.x - mx) / gap) * STEP_ASIDE_M;
+            w.y = my + ((w.y - my) / gap) * STEP_ASIDE_M;
+          }
+        }
         const seen = lastAt.get(d.person);
         if (seen) {
           seen.x = w.x;
@@ -350,6 +368,12 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     playerPosition: () => (Number.isFinite(playerAt.x) ? { x: playerAt.x, y: playerAt.y } : null),
     lend(household) {
       lent = household;
+    },
+    blockedTile(x, y, radiusM) {
+      if (!frame) return false;
+      const [lx, ly] = frame.toLocalM(x, y);
+      for (const at of lastAt.values()) if (Math.hypot(at.x - lx, at.y - ly) < radiusM + BODY_M) return true;
+      return false;
     },
     watchers(x, y, r) {
       // Children under eight see, and nobody asks them: the same rule the act route's witnesses keep.

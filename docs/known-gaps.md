@@ -1707,6 +1707,11 @@ Three limits of C41's first village, written down rather than discovered:
 **Status:** OPEN, all three. The first is a rebuild on a day change; the second is a path graph over
 the plan's lanes; the third is a decision.
 
+**Status (2026-10-18, C46):** the second is CLOSED. Every leg is routed round the houses, the well,
+the mine and the graveyard wall (`lib/nav.ts`). `nav.test.ts` samples every walked point of twelve
+villages' days and fails on one inside a wall, and the same days drawn straight cross houses on
+dozens of legs. Nobody walks through the stranger either. The first and third are still open.
+
 ---
 
 ## ⚑ 36. The frame has about ten draw calls of headroom left on a large village (2026-10-17)

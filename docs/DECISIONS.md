@@ -2635,3 +2635,34 @@ The browser says who saw you: "Rur, Hoomnost and Stivir saw you."
   these acts is **not yet measured**.
 
 Limits are in ⚑40.
+
+## C46 — villagers walk round things, and nobody walks through anybody
+
+The first of the twenty features the user asked for on 2026-10-18 ("hepsini istiyorum, sırayı sen
+belirle"), in the order chosen then. It went first because nearly everything after it stands on
+people walking: villagers talking to each other, interiors, animals and live events.
+
+- **The village's graph** (`lib/nav.ts`). Obstacles are every plot's house, grown by a body's width,
+  plus the well, the mine's heap, and the graveyard's wall: a circle with a gate toward the green.
+  Nodes are their corners, pushed out, and rings round the circles. Edges are clear walks between
+  nodes. A walk is the straight line when that is clear; otherwise it is A* round. It is memoised per
+  plan, and it is the same polyline in every browser and on the server, because the schedule routes
+  every leg through it and the server asks the schedule where people are.
+- **Two bugs the tests found in the first version.**
+  - **Far ends were cut off.** A field or a road far from every obstacle had no node within the link
+    length, so A* found no way and the person walked straight through the village. Such an end now
+    joins any node it can see.
+  - **The mine was an island.** It stands too far past the houses for its corners to link to theirs,
+    so a miner walking home did the same. Islands are now joined by their shortest clear link.
+- **What a leg is now.** A leg carries `via`, the way round. Its time is the length of that way, so
+  fishers leave home earlier to catch their boat. Each person also walks a little to one side of the
+  line (±0.4 m, nothing at either end), so two on one lane are not one body.
+- **Nobody walks through the stranger** (browser only). Villagers stop the player's body; a villager
+  whose way crosses where you stand steps round you, in your view only.
+- **Measured.**
+  - `nav.test.ts` samples every walked point of twelve villages' days (coast, valley, hills) and finds
+    none inside a wall. Drawn straight, the same days cross houses on dozens of legs, so the test is
+    not vacuous. Disabling routing fails it.
+  - A day's plans for the biggest village are about 50 ms, the graph included.
+  - The midnight test moved from 0.92 to 0.95: since routing, the last young people reach their doors
+    just after 0.917, ten past ten. Midnight is what the test claims.
