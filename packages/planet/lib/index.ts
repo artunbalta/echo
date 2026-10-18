@@ -62,3 +62,7 @@ export * from "./animals.js";
 export * from "./crossing.js";
 // A stranger come in from the sea, and who knows it (C57).
 export * from "./landings.js";
+// Villages trading with each other, a market every sixth day (C58).
+export * from "./markets.js";
+// Barter and labour for labour, with no price (C58).
+export * from "./trade.js";

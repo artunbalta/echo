@@ -65,6 +65,7 @@ import { walkLayer } from "./walkLayer";
 import { interactLayer } from "./interactLayer";
 import { interiorLayer } from "./interiorLayer";
 import { soundLayer } from "./soundLayer";
+import { marketLayer } from "./marketLayer";
 import { animalsLayer } from "./animalsLayer";
 import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
@@ -158,6 +159,8 @@ export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch, clo
     villagersLayer({ clock }),
     // Goats, hens, dogs, birds and fish (C55): after the villagers, whose people the dogs keep to.
     animalsLayer({ clock }),
+    // The market stall on the green, on market day (C58).
+    marketLayer({ clock }),
     meadowLayer(),
     // The weather over all of it (C48): last, so it leans on a sky every other layer has already read.
     weatherLayer({ clock }),

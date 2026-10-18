@@ -2003,3 +2003,29 @@ consecutive salts anywhere this matters has **not** been audited.
   round.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 48. What C58 does not do yet, and what it trusts (2026-10-18)
+
+- **A market moves one way.** The partner's people never come, and the partner does not know it is
+  anyone's partner: Dragcrachadit's villagers never mention Senstrand's traders.
+- **The traders walk.** They go out by land toward the partner even across water, and nothing they
+  carry is drawn.
+- **Only the player is stopped by the stall.** Villagers walk through it, and it can stand where
+  someone's evening spot on the green is.
+- **No village is richer for trading** (SOC-7.C, developed vs undeveloped). Houses and lives are
+  unchanged by it.
+- **The stranger chooses only what to offer.** The route takes `asked`, but the panel always asks
+  for whatever the villager can spare.
+- **One trade a villager a day.** The goods at the stall never run out, and there are no seasons in
+  them.
+- **A return for help is a thing.** Labour returned as labour, such as building your house, waits
+  for feature 13.
+- **`barter` and `ask_return` are unrouted.** They move the posterior only through the label
+  embedding. G12's other side, free-riding, is not measured.
+- **Pressing is remembered by the page.** A reload and the same ask again is not pressing.
+- **Nothing checks that a villager never names a price.** The facts say there is no money, and the
+  real-model checks found no price.
+- **The partner is found without the neighbours' conversations** (C44 changes), so that the browser
+  and the server find the same one.
+
+**Status:** OPEN, all of it, written down rather than discovered.

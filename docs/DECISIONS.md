@@ -3514,3 +3514,128 @@ Real model, Jerreef:
   round-trip test cancels it out either way. It is now pinned.
 
 **Not done.** See ⚑47.
+
+## C58 — barter and labour with no price, and villages trading with each other
+
+Feature 12 of the twenty. What was promised: no money, because Design Law 1 says no points; things
+for things, and labour for labour; and a written decision for the economy (SOC-7).
+
+**The decision**, taken 2026-10-18 by the user, three answers:
+
+1. **The valueless shape, not an exemption.** SOC-7.B asks for "an explicit written exemption or a
+   different shape". This is the different shape, and no exemption is written, because nothing in
+   it needs one:
+   - no item has a price, a value or a number: `items.test.ts` already fails on any field but a
+     name and who is glad of it;
+   - a villager's answer is a reason, in words, and a test fails on any price word in them;
+   - one thing goes for one thing, and no balance accumulates;
+   - help owed is a promise, which is square once it is returned.
+2. **A villager gives only what their work leaves them to spare.** Nothing is ranked above
+   anything else, so there is no trading up, and the pack's eight slots are the only ceiling.
+3. **Villages trade with each other, the simple version** (SOC-7.A, simulation-visible and
+   player-inert). This made the feature XL.
+
+**What a villager can spare** (`markets.ts` `TRADE_GOODS`, `trade.ts` `sparesOf`): their trade's
+good. A fisher a fish, a farmer grain, a herder cheese, a smith a knife, a potter a pot, a weaver
+cloth, a carpenter a bowl, a healer herbs, an innkeeper bread, a forester a dry branch, a miner ore,
+a stonecutter a stone. Eight of these are new items. A child has nothing of their own. A trader has
+what came back from market.
+
+**What a villager says to an offer** (`tradeAnswer`):
+
+- **They take it** if it is:
+  - the very thing they need this week. It is then recorded met, as a gift would be;
+  - something they are glad of;
+  - something their trade works with.
+- **They take it as a favour** if they know the stranger has been kind or helpful to their household
+  in the last 60 days.
+- **They turn it down**:
+  - if they make it themselves, or have no use for it;
+  - if the stranger has wronged them;
+  - if they have already traded with the stranger today;
+  - if they have nothing to spare. A trader without stock says when the next market is, and what
+    it will bring.
+
+**Labour for labour** (`owes`). Help to a household — a field weeded, a boat bailed, a shift worked —
+may be asked back once. It is owed while the help is more recent than the last return, within 30
+days, and the return is something of the villager's trade.
+
+**Markets** (`markets.ts`; `villageAt` finds the neighbours in 10–28 ms with the market included):
+
+- **Who has one.** A village with traders or carters in it.
+- **Its partner.** The settled neighbour within three rings with the most of what this village
+  lacks; the nearest of a tie.
+- **When.** Every sixth day.
+- **The road and the stall** (`schedule.ts`):
+  - the day before, the traders and carters go out along the partner's road and are away that night
+    (`homeState` now knows a day that begins away from home);
+  - on market day they come in from the road to a stall on the green;
+  - they have the partner's goods for two days after.
+- **The stall** (`marketLayer`) is one draw. The player cannot walk through it.
+- **Player-inert.** The partner, the days and the goods are the seed's and the day's. With no price
+  anywhere, there is nothing to buy cheap and sell dear.
+
+Measured:
+
+| Village | Partner | Distance | Brings |
+|---|---|---|---|
+| Senstrand | Dragcrachadit | 2.7 km | knife, pot |
+| Jerreef | Tulmarket | 2.6 km | cheese, bowl, herbs |
+| Tulmarket | Teismurcombe | — | dry branch, cloth, bread |
+
+Drurnscree has no traders, and so no market.
+
+**The routes.**
+
+- `POST /api/village/trade` checks three things: the villager is there to hand it to; what is held
+  out is in the pack; and what `tradeAnswer` says. On a yes it swaps one thing for the other and
+  records a `trade` or `ask-back` deed, read as respect, with `item` and `got`. `got` is migration
+  0025.
+- The act route refuses those two verbs. A trade through it would be a free deed.
+
+**What the village knows.**
+
+- Each villager knows what they can spare and that there is no money. They know when market day is,
+  who goes where, and what comes back.
+- A trade is said as one thing for another ("traded a shell with Tosdaym for a dry branch") and goes
+  round the village as deeds do.
+
+Real model, Senstrand:
+
+- Naand, a weaver: "I've a length of cloth to spare, off this very loom — nothing here has a price,
+  mind, but if you've something I'd have use for, we can swap fair."
+- Peissta, a trader: "Every sixth day, on the green. The next is in two days, so tomorrow I'll take
+  the cart to Dragcrachadit, three kilometres off, and bring back a knife and a clay pot for the
+  stall."
+
+**What the echo hears.** No ML change (C7):
+
+- `barter` (F9), unrouted;
+- `ask_return` (G12, reciprocity), unrouted. It is the catalogue's first emitter of G12;
+- `bargain_hard` (F9), which ingest.py routes by name, for asking again after a no. A kindness done
+  in between changes the terms, and the next ask is not pressing.
+
+**Measured.**
+
+- `markets.test.ts`, 5 tests: what a village spares and lacks, the partner, the cadence, the road
+  and the stall, and nobody else's day moving for it.
+- `trade.test.ts`, 6 tests: every answer, labour owed and squared, words with no price, the deed's
+  sentence.
+- `trade.test.mts`, 9 tests: the route, the act route's refusal, a return for help, a need met, a
+  trader on market day, the measurement, the facts, the stall and its collision.
+- 24 injected defects, all caught. The first pass missed two, both now pinned: a child's spares and
+  the not-carried check. Neither was exploitable, because the route's own guard and the pack's own
+  removal still stood.
+- Browser, Tulmarket, on its market day:
+  - the stall was up with dry branch, cloth and bread;
+  - Tosdaym, a trader, came in from the road (100 m out at 0.266, at the stall by 0.371);
+  - a shell was refused ("I've no use for a shell, I'm sorry"); asking again sent `bargain_hard`;
+  - after a gift of berries, the shell was taken as a favour for a dry branch;
+  - the echo was told `bargain_hard`, `give_gift`, `barter`;
+  - 98 draw calls.
+- Found on the way:
+  - the first browser run counted the ask after the gift as pressing too;
+  - a farmer's basket was the farmer's need that week, which is "need", not "glad": the test was
+    wrong, not the rule.
+
+**Not done.** See ⚑48.

@@ -43,6 +43,16 @@ export const ITEMS: Record<string, ItemSpec> = {
   hammer: { id: "hammer", name: "a stone hammer", gladdens: ["smith", "carpenter", "stonecutter"] },
   torch: { id: "torch", name: "a torch" },
   raft: { id: "raft", name: "a raft" },
+  // What a villager's work leaves them to spare, given in trade or in return for help (C58). Each is
+  // somebody's day's work, and none of them is worth more than another: nothing here has a value.
+  fish: { id: "fish", name: "a fish", gladdens: ["old", "innkeeper", "smith"] },
+  bread: { id: "bread", name: "a loaf of bread", gladdens: ["fisher", "miner", "child"] },
+  cheese: { id: "cheese", name: "a piece of cheese", gladdens: ["fisher", "child"] },
+  cloth: { id: "cloth", name: "a length of cloth", gladdens: ["farmer", "old"] },
+  pot: { id: "pot", name: "a clay pot", gladdens: ["innkeeper", "healer", "farmer"] },
+  bowl: { id: "bowl", name: "a wooden bowl", gladdens: ["innkeeper", "old"] },
+  herbs: { id: "herbs", name: "a bunch of herbs", gladdens: ["healer", "old"] },
+  knife: { id: "knife", name: "a knife", gladdens: ["fisher", "herder", "forester"] },
 };
 
 export interface Recipe {

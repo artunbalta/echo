@@ -38,6 +38,8 @@ import {
   animalsOf,
   comingOn,
   dayPlans,
+  daysToMarket,
+  sparesOf,
   gatheringName,
   gatheringsOn,
   goalFits,
@@ -341,6 +343,24 @@ export function villagerContext(
   const strays = beasts.filter((a) => a.id.startsWith("stray:")).map((a) => a.name);
   if (strays.length) lines.push(`${strays.join(" and ")} ${strays.length > 1 ? "are" : "is"} the village's stray${strays.length > 1 ? "s" : ""}, belonging to nobody.`);
 
+  // What their work leaves them to spare, and the market (C58). No price, ever: there is no money.
+  const spare = sparesOf(s, plan, me, day);
+  if (spare.length) {
+    lines.push(`What your work leaves you to spare, to trade or to give: ${spare.map((i) => ITEMS[i]?.name ?? i).join(", ")}. There is no money and nothing has a price; you trade one thing for another when you want what is offered, or like who is offering.`);
+  }
+  const market = plan.market ?? null;
+  if (market) {
+    const goers = market.goers.map((id) => people.get(id)?.given).filter(Boolean);
+    const brings = market.brings.map((i) => ITEMS[i]?.name ?? i).join(" and ");
+    const until = daysToMarket(market, day);
+    const when = until === 0 ? "today" : until === 1 ? "tomorrow" : `in ${until} days`;
+    lines.push(
+      market.goers.includes(me.id)
+        ? `Every sixth day is market day in ${s.name}, and you are one of those who go for it: the day before, you set off for ${market.partner.name}, ${Math.max(1, Math.round(market.partner.km))} km off, and come back with ${brings} for the stall on the green. The next market is ${when}.`
+        : `Every sixth day is market day in ${s.name}: ${goers.join(", ")} go to ${market.partner.name} the day before and come back with ${brings} for the stall on the green. The next market is ${when}.`,
+    );
+  }
+
   // Between villages (C53): where they came from, where they went and came back from, and word sent.
   // Other villages' names, and the people of them named here, are names a reply may use.
   const elsewhere = new Set<string>();
@@ -503,7 +523,7 @@ export function villagerContext(
   lines.push(`There are ${graves} graves in the yard beyond the houses.`);
 
   // The village's dogs have names too (C55), and a reply may say them.
-  const names = new Set<string>([s.name, ...elsewhere, ...beasts.map((a) => a.name).filter((n): n is string => n !== null)]);
+  const names = new Set<string>([s.name, ...elsewhere, ...beasts.map((a) => a.name).filter((n): n is string => n !== null), ...(market ? [market.partner.name] : [])]);
   for (const p of s.people) {
     names.add(p.given);
     names.add(p.family);

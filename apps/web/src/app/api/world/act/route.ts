@@ -93,6 +93,8 @@ export async function POST(req: Request) {
 
   const verb = verbOf(kind, verbId);
   if (!verb) return bad("no_such_verb", 404);
+  // Something comes back from a trade (C58): the trade route does those, or the deed would be free.
+  if (verb.id === "trade" || verb.id === "ask-back") return bad("use_trade_route", 400);
   if (!verb.deed && !(verb.effect && verb.effect.lastsDays > 0)) return NextResponse.json({ recorded: false, reason: "touches_nothing" });
 
   const rate = await rateLimit(req, { bucket: "world", windowMs: 10 * 60 * 1000, max: 120, onUnavailable: "allow" });

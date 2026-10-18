@@ -35,6 +35,7 @@
  * Pure: no clock, no I/O, no cache. Coordinates are PLANET-LOCAL METRES, east and north.
  */
 
+import type { Market } from "./markets.js";
 import { DAYS_PER_YEAR, yearsToDays } from "./worldclock.js";
 import { hash01, occupationOn, occupationWeights, stream, type Household, type Person, type Settlement } from "./society.js";
 import { present } from "./life.js";
@@ -160,6 +161,11 @@ export interface VillagePlan {
   clearings: { x: number; y: number; radiusM: number }[];
   /** Centrelines worn between the places people walk, for the scatter layer. */
   paths: [Point, Point][];
+  /**
+   * The village's market (C58): who it trades with, what comes back, and on which days. Set by
+   * `villageAt`, which has the planet to find the neighbours with; absent on a plan made without it.
+   */
+  market?: Market | null;
 }
 
 // ── the dials ───────────────────────────────────────────────────────────────────
