@@ -1717,6 +1717,9 @@ is cheap — two calls — and the crowd is thirteen with its shadows whatever i
 ORDINARY parcel's (C28, C31) with a village on top. A bigger town, smoke, more props or the C38
 `buttress-tree` mid band each spend from the same ten.
 
+**Re-measured 2026-10-18 after C43's re-roll:** the biggest village is now Kamgull, 84 people —
+**112 calls / 526k triangles**, worst of 12 headings at dusk and at morning. Eight calls of headroom.
+
 **Status:** OPEN. The levers on record: SOC-4.C's person impostor (fewer crowd calls at distance),
 thinning the scatter inside a settled cell (realistic, and cuts scatter calls), and C38's mid band
 for more classes. None is free; pick with a measurement.
@@ -1741,6 +1744,12 @@ Two further limits, written down rather than found later:
 
 **Status:** OPEN. Applying 0018 is an operator action on a database this repository does not own a
 connection to; it was not done here.
+
+
+**Status (2026-10-18, C44):** the two further limits are closed. Villagers remember strangers
+(`villager_memories`), and a conversation begins only beside the villager (`talk/begin`, 25 m, against
+the closed form). The first limit still stands, and C44 widens it: 0019 must be applied as well as
+0018, or memory and decisions are dark too. What is left is ⚑39.
 
 ---
 
@@ -1779,4 +1788,30 @@ changing it would move the whole planet's ground. Only the society side (`societ
 consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** CLOSED for the society (C43). OPEN for the audit of `hashString`'s other callers.
+
+---
+
+## ⚑ 39. What C44 does not do, and what it trusts (2026-10-18)
+
+- **The stranger's position is their browser's word.** `talk/begin` checks it against the closed
+  form, so nobody talks to someone asleep, at sea or gone, but a crafted client can compute where a
+  villager stands and claim to be there. The rate limit is still the cost guard.
+- **Death is not changeable.** No change touches a drawn lifespan, so "lives not fixed in advance"
+  holds for what people do, where they go and who is born after a decision, not for when anyone dies.
+  A hazard model (lifespan as a threshold over circumstances a change can alter) would make it
+  changeable. It is not built, and it would re-roll every death on the planet.
+- **No matchmaking, no return.** Nobody can be talked into a marriage, and a leaver is gone: they
+  are not living in some other village of the planet. Each is a further event kind.
+- **Griefing is bounded, not prevented.** One leaving per village per 30 world days (6 real hours),
+  and leaving needs a second meeting, so one persistent stranger can still empty a village slowly.
+  There is no reverting tool beyond a database row.
+- **Decisions are rare, and that is measured on five conversations only** (C44): one decision in
+  five. Whether real players find villagers too stubborn is unmeasured.
+- **The village a page shows is fetched once.** A change made by someone else while you are on the
+  parcel arrives on your next visit. Your own changes are folded in at once (`PlanetWorld.revillage`).
+  The houses are the build day's either way (⚑35).
+- **0019 is applied nowhere.** Locally the store runs as `VILLAGE_STORE=memory`, and production needs
+  the migration before any of this is more than talk.
+
+**Status:** OPEN, all of it, written down rather than discovered.
 

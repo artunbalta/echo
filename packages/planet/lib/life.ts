@@ -40,6 +40,7 @@ import {
   ageYears,
   alive,
   hash01,
+  occupationOn,
   stream,
   type Occupation,
   type Person,
@@ -169,13 +170,16 @@ export type LifeEventKind =
   | "born" | "arrived" | "learned-trade" | "taught" | "befriended" | "married"
   | "child-born" | "sibling-born" | "grandchild-born" | "left-home"
   | "parent-died" | "sibling-died" | "child-died" | "friend-died" | "widowed"
-  | "rift" | "reconciled" | "died";
+  | "rift" | "reconciled"
+  // C44: what a change made happen. Never emitted for a village nobody has changed.
+  | "took-up-trade" | "left-village" | "relative-left"
+  | "died";
 
 /** Same-day events sort in the order they happen in a life: you are born before anything else. */
 const KIND_ORDER: readonly LifeEventKind[] = [
   "born", "arrived", "learned-trade", "taught", "befriended", "left-home", "married",
-  "child-born", "sibling-born", "grandchild-born", "rift", "reconciled",
-  "parent-died", "sibling-died", "child-died", "friend-died", "widowed", "died",
+  "child-born", "sibling-born", "grandchild-born", "rift", "reconciled", "took-up-trade",
+  "parent-died", "sibling-died", "child-died", "friend-died", "widowed", "relative-left", "left-village", "died",
 ];
 
 export interface LifeEvent {
@@ -210,11 +214,13 @@ export interface VillageEvent {
 /**
  * Was this person IN THE VILLAGE on this day — alive, and arrived?
  *
- * Nobody in the substrate leaves, so arriving is the whole of it: an incomer arrives on the day they
- * pair (`society.ts:662-673`), a founder on the founding day, and everyone else is here from birth.
+ * An incomer arrives on the day they pair (`society.ts:662-673`), a founder on the founding day, and
+ * everyone else is here from birth. Since C44 a person can also go: from their `leftDay` they are
+ * alive somewhere else, which is not here.
  */
 export function present(s: Settlement, p: Person, day: number): boolean {
   if (!alive(p, day)) return false;
+  if (p.leftDay <= day) return false;
   if (p.founder) return s.foundedDay <= day;
   if (p.incomer) return p.partnerDay !== null && p.partnerDay <= day;
   return true;
@@ -244,7 +250,7 @@ export function causeOfDeath(p: Person): DeathCause {
   const age = ageYears(p, p.deathDay);
   if (age < VITALS.childCeilingYears) return "childhood-illness";
   if (age < HAZARD_BEFORE_YEARS) {
-    const hazard = HAZARDS[p.occupation];
+    const hazard = HAZARDS[occupationOn(p, p.deathDay)];
     if (hazard !== undefined && stream(`${p.id}/death`)() < hazard[1]) return hazard[0];
     return "illness";
   }
@@ -340,13 +346,16 @@ export function lives(s: Settlement): Map<string, LifeEvent[]> {
     day: number,
     others: readonly Person[],
     detail: string | null,
-    discriminator?: Person,
+    discriminator?: Person | string,
   ) => {
     if (day > horizon) return;
     const list = out.get(subject.id);
     if (list === undefined) return;
     list.push({
-      key: discriminator === undefined ? `${subject.id}/${kind}` : `${subject.id}/${kind}/${discriminator.id}`,
+      key:
+        discriminator === undefined
+          ? `${subject.id}/${kind}`
+          : `${subject.id}/${kind}/${typeof discriminator === "string" ? discriminator : discriminator.id}`,
       day,
       kind,
       subject: subject.id,
@@ -402,6 +411,20 @@ export function lives(s: Settlement): Map<string, LifeEvent[]> {
     }
 
     if (p.deathDay <= horizon) emit(p, "died", p.deathDay, [], causeOfDeath(p));
+
+    // C44. A trade taken up, a village left — and, for those left behind, a relative gone.
+    for (const t of p.trades) emit(p, "took-up-trade", t.day, [], t.occupation, String(t.day));
+    if (p.leftDay < p.deathDay && p.leftDay <= horizon) {
+      const withThem = [...(partner !== null ? [partner] : []), ...p.children.map((i) => people[i])].filter((q) => q.leftDay === p.leftDay);
+      emit(p, "left-village", p.leftDay, withThem, null);
+    }
+    const kin = [...parents, ...(partner !== null ? [partner] : []), ...p.children.map((i) => people[i])];
+    if (parents.length > 0) for (const si of parents[0].children) if (si !== p.index) kin.push(people[si]);
+    for (const q of kin) {
+      if (q.leftDay < q.deathDay && q.leftDay !== p.leftDay && livingOn(p, q.leftDay) && p.leftDay > q.leftDay) {
+        emit(p, "relative-left", q.leftDay, [q], null, q);
+      }
+    }
   }
 
   // ── B1. the trade, and who taught it ──

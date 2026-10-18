@@ -3,7 +3,10 @@
  *   - ML learning state (persona posterior, reward head, behavior index, buckets) via the
  *     ML service DELETE /user/{uid}
  *   - all string-keyed rows in Supabase (telemetry, interactions, behaviors, persona,
- *     reward, autonomy, preference pairs, meeting outcomes, narrations, behavioral events)
+ *     reward, autonomy, preference pairs, meeting outcomes, narrations, behavioral events,
+ *     villagers' memories of them)
+ *   - their name on the village changes they were part of (C44): cleared, not deleted, because
+ *     those rows are the shared world's history
  *
  * Selfies are never stored (discarded after attribute extraction, §6), so there is no
  * biometric image to erase. Auth-uuid-keyed tables (characters/world_entities) cascade
@@ -46,7 +49,14 @@ const USER_KEYED: [string, string][] = [
   // cascade as the reason that column exists. Missing it left the one table that holds a
   // person's raw behaviour behind after an erasure said it had finished.
   ["behavioral_events", "actor_id"],
+  // C44. What each villager remembers of this person, in the villager's words. Deleted outright.
+  ["villager_memories", "subject"],
 ];
+
+// table → column to NULL rather than delete: rows that are the shared world's history now, and point
+// at the person only through that column. C44's `village_changes`: deleting a row would bring a family
+// back from wherever it went, for every other visitor, so the row stays and forgets who was there.
+const USER_NAMED: [string, string][] = [["village_changes", "subject"]];
 
 async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: string[] }> {
   // NO KEY IS A FAILURE, NOT A CLEAN SLATE. This returned `{wiped: [], failed: []}`, which made
@@ -72,6 +82,24 @@ async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: s
       // Keep erasing the rest, but never let a table that refused pass for a table that is clean.
       // A silent failure here is the difference between "your data is gone" and a sentence that
       // only sounds like it.
+      failed.push(`${table} ${(err as Error).message}`);
+    }
+  }
+  for (const [table, col] of USER_NAMED) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(uid)}`, {
+        method: "PATCH",
+        headers: {
+          apikey: SERVICE_KEY,
+          authorization: `Bearer ${SERVICE_KEY}`,
+          prefer: "return=minimal",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ [col]: null }),
+      });
+      if (res.ok) wiped.push(`${table} (${col} cleared)`);
+      else failed.push(`${table} ${res.status}`);
+    } catch (err) {
       failed.push(`${table} ${(err as Error).message}`);
     }
   }

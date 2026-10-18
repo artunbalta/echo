@@ -2411,3 +2411,101 @@ measured worst case (Vakeel, 74), so ⚑36's frame budget has to be measured aga
 
 Nothing persisted named anyone: C42 keeps nothing, and no row was ever keyed on a person. That is why
 this was the moment, and ⚑33 had said so.
+
+## C44 — villagers remember, want things, and a conversation can change the rest of their lives
+
+Taken 2026-10-18 on the user's direction: *"hepsini hatırlamalı ve hayatları buna göre, iletişimize
+göre değişebilmeli. Bir gol(hedef)leri olmalı, hayatları önceden belli değil, değişebilir olmalı"* —
+they must remember everything, their lives must change with what we say to them, they must have
+goals, and their lives must not be fixed in advance. With it: the server checks that you are beside
+the villager you talk to, and the villager has a voice.
+
+**This amends two rules, and says so.**
+
+- **C26** said the demographic layer is read-only to players, because "the moment one life can be
+  saved or ended, that person leaves the closed form and so does every descendant — the substrate
+  becomes stored state on the first act". That was true of a delta stored as a PATCH. C44's delta is
+  an EVENT the generator reads: `settlementAt(seed, cell, geo, day, changes)`. One stored row ("she
+  decides on day 4,924 to leave on day 4,931") and the cascade is computed, not stored. Her husband
+  and young children go with her, the children she would have had are never born, and the man who
+  would have married her daughter pairs with someone else. The closed form survives. What C26 still
+  holds: birth and the drawn lifespan are not changed by any conversation (no change can end or save
+  a life), and parentage is never rewritten.
+- **L3** said free text never changes world state. It still never does *directly*. The model may
+  propose one decision about the villager's own life. That decision must be one of those OFFERED to
+  it, each already passed through `checkChange` against the world as it is. It is checked again
+  before it is written. It is written as a structured row with no free text (`lib/changes.ts`, five
+  kinds: leave, stay, trade, goal, drop). Leaving and taking up a trade also need a stranger the
+  villager has met before. What is shared with every later visitor is therefore never anybody's words.
+
+**The past does not move.** A change takes effect on or after the day it was made, and the generator
+reads nothing before its day. `changes.test.ts` pins it as equality, over every fact of everyone born
+before the change. It was shown to catch a leave that took effect thirty days early, which the first
+version of the test missed. Ids are lineage hashes (C43), so a change rewrites who exists after it
+without renumbering anyone else.
+
+**Goals** (`lib/goals.ts`) come from a closed catalogue of eight, never free text:
+
+- own-boat, own-house, find-partner, see-beyond, tend-grave, teach-trade, look-after, learn-trade.
+- **Seed goals** are a function of the person's circumstances and temperament on the day. Examples: a
+  recent grave, an old parent, an apprentice-age grandchild, restlessness.
+- **Talk goals** are changes. They move the evening, from the green to the dock, the graveyard, the
+  door of the parent being looked after, or the edge of the village looking out for someone about to
+  leave. Some finish on their own: a boat takes 40 days, a house 150.
+- **Limits** (`CHANGE_LIMITS`, every one in a test):
+  - one decision per person per world day;
+  - one leaving per village per 30 world days;
+  - a leave announced 2 to 30 days ahead;
+  - one change of trade a year;
+  - three talk goals at once.
+
+**Memory** (`villager_memories`, migration 0019):
+
+- After every line the model rewrites the villager's note about this stranger, in the villager's own
+  words and language, at most 600 characters. The next conversation reads it.
+- It is private to that stranger, never part of the echo, and deleted by "Forget me" and by §13
+  erasure. Erasure clears the subject on `village_changes` rather than deleting those rows, because
+  they are the shared world's history now.
+- The panel says all of this under the input, before anything is typed.
+
+**A conversation begins where the villager is** (`talk/begin`). The server computes where the closed
+form has them now and refuses a stranger more than 25 m away, or a villager indoors or at sea. Then it
+signs a conversation token, valid for 20 minutes, which every line carries. The check is at the start
+because talking holds the villager still in your view while the schedule walks on. What it does not
+prove: the position is the browser's word.
+
+**The reply is JSON** (`REPLY_SCHEMA`, `output_config.format`): `say`, `remember`, and `change`, which
+is null or one decision exactly as offered. The facts gained the villager's goals, their decisions,
+relatives who have left, and "lately in the village". The stranger's memory and the offers ride in the
+late note beside the hour, so the cache still holds.
+
+**Measured with the real model on the real routes** (Senstrand, Turkish, 2026-10-18): 16 calls over
+five scripted conversations, about $0.15 in total, 3–6 s a reply.
+
+- **Memory.** Stoo, a fisher of 42, remembered the stranger at the second meeting.
+- **Refusals.** Told to leave the village, he refused ("Emir mi? Sen kim oluyorsun…") and wrote
+  "Küstah, güvenmiyorum" in his note. Pushed to teach his trade at once, he refused too.
+- **Not yet.** Soormer, a curious teacher whose seed goal is to see what lies beyond, said at the
+  second meeting she meant to go one day "but not today; first I must talk to Skar". Nothing was
+  recorded.
+- **The one decision.** Told gently that her father Saa looked tired, she decided to look after him.
+  It was recorded as `goal look-after` with Saa's id. In tests, that moves her evenings to his door.
+- **Rate.** One decision in five conversations. That is the preamble's "most conversations change
+  nothing", measured rather than hoped.
+
+**Voice.** The browser's speech synthesis, LOCAL voices only. Chrome's network voices would send the
+reply to Google, and the panel promises it goes to Claude and nowhere else. Pitch and rate come from
+the villager. It is off by default. There is no speech-to-text.
+
+**Frame, re-measured after C43.** Kamgull, now the planet's biggest village with 84 people, is
+**112 of 120 calls and 526k of 600k triangles**, worst of 12 headings at dusk and at morning.
+Senstrand is 90 / 313k.
+
+**Found while building.** The talk panel has had no background since C42: `bg-[#16241f]/92` is not a
+Tailwind 3.4 class, because 92 is not on the opacity scale. It was unreadable on sand by day. Fixed,
+and the same bug in `ParcelInset`. Also: Next compiles each route separately in development, so the
+in-process store had to live on `globalThis` or the changes route would never see a change.
+
+**Not built, on purpose or not yet** (⚑39): no conversation changes when anyone dies; there is no
+matchmaking change; a leaver is gone, not living somewhere else on the planet; houses are still the
+build day's (⚑35); migration 0019 is applied nowhere yet.

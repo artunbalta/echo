@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 
-import type { LifeEvent } from "@echo/planet";
+import type { LifeEvent, Person } from "@echo/planet";
 import { windowLight } from "../src/game/world/settlementLayer";
 import { lifeLine } from "../src/game/world/villagersLayer";
 import { Crowd, lookFor } from "../src/game/world/crowd";
@@ -98,4 +98,50 @@ test("children are small, the old are grey and stooped, and nobody is dressed in
     // Echo violet is h ≈ 0.75; the art bible keeps it for live humans.
     assert.ok(Math.abs(hsl.h - 0.75) > 0.06 || hsl.s < 0.15, `${trade} is dressed in violet`);
   }
+});
+
+test("C44: a changed village is swapped in without a rebuild, and the change moves that person's evening", async () => {
+  // The server's planet, for the same village the server builds; "server-only" is a no-op here.
+  const { createRequire } = await import("node:module");
+  const require_ = createRequire(import.meta.url);
+  const SERVER_ONLY = require_.resolve("server-only");
+  require_.cache[SERVER_ONLY] = { id: SERVER_ONLY, filename: SERVER_ONLY, path: SERVER_ONLY, loaded: true, exports: {}, children: [], paths: [] } as never;
+  const { planet } = await import("../src/lib/planet");
+  const P = await import("@echo/planet");
+  const { villagersLayer } = await import("../src/game/world/villagersLayer");
+  const clock = P.worldClock(P.WORLD_EPOCH);
+  const day = P.worldDayIndex(clock, Date.now());
+  const { field, calibration, commons, world } = planet();
+  const cell = "843f6a1ffffffff";
+  const v0 = P.villageAt(world.seed, cell, field, calibration, world.radiusKm, { commons: commons.cells, day })!;
+  const s = v0.settlement;
+  // Someone grown, with a parent of sixty-five or more living in another house.
+  const people = P.residentsOn(s, v0.plan, day);
+  const homeOf = new Map(people.map((r) => [r.person.id, r.plot.index]));
+  let pick: { me: Person; elder: Person } | null = null;
+  for (const { person: me } of people) {
+    if (P.ageYears(me, day) < 20 || P.ageYears(me, day) >= 60 || me.parents === null) continue;
+    const elder = me.parents.map((i) => s.people[i]).find((q) => P.present(s, q, day) && P.ageYears(q, day) >= 65 && homeOf.get(q.id) !== homeOf.get(me.id));
+    if (elder) {
+      pick = { me, elder };
+      break;
+    }
+  }
+  assert.ok(pick, "nobody in Senstrand has an old parent in another house");
+  const verdict = P.checkChange(s, pick.me, day, { kind: "goal", goal: "look-after", target: pick.elder.id }, []);
+  assert.ok(verdict.ok);
+  const change = { id: "c000000000001", ...verdict.change };
+  const v1 = P.villageAt(world.seed, cell, field, calibration, world.radiusKm, { commons: commons.cells, day, changes: [change] })!;
+
+  const layer = villagersLayer({ clock });
+  const ctx = { region: { village: v0 }, frame: {}, scene: new THREE.Scene(), renderer: { domElement: { parentElement: null } } };
+  await layer.build(ctx as never, new AbortController().signal);
+  const evening = () => layer.plans().find((d) => d.person === pick!.me.id)!.stays.find((st) => st.t0 > 0.55 && st.t1 > 0.75)!.at;
+  const before = evening();
+  layer.apply(v1);
+  const after = evening();
+  const door = P.doorOf(people.find((r) => r.person.id === pick!.elder.id)!.plot);
+  assert.ok(Math.hypot(after.x - door.x, after.y - door.y) < 2, `after the change the evening is ${Math.hypot(after.x - door.x, after.y - door.y).toFixed(1)} m from ${pick.elder.given}'s door`);
+  assert.ok(Math.hypot(before.x - door.x, before.y - door.y) > 2, "the evening was at the door before anyone decided anything");
+  layer.dispose?.();
 });

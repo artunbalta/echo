@@ -26,9 +26,11 @@
  */
 
 import { WORLD_DAY_S } from "./worldclock.js";
-import { ageYears, hash01, type Person, type Settlement } from "./society.js";
+import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./society.js";
+import type { LifeChange } from "./changes.js";
+import { eveningOf, type GoalPlace } from "./goals.js";
 import { temperaments } from "./life.js";
-import { householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
+import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
 // ── the dials ───────────────────────────────────────────────────────────────────
 
@@ -157,7 +159,12 @@ export function mooringsOn(s: Settlement, plan: VillagePlan, day: number): Moori
     const h = householdOn(s, plot, day);
     if (h === null) continue;
     const fishes = s.people.some(
-      (p) => p.occupation === "fisher" && p.birthDay <= day && p.deathDay > day && (p.household === h.index || p.bornInto === h.index),
+      (p) =>
+        occupationOn(p, day) === "fisher" &&
+        p.birthDay <= day &&
+        p.deathDay > day &&
+        p.leftDay > day &&
+        (p.household === h.index || p.bornInto === h.index),
     );
     if (fishes) owners.push(h.index);
   }
@@ -240,7 +247,13 @@ const GREEN = new Set(["trader", "innkeeper", "teacher"]);
  * Everyone's plan for a world day. Computed once per day; `whereabouts` evaluates an instant of it.
  * Infants are left out: they are carried, and nothing in this file draws a carried child.
  */
-export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans: DayPlan[]; boats: (BoatDay | null)[]; moorings: Mooring[] } {
+export function dayPlans(
+  s: Settlement,
+  plan: VillagePlan,
+  day: number,
+  /** The cell's changes (C44): a talk goal or a decision to leave moves someone's evening. */
+  changes: readonly LifeChange[] = [],
+): { plans: DayPlan[]; boats: (BoatDay | null)[]; moorings: Mooring[] } {
   const moorings = mooringsOn(s, plan, day);
   const boats = moorings.map((m, i) => boatDay(plan, m, i, day));
   const boatOf = new Map(moorings.map((m, i) => [m.household, i]));
@@ -251,10 +264,16 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
   const plans: DayPlan[] = [];
   const temper = temperaments(s);
   const seats = new Map<number, number>();
-  for (const { person: p, plot } of residentsOn(s, plan, day)) {
+  const changed = new Set(changes.map((c) => c.person));
+  // Whose door and whose grave a moved evening may go to: the person it is about (C44).
+  const residents = residentsOn(s, plan, day);
+  const doorOfPerson = new Map(residents.map(({ person, plot }) => [person.id, doorOf(plot)]));
+  const graves = changed.size > 0 ? new Map(gravesOn(s, plan, day).map((g) => [g.person, { x: g.x, y: g.y }])) : new Map<string, Point>();
+  for (const { person: p, plot } of residents) {
     const age = ageYears(p, day);
     if (age < SCHEDULE.infantYears) continue;
     const t = temper.get(p.id)!;
+    const trade = occupationOn(p, day);
     const pace = (0.86 + 0.14 * (t[3] + 1)) * (age >= SCHEDULE.elderYears ? 0.72 : age < SCHEDULE.childYears ? 1.1 : 1);
     const v = SCHEDULE.walkMps * pace * WORLD_DAY_S; // metres per day-fraction
     const j = (what: string) => jitter(p.id, day, what) * 2 * SCHEDULE.jitter;
@@ -281,7 +300,7 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
 
     const household = p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto;
     const boatIndex = boatOf.get(household);
-    const rows = age >= SCHEDULE.childYears && age < SCHEDULE.elderYears && p.occupation === "fisher" && boatIndex !== undefined && boats[boatIndex] !== null;
+    const rows = age >= SCHEDULE.childYears && age < SCHEDULE.elderYears && trade === "fisher" && boatIndex !== undefined && boats[boatIndex] !== null;
     // A moment on the step, then the day — except for those who row out, who leave before first
     // light; a stay on the step would overlap the walk down to the dock.
     if (!rows) stay(clock + 0.006, plot.facing, "stand");
@@ -310,11 +329,11 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
         seats.set(boat, seat + 1);
         stays.push({ t0: b.t[0], t1: b.t[3], at: { x: m.x, y: m.y }, heading: m.heading, activity: "fish", wander: 0, seat: seat === 0 ? -0.55 : 0.75 });
         clock = b.t[3];
-      } else if (p.occupation === "fisher" || (p.occupation === "labourer" && plan.dock && hash01(`${p.id}/dock`) < 0.5)) {
+      } else if (trade === "fisher" || (trade === "labourer" && plan.dock && hash01(`${p.id}/dock`) < 0.5)) {
         // Mending nets and hauling on the dock.
         go(plan.dock ? along(plan.dock.root, plan.dock.heading, 2 + hash01(`${p.id}/net`) * (plan.dock.lengthM - 4)) : greenSpot(plan, p.id, 1));
         stay(work, plan.dock ? plan.dock.heading + Math.PI / 2 : 0, "work", 1.5);
-      } else if (p.occupation === "farmer" || p.occupation === "labourer") {
+      } else if (trade === "farmer" || trade === "labourer") {
         const f = fieldFor(plot);
         if (f) {
           const u = (hash01(`${p.id}/row`) - 0.5) * f.lengthM * 0.7;
@@ -324,7 +343,7 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
         } else {
           stay(work, plot.facing, "work", 1);
         }
-      } else if (OUTBOUND.has(p.occupation)) {
+      } else if (OUTBOUND.has(trade)) {
         // Out inland and over the hill: gone until the evening, then back the way they went.
         const out = along(plan.centre, away + (hash01(`${p.id}/out`) - 0.5) * 1.6, SCHEDULE.outboundM);
         go(out);
@@ -336,23 +355,81 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
         legs.push({ t0, t1: t0 + dur, from: out, to: back });
         here = back;
         clock = t0 + dur;
-      } else if (GREEN.has(p.occupation)) {
+      } else if (GREEN.has(trade)) {
         go(greenSpot(plan, p.id, 1.05));
         stay(work, toward(here, plan.centre), "stand", 0.8);
-      } else if (CRAFT.has(p.occupation)) {
+      } else if (CRAFT.has(trade)) {
         go(along(door, plot.facing + (hash01(`${p.id}/yard`) - 0.5), 1.8));
         stay(work, plot.facing, "work");
       } else {
         stay(work, plot.facing, "work", 1);
       }
-      // The evening on the green, and home after dark.
-      go(greenSpot(plan, p.id, 0.9));
-      stay(SCHEDULE.gatherEnd + j("bed") + (age < 30 ? 0.03 : 0), toward(here, plan.centre), "stand", 0.4);
+      // The evening: on the green with everyone, unless a conversation has sent it somewhere (C44).
+      const evening = changed.has(p.id) ? eveningOf(s, p, day, changes) : null;
+      const until = SCHEDULE.gatherEnd + j("bed") + (age < 30 ? 0.03 : 0);
+      const about = evening?.target ?? null;
+      const spot = evening === null ? null : eveningSpot(plan, p.id, plot, evening.place, about ? (doorOfPerson.get(about) ?? null) : null, about ? (graves.get(about) ?? null) : null);
+      if (spot === null) {
+        go(greenSpot(plan, p.id, 0.9));
+        stay(until, toward(here, plan.centre), "stand", 0.4);
+      } else if (spot !== "here") {
+        go(spot.at);
+        stay(until, spot.heading, spot.activity, spot.wander);
+      } else {
+        stay(until, plot.facing, "work", 1);
+      }
       bed();
     }
     plans.push({ person: p.id, legs, stays, pace, boat });
   }
   return { plans, boats, moorings };
+}
+
+/**
+ * Where an evening a conversation has moved is spent. `here` is "stay at the work you were doing";
+ * null is "the green after all" (there is no dock to go to, say).
+ */
+function eveningSpot(
+  plan: VillagePlan,
+  person: string,
+  plot: Plot,
+  place: GoalPlace,
+  /** The door of the person the goal is about, if they live here: looking after someone is at THEIR house. */
+  theirDoor: Point | null,
+  /** The grave of the person the goal is about, if it is still marked. */
+  theirGrave: Point | null,
+): { at: Point; heading: number; activity: Activity; wander: number } | "here" | null {
+  switch (place) {
+    case "green":
+      return null;
+    case "work":
+      return "here";
+    case "home":
+      if (theirDoor) return { at: along(theirDoor, hash01(`${person}/evening-door`) * Math.PI * 2, 1.2), heading: toward(theirDoor, plan.centre), activity: "stand", wander: 0.3 };
+      return { at: doorOf(plot), heading: plot.facing, activity: "stand", wander: 0.3 };
+    case "dock": {
+      if (!plan.dock) return null;
+      const at = along(plan.dock.root, plan.dock.heading, 2 + hash01(`${person}/evening-dock`) * (plan.dock.lengthM - 4));
+      return { at, heading: plan.dock.heading, activity: "stand", wander: 0.5 };
+    }
+    case "graveyard": {
+      if (!plan.graveyard) return null;
+      if (theirGrave) {
+        // At the foot of the grave, facing it.
+        const at = { x: theirGrave.x, y: theirGrave.y - 1.1 };
+        return { at, heading: Math.PI / 2, activity: "stand", wander: 0 };
+      }
+      const a = hash01(`${person}/evening-grave`) * Math.PI * 2;
+      const at = along(plan.graveyard, a, plan.graveyard.radiusM * 0.6);
+      return { at, heading: toward(at, plan.graveyard), activity: "stand", wander: 0 };
+    }
+    case "edge": {
+      // Out past the last houses on the way in, looking away from the village.
+      const out = toward(plan.centre, plan.arrival);
+      const at = along(plan.arrival, out + (hash01(`${person}/evening-edge`) - 0.5) * 0.8, 4);
+      return { at, heading: out, activity: "stand", wander: 0 };
+    }
+  }
 }
 
 /** Where a person is at hour `t` of their day plan. */
@@ -414,5 +491,5 @@ export function dayAndHour(worldDay: number): { day: number; hour: number } {
 
 /** Who a person is, in the form a nameplate wants. */
 export function personLabel(s: Settlement, p: Person, day: number): string {
-  return `${p.given} ${p.family} · ${Math.floor(ageYears(p, day))} · ${p.occupation}`;
+  return `${p.given} ${p.family} · ${Math.floor(ageYears(p, day))} · ${occupationOn(p, day)}`;
 }

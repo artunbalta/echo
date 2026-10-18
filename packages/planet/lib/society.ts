@@ -61,7 +61,8 @@
  * under `node --test` with nothing mocked.
  */
 
-import { hashString } from "./terrain.js";
+import { resolveChanges, type LifeChange, type Resolved } from "./changes.js";
+import type { hashString } from "./terrain.js";
 import { DAYS_PER_YEAR, daysToYears, yearsToDays } from "./worldclock.js";
 
 // ── the dials ───────────────────────────────────────────────────────────────────
@@ -272,6 +273,17 @@ export interface Person {
    * about forty characters in any generation, and exactly as semantic.
    */
   seedKey: string;
+  /**
+   * The day this person left the village for good, or `Infinity` (C44). Only a change sets it — the
+   * seed has nobody leave — and a partner and young children leave on the same day. After it they
+   * are alive somewhere else: not here, not in the census, and not in the graveyard.
+   */
+  leftDay: number;
+  /**
+   * Trades taken up after the one they were raised to, oldest first (C44). Empty for almost everyone.
+   * `occupation` stays what they were raised to; {@link occupationOn} is what they do on a day.
+   */
+  trades: readonly { day: number; occupation: Occupation }[];
 }
 
 /** A household is a pairing and the children it raises, from the day it forms until it empties. */
@@ -526,6 +538,8 @@ interface Ctx {
   people: Person[];
   households: Household[];
   truncated: boolean;
+  /** This cell's changes, resolved per `Person.id` (C44). Empty for a village nobody has changed. */
+  changes: Map<string, Resolved>;
 }
 
 function drawLifespanDays(r: () => number): number {
@@ -538,10 +552,22 @@ function drawLifespanDays(r: () => number): number {
 
 const isAlive = (p: Person, day: number): boolean => p.birthDay <= day && p.deathDay > day;
 
-function occupationFor(ctx: Ctx, r: () => number, parents: readonly [number, number] | null): Occupation {
+/** Alive AND still here: what pairing, childbearing and the population ask (C44). */
+const inVillage = (p: Person, day: number): boolean => isAlive(p, day) && p.leftDay > day;
+
+/** What someone does on a day: the trade they were raised to, or the last one they took up since. */
+export function occupationOn(p: Person, day: number): Occupation {
+  let o = p.occupation;
+  for (const t of p.trades) if (t.day <= day) o = t.occupation;
+  return o;
+}
+
+function occupationFor(ctx: Ctx, r: () => number, parents: readonly [number, number] | null, birthDay: number): Occupation {
   if (parents !== null && r() < OCCUPATION_INHERITANCE) {
     const from = ctx.people[r() < 0.5 ? parents[0] : parents[1]];
-    if (from !== undefined) return from.occupation;
+    // What the parent did when the child was born: a father who took up smithing at forty raises
+    // his later children to the forge (C44).
+    if (from !== undefined) return occupationOn(from, birthDay);
   }
   return pick(r(), occupationWeights(ctx.geo));
 }
@@ -585,19 +611,40 @@ function addPerson(ctx: Ctx, spec: NewPerson): Person | null {
     bornInto: spec.bornInto,
     pairAgeDays: 0,
     seedKey: spec.key,
+    leftDay: Infinity,
+    trades: [],
   };
   person.lifespanDays = drawLifespanDays(r);
   person.deathDay = person.birthDay + person.lifespanDays;
   person.pairAgeDays = Math.round(yearsToDays(PAIRING.minAgeYears + r() * PAIRING.ageSpanYears));
-  person.occupation = occupationFor(ctx, r, spec.parents);
+  person.occupation = occupationFor(ctx, r, spec.parents, spec.birthDay);
+  const changed = ctx.changes.get(person.id);
+  if (changed !== undefined) {
+    person.leftDay = changed.leftDay;
+    person.trades = changed.trades;
+  }
   ctx.people.push(person);
   return person;
 }
 
+/**
+ * A pair leaves together (C44): whichever of them decided, the other goes on the same day if they are
+ * still alive then. Called the moment a pair is made, which is before either of their children is
+ * drawn, so `bearChildren` already knows the day births stop.
+ */
+function leaveTogether(a: Person, b: Person): void {
+  const day = Math.min(a.leftDay, b.leftDay);
+  if (day === Infinity) return;
+  for (const p of [a, b]) if (p.deathDay > day && p.leftDay > day) p.leftDay = day;
+}
+
+/** Children under this age on the day their family leaves go with it; older ones choose for themselves. */
+export const LEAVE_WITH_FAMILY_YEARS = 16;
+
 /** Everyone alive on a day. O(n), and called once per pairing, which is where the n^2 comes from. */
 function populationAt(ctx: Ctx, day: number): number {
   let n = 0;
-  for (const p of ctx.people) if (isAlive(p, day)) n++;
+  for (const p of ctx.people) if (inVillage(p, day)) n++;
   return n;
 }
 
@@ -656,7 +703,7 @@ function bearChildren(
       day += Math.round(yearsToDays(FERTILITY.spacingMinYears + r() * FERTILITY.spacingSpanYears));
       continue;
     }
-    if (!isAlive(mother, day) || !isAlive(father, day)) break;
+    if (!inVillage(mother, day) || !inVillage(father, day)) break;
     if (daysToYears(day - mother.birthDay) > FERTILITY.maxMotherAgeYears) break;
 
     const child = addPerson(ctx, {
@@ -668,6 +715,11 @@ function bearChildren(
       bornInto: household,
     });
     if (child === null) return;
+    // Born before the family went, and young enough on that day to be taken with it.
+    const familyLeaves = Math.min(mother.leftDay, father.leftDay);
+    if (familyLeaves < child.leftDay && familyLeaves - child.birthDay < yearsToDays(LEAVE_WITH_FAMILY_YEARS) && child.deathDay > familyLeaves) {
+      child.leftDay = familyLeaves;
+    }
     mother.children.push(child.index);
     father.children.push(child.index);
 
@@ -703,14 +755,14 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
     settled.add(next.index);
 
     // Died before ever pairing. Common, and it is where the child graves come from.
-    if (!isAlive(next, nextDay)) continue;
+    if (!inVillage(next, nextDay)) continue;
 
     const r = stream(`${next.id}/pair`);
     let match: Person | null = null;
     for (const other of ctx.people) {
       if (other.index === next.index) continue;
       if (other.partner !== null || other.sex === next.sex) continue;
-      if (!isAlive(other, nextDay)) continue;
+      if (!inVillage(other, nextDay)) continue;
       if (readyDay(other) > nextDay) continue;
       if (tooClose(next, other)) continue;
       if (Math.abs(daysToYears(other.birthDay - next.birthDay)) > PAIRING.maxAgeGapYears) continue;
@@ -761,6 +813,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
     partner.partnerDay = nextDay;
     next.household = household;
     partner.household = household;
+    leaveTogether(next, partner);
 
     const mother = next.sex === "f" ? next : partner;
     const father = next.sex === "f" ? partner : next;
@@ -776,6 +829,8 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
  * grew up in can outlast both their parents, which is exactly the unmarried daughter still living in
  * the family house, and it is the shape a schedule and a dwelling want later.
  */
+const goneDay = (p: Person): number => Math.min(p.deathDay, p.leftDay);
+
 function closeHouseholds(ctx: Ctx): void {
   const lastOut = new Map<number, number>();
   const bump = (house: number, day: number) => {
@@ -785,12 +840,12 @@ function closeHouseholds(ctx: Ctx): void {
   };
 
   for (const h of ctx.households) {
-    bump(h.index, ctx.people[h.partners[0]].deathDay);
-    bump(h.index, ctx.people[h.partners[1]].deathDay);
+    bump(h.index, goneDay(ctx.people[h.partners[0]]));
+    bump(h.index, goneDay(ctx.people[h.partners[1]]));
   }
   for (const p of ctx.people) {
     if (p.bornInto < 0) continue;
-    bump(p.bornInto, p.partnerDay ?? p.deathDay);
+    bump(p.bornInto, Math.min(p.partnerDay ?? p.deathDay, p.leftDay));
   }
 
   for (const h of ctx.households) {
@@ -812,6 +867,11 @@ export function settlementAt(
   cell: string,
   geo: SettlementGeography,
   throughDay: number,
+  /**
+   * What conversations have decided here (C44), in any order. Each takes effect on its own day, so a
+   * village generated to a day before the first of them is the seed's village exactly.
+   */
+  changes: readonly LifeChange[] = [],
 ): Settlement | null {
   if (geo.habitability < MIN_HABITABILITY) return null;
 
@@ -834,7 +894,7 @@ export function settlementAt(
     yearsToDays(FOUNDING.minYearsAgo + rs() * (FOUNDING.maxYearsAgo - FOUNDING.minYearsAgo)),
   );
 
-  const ctx: Ctx = { key, culture, geo, capacity, people: [], households: [], truncated: false };
+  const ctx: Ctx = { key, culture, geo, capacity, people: [], households: [], truncated: false, changes: resolveChanges(changes) };
 
   const founderPairs = clamp(
     Math.round(capacity * FOUNDING.founderFraction),
@@ -879,6 +939,7 @@ export function settlementAt(
     b.partner = a.index;
     a.partnerDay = foundedDay;
     b.partnerDay = foundedDay;
+    leaveTogether(a, b);
     // A founder's lifespan may have been drawn short enough to have ended before the founding day.
     // They founded the place, so they were alive on the day they did it.
     for (const p of [a, b]) {
@@ -932,6 +993,8 @@ export interface Census {
   households: Household[];
   /** Everyone already dead. The graves, and what SOC-6.H has to make visible in a first session. */
   dead: Person[];
+  /** Everyone who has left for good (C44), alive or not: neither here nor buried here. */
+  left: Person[];
   /** Deaths inside {@link LIVING_MEMORY_YEARS}. What people still bring up unprompted. */
   recentlyDead: Person[];
   medianAgeYears: number;
@@ -946,8 +1009,10 @@ export interface Census {
 export function census(s: Settlement, day: number): Census {
   const living: Person[] = [];
   const dead: Person[] = [];
+  const left: Person[] = [];
   for (const p of s.people) {
-    if (isAlive(p, day)) living.push(p);
+    if (p.leftDay <= day && p.leftDay < p.deathDay) left.push(p);
+    else if (isAlive(p, day)) living.push(p);
     else if (p.deathDay <= day) dead.push(p);
   }
 
@@ -963,6 +1028,7 @@ export function census(s: Settlement, day: number): Census {
     day,
     alive: living,
     population: living.length,
+    left,
     households: s.households.filter((h) => h.foundedDay <= day && h.dissolvedDay > day),
     dead,
     recentlyDead: dead.filter((p) => p.deathDay > memory),

@@ -15,6 +15,14 @@
 
 ### Where this stands — 2026-09-14
 
+> **2026-10-18 — `C43` + `C44`, lives that change.** The planet was re-rolled once: the society's
+> stream had been one number and its shifts (`⚑38`), and a person's id is now their lineage (`⚑33`
+> closed). Villagers remember each stranger (a private note in their own words), want things (a closed
+> catalogue of eight goals, seed and talk), and a conversation can change the rest of a life — leave,
+> stay, take up a trade, want or give up a goal — as a structured event the generator reads, so a
+> family that leaves takes its unborn with it and the past never moves. This amends C26 and L3, and
+> C44 says how far. SOC-6.C's delta layer and SOC-6.F's memory exist; 0019 is applied nowhere (`⚑39`).
+>
 > **2026-10-18 — `C42`, talking.** Press E beside a villager and they answer from the life they
 > lived — family, dated life, the chronicle they witnessed, the whole village's roster — in the
 > stranger's own language, with a mechanical check that they name nobody who is not there. Measured

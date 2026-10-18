@@ -164,7 +164,7 @@ export default function ParcelInset({
   }, [cell, field, calibration, radiusKm, resolution, commonsName]);
 
   return (
-    <div className="w-[228px] rounded-lg border border-echo/30 bg-ink/92 p-3 backdrop-blur-sm">
+    <div className="w-[228px] rounded-lg border border-echo/30 bg-ink/90 p-3 backdrop-blur-sm">
       <canvas
         ref={canvas}
         width={resolution}
