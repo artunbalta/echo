@@ -2385,3 +2385,29 @@ panel was mapping the wrong error code for "the counter is down".
 **Not built:** memory of the stranger across conversations (SOC-6.C/6.F — every villager meets you
 for the first time, every time); proximity is not checked by the server, so any living villager can be
 spoken to by id, rate-limited and changing nothing; voice.
+
+## C43 — the planet is re-rolled once: independent draws, and a person's id is their lineage
+
+Taken 2026-10-18, on the user's "yap hepsini" to: fix the stream (⚑38), then memory and changeable
+lives. Both halves re-roll every settlement, so they are one decision and one re-roll.
+
+**The stream (⚑38).** `stream(key)` is a golden-ratio counter through murmur3's finaliser, seeded
+from both lanes of a cyrb53-style string hash; `hash01(key)` is its first draw and replaces every
+society-side `hashString(...)` (`life`, `schedule`, `village`). `hashString` is untouched, so no
+ground, scatter or spawn moved.
+
+**The id (⚑33).** `Person.id = uidOf(seedKey)`: sixteen hex characters. A child's key is
+`${mother.id}+${father.id}/kid/${i}`, an incomer's `${partner.id}/incomer`, a pairing's stream
+`${id}/pair`. The id no longer says where someone sits in `people` (it was `${seed}/${cell}#index`),
+which is the property C44 needs: once one life can change, positions move, and lineages do not.
+
+**What it cost, measured.** Every villager on the planet is someone else. The census on world day
+4,920: **28,904 settlements (28,305 on land), 707,579 living, 2,360,694 graves, 2,587 abandoned**
+(C33's equivalents on day 4,907: 28,952 / 713,736 / 2,808,156 / 2,171). The village index is
+regenerated (28,305 cells). Konreef, C41's first village, is empty ground; the real-planet test is now
+**Senstrand** (`843f6a1ffffffff`: a fishing village of 50, 13 fishers, with a dock, founded 216 years
+ago). The biggest place is **Kamgull** (`84aed1dffffffff`, a market town of 84), larger than C41's
+measured worst case (Vakeel, 74), so ⚑36's frame budget has to be measured again rather than assumed.
+
+Nothing persisted named anyone: C42 keeps nothing, and no row was ever keyed on a person. That is why
+this was the moment, and ⚑33 had said so.

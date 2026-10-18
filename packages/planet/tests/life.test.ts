@@ -24,6 +24,7 @@ import {
   CHRONICLE,
   HAZARDS,
   TEMPERAMENT_AXES,
+  TEMPERAMENT,
   TRADE,
   causeOfDeath,
   chronicle,
@@ -302,6 +303,51 @@ test("temperament: the spread survives ten generations, rather than everyone bec
   }
   const ratio = sd(recent) / sd(founders);
   assert.ok(ratio > 0.8 && ratio < 1.25, `the latest generation has ${ratio.toFixed(2)}x the founders' spread`);
+});
+
+test("C43: a founder's eight axes are eight independent draws, at the spread the dial says", () => {
+  // A founder's temperament is pure prior, so any correlation between two axes is the generator's and
+  // not anybody's parents'. Before C43 dominance and pace came out correlated at 0.52 over 7,946
+  // founders of the real planet, and every axis's sd was 0.32-0.35 against a dial of 0.4.
+  const axes: number[][] = [];
+  for (let i = 0; i < 600 && axes.length < 1500; i++) {
+    for (const geo of [VALLEY, COAST]) {
+      const s = settlementAt(SEED, `axes-${i}`, geo, 0);
+      if (s === null) continue;
+      const t = temperaments(s);
+      for (const p of s.people) if (p.founder) axes.push([...t.get(p.id)!]);
+    }
+  }
+  const n = axes.length;
+  assert.ok(n > 800, `only ${n} founders`);
+  const mean = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => axes.reduce((a, v) => a + v[k], 0) / n);
+  const cov = (i: number, j: number) => axes.reduce((a, v) => a + (v[i] - mean[i]) * (v[j] - mean[j]), 0) / n;
+  const bound = 4 / Math.sqrt(n);
+  for (let i = 0; i < 8; i++) {
+    const sd = Math.sqrt(cov(i, i));
+    assert.ok(Math.abs(sd - TEMPERAMENT.spread) < 0.03, `axis ${i}: sd ${sd.toFixed(3)} against a dial of ${TEMPERAMENT.spread}`);
+    for (let j = i + 1; j < 8; j++) {
+      const r = cov(i, j) / Math.sqrt(cov(i, i) * cov(j, j));
+      assert.ok(Math.abs(r) < bound, `axes ${i} and ${j} correlate at ${r.toFixed(3)} over ${n} founders`);
+    }
+  }
+});
+
+test("C43: sex says nothing about how long someone lives", () => {
+  // It did before C43, through the stream: the sex draw and the lifespan draws were shifts of one
+  // number, and over 88,139 people of the real planet women lived 70.0 years and men 69.1.
+  const years = { f: [] as number[], m: [] as number[] };
+  for (let i = 0; i < 300; i++) {
+    const s = settlementAt(SEED, `sexes-${i}`, VALLEY, 0);
+    if (s === null) continue;
+    for (const p of s.people) if (!p.founder && !p.incomer && p.lifespanDays / 365 > 16) years[p.sex].push(p.lifespanDays / 365);
+  }
+  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+  const sd = (a: number[]) => Math.sqrt(mean(a.map((y) => (y - mean(a)) ** 2)));
+  const se = Math.sqrt(sd(years.f) ** 2 / years.f.length + sd(years.m) ** 2 / years.m.length);
+  assert.ok(years.f.length > 2000 && years.m.length > 2000, "too few adults to compare");
+  const gap = mean(years.f) - mean(years.m);
+  assert.ok(Math.abs(gap) < 4 * se, `women live ${gap.toFixed(2)} years longer than men (se ${se.toFixed(2)})`);
 });
 
 test("temperament: a child resembles their parents more than a stranger does", () => {

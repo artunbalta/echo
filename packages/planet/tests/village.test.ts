@@ -78,7 +78,9 @@ test("L2: a house built by an early day stands in the same place when the villag
   const late = Math.round(yearsToDays(20));
   let compared = 0;
   for (const [geo, ground, site] of [[VALLEY, INLAND, INLAND_SITE], [COAST, SHORE, SHORE_SITE]] as const) {
-    for (let i = 0; i < 12; i++) {
+    // Twenty-four, not twelve: since C43 founding dates are uniform rather than skewed old (see
+    // society.test.ts), so fewer villages already have houses sixty years ago.
+    for (let i = 0; i < 24; i++) {
       const a = settlementAt(SEED, `l2v-${i}`, geo, early);
       const b = settlementAt(SEED, `l2v-${i}`, geo, late);
       if (a === null || b === null) continue;
@@ -228,23 +230,24 @@ test("Design Law 1: a village has no score, no level, no points and no wealth", 
 
 // ── the real planet ─────────────────────────────────────────────────────────────
 
-test("real planet: Konreef is a fishing village on its own shore, built the same from the browser's calibration", () => {
+test("real planet: Senstrand is a fishing village on its own shore, built the same from the browser's calibration", () => {
+  // Konreef (84b38ebffffffff) until C43 re-rolled every settlement; that cell is empty ground now.
   const seed = "echo-capacity-1";
   const field = createTerrain(seed);
   const full = calibratePlanet(field, PLANET_PARAMS.landFractionTarget);
   // What PlanetWorld actually holds: the two numbers the page hands it, and a placeholder.
   const browser = { seaLevel: full.seaLevel, peakElevation: full.peakElevation, landFraction: 0.6 };
   const commons = chooseCommons(PLANET_PARAMS.commonsResolution ?? 4, landFractionSampler(field, full.seaLevel, 2), PLANET_PARAMS.minLandFraction).cells;
-  const cell = "84b38ebffffffff";
+  const cell = "843f6a1ffffffff";
 
   const server = geographySampler(field, full, PLANET_PARAMS.radiusKm, { commons })(cell);
   const client = geographySampler(field, browser as never, PLANET_PARAMS.radiusKm, { commons })(cell);
   assert.deepEqual(client, server, "the browser's calibration reads a different geography than the census");
 
-  const day = 4906;
+  const day = 4920;
   const v = villageAt(seed, cell, field, browser as never, PLANET_PARAMS.radiusKm, { commons, day });
-  assert.ok(v, "no village on Konreef");
-  assert.equal(v.settlement.name, "Konreef");
+  assert.ok(v, "no village on Senstrand");
+  assert.equal(v.settlement.name, "Senstrand");
   assert.ok(v.plan.dock, "a coastal village of fishers with no dock");
   const presentN = v.settlement.people.filter((p) => present(v.settlement, p, day)).length;
   assert.equal(residentsOn(v.settlement, v.plan, day).length, presentN);

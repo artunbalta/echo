@@ -34,7 +34,9 @@ function villages(geo: SettlementGeography, ground: VillageGround, site: Village
   for (let i = 0; i < 400 && out.length < n; i++) {
     const s = settlementAt(SEED, `${prefix}-${i}`, geo, 0);
     const plan = s && villagePlan(s, ground, site);
-    if (s && plan) out.push({ s, plan });
+    // A village with people in it today. An abandoned one has a plan and nobody to live a day in it,
+    // and these tests are about the day.
+    if (s && plan && s.people.filter((p) => p.birthDay <= 0 && p.deathDay > 0).length >= 10) out.push({ s, plan });
   }
   assert.equal(out.length, n);
   return out;

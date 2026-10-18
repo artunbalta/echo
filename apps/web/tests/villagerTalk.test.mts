@@ -105,7 +105,7 @@ test("the preamble holds the contract: the stranger's language, no invented peop
 
 const SECRET = "talk-route-secret-aaaa";
 const SUBJECT = "ff96e0fc-1111-4222-8333-444455556667";
-const CELL = "84b38ebffffffff"; // Konreef
+const CELL = "843f6a1ffffffff"; // Senstrand (Konreef until C43 re-rolled the planet)
 const saved = { secret: process.env.ECHO_IDENTITY_SECRET, trust: process.env.ECHO_TRUST_CLIENT_ID, vercel: process.env.VERCEL_ENV, fetch: globalThis.fetch };
 
 let calls: { url: string; body: Record<string, unknown> | null }[] = [];
@@ -149,11 +149,11 @@ before(() => {
     );
   }) as typeof fetch;
 
-  // A real villager of Konreef, as the server will rebuild them.
+  // A real villager of Senstrand, as the server will rebuild them.
   // Someone who will still be alive for years, so the route's own "today" finds them too.
   const { field, calibration, commons, world } = planet();
   const v = villageAt(world.seed, CELL, field, calibration, world.radiusKm, { commons: commons.cells, day: 4906 });
-  assert.ok(v, "Konreef has no village");
+  assert.ok(v, "Senstrand has no village");
   villager = v.settlement.people.find((p) => present(v.settlement, p, 4906) && ageYears(p, 4906) >= 25 && p.deathDay > 4906 + 365 * 5)!.id;
 });
 
@@ -223,7 +223,7 @@ test("a real caller is answered, and the request is the one C42 describes", asyn
   const system = body.system as Array<{ text: string; cache_control?: unknown }>;
   assert.equal(system.length, 2);
   assert.ok(system.every((b) => b.cache_control), "both system blocks should be cache breakpoints");
-  assert.ok(system[1].text.includes("Konreef"), "the facts are not this villager's");
+  assert.ok(system[1].text.includes("Senstrand"), "the facts are not this villager's");
   const messages = body.messages as Array<{ role: string; content: string }>;
   assert.equal(messages.at(-2)?.role, "user");
   assert.equal(messages.at(-2)?.content, "Good morning!");

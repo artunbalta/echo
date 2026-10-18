@@ -221,9 +221,11 @@ export const OCCUPATIONS: readonly Occupation[] = [
 /**
  * One person. Every field here is IMMUTABLE (C26) and is a function of the seed.
  *
- * `index` is the person's identity inside the settlement and is stable for a given `(seed, cell)`
- * because generation order is deterministic; `id` is the identity across the planet and is what a
- * delta row keys on. Neither is a display name: two people in a village are called Mira.
+ * `id` is the identity across the planet and is what a memory or a change keys on: {@link uidOf} of
+ * the person's lineage key, so it says who someone IS and not where they landed in an array (C43).
+ * `index` is a position in this settlement's `people` and is what `parents`, `children` and `partner`
+ * point with; it is stable for a given world but is not an identity. Neither is a display name: two
+ * people in a village are called Mira.
  */
 export interface Person {
   id: string;
@@ -263,6 +265,11 @@ export interface Person {
    *
    * Carried so that everything downstream of a person — their pairing, the stranger who married
    * them — keys on WHO THEY ARE rather than on where they landed in an array. See {@link stream}.
+   *
+   * BOUNDED SINCE C43 (⚑33). A child's key used to concatenate both parents' whole keys, so it
+   * doubled every generation — 36,037 characters at the longest over 60 cells — and the hash read all
+   * of it on every draw. It now names the parents by their ids: `${mother.id}+${father.id}/kid/${i}`,
+   * about forty characters in any generation, and exactly as semantic.
    */
   seedKey: string;
 }
@@ -309,20 +316,81 @@ export interface Settlement {
 // ── a deterministic stream ──────────────────────────────────────────────────────
 
 /**
+ * Two 32-bit lanes of a string hash (cyrb53's construction, both lanes kept whole).
+ *
+ * Every character goes through two different multiplications and the lanes are cross-mixed at the
+ * end, so two keys that differ only in their last character — two siblings, `kid/0` and `kid/1` —
+ * come out unrelated. That last property is the one {@link hashString} does not have (C43).
+ */
+function lanes(key: string): [number, number] {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < key.length; i++) {
+    const ch = key.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return [h1 >>> 0, h2 >>> 0];
+}
+
+/** murmur3's finaliser: every input bit reaches every output bit. */
+function fmix32(h: number): number {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
  * A reproducible sequence of numbers in `[0, 1)` from a string key.
  *
- * Built on {@link hashString}, which is the generator the rest of the package already orders its
- * draws with. The KEY IS SEMANTIC, never an array position: a child's stream is keyed on its
- * parents and its birth order, a founder's on which founder it is. That is deliberate. An
- * index-keyed stream means inserting one person early in the generation re-rolls every person after
- * them, and the day someone adds a rule that creates one extra incomer, every lifespan on the
- * planet changes and every NPC anybody met becomes a different person.
+ * The KEY IS SEMANTIC, never an array position: a child's stream is keyed on its parents and its
+ * birth order, a founder's on which founder it is. That is deliberate. An index-keyed stream means
+ * inserting one person early in the generation re-rolls every person after them, and the day someone
+ * adds a rule that creates one extra incomer, every lifespan on the planet changes and every NPC
+ * anybody met becomes a different person.
+ *
+ * THE DRAWS ARE INDEPENDENT, and the first version's were not (C43). It was `hashString(key, n++)`:
+ * FNV with the counter XORed in and no final mixing, so draw `n` was draw 0 plus `n` times one
+ * constant, modulo 1. A person's whole life was one number and its shifts — over 20,000 keys the gap
+ * between the first two draws took TWO values, siblings' first draws differed by ONE constant in every
+ * family, the three-uniform bell had sd 0.135 instead of 1/6, and founders' temperaments came out
+ * with dominance and pace correlated at 0.52. Now: a counter stepped by the golden ratio and pushed
+ * through a full-avalanche finaliser, seeded from both lanes of the key (splitmix's shape).
  *
  * Exported for `life.ts` (C40), so there is one stream in the package and not two (L5).
  */
 export function stream(key: string): () => number {
-  let n = 0;
-  return () => hashString(key, n++);
+  const [h1, h2] = lanes(key);
+  let state = h1;
+  return () => {
+    state = (state + 0x9e3779b9) | 0;
+    return fmix32(state ^ h2) / 4294967296;
+  };
+}
+
+/** One number in `[0, 1)` for a key: the first draw of its {@link stream}. */
+export function hash01(key: string): number {
+  return stream(key)();
+}
+
+/**
+ * A person's identity, from the key their life was drawn from: sixteen hex characters, the same on
+ * every machine, and unchanged by anything that happens to anyone else (C43).
+ *
+ * WHY NOT THE INDEX. `index` is a position in generation order, and once a life can change (C44) a
+ * person who leaves before having children removes those children from the list, and everyone
+ * generated after them moves down a place. A memory or a change keyed on an index would then belong
+ * to somebody else. The lineage key does not move: a person is who their parents were and which of
+ * their children they were.
+ */
+export function uidOf(key: string): string {
+  const [h1, h2] = lanes(key);
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -498,7 +566,7 @@ function addPerson(ctx: Ctx, spec: NewPerson): Person | null {
   const r = stream(spec.key);
   const index = ctx.people.length;
   const person: Person = {
-    id: `${ctx.key}#${index}`,
+    id: uidOf(spec.key),
     index,
     given: givenName(r, ctx.culture),
     family: spec.family ?? familyName(r, ctx.culture),
@@ -578,7 +646,7 @@ function bearChildren(
   family: string,
   pairDay: number,
 ): void {
-  const r = stream(`${mother.seedKey}+${father.seedKey}/kids`);
+  const r = stream(`${mother.id}+${father.id}/kids`);
   const pressure = clamp(populationAt(ctx, pairDay) / ctx.capacity, 0, 1);
   const rate = FERTILITY.baseRate * clamp(1 - pressure, FERTILITY.pressureFloor, 1);
 
@@ -592,7 +660,7 @@ function bearChildren(
     if (daysToYears(day - mother.birthDay) > FERTILITY.maxMotherAgeYears) break;
 
     const child = addPerson(ctx, {
-      key: `${mother.seedKey}+${father.seedKey}/kid/${i}`,
+      key: `${mother.id}+${father.id}/kid/${i}`,
       birthDay: day,
       parents: [mother.index, father.index] as const,
       family,
@@ -637,7 +705,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
     // Died before ever pairing. Common, and it is where the child graves come from.
     if (!isAlive(next, nextDay)) continue;
 
-    const r = stream(`${next.seedKey}/pair`);
+    const r = stream(`${next.id}/pair`);
     let match: Person | null = null;
     for (const other of ctx.people) {
       if (other.index === next.index) continue;
@@ -662,7 +730,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
       const arrivesAt = PAIRING.minAgeYears + r() * PAIRING.ageSpanYears;
       const born = nextDay - Math.round(yearsToDays(arrivesAt));
       partner = addPerson(ctx, {
-        key: `${next.seedKey}/incomer`,
+        key: `${next.id}/incomer`,
         birthDay: born,
         parents: null,
         family: null,

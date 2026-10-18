@@ -35,9 +35,8 @@
  * Pure: no clock, no I/O, no cache. Coordinates are PLANET-LOCAL METRES, east and north.
  */
 
-import { hashString } from "./terrain.js";
 import { DAYS_PER_YEAR, yearsToDays } from "./worldclock.js";
-import { stream, type Household, type Person, type Settlement } from "./society.js";
+import { hash01, stream, type Household, type Person, type Settlement } from "./society.js";
 import { present } from "./life.js";
 
 // ── what the module needs and returns ───────────────────────────────────────────
@@ -419,7 +418,7 @@ function* sites(centre: Point, key: string): Generator<Candidate> {
   for (let ring = 1; ring <= VILLAGE.maxRings; ring++) {
     const radius = VILLAGE.firstRingM + (ring - 1) * VILLAGE.ringStepM;
     const n = Math.floor((2 * Math.PI * radius) / VILLAGE.plotSpacingM);
-    const turn = hashString(`${key}/ring/${ring}`) * Math.PI * 2;
+    const turn = hash01(`${key}/ring/${ring}`) * Math.PI * 2;
     for (let j = 0; j < n; j++) {
       const r = stream(`${key}/site/${ring}/${j}`);
       const a = turn + (j / n) * Math.PI * 2 + (r() - 0.5) * 0.25;
@@ -544,7 +543,7 @@ export function villagePlan(s: Settlement, ground: VillageGround, site: VillageS
   if (dock) clearings.push({ x: dock.root.x, y: dock.root.y, radiusM: 6 });
 
   const benchCount = Math.max(4, Math.round(greenRadiusM / 2.2));
-  const turn = hashString(`${key}/benches`) * Math.PI * 2;
+  const turn = hash01(`${key}/benches`) * Math.PI * 2;
   const benches = Array.from({ length: benchCount }, (_, i) => {
     const a = turn + (i / benchCount) * Math.PI * 2;
     return { x: centre.x + Math.cos(a) * greenRadiusM * 0.82, y: centre.y + Math.sin(a) * greenRadiusM * 0.82, heading: a + Math.PI / 2 };
