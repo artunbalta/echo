@@ -135,6 +135,18 @@ export default function Interact({
     if (text) lineTimer.current = setTimeout(() => setLine(null), ms);
   }, []);
 
+  /** Your own deeds here (C49), for the villagers' talk: what they may be saying about you. */
+  const refreshDeeds = useCallback(async () => {
+    try {
+      await ensureIdentity();
+      const res = await fetch(`/api/village/deeds?cell=${encodeURIComponent(cell)}`, { headers: identityHeaders() });
+      const data = (await res.json().catch(() => ({}))) as { deeds?: unknown[] };
+      if (Array.isArray(data.deeds)) layers().villagers?.setDeeds(data.deeds as never);
+    } catch {
+      // the villagers will talk about other things
+    }
+  }, [cell, layers]);
+
   /** Tell the world: the deed and the mark, and who saw it. */
   const record = useCallback(
     async (verb: Verb, thing: NearThing, item: string | null) => {
@@ -176,6 +188,7 @@ export default function Interact({
           }
         }
         if (data.effect) interact?.addMark(data.effect as never);
+        if (verb.deed) void refreshDeeds();
         // Who saw it matters only for what somebody would think about: cutting a reed is nobody's business.
         const seen = verb.deed ? (data.seenBy ?? []) : [];
         if (seen.length === 1) say(`${seen[0]} saw you.`, 5200);
@@ -185,7 +198,7 @@ export default function Interact({
         // The act happened; the village did not hear of it. Nothing to show the person.
       }
     },
-    [cell, layers, say],
+    [cell, layers, say, refreshDeeds],
   );
 
   const finish = useCallback(
@@ -311,6 +324,7 @@ export default function Interact({
         const res = await fetch("/api/player/pack", { headers: identityHeaders() });
         const data = (await res.json().catch(() => ({}))) as { pack?: Pack };
         if (live && data.pack) setPack(data.pack);
+        if (live) void refreshDeeds();
       } catch {
         // no pack to show
       }
@@ -318,7 +332,7 @@ export default function Interact({
     return () => {
       live = false;
     };
-  }, [consent]);
+  }, [consent, refreshDeeds]);
 
   // What is within reach, a few times a second; and the act's clock.
   useEffect(() => {

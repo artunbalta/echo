@@ -21,6 +21,8 @@ import * as THREE from "three";
 import {
   ageYears,
   boatAt,
+  chatter,
+  weatherAt,
   dayPlans,
   lives,
   occupationOn,
@@ -30,6 +32,7 @@ import {
   SCHEDULE,
   type BoatDay,
   type DayPlan,
+  type Deed,
   type LifeEvent,
   type Mooring,
   type Person,
@@ -69,6 +72,8 @@ export interface VillagersLayer extends WorldLayer {
   nearest(): NearVillager | null;
   /** Metres from the player to a villager drawn last frame, or null if they are not out. */
   distanceTo(id: string): number | null;
+  /** The stranger's own deeds here (C49): what the villagers may be saying about them, once word has spread. */
+  setDeeds(deeds: readonly Deed[]): void;
   /**
    * A household's boat is out with the stranger (C45): its mooring is drawn empty, in this view only,
    * until `lend(null)`. The schedule — the family's fisher rowing out at dawn — is untouched.
@@ -151,7 +156,11 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   const tint = new THREE.Color();
   let drawn = 0;
   /** Where each visible villager stood last frame, local metres. Reused; the hook may not allocate per person. */
-  const lastAt = new Map<string, { x: number; y: number }>();
+  const lastAt = new Map<string, { x: number; y: number; activity: string; sx: number; sy: number; sz: number }>();
+  /** What two villagers standing together say (C49): three bubbles at most, near the stranger. */
+  let deeds: Deed[] = [];
+  const bubbles: { el: HTMLDivElement; at: THREE.Vector3 | null; key: string }[] = [];
+  let chatterClock = 0;
   let near: NearVillager | null = null;
   let held: { id: string; x: number; y: number; activity: string } | null = null;
   let released: { id: string; x: number; y: number; at: number } | null = null;
@@ -216,6 +225,16 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           "max-width:260px;padding:6px 10px;border-radius:10px;background:rgba(22,36,31,.86);color:#f4e9d0;" +
           "font:12px/1.35 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35)";
         host.appendChild(label);
+        for (let k = 0; k < 3; k++) {
+          const el = document.createElement("div");
+          el.dataset.villagerChatter = "";
+          el.style.cssText =
+            "position:absolute;left:0;top:0;pointer-events:none;z-index:14;display:none;transform:translate(-50%,-100%);" +
+            "max-width:220px;padding:4px 9px;border-radius:12px;background:rgba(244,233,208,.88);color:#213522;" +
+            "font:11px/1.3 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)";
+          host.appendChild(el);
+          bubbles.push({ el, at: null, key: "" });
+        }
       }
     },
 
@@ -285,13 +304,17 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
             w.y = my + ((w.y - my) / gap) * STEP_ASIDE_M;
           }
         }
+        const [tx, ty] = frame.fromLocalM(w.x, w.y);
+        const y = w.boat !== null ? 0.22 + Math.sin(seconds * 1.3 + w.boat) * 0.03 : Math.max(0, frame.heightAtTile(tx, ty));
         const seen = lastAt.get(d.person);
         if (seen) {
           seen.x = w.x;
           seen.y = w.y;
-        } else lastAt.set(d.person, { x: w.x, y: w.y });
-        const [tx, ty] = frame.fromLocalM(w.x, w.y);
-        const y = w.boat !== null ? 0.22 + Math.sin(seconds * 1.3 + w.boat) * 0.03 : Math.max(0, frame.heightAtTile(tx, ty));
+          seen.activity = w.activity;
+          seen.sx = tx * frame.tileM;
+          seen.sy = y;
+          seen.sz = ty * frame.tileM;
+        } else lastAt.set(d.person, { x: w.x, y: w.y, activity: w.activity, sx: tx * frame.tileM, sy: y, sz: ty * frame.tileM });
         const look = looks.get(d.person)!;
         const gait = w.activity === "walk" || w.activity === "play" ? (SCHEDULE.walkMps * w.speed) / PLAYER_WALK_MPS : 0;
         crowd.pose(
@@ -346,9 +369,74 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         labelled = nearest ? { id: nearest.id, x: nearest.x, y: nearest.y, z: nearest.z } : null;
         if (!labelled) label.style.display = "none";
       }
+
+      // Two people standing together talk (C49). Every so often: the pairs near the stranger, what one
+      // says to the other this half-hour (the same for every passer-by), three bubbles at most.
+      chatterClock += _dt;
+      if (chatterClock > 0.8 && bubbles.length > 0) {
+        chatterClock = 0;
+        const s = village.settlement;
+        const weather = ctx.region.geography ? weatherAt(ctx.seed, ctx.region.cell, ctx.region.geography, day, hour, s) : null;
+        const idle = [...lastAt].filter(([id, at]) => (at.activity === "stand" || at.activity === "sit" || at.activity === "work") && id !== held?.id && Math.hypot(at.x - mx, at.y - my) < 28);
+        const said: { key: string; at: THREE.Vector3; text: string; d: number }[] = [];
+        for (let i = 0; i < idle.length; i++) {
+          for (let j = i + 1; j < idle.length; j++) {
+            const [ia, a] = idle[i];
+            const [ib, b] = idle[j];
+            if (Math.hypot(a.x - b.x, a.y - b.y) > 2.6) continue;
+            const pa = people.get(ia);
+            const pb = people.get(ib);
+            if (!pa || !pb || ageYears(pa, day) < 6 || ageYears(pb, day) < 6) continue;
+            const first = hashUnit(`${ia}+${ib}/${day}/${Math.floor(hour * 48)}`) < 0.5;
+            const [speaker, listener, at] = first ? [pa, pb, a] : [pb, pa, b];
+            const text = chatter(s, speaker, listener, day, hour, { weather, deeds, changes: village.changes, plan: village.plan });
+            if (text) said.push({ key: `${speaker.id}:${text}`, at: new THREE.Vector3(at.sx, at.sy + 2.3 * (frame.tileM / 1.6), at.sz), text: `${speaker.given}: ${text}`, d: Math.hypot(at.x - mx, at.y - my) });
+          }
+        }
+        said.sort((p, q) => p.d - q.d);
+        // The same sentence twice on one screen reads as a machine; keep the nearer of the two.
+        const shown = new Set<string>();
+        const unique = said.filter((x) => {
+          const t = x.text.slice(x.text.indexOf(":") + 1);
+          if (shown.has(t)) return false;
+          shown.add(t);
+          return true;
+        });
+        said.length = 0;
+        said.push(...unique);
+        bubbles.forEach((b, k) => {
+          const next = said[k];
+          if (!next) {
+            b.at = null;
+            b.el.style.display = "none";
+            return;
+          }
+          if (b.key !== next.key) b.el.textContent = next.text;
+          b.key = next.key;
+          b.at = next.at;
+        });
+      }
     },
 
     beforeRender(ctx) {
+      const canvas = ctx.renderer.domElement;
+      // Bubbles that would overlap are stacked, the later one lifted above the earlier.
+      const placed: { x: number; y: number }[] = [];
+      for (const b of bubbles) {
+        if (!b.at) continue;
+        head.copy(b.at).project(ctx.camera);
+        if (head.z > 1) {
+          b.el.style.display = "none";
+          continue;
+        }
+        const x = ((head.x + 1) / 2) * canvas.clientWidth;
+        let y = ((1 - head.y) / 2) * canvas.clientHeight;
+        while (placed.some((p) => Math.abs(p.x - x) < 200 && Math.abs(p.y - y) < 30)) y -= 32;
+        placed.push({ x, y });
+        b.el.style.display = "block";
+        b.el.style.left = `${x}px`;
+        b.el.style.top = `${y}px`;
+      }
       // Placed here, after the camera has moved, so the plate does not trail its person by a frame.
       if (!label || !labelled) return;
       head.set(labelled.x, labelled.y, labelled.z).project(ctx.camera);
@@ -356,7 +444,6 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         label.style.display = "none";
         return;
       }
-      const canvas = ctx.renderer.domElement;
       label.style.display = "block";
       label.style.left = `${((head.x + 1) / 2) * canvas.clientWidth}px`;
       label.style.top = `${((1 - head.y) / 2) * canvas.clientHeight}px`;
@@ -368,6 +455,9 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     playerPosition: () => (Number.isFinite(playerAt.x) ? { x: playerAt.x, y: playerAt.y } : null),
     lend(household) {
       lent = household;
+    },
+    setDeeds(list) {
+      deeds = [...list];
     },
     blockedTile(x, y, radiusM) {
       if (!frame) return false;
@@ -417,6 +507,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     },
 
     dispose() {
+      for (const b of bubbles) b.el.remove();
+      bubbles.length = 0;
       crowd?.dispose();
       boatMesh?.geometry.dispose();
       boatMaterial?.dispose();

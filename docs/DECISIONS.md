@@ -2752,3 +2752,67 @@ and a stranger there that day saw the weather that killed him.
 **Not done.** There is no snow cover on the ground and no wet sheen, because the terrain shader is
 untouched. Weather does not reach the measurement context (`mood_proxy`, `scarcity_level`). Rain has
 no sound; that is feature 10.
+
+## C49 — who is close to whom, word travels, and villagers talk to each other
+
+Feature 4 of the twenty.
+
+**A village's ties** (`lib/social.ts` `socialGraph`). These are read off lives already lived, never
+drawn:
+
+- **family** (3): partner, parents, children, brothers and sisters;
+- **friend** (2): C40's `befriended`;
+- **neighbour** (1): the next plots;
+- **workmate** (1): the nearest in age in the same trade.
+
+**Word travels along them, one tie a day** (`spread`). Witnesses know at once, and the household it
+was done to knows the next morning. After that, how far it goes depends on the deed's weight:
+
+- a small thing (1) goes through family only, one step;
+- a thing that matters (2) goes through family and friends, two steps;
+- a thing nobody forgets (3) goes through everyone.
+
+A forced door reached more than 80% of a village's grown people within eight days, and the next
+morning not all of them yet. **This replaces C45's "word goes no further than family"**, which left a
+forced door known to two households forever. That was the less true world, and the knowledge and
+grievance tests were moved to the new rule rather than loosened. `knownDeeds` and `grievance` now
+take the plan, so neighbours count.
+
+**Friends stand together** (`friendCircles`). The evening green is arranged by friendship. In id
+order, each grown person not yet placed starts a circle and grows it along friendship chains, breadth
+first, up to seven. Members stand round the circle's spot, facing in. Two first attempts were
+measured and rejected:
+
+- the friendship closure joined half a village into one ring that nobody could stand in;
+- cutting the closure in walk order split pairs: 14 of 37 together.
+
+The chain-growing version keeps **81% of friend pairs together** on the evening green, 105 of 130
+across 40 villages.
+
+**What they say** (`chatter`). A pair standing together exchanges a line every half-hour of the world
+day. It is chosen deterministically from the pair, the day and the hour, so every passer-by hears the
+same thing. The line draws on:
+
+- the sky, chosen per speaker so two pairs do not say one sentence;
+- the work;
+- the village's news: who is leaving, who has taken up a trade, a death, a birth;
+- the stranger, once word of what they did has reached the speaker.
+
+No model is asked. In the browser, up to three bubbles show near the stranger, stacked, never the same
+sentence twice. Your own deeds come to your browser alone (`GET /api/village/deeds`, signed), so
+nobody hears gossip about a stranger they are not.
+
+**Measured.** `deeds.test.ts` covers:
+
+- a small thing stays in the family;
+- a forced door goes round the village in days;
+- help reaches a friend and not everybody;
+- friends stand together on the evening green;
+- the chatter is the same for every passer-by;
+- the chatter names the stranger only after word has reached the speaker.
+
+In a browser, Senstrand's green at dusk in the rain shows the circles and three stacked lines from
+three different villagers.
+
+**Not done.** Villagers do not walk over to friends during the day, only in the evening. The chatter
+is English templates; Turkish is feature 20.

@@ -143,7 +143,7 @@ export async function POST(req: Request) {
   ];
   // What this villager knows of what the stranger has DONE here (C45): seen, found, or heard from family.
   const deeds = store ? ((await store.deedsFor(caller.subject, cell)) ?? []) : [];
-  const seen = knownDeeds(s, me, deeds, day).slice(-8);
+  const seen = knownDeeds(s, me, deeds, day, village.plan).slice(-8);
   const doings = seen.length
     ? `What you know of this stranger's doings in ${s.name}:\n- ${seen.map((k) => deedWords(s, me, k, day)).join("\n- ")}\nLet it colour how you speak to them, as it would anyone's.`
     : "";
