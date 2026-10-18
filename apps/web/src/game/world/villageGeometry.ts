@@ -339,6 +339,35 @@ export function boatForm(): THREE.BufferGeometry {
   return m.geometry();
 }
 
+/**
+ * The stranger's own raft (C47, C57): six driftwood logs side by side, lashed across with two beams,
+ * bow toward +x like the village boat. Each log is a slightly different grey-brown, as driftwood is.
+ */
+export function raftForm(): THREE.BufferGeometry {
+  const m = new Mesher();
+  const L = 3.0;
+  const W = 0.29;
+  for (let i = 0; i < 6; i++) {
+    const c = mix(PALETTE.wood, PALETTE.shadow, 0.12 + 0.07 * ((i * 5) % 3));
+    m.box((i % 2) * 0.12 - 0.06, 0.12, (i - 2.5) * W, L - (i === 0 || i === 5 ? 0.3 : 0), 0.24, W - 0.02, c);
+  }
+  const lash = rgb(PALETTE.woodLight);
+  m.box(-0.9, 0.26, 0, 0.16, 0.06, W * 6 + 0.06, lash);
+  m.box(0.9, 0.26, 0, 0.16, 0.06, W * 6 + 0.06, lash);
+  return m.geometry();
+}
+
+/** The raft's mast and square sail (C57): drawn only while the raft is under sail. */
+export function sailForm(): THREE.BufferGeometry {
+  const m = new Mesher();
+  m.box(0.35, 1.25, 0, 0.08, 2.3, 0.08, rgb(PALETTE.woodLight));
+  m.box(0.4, 2.2, 0, 0.06, 0.06, 1.7, rgb(PALETTE.woodLight));
+  const cloth = mix(PALETTE.cloth, PALETTE.sand, 0.35);
+  m.quad([0.44, 0.75, 0.8], [0.44, 2.15, 0.8], [0.44, 2.15, -0.8], [0.44, 0.75, -0.8], cloth);
+  m.quad([0.42, 0.75, -0.8], [0.42, 2.15, -0.8], [0.42, 2.15, 0.8], [0.42, 0.75, 0.8], cloth);
+  return m.geometry();
+}
+
 export function buildVillage(frame: WorldFrame, v: SettledParcel, day: number): VillageForms {
   const { plan, settlement } = v;
   const sw = swatch(plan.style);

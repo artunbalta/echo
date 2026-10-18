@@ -310,6 +310,9 @@ export function soundLayer(options: { clock: WorldClock }): SoundLayer {
       };
       window.addEventListener("pointerdown", onGesture);
       window.addEventListener("keydown", onGesture);
+      // A world built for the parcel a raft is crossing into (C57) is built after the person has long
+      // since touched the page: it may start at once, and is silent until it draws.
+      if (typeof navigator !== "undefined" && (navigator as { userActivation?: { hasBeenActive?: boolean } }).userActivation?.hasBeenActive) onGesture();
       // A hidden tab draws no frames, so nothing would turn the beds down: the sea would go on
       // breaking in a tab nobody is looking at. Hidden, the whole graph stops; shown, it goes on.
       if (typeof document !== "undefined") {
@@ -366,10 +369,17 @@ export function soundLayer(options: { clock: WorldClock }): SoundLayer {
         const w = geo ? weatherAt(ctx.seed, ctx.region.cell, geo, worldDayIndex(options.clock, Date.now()), hour, village?.settlement ?? null) : null;
         snowing = w?.kind === "snow";
         const ear = villagers?.earshot(me.x, me.y, 30) ?? { people: 0, talking: 0, working: [] };
+        // The first levels are set, not eased toward: a world crossed into (C57) takes over the sea
+        // the last one was playing, at its level, instead of bringing it up from silence.
+        const first = mix === null;
         mix = mixFor({ hour, seaM, weather: w, inside: inside !== null && room !== null, fire: room !== null && !room.room.empty, people: ear.people, talking: ear.talking, coastal: village?.plan.dock !== null && village?.plan.dock !== undefined });
         const at = ac.currentTime;
-        beds.rain?.gain.gain.setTargetAtTime(mix.rain * LEVEL.rain, at, 0.8);
-        beds.insects?.gain.gain.setTargetAtTime(mix.insects * LEVEL.insects, at, 1);
+        beds.rain?.gain.gain.setTargetAtTime(mix.rain * LEVEL.rain, at, first ? 0.001 : 0.8);
+        beds.insects?.gain.gain.setTargetAtTime(mix.insects * LEVEL.insects, at, first ? 0.001 : 1);
+        if (first) {
+          beds.sea?.gain.gain.setTargetAtTime(mix.sea * LEVEL.sea * 0.55, at, 0.001);
+          beds.wind?.gain.gain.setTargetAtTime(mix.wind * LEVEL.wind * 0.6, at, 0.001);
+        }
         walls.frequency.setTargetAtTime(mix.through < 1 ? 650 : 18000, at, 0.2);
         outside.gain.setTargetAtTime(mix.through, at, 0.2);
         if (beds.sea?.pan) beds.sea.pan.pan.setTargetAtTime(Math.sin(seaAngle - camDir) * -0.6, at, 0.5);

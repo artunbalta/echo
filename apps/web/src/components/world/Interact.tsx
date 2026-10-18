@@ -34,6 +34,7 @@ import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 
 interface Acting {
   verb: Verb;
@@ -87,6 +88,8 @@ export default function Interact({
   aboardRef.current = aboard;
   /** While aboard: land within reach to step onto, tile coordinates, or null. */
   const [shore, setShore] = useState<{ x: number; y: number } | null>(null);
+  /** The raft trip under way (C57): the parcel it set out from and where, in that parcel's metres. */
+  const trip = useRef<{ cell: string; at: { x: number; y: number } } | null>(null);
   const worldRef = useRef(world);
   worldRef.current = world;
   const seenSince = useRef<{ ref: string; at: number } | null>(null);
@@ -469,18 +472,55 @@ export default function Interact({
     const [tx, ty] = ctx.frame.fromLocalM(near.x, near.y);
     const body = layers().interact?.bodyAt();
     const heading = body ? Math.atan2(-(near.y - body.y), near.x - body.x) : 0;
-    player.board({ x: tx, y: ty }, heading);
+    player.board({ x: tx, y: ty }, heading, "raft");
     setAboard({ thing: { ...near, ref: "raft", kind: "boat", name: "your raft" }, household: -1, own: true });
     say("It floats. You did not think it would.");
-  }, [near, layers, say]);
+    // The trip begins here (C57), in this parcel's own frame; where it ends is the landing route's to judge.
+    trip.current = { cell: ctx.region.cell, at: { x: near.x, y: near.y } };
+    // Setting out with something to eat aboard is planning for a crossing.
+    if (provisioned(pack) && chain.armed()) {
+      const m = preparationMeasurement(ctx.region.cell);
+      void chain.emitAction(m.action, m.opts);
+    }
+  }, [near, layers, say, pack, chain]);
   const stepAshore = useCallback(() => {
     if (!aboard || !shore) return;
-    const { player, villagers } = layers();
+    const { player, villagers, ctx } = layers();
     player?.ashore(shore);
     villagers?.lend(null);
     setAboard(null);
-    say(aboard.own ? "You drag the raft up the shore." : `You leave the ${aboard.thing.name.replace(/^the /, "")} on the shore. Someone will have to fetch it.`);
-  }, [aboard, shore, layers, say]);
+    if (!aboard.own) {
+      say(`You leave the ${aboard.thing.name.replace(/^the /, "")} on the shore. Someone will have to fetch it.`);
+      return;
+    }
+    const started = trip.current;
+    trip.current = null;
+    if (!started || !ctx) {
+      say("You drag the raft up the shore.");
+      return;
+    }
+    // Where the raft came ashore, and in which parcel: the world this body is in now, which after a
+    // crossing is not the one it set out in.
+    const [x, y] = ctx.frame.toLocalM(shore.x, shore.y);
+    const cellNow = ctx.region.cell;
+    void (async () => {
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/world/landing", {
+          method: "POST",
+          headers: identityHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ cell: cellNow, at: { x, y }, from: started.cell, launchedAt: started.at }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const answer = (await res.json()) as LandingAnswer;
+        say(answer.side ? landingLine(answer) : "You drag the raft up the shore.");
+        const m = travelMeasurement(answer, cellNow);
+        if (m && chain.armed()) void chain.emitAction(m.action, m.opts);
+      } catch {
+        say("You drag the raft up the shore.");
+      }
+    })();
+  }, [aboard, shore, layers, say, chain]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

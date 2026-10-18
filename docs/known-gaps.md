@@ -1974,3 +1974,32 @@ consecutive salts anywhere this matters has **not** been audited.
   matching across devices or headphones.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 47. What C57 does not do yet, and what it trusts (2026-10-18)
+
+- **A crossing stutters.** While the next world builds, three frames run 0.15–0.3 s. The terrain
+  (`buildRegionScene`, 309 ms) and the scatter (468 ms) are synchronous. It happens mid-water, with no
+  loading screen, but it is felt. A chunked build or a worker is the fix, and it belongs with feature
+  20.
+- **Only by raft.** On foot the region's edge still stops you, and a borrowed village boat cannot
+  cross.
+- **One village per world.** The next parcel's village appears when you cross into that parcel, not
+  before. The fog at about 420 m hides most of that; a village close to the line can still be seen
+  arriving.
+- **The sail draws from any quarter.** The weather has no wind direction.
+- **The wind can change at the line.** Weather follows each parcel's geography; it was measured going
+  from 0.41 to 0.34 at the crossing.
+- **Most coasts have no other village on them.** Senstrand's sea has none within 12 km. A raft from
+  there finds empty shores, and it is the census, not the raft, that says so.
+- **`dest_occupants` is the parcel's residents,** not who is on the beach.
+- **The cues are the client's to send** (⚑10), with the server's numbers in them.
+  `crossing_latency` (VIII.11, the first sail-out of a life) is not measured. `distance_m` is metres,
+  where the old `distance` was slot spacings; ingest.py reads neither.
+- **Two worlds are held in memory during a crossing.** It has not been tried on a phone.
+- **The raft is the stranger's alone.** Nobody else sees it, and it is not left on the beach as a
+  thing: it goes back into the pack.
+- **A reload after a crossing** puts you at the new parcel's arrival point, not on its beach.
+- **"From the direction of"** names the village the raft set out from, even if it went the long way
+  round.
+
+**Status:** OPEN, all of it, written down rather than discovered.

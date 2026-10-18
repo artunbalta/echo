@@ -25,8 +25,9 @@ import { cylinderBoomLimit } from "./cameraObstacles";
 
 import { buildCharacter, gaitFootTarget, poseCharacter, reachCharacter, type CharacterParts } from "../three/character";
 import type { ActivityKind } from "../WorldCore";
-import { boatForm } from "./villageGeometry";
-import { initialMover, jumpHeightM, parcelMovement, stepMover, type MoveInput, type MoverState } from "./controller";
+import { raftSpeed } from "../../lib/raft";
+import { boatForm, raftForm, sailForm } from "./villageGeometry";
+import { facingFromHeading, initialMover, jumpHeightM, parcelMovement, stepMover, type MoveInput, type MoverState } from "./controller";
 import {
   initialFollowCamera,
   stepFollowCamera,
@@ -38,6 +39,7 @@ import { createInput, type WorldInput } from "./input";
 import type { TouchControlHandle } from "./touchInput";
 import { SPAWN_HORIZON_MARGIN_DEG, spawnView, yawBehindHeading } from "./spawnView";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
+import type { WeatherLayer } from "./weatherLayer";
 
 export interface PlayerLayerOptions {
   /** Seeds the body's look, so it is the same person every visit. */
@@ -93,16 +95,34 @@ export interface PlayerLayer extends WorldLayer {
    * Into a boat (C45): the body sits in it at a tile position, facing `heading` (the boat's, in this
    * layer's convention), and moves on water only, at a rower's speed, until `ashore`.
    */
-  board(at: { x: number; y: number }, heading: number): void;
+  board(at: { x: number; y: number }, heading: number, kind?: "boat" | "raft"): void;
   /** Out of the boat, onto the tile given. */
   ashore(at: { x: number; y: number }): void;
   aboard(): boolean;
+  /** Aboard the stranger's own raft (C57), not a village boat: the one that can cross to other parcels. */
+  onRaft(): boolean;
+  /** Under sail: on the raft with Shift held (C57). */
+  sailing(): boolean;
+  /** Everything the next parcel's world needs to carry on as this body (C57), in this world's tiles. */
+  handOff(): PlayerHandoff;
+  /** Carry on as the body a hand-off describes, already in this world's tiles. */
+  adopt(h: PlayerHandoff): void;
   /**
    * How many times a foot has come down since the page opened, as the gait draws it: a foot lands
    * each time the gait's phase passes a half turn (`gaitFootTarget`'s stance begins at 0.5 of the
    * cycle, and the two feet are half a cycle apart). The ears hear a step on each (C56).
    */
   footfalls(): number;
+}
+
+/** One body passed from one parcel's world to the next (C57). */
+export interface PlayerHandoff {
+  mover: MoverState;
+  camera: FollowCameraState;
+  boating: boolean;
+  raft: boolean;
+  /** The keys held down at the crossing: a sail held across the line stays up. */
+  keys?: string[];
 }
 
 /** A rower's pace on open water, metres per second: slower than a walk, and it does not run. */
@@ -145,7 +165,11 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
   let wants = false;
   let carrying = false;
   let boating = false;
+  let rafting = false;
+  let underSail = false;
   let boat: THREE.Mesh | null = null;
+  let raft: THREE.Mesh | null = null;
+  let sail: THREE.Mesh | null = null;
   let boatMovement = parcelMovement(1.6);
 
   return {
@@ -222,6 +246,17 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       boat.visible = false;
       boat.castShadow = true;
       ctx.scene.add(boat);
+      // The stranger's own raft and its sail (C57), the same way: hidden until launched.
+      const wood = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+      raft = new THREE.Mesh(raftForm(), wood);
+      raft.name = "player:raft";
+      raft.visible = false;
+      raft.castShadow = true;
+      sail = new THREE.Mesh(sailForm(), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+      sail.name = "player:sail";
+      sail.visible = false;
+      raft.add(sail);
+      ctx.scene.add(raft);
       boatMovement = { ...parcelMovement(ctx.frame.tileM), walk: ROW_MPS / ctx.frame.tileM, run: ROW_MPS / ctx.frame.tileM };
       input = createInput(ctx.renderer.domElement, { touch: options.touch });
       input.setEnabled(inputEnabled);
@@ -234,7 +269,13 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       wants = Math.hypot(asked.dx, asked.dy) > 0.1 || asked.jump;
       // While acting the body holds its pose and the mover is told so; the ask is kept for wantsToMove.
       // In a boat the ground is the water: anything deep enough, inside the region, and no jumping.
-      const move = acting ? { ...NEUTRAL, activity: acting.pose } : boating ? { ...asked, jump: false, run: false } : asked;
+      // A village boat is rowed and never runs; the raft is paddled, and Shift puts up its sail (C57).
+      const move = acting ? { ...NEUTRAL, activity: acting.pose } : boating ? { ...asked, jump: false, run: rafting && asked.run } : asked;
+      if (boating && rafting) {
+        const wind = ctx.layer<WeatherLayer>("weather")?.weather()?.wind ?? 0.3;
+        boatMovement = { ...boatMovement, walk: raftSpeed(wind, false) / ctx.frame.tileM, run: raftSpeed(wind, true) / ctx.frame.tileM };
+        underSail = move.run && Math.hypot(move.dx, move.dy) > 0.1;
+      } else underSail = false;
       if (boating) {
         const extent = ctx.region.extentM / ctx.frame.tileM;
         // Any water floats a small boat; a mooring in a hand's depth of it is still afloat.
@@ -253,12 +294,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       if (moving) animTime += dt * (1 + runBlend * .7);
       ctx.frame.toScene(state.x, state.y, jumpHeightM(state), tmp);
       parts.root.position.copy(tmp);
-      if (boating && boat) {
-        // The hull rides the sea sheet; the rower sits on its thwart.
+      const hull = rafting ? raft : boat;
+      if (boating && hull) {
+        // The hull rides the sea sheet; the rower sits on its thwart, or on the raft's logs.
         const t = performance.now() / 1000;
-        boat.position.set(tmp.x, 0.08 + Math.sin(t * 1.3) * 0.03, tmp.z);
-        boat.rotation.set(0, -state.heading, 0);
-        parts.root.position.y = 0.32 + Math.sin(t * 1.3) * 0.03;
+        hull.position.set(tmp.x, (rafting ? 0.02 : 0.08) + Math.sin(t * 1.3) * 0.03, tmp.z);
+        hull.rotation.set(rafting ? Math.sin(t * 0.9) * 0.025 : 0, -state.heading, rafting ? Math.sin(t * 1.1 + 1) * 0.02 : 0);
+        parts.root.position.y = (rafting ? 0.3 : 0.32) + Math.sin(t * 1.3) * 0.03;
+        if (sail) sail.visible = underSail;
       }
       const yaw = yawFromHeading(state.heading);
       const footGround = (side: number) => {
@@ -268,7 +311,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         return (ctx.frame.heightAtTile(x, y) - ctx.frame.heightAtTile(state.x, state.y)) / ctx.frame.tileM;
       };
       poseCharacter(parts, { facing: state.facing, moving: moving && !boating, animTime, bob: 0, lean: 0, carrying,
-        activity: boating && !acting ? (moving ? "row" : "sit") : state.activity, speed: boating ? 0 : speed, runBlend,
+        activity: boating && !acting ? (moving && !underSail ? "row" : "sit") : state.activity, speed: boating ? 0 : speed, runBlend,
         airborne: state.jumpT >= 0, groundL: footGround(-1), groundR: footGround(1) });
       parts.root.rotation.y = yawFromHeading(state.heading);
 
@@ -323,18 +366,40 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     setCarrying(on) {
       carrying = on;
     },
-    board(at, heading) {
+    board(at, heading, kind = "boat") {
       boating = true;
+      rafting = kind === "raft";
       acting = null;
       state = { ...initialMover(at.x, at.y, heading) };
-      if (boat) boat.visible = true;
+      if (boat) boat.visible = !rafting;
+      if (raft) raft.visible = rafting;
     },
     ashore(at) {
       boating = false;
+      rafting = false;
+      underSail = false;
       state = { ...initialMover(at.x, at.y, state.heading) };
       if (boat) boat.visible = false;
+      if (raft) raft.visible = false;
+      if (sail) sail.visible = false;
     },
     aboard: () => boating,
+    onRaft: () => boating && rafting,
+    sailing: () => underSail,
+    handOff: () => ({ mover: { ...state }, camera: { ...cam, anchor: cam.anchor ? [...cam.anchor] as typeof cam.anchor : null }, boating, raft: rafting, keys: input?.heldKeys() ?? [] }),
+    adopt(h) {
+      boating = h.boating;
+      rafting = h.raft;
+      acting = null;
+      state = { ...h.mover, facing: facingFromHeading(h.mover.heading) };
+      cam = { ...h.camera };
+      if (boat) boat.visible = boating && !rafting;
+      if (raft) raft.visible = boating && rafting;
+      // Whatever the pointer did while this world was asleep is not a turn of the camera now; the
+      // keys still down are still down.
+      input?.read(cam.yaw);
+      if (h.keys) input?.hold(h.keys);
+    },
 
     dispose() {
       if (boat) {
@@ -342,6 +407,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         (boat.material as THREE.Material).dispose();
         boat = null;
       }
+      for (const m of [sail, raft]) {
+        if (!m) continue;
+        m.removeFromParent();
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      }
+      raft = null;
+      sail = null;
       input?.dispose();
       input = null;
       blocked = null;

@@ -31,7 +31,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { ageYears, checkChange, deedWords, doorOf, homeChanges, knownDeeds, metOn, moveChanges, needOf, portable, present, residentsOn, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
+import { ageYears, checkChange, deedWords, doorOf, homeChanges, knownDeeds, knownLandings, landingWords, metOn, moveChanges, needOf, portable, present, residentsOn, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -237,10 +237,15 @@ export async function POST(req: Request) {
   const doings = seen.length
     ? `What you know of this stranger's doings in ${s.name}:\n- ${seen.map((k) => deedWords(s, me, k, day)).join("\n- ")}\nLet it colour how you speak to them, as it would anyone's.`
     : "";
+  // How they came (C57): in out of the sea on a raft, seen or heard of, and from which direction.
+  const landings = store ? ((await store.landingsIn(caller.subject, cell)) ?? []) : [];
+  const ashore = knownLandings(me, landings, day).slice(-3);
+  for (const k of ashore) if (k.landing.fromName) names.add(k.landing.fromName);
+  const came = ashore.length ? `How this stranger came to ${s.name}, as far as you know:\n- ${ashore.map((k) => landingWords(s, k, day)).join("\n- ")}` : "";
   // What they would ask for this week (C50), which a stranger may already have met.
   const effects = store ? ((await store.effectsFor(cell, day)) ?? []) : [];
   const wanting = needLine(s, village.plan, me, day, changes, effects, deeds);
-  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, wanting, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
+  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, came, wanting, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
   // Constructed per request, with fetch looked up at call time, so a test's recorder sees the call.
   const client = new Anthropic({ apiKey: KEY, timeout: 25_000, maxRetries: 1, fetch: (url, init) => globalThis.fetch(url, init) });
 

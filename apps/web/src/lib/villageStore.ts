@@ -13,7 +13,7 @@
  */
 import "server-only";
 
-import type { Deed, LifeChange, Pack, WorldEffect } from "@echo/planet";
+import type { Deed, Landing, LifeChange, Pack, WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 
@@ -47,7 +47,22 @@ export interface VillageStore {
   /** What a stranger carries (C47). Null: unreadable. An empty pack for someone who has never carried anything. */
   packOf(subject: string): Promise<Pack | null>;
   setPack(subject: string, pack: Pack): Promise<boolean>;
+  /** Where one stranger has come ashore from the sea in one cell (C57), oldest first. Null: unreadable. */
+  landingsIn(subject: string, cell: string): Promise<Landing[] | null>;
+  addLanding(subject: string, cell: string, landing: Omit<Landing, "id">): Promise<Landing | null>;
 }
+
+interface LandingRow {
+  id: number;
+  from_cell: string;
+  from_name: string | null;
+  side: Landing["side"];
+  rings: number;
+  day: number;
+  hour: number;
+  witnesses: string[];
+}
+const landingFromRow = (r: LandingRow): Landing => ({ id: `l${r.id}`, fromCell: r.from_cell, fromName: r.from_name, side: r.side, rings: r.rings, day: r.day, hour: r.hour, witnesses: r.witnesses ?? [] });
 
 interface EffectRow {
   id: number;
@@ -258,6 +273,26 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("packOf", error.message), null;
       return (data?.pack as Pack | undefined) ?? {};
     },
+    async landingsIn(subject, cell) {
+      const { data, error } = await admin
+        .from("player_landings")
+        .select("id, from_cell, from_name, side, rings, day, hour, witnesses")
+        .eq("subject", subject)
+        .eq("cell", cell)
+        .order("id", { ascending: true })
+        .limit(200);
+      if (error) return warn("landingsIn", error.message), null;
+      return (data as LandingRow[]).map(landingFromRow);
+    },
+    async addLanding(subject, cell, l) {
+      const { data, error } = await admin
+        .from("player_landings")
+        .insert({ subject, cell, from_cell: l.fromCell, from_name: l.fromName, side: l.side, rings: l.rings, day: l.day, hour: l.hour, witnesses: l.witnesses })
+        .select("id, from_cell, from_name, side, rings, day, hour, witnesses")
+        .single();
+      if (error) return warn("addLanding", error.message), null;
+      return landingFromRow(data as LandingRow);
+    },
     async setPack(subject, pack) {
       const { error } = await admin.from("player_items").upsert({ subject, pack, updated_at: new Date().toISOString() }, { onConflict: "subject" });
       if (error) return warn("setPack", error.message), false;
@@ -277,6 +312,7 @@ interface MemoryState {
   effects?: Map<string, WorldEffect[]>;
   deeds?: Map<string, Deed[]>;
   packs?: Map<string, Pack>;
+  landings?: Map<string, Landing[]>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -339,6 +375,15 @@ function memoryStore(): VillageStore {
       memory.packs.set(subject, { ...pack });
       return true;
     },
+    async landingsIn(subject, cell) {
+      return [...(memory.landings?.get(`${subject}|${cell}`) ?? [])];
+    },
+    async addLanding(subject, cell, l) {
+      const landing: Landing = { ...l, id: `l${memory.next++}` };
+      memory.landings ??= new Map();
+      memory.landings.set(`${subject}|${cell}`, [...(memory.landings.get(`${subject}|${cell}`) ?? []), landing]);
+      return landing;
+    },
   };
 }
 
@@ -363,5 +408,6 @@ export function resetMemoryStore(): void {
   memory.effects?.clear();
   memory.deeds?.clear();
   memory.packs?.clear();
+  memory.landings?.clear();
   memory.next = 1;
 }
