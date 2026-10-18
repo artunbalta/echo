@@ -49,12 +49,16 @@ import {
   verbOf,
   villageThings,
   witnessesOf,
+  worldClock,
+  worldDayIndex,
+  WORLD_EPOCH,
   type Deed,
   type LifeChange,
   type Need,
 } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
+import { villageStore } from "@/lib/villageStore";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { loadVillage } from "@/lib/villageTalk";
 
@@ -104,7 +108,7 @@ export async function POST(req: Request) {
   }
 
   const loaded = await loadVillage(cell);
-  if (!loaded) return bad("no_village", 404);
+  if (!loaded) return unpeopled(caller.subject, cell, thing, kind, verb, pos, body.item);
   const { village, changes, store, day, hour } = loaded;
   if (!store) return NextResponse.json({ recorded: false, reason: "no_store" });
   const s = village.settlement;
@@ -232,4 +236,45 @@ export async function POST(req: Request) {
     // The need met, and the change that says so, for the page to fold into its own village at once.
     ...(met.length > 0 ? { met, changes: recorded } : {}),
   });
+}
+
+/**
+ * An act on a parcel with no village (C59): most of the planet. Nobody lives here to see it or be
+ * wronged by it, so only what is nobody's can be acted on — the scatter and the water. That is still
+ * driftwood picked up, a stone carried off, a mark left that heals. Before C59 this answered "no
+ * village" and nothing was recorded, so a stranger could gather nothing on their own empty land to
+ * build a house with.
+ */
+async function unpeopled(subject: string, cell: string, thing: string, kind: string, verb: NonNullable<ReturnType<typeof verbOf>>, pos: { x?: unknown; y?: unknown }, item: unknown) {
+  const scatter = parseScatterRef(thing);
+  if (!scatter || verb.deed) return bad("no_village", 404);
+  if (scatter.classId !== kind || Math.hypot(scatter.x, scatter.y) > REGION_M) return bad("no_such_thing", 404);
+  if (Math.hypot(scatter.x - (pos.x as number), scatter.y - (pos.y as number)) > verb.reachM + 1 + SLACK_M) return bad("too_far", 403);
+  const store = villageStore();
+  if (!store) return NextResponse.json({ recorded: false, reason: "no_store" });
+  const clock = worldClock(WORLD_EPOCH);
+  const day = worldDayIndex(clock, Date.now());
+  let pack = verb.gives || verb.needs === "carrying" ? await store.packOf(subject) : null;
+  if (verb.gives) {
+    if (pack === null) return bad("pack_unavailable", 503);
+    const next = add(pack, verb.gives);
+    if (!next) return bad("pack_full", 409);
+    pack = next;
+  }
+  if (verb.needs === "carrying") {
+    if (pack === null) return bad("pack_unavailable", 503);
+    if (typeof item !== "string") return bad("bad_item");
+    if (verb.takes && !verb.takes.includes(item)) return bad("not_food", 409);
+    const next = remove(pack, item);
+    if (!next) return bad("not_carried", 409);
+    pack = next;
+  }
+  if (pack !== null) await store.setPack(subject, pack);
+  let effect = null;
+  if (verb.effect && verb.effect.lastsDays > 0) {
+    const standing = (await store.effectsFor(cell, day)) ?? [];
+    const already = activeEffects(standing, day).get(thing);
+    effect = already && already.kind === verb.effect.kind ? already : await store.addEffect(cell, { thing, kind: verb.effect.kind, day, untilDay: day + verb.effect.lastsDays }, subject);
+  }
+  return NextResponse.json({ recorded: effect !== null, seenBy: [], ...(effect ? { effect } : {}), ...(pack !== null ? { pack } : {}) });
 }

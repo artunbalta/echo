@@ -36,12 +36,17 @@
 import { ASSET_CLASSES, type AssetClassId } from "./assets.js";
 
 /** The things the village plan draws. Every one has an entry below; a new one must. */
+/** What can dye a door, a wall or a shirt, and what can be set down in a house (C59, `homes.ts`). */
+const DYE_ITEMS = ["berries", "herbs", "shell", "ore"] as const;
+const PLACEABLE_ITEMS = ["bed", "table", "stool", "shelf", "basket", "pot", "bowl", "cloth", "torch"] as const;
+
 export const VILLAGE_THINGS = ["house", "ruin", "field", "bench", "well", "dock", "boat", "grave", "mine"] as const;
 export type VillageThing = (typeof VILLAGE_THINGS)[number];
 
 /** Not drawn by the plan or the scatter, and still things a person can act on. */
 /** C55: the animals a stranger can act on — a dog (anyone's, or nobody's), a goat, a hen. */
-export const OTHER_THINGS = ["villager", "water", "dog", "goat", "hen"] as const;
+/** C59: your own land, the house on it, and what is set down inside. */
+export const OTHER_THINGS = ["villager", "water", "dog", "goat", "hen", "land", "home", "furnishing"] as const;
 export type OtherThing = (typeof OTHER_THINGS)[number];
 
 /** Every kind of thing: the village's, the others, and every scatter class by its id. */
@@ -119,7 +124,7 @@ const CLIMB = v({ id: "climb", label: "Climb", holdS: 3, pose: "climb", reachM: 
 const EXAMINE = v({ id: "examine", label: "Look closely", holdS: 2.5, pose: "study", reachM: 2.5, stakes: "low", measure: m("J6", "study_marker", "named"), effect: null, deed: null, owner: "none", beat: "You look closely. There is more to it than you thought." });
 const PICK = (what: string, label = `Pick up the ${what}`, beat = `You pick up the ${what}.`) =>
   v({ id: "pick-up", label, holdS: 1.2, pose: "gather", reachM: 1.8, stakes: "low", measure: m("J3", "collect", "named"), effect: { kind: "taken", lastsDays: 5 }, deed: null, owner: "none", needs: "empty-handed", gives: what, beat });
-const PUSH_THROUGH = v({ id: "push-through", label: "Push through", holdS: 2.5, pose: "push", reachM: 2, stakes: "medium", measure: m("F3", "push_through", "unrouted"), effect: null, deed: null, owner: "none", beat: "You push in. It scratches, and gives." });
+const PUSH_THROUGH = v({ id: "push-through", label: "Push through", holdS: 2.5, pose: "push", reachM: 2, stakes: "medium", measure: m("F3", "push_through", "generic"), effect: null, deed: null, owner: "none", beat: "You push in. It scratches, and gives." });
 const TOUCH = v({ id: "touch", label: "Touch it", holdS: 1, pose: "gather", reachM: 1.6, stakes: "low", measure: m("I3", "touch_novel", "unrouted"), effect: null, deed: null, owner: "none", beat: "You touch it." });
 
 const TREE = [REST_SHADE, CLIMB, EXAMINE];
@@ -217,7 +222,7 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
     // Barter and labour (C58), with no price anywhere: the villager takes what they want or need, or
     // takes it from someone they like, and gives what their own work leaves them to spare
     // (`trade.ts`). Done through the trade route, never the act route, because something comes back.
-    v({ id: "trade", label: "Offer it in trade", holdS: 1.5, pose: "gather", reachM: 3, stakes: "low", measure: m("F9", "barter", "unrouted"), effect: null, deed: { reading: "respect", weight: 1 }, owner: "household", needs: "carrying", beat: "" }),
+    v({ id: "trade", label: "Offer it in trade", holdS: 1.5, pose: "gather", reachM: 3, stakes: "low", measure: m("F9", "barter", "generic"), effect: null, deed: { reading: "respect", weight: 1 }, owner: "household", needs: "carrying", beat: "" }),
     v({ id: "ask-back", label: "Ask for something for your help", holdS: 1, pose: "still", reachM: 3, stakes: "low", measure: m("G12", "ask_return", "unrouted"), effect: null, deed: { reading: "respect", weight: 1 }, owner: "household", beat: "" }),
   ],
   // C55. A dog: the one creature here a stranger can make a friend of. D11 is the catalogue's pet cue,
@@ -235,6 +240,25 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
   hen: [
     v({ id: "feed", label: "Scatter grain for them", holdS: 2, pose: "gather", reachM: 2.5, stakes: "low", measure: m("F7", "feed_hens", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", needs: "carrying", takes: ["a handful of grain", "berries"], beat: "They come at a run, and peck round your feet." }),
     v({ id: "chase", label: "Chase the hens", holdS: 1.5, pose: "push", reachM: 2.5, stakes: "medium", measure: m("H5", "chase_animals", "unrouted"), effect: null, deed: { reading: "harm", weight: 1 }, owner: "household", beat: "Feathers, and a great deal of noise." }),
+  ],
+  // C59. A house of your own, on your own parcel (`homes.ts`), through the home route, never the act
+  // route: it changes a house, not the shared world. Building is time at a structure, which
+  // ingest.py's dwell branch reads as ts_build; the customising (J1) and the arranging (J5) are the
+  // catalogue's, and what the arrangement says is read off the whole room when you step out.
+  land: [
+    v({ id: "stake", label: "Mark out a house here", holdS: 3, pose: "dig", reachM: 1, stakes: "medium", measure: m("F6", "stake_home", "unrouted"), effect: null, deed: null, owner: "none", beat: "Four stakes and a string. It is a start." }),
+  ],
+  home: [
+    v({ id: "build", label: "Work on the house", holdS: 10, pose: "build", reachM: 4, stakes: "medium", measure: m("F6", "build_home", "generic"), effect: null, deed: null, owner: "none", beat: "" }),
+    v({ id: "paint-door", label: "Paint the door", holdS: 4, pose: "build", reachM: 3, stakes: "low", measure: m("J1", "customize_home", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: DYE_ITEMS, beat: "" }),
+    v({ id: "paint-walls", label: "Paint the walls", holdS: 6, pose: "build", reachM: 4, stakes: "low", measure: m("J1", "customize_home", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: DYE_ITEMS, beat: "" }),
+    v({ id: "dress", label: "Dye your shirt", holdS: 5, pose: "gather", reachM: 4, stakes: "low", measure: m("J1", "customize_self", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: DYE_ITEMS, beat: "" }),
+    v({ id: "place-square", label: "Set it down square", holdS: 1, pose: "kneel", reachM: 4, stakes: "low", measure: m("J5", "place_square", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: PLACEABLE_ITEMS, beat: "" }),
+    v({ id: "place-loose", label: "Set it down as it is", holdS: 1, pose: "kneel", reachM: 4, stakes: "low", measure: m("J5", "place_loose", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: PLACEABLE_ITEMS, beat: "" }),
+  ],
+  furnishing: [
+    v({ id: "lift", label: "Pick it up", holdS: 1, pose: "gather", reachM: 1.6, stakes: "low", measure: m("J5", "lift_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),
+    v({ id: "turn", label: "Turn it", holdS: 1, pose: "push", reachM: 1.6, stakes: "low", measure: m("J5", "turn_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),
   ],
   water: [
     v({ id: "wade", label: "Wade in", holdS: 2, pose: "still", reachM: 3, stakes: "low", measure: m("I3", "wade_in", "unrouted"), effect: null, deed: null, owner: "none", beat: "Colder than you meant it to be." }),
@@ -261,7 +285,7 @@ export function verbOf(kind: ThingKind, id: string): Verb | null {
 export function thingName(kind: ThingKind): string {
   const NAMES: Record<string, string> = {
     house: "house", ruin: "ruin", field: "field", bench: "bench", well: "well", dock: "dock", boat: "boat",
-    grave: "grave", mine: "mine", villager: "villager", water: "water's edge", dog: "dog", goat: "goat", hen: "hen",
+    grave: "grave", mine: "mine", villager: "villager", water: "water's edge", land: "your land", home: "house", furnishing: "thing", dog: "dog", goat: "goat", hen: "hen",
     "berry-bush": "berry bush", "fallen-log": "fallen log", "dead-tree": "dead tree", "buttress-tree": "great tree",
     "canopy-palm": "palm", "vine-tangle": "tangle of vines", "grass-tuft": "tuft of grass", "dead-shrub": "dry shrub",
     "moss-patch": "moss", "lichen-rock": "lichen-covered rock", "snow-drift": "snow drift", "dune-ripple": "sand",

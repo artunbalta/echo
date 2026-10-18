@@ -242,10 +242,24 @@ export async function POST(req: Request) {
   const ashore = knownLandings(me, landings, day).slice(-3);
   for (const k of ashore) if (k.landing.fromName) names.add(k.landing.fromName);
   const came = ashore.length ? `How this stranger came to ${s.name}, as far as you know:\n- ${ashore.map((k) => landingWords(s, k, day)).join("\n- ")}` : "";
+  // A stranger's own house on this land (C59): how far it has got, where, and whether it is this one's.
+  const house = store ? ((await store.homeIn(cell)) ?? null) : null;
+  let homeLine = "";
+  if (house) {
+    const mine = (await store!.homeOf(caller.subject))?.cell === cell;
+    const what = ["has marked out a house", "has laid the foundation stones of a house", "has the walls of a house up", "has the roof on a house", "has built a house"][Math.max(0, Math.min(4, house.stage))];
+    const dx = house.x - village.plan.centre.x;
+    const dy = house.y - village.plan.centre.y;
+    const dir = ["east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"][((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8];
+    const where = `${Math.round(Math.hypot(dx, dy) / 10) * 10} metres ${dir} of the green`;
+    homeLine = mine
+      ? `This stranger ${what} of their own on this land, ${where}: the land is theirs, by the registry's say.`
+      : `A stranger ${what} of their own on this land, ${where} — not the one in front of you.`;
+  }
   // What they would ask for this week (C50), which a stranger may already have met.
   const effects = store ? ((await store.effectsFor(cell, day)) ?? []) : [];
   const wanting = needLine(s, village.plan, me, day, changes, effects, deeds);
-  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, came, wanting, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
+  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, came, homeLine, wanting, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
   // Constructed per request, with fetch looked up at call time, so a test's recorder sees the call.
   const client = new Anthropic({ apiKey: KEY, timeout: 25_000, maxRetries: 1, fetch: (url, init) => globalThis.fetch(url, init) });
 

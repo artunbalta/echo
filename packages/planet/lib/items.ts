@@ -53,6 +53,11 @@ export const ITEMS: Record<string, ItemSpec> = {
   bowl: { id: "bowl", name: "a wooden bowl", gladdens: ["innkeeper", "old"] },
   herbs: { id: "herbs", name: "a bunch of herbs", gladdens: ["healer", "old"] },
   knife: { id: "knife", name: "a knife", gladdens: ["fisher", "herder", "forester"] },
+  // What a house is furnished with (C59), made like anything else.
+  stool: { id: "stool", name: "a stool" },
+  table: { id: "table", name: "a table" },
+  bed: { id: "bed", name: "a bed" },
+  shelf: { id: "shelf", name: "a shelf" },
 };
 
 export interface Recipe {
@@ -78,6 +83,11 @@ export const RECIPES: readonly Recipe[] = [
   { id: "hammer", makes: "hammer", needs: { stone: 2, "dry branch": 1 }, holdS: 7, label: "Lash a stone hammer", measure: craft("lash_hammer", "unrouted"), beat: "Heavier at the head than you meant. Good." },
   { id: "torch", makes: "torch", needs: { "dry branch": 1, "dry twigs": 1 }, holdS: 4, label: "Bind a torch", measure: craft("bind_torch", "unrouted"), beat: "It will burn, when it is lit." },
   // The raft is the one recipe ingest.py already knows by its own name: building it is assemble_raft.
+  // Furniture for a house of your own (C59): F6, investment in building, under their own labels.
+  { id: "stool", makes: "stool", needs: { "dry branch": 2 }, holdS: 6, label: "Make a stool", measure: craft("make_stool", "unrouted"), beat: "Three legs. It does not rock." },
+  { id: "table", makes: "table", needs: { driftwood: 3 }, holdS: 10, label: "Make a table", measure: craft("make_table", "unrouted"), beat: "Driftwood boards, pegged. Something to eat at." },
+  { id: "bed", makes: "bed", needs: { driftwood: 2, reed: 3 }, holdS: 10, label: "Make a bed", measure: craft("make_bed", "unrouted"), beat: "A frame, and reeds to lie on." },
+  { id: "shelf", makes: "shelf", needs: { driftwood: 2, "dry branch": 1 }, holdS: 7, label: "Make a shelf", measure: craft("make_shelf", "unrouted"), beat: "A board on two brackets. A place for things." },
   { id: "raft", makes: "raft", needs: { driftwood: 6, reed: 2 }, holdS: 14, label: "Lash a raft together", measure: { cue: "F6", channel: "F", action: "assemble_raft", route: "named", abandon: "abandon_build" }, beat: "Six logs and two reeds. It floats, probably.", atWater: true },
 ];
 

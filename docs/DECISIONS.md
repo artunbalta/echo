@@ -3610,7 +3610,10 @@ Real model, Senstrand:
 
 **What the echo hears.** No ML change (C7):
 
-- `barter` (F9), unrouted;
+- `barter` (F9). Corrected in C59: this said "unrouted", but ingest.py's generic channel-F branch
+  reads every F9 into `risk_index`, at 0.6 when no amount is sent, so every trade read as a hard
+  bargain. It now sends amount 0.2, a trade on the villager's terms, and the registry test forbids
+  an "unrouted" act from taking a generic branch;
 - `ask_return` (G12, reciprocity), unrouted. It is the catalogue's first emitter of G12;
 - `bargain_hard` (F9), which ingest.py routes by name, for asking again after a no. A kindness done
   in between changes the terms, and the next ask is not pressing.
@@ -3639,3 +3642,126 @@ Real model, Senstrand:
     wrong, not the rule.
 
 **Not done.** See ⚑48.
+
+## C59 — your own land and house; J1 and J5; and gathering on land with no village
+
+Feature 13 of the twenty. What was promised: build a house on your own parcel and arrange it, and
+feed the catalogue's J1 (customising home and self) and J5 (order against chaos in arrangement).
+
+**Your own land.** The registry says whose a parcel is (`parcelOf`). A house goes up there and
+nowhere else (`homes.ts` `siteProblem`). The site must be:
+
+- inside the parcel;
+- on dry ground;
+- level to within 1.4 m across the footprint;
+- clear of the village's houses, fields, dock, green, mine, graves and paths, where a village
+  shares the land (C25).
+
+The corner card now says "Your corner of the world" to the parcel's owner only. Before, it said it
+to everyone. Others see the village's name, or "Open land".
+
+**Building** (`/api/home`):
+
+- Stake out the house where you stand, facing the way you face.
+- Then four stages, each a stretch of work and the materials for it:
+  - foundation: 4 stones, 10 s;
+  - walls: 4 driftwood and 2 dry branches, 14 s;
+  - roof: 6 reeds, 12 s;
+  - door: 2 driftwood, 8 s.
+- The pack holds eight things, so a house is several trips.
+- New recipes furnish it: a stool, a table, a bed, a shelf.
+
+**J1, customising** (unrouted, as nothing anchored reads J1). Each act costs a dye, as the
+catalogue's "cost-weight it" asks:
+
+| Dye | Colour |
+|---|---|
+| berries | red |
+| herbs | green |
+| shells | lime white |
+| ore | rust |
+
+- Paint the walls (once they stand) or the door (once it hangs): `customize_home`.
+- Dye your shirt, inside your own house: `customize_self`. Everyone who sees you sees it.
+
+**J5, order against chaos.** The catalogue says to offer an easy tidy and an easy chaos, so that
+what is chosen is the person and not the interface. Two verbs do that:
+
+- **"Set it down square"**: turned with the walls and pushed flush to the nearest one.
+- **"Set it down as it is"**: at your feet, turned however you stand.
+
+"Turn it" and "Pick it up" undo either.
+
+`orderliness` reads the whole room. Each thing counts:
+
+- 0.45 for being turned with the walls;
+- 0.35 for standing against a wall or on the middle line;
+- 0.2 for a same-kind twin mirrored across that line.
+
+The room is read when the stranger steps out after arranging it, once:
+
+| Reading | Sent |
+|---|---|
+| ≥ 0.65, orderly | `stack_tidy` taken |
+| ≤ 0.4, as things fell | `stack_tidy` refused |
+| in between | nothing |
+
+`stack_tidy` is ingest.py's own handler for ordering objects as against leaving them scattered.
+Building is `build_home` with the time worked as `dwell_ms` at a `structure`, which ingest.py's
+dwell branch reads as `ts_build`. No ML change.
+
+**In the world** (`homeLayer`):
+
+- **Drawn by stage**, in its paint, level on the highest ground under it.
+- **Solid.** The walls stop a body, except at the doorway, and so does solid furniture.
+- **Seen from inside.** The roof lifts off and the walls are cut to waist height, so the camera
+  behind you sees in.
+- **The ground is cleared** for 1.5 m round the house: the undergrowth is gone, the trees there stop
+  neither body nor camera, and no grass grows through the floor.
+- **Seen by everyone** on the parcel. A village on the land knows it is there and whether the
+  stranger in front of them built it.
+
+Real model, Senstrand:
+
+- To the owner: "Oh, the new one up north-east of the green? I've seen it from the field, yes —
+  looks snug enough for this wet weather. You're welcome among us, neighbour."
+- To someone else: "There's a newcomer who put up a house of their own a little north-east of the
+  green, but I've not met them, so you'd do better to knock and ask."
+
+**Found on the way.**
+
+- **The act route refused everything on a parcel with no village.** That is about nine parcels in
+  ten. Nothing could be picked up on your own empty land, so no house could have been built on it.
+  Now what is nobody's (the scatter and the water) can be acted on there. Deeds still need a
+  village, and a registry test pins that no scatter verb is a deed.
+- **C58's `barter` was mis-measured.** It was sent as F9 and called unrouted, but ingest.py's generic
+  channel-F branch read every one as a hard bargain (`risk_index` 0.6). It now sends amount 0.2, a
+  trade on the villager's terms. The registry test now fails any "unrouted" act that takes a generic
+  branch. It found one more: C45's `push_through` (F3), relabelled generic, its behaviour unchanged.
+- **Nothing could be set down or painted inside.** A piece of furniture near you always outranked
+  the house. Now what is in your hands decides.
+- **A tuft of grass at your feet outranked the land you meant to stake.** It was a tie, and ties now
+  go to the house.
+- **In a forest parcel, ferns and trees stood inside the house**, and a fern was nearer than the
+  door. The house now clears its ground.
+- **From inside, the camera saw only a wall.** The walls are now cut to waist height. And the grass
+  grew through the floor.
+
+**Measured.**
+
+- `homes.test.ts`, 5 tests: the frame, walls and doorway, the site, the stages, placing square and
+  as it falls, orderliness.
+- `affordances.test.ts`: two new rules, one against unrouted-but-generic and one that the ground
+  offers no deed.
+- `home.test.mts`, 9 tests: the registry's owner, staking, the four stages, paint and dye, placing,
+  turning and lifting, what the echo hears, what a village knows, gathering on empty land, and the
+  house's walls in the world.
+- 27 injected defects, all caught. The first pass missed three, now pinned: twins of different
+  kinds, a middling room being read, and a scatter verb given a deed.
+- Browser, on parcels claimed through the real route (tundra, forest, rainforest):
+  - staked, built through four stages, furnished with a table and two stools, walls painted berry
+    red, shirt dyed;
+  - the echo was told `stake_home`, then `build_home` four times (10.1, 14.0, 12.0, 8.0 s), then
+    `customize_home`, `customize_self`, and on stepping out `stack_tidy` (J5, 0.77, orderly).
+
+**Not done.** See ⚑49.
