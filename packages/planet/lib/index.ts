@@ -50,3 +50,5 @@ export * from "./weather.js";
 export * from "./social.js";
 // What a villager would ask a stranger for (C50).
 export * from "./needs.js";
+// A village's burials, weddings and new children, on the day (C52).
+export * from "./events.js";

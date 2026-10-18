@@ -29,6 +29,7 @@ import { lives, present } from "./life.js";
 import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./society.js";
 import type { VillagePlan } from "./village.js";
 import type { Deed } from "./deeds.js";
+import { comingOn, gatheringsOn } from "./events.js";
 import type { Need } from "./needs.js";
 import type { Weather } from "./weather.js";
 
@@ -238,6 +239,7 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
       give: `The stranger left ${ITEMS[d.item ?? ""]?.name ?? "a gift"} at ${name}.`,
       work: `The stranger did a shift at the mine. Not bad at it, either.`,
       "peer-in": `I saw the stranger looking in at windows.`,
+      attend: d.kind === "grave" ? "The stranger came to the burial. Stood at the back, quiet." : d.kind === "villager" ? "The stranger came to the wedding, did you see?" : "The stranger called at the door for the baby, with the rest of us.",
     };
     const l = line[d.verb];
     if (l) options.push(l, l); // the stranger is the news, when there is news
@@ -270,6 +272,30 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
   if (need) {
     const line = need.goal?.kind === "own-boat" ? "Still short of wood for the boat." : need.goal?.kind === "own-house" ? "The walls are eating stone faster than I can find it." : need.verb === "tend" ? "Have you seen what was done to our field?" : need.verb === "tidy" ? "I've let the grave go. I must get up there." : need.item ? `I could do with ${ITEMS[need.item]?.name ?? "a hand"}.` : null;
     if (line) options.push(line);
+  }
+  // The day's burial, wedding or callers, and what is coming (C52): the talk of the village today.
+  if (ctx.plan) {
+    for (const g of gatheringsOn(s, ctx.plan, day)) {
+      const n = (id: string) => byId.get(id)?.given ?? "them";
+      const mine = g.family.includes(speaker.id) || g.centre.includes(speaker.id);
+      if (g.kind === "funeral") {
+        const dead = n(g.about[0]);
+        if (mine) options.push(`I don't know how we'll manage without ${dead}.`, `${dead} would have hated all this fuss.`);
+        else if (hour < g.t0) options.push(`They bury ${dead} this afternoon.`, `Are you going up to the yard for ${dead}?`);
+        else if (hour > g.t1) options.push(`The whole village came out for ${dead}.`, `It was a good send-off, for ${dead}.`);
+      } else if (g.kind === "wedding") {
+        const [a, b] = g.about.map(n);
+        if (hour < g.t0) options.push(`${a} and ${b} are married this afternoon!`, `I've not a thing to wear to the wedding.`);
+        else if (hour > g.t1) options.push(`Did you see ${a}'s face?`, `${a} and ${b}. Who'd have thought it.`);
+      } else if (hour < g.t1) {
+        options.push(`Have you been to see the new baby?`);
+      }
+    }
+    for (const c of comingOn(s, ctx.plan, day)) {
+      if (c.day === day && c.kind !== "expecting") continue; // today's gatherings are above
+      if (c.about.includes(speaker.id)) continue;
+      options.push(`${c.words}.`);
+    }
   }
   // The village's news: who has decided to leave, who is new, who is gone, whose boat is coming on.
   for (const c of ctx.changes ?? []) {
