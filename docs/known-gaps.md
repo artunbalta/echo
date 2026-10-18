@@ -1669,6 +1669,13 @@ date on it.
 permanently. Recommendation: before. Measure `settlementAt` with and without first, so the decision
 is made on a number.
 
+**Status (2026-10-18):** CLOSED by C43, before any row. A child is keyed on its parents' ids —
+`` `${mother.id}+${father.id}/kid/${i}` `` — and `Person.id` is `uidOf(seedKey)`, sixteen hex
+characters of the lineage, so a key is about forty characters in any generation and an id names the
+same human being whatever happens to anyone else. `society.test.ts` fails if a key passes eighty
+characters. It was done together with ⚑38, because each re-rolls the planet and doing them apart
+would have re-rolled it twice.
+
 ---
 
 ## ⚑ 34. The landing page downloads the planet's village index: 594 KB, 103 KB compressed (2026-10-17)
@@ -1734,3 +1741,42 @@ Two further limits, written down rather than found later:
 
 **Status:** OPEN. Applying 0018 is an operator action on a database this repository does not own a
 connection to; it was not done here.
+
+---
+
+## ⚑ 38. The society's random stream was one number and its shifts (2026-10-18)
+
+`stream(key)` was `() => hashString(key, n++)`. `hashString` is FNV-1a with the salt XORed into the
+state and multiplied through, and no final mixing, so `(H ⊕ n)·p⁴ mod 2³²` is draw 0 plus a small
+integer times one constant (≈ 0.6868) modulo 1. **Every draw a person ever made was a shift of their
+first.** Found while explaining one villager's numbers to the user, not by any test: his first six
+draws were an arithmetic progression.
+
+**MEASURED, before → after the fix (C43):**
+
+| | before | after |
+|---|---|---|
+| distinct gaps between a stream's first two draws, 20,000 keys | **2** | 20,000 |
+| distinct gaps between two siblings' first draws, 20,000 families | **1** | 20,000 |
+| sd of the three-uniform bell (lifespans), against 1/6 | **0.135** | 0.1666 |
+| founders' temperament sd per axis, dial 0.4 (7,946 → 7,984 founders) | **0.32–0.35** | 0.394–0.402 |
+| strongest correlation between two founder axes | **0.52** (dominance–pace) | −0.029 |
+| mean adult lifespan, women / men | **70.0 / 69.1** | 67.4 / 67.4 |
+| mean founding date of a settled valley, window mean 180 | **218 years** | 181 |
+
+The last row is the one with consequences beyond a person: the roll that settles a cell and the roll
+that dates it were two draws of the same stream, so settled cells were systematically old, which is
+why C33's census had 2.81 M graves and the re-rolled planet has 2.36 M.
+
+**Why nothing caught it.** The tests measured rates and L2, never independence; the temperament test
+compared founders' spread with the last generation's, and both were shrunk alike. Three tests in
+`society.test.ts` and two in `life.test.ts` now pin independence, and all five fail on the old stream
+(injected and checked).
+
+**What was NOT changed:** `hashString` itself. Terrain, scene, assets and walkable read it, and
+changing it would move the whole planet's ground. Only the society side (`society`, `life`,
+`schedule`, `village`) moved to `stream` and `hash01`. Whether `hashString`'s own callers draw
+consecutive salts anywhere this matters has **not** been audited.
+
+**Status:** CLOSED for the society (C43). OPEN for the audit of `hashString`'s other callers.
+

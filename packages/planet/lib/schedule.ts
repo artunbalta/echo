@@ -25,9 +25,8 @@
  * Pure: no clock, no I/O. Coordinates are planet-local metres, east and north, like the plan.
  */
 
-import { hashString } from "./terrain.js";
 import { WORLD_DAY_S } from "./worldclock.js";
-import { ageYears, type Person, type Settlement } from "./society.js";
+import { ageYears, hash01, type Person, type Settlement } from "./society.js";
 import { temperaments } from "./life.js";
 import { householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
@@ -122,7 +121,7 @@ const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 const toward = (a: Point, b: Point): number => Math.atan2(b.y - a.y, b.x - a.x);
 
 /** One jittered number per person per day per purpose. */
-const jitter = (person: string, day: number, what: string): number => hashString(`${person}/day/${day}/${what}`) - 0.5;
+const jitter = (person: string, day: number, what: string): number => hash01(`${person}/day/${day}/${what}`) - 0.5;
 
 /** The step in front of a house's door. */
 export function doorOf(plot: Plot): Point {
@@ -133,7 +132,7 @@ export function doorOf(plot: Plot): Point {
 function benchSeat(plan: VillagePlan, person: string): { at: Point; heading: number } {
   const seats = plan.benches.length * 2;
   if (seats === 0) return { at: greenSpot(plan, person, 0.8), heading: 0 };
-  const k = Math.floor(hashString(`${person}/bench`) * seats);
+  const k = Math.floor(hash01(`${person}/bench`) * seats);
   const b = plan.benches[Math.floor(k / 2)];
   const side = k % 2 === 0 ? -0.5 : 0.5;
   return { at: along(b, b.heading, side), heading: toward(b, plan.centre) };
@@ -141,7 +140,7 @@ function benchSeat(plan: VillagePlan, person: string): { at: Point; heading: num
 
 /** A seat on the green, somewhere round the well, the same one every evening. */
 function greenSpot(plan: VillagePlan, person: string, ring: number): Point {
-  const a = hashString(`${person}/green`) * Math.PI * 2;
+  const a = hash01(`${person}/green`) * Math.PI * 2;
   return along(plan.centre, a, plan.greenRadiusM * ring);
 }
 
@@ -198,8 +197,8 @@ export function boatDay(plan: VillagePlan, mooring: Mooring, index: number, day:
   const out = SCHEDULE.wake + 0.06 + jitter(key, day, "sail") * 0.03;
   const home = SCHEDULE.workEnd - 0.02 + jitter(key, day, "home") * 0.03;
   // Out along the dock's own heading, fanned so two boats do not sit on each other.
-  const fan = (hashString(`${key}/fan`) - 0.5) * 1.1 + (index % 2 === 0 ? 0.12 : -0.12);
-  let ground = along(plan.dock.tip, plan.dock.heading + fan, 60 + hashString(`${key}/reach`) * 120);
+  const fan = (hash01(`${key}/fan`) - 0.5) * 1.1 + (index % 2 === 0 ? 0.12 : -0.12);
+  let ground = along(plan.dock.tip, plan.dock.heading + fan, 60 + hash01(`${key}/reach`) * 120);
   let sailDays = dist(mooring, ground) / (SCHEDULE.boatMps * WORLD_DAY_S);
   // A day is twelve real minutes (C24), so a long row out can eat the time there is to fish in.
   // The first version did, and `schedule.test.ts` caught boats turning for home before they had
@@ -311,15 +310,15 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
         seats.set(boat, seat + 1);
         stays.push({ t0: b.t[0], t1: b.t[3], at: { x: m.x, y: m.y }, heading: m.heading, activity: "fish", wander: 0, seat: seat === 0 ? -0.55 : 0.75 });
         clock = b.t[3];
-      } else if (p.occupation === "fisher" || (p.occupation === "labourer" && plan.dock && hashString(`${p.id}/dock`) < 0.5)) {
+      } else if (p.occupation === "fisher" || (p.occupation === "labourer" && plan.dock && hash01(`${p.id}/dock`) < 0.5)) {
         // Mending nets and hauling on the dock.
-        go(plan.dock ? along(plan.dock.root, plan.dock.heading, 2 + hashString(`${p.id}/net`) * (plan.dock.lengthM - 4)) : greenSpot(plan, p.id, 1));
+        go(plan.dock ? along(plan.dock.root, plan.dock.heading, 2 + hash01(`${p.id}/net`) * (plan.dock.lengthM - 4)) : greenSpot(plan, p.id, 1));
         stay(work, plan.dock ? plan.dock.heading + Math.PI / 2 : 0, "work", 1.5);
       } else if (p.occupation === "farmer" || p.occupation === "labourer") {
         const f = fieldFor(plot);
         if (f) {
-          const u = (hashString(`${p.id}/row`) - 0.5) * f.lengthM * 0.7;
-          const w = (hashString(`${p.id}/col`) - 0.5) * f.widthM * 0.7;
+          const u = (hash01(`${p.id}/row`) - 0.5) * f.lengthM * 0.7;
+          const w = (hash01(`${p.id}/col`) - 0.5) * f.widthM * 0.7;
           go({ x: f.x + Math.cos(f.heading) * u - Math.sin(f.heading) * w, y: f.y + Math.sin(f.heading) * u + Math.cos(f.heading) * w });
           stay(work, f.heading, "stoop", 4);
         } else {
@@ -327,7 +326,7 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
         }
       } else if (OUTBOUND.has(p.occupation)) {
         // Out inland and over the hill: gone until the evening, then back the way they went.
-        const out = along(plan.centre, away + (hashString(`${p.id}/out`) - 0.5) * 1.6, SCHEDULE.outboundM);
+        const out = along(plan.centre, away + (hash01(`${p.id}/out`) - 0.5) * 1.6, SCHEDULE.outboundM);
         go(out);
         // Back so as to be in by the end of work, but never before they got there: a slow walker on
         // a long road would otherwise be on the way back while still on the way out.
@@ -341,7 +340,7 @@ export function dayPlans(s: Settlement, plan: VillagePlan, day: number): { plans
         go(greenSpot(plan, p.id, 1.05));
         stay(work, toward(here, plan.centre), "stand", 0.8);
       } else if (CRAFT.has(p.occupation)) {
-        go(along(door, plot.facing + (hashString(`${p.id}/yard`) - 0.5), 1.8));
+        go(along(door, plot.facing + (hash01(`${p.id}/yard`) - 0.5), 1.8));
         stay(work, plot.facing, "work");
       } else {
         stay(work, plot.facing, "work", 1);
@@ -395,7 +394,7 @@ export function whereabouts(d: DayPlan, t: number, boats: readonly (BoatDay | nu
         // A slow figure-of-eight about the spot: a furrow worked along, a game of tag. A runner faces
         // the way the curve is going, which is its derivative; a worker keeps facing the work.
         const rate = s.activity === "play" ? 0.5 : 0.06;
-        const phase = (t - s.t0) * WORLD_DAY_S * rate + hashString(d.person) * 6.28;
+        const phase = (t - s.t0) * WORLD_DAY_S * rate + hash01(d.person) * 6.28;
         x += Math.sin(phase) * s.wander;
         y += Math.sin(phase * 2) * s.wander * 0.5;
         moving = s.activity === "play";

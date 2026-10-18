@@ -25,23 +25,21 @@
  * this module asks, and `census()` on a past day does not ask it (the known-gaps entry for that is
  * the one this module was built beside).
  *
- * STREAM KEYS ARE `Person.id`, NOT `seedKey`, and that is measured rather than preferred. A child's
- * `seedKey` concatenates both parents' keys, so it doubles per generation: 36,037 characters at the
- * longest over 60 sample cells, 2,089 on average, and `hashString` reads the whole key on every
- * draw. `id` is unique on the planet and pinned by the L2 test. What a semantic key would buy over it
- * — stability if the substrate ever inserts a person — is already lost by then, because that insertion
- * changes every `id` after it and therefore every delta row.
+ * STREAM KEYS ARE `Person.id`. Since C43 the id IS the semantic key — {@link uidOf} of the person's
+ * lineage — so it is as stable as `seedKey` and sixteen characters long. (Before C43 the id was an
+ * index and the key doubled per generation, and this note explained which of two bad choices was
+ * less bad.)
  *
  * Pure, in `society.ts`'s idiom: no clock, no I/O, no cache. It reads a `Settlement`, never mutates
  * it, and returns fresh arrays. The caller memoises per `(settlement, horizon)`.
  */
 
-import { hashString } from "./terrain.js";
 import { DAYS_PER_YEAR, yearsToDays } from "./worldclock.js";
 import {
   VITALS,
   ageYears,
   alive,
+  hash01,
   stream,
   type Occupation,
   type Person,
@@ -500,7 +498,7 @@ export function lives(s: Settlement): Map<string, LifeEvent[]> {
       let detail = "";
       if (villageBorn(a) && villageBorn(b) && gap <= childGap) {
         const d = b.birthDay + Math.round(yearsToDays(FRIENDSHIP.child.formAgeYears));
-        if (d <= horizon && !wedBy(d) && present(s, a, d) && present(s, b, d) && hashString(`${pair}/friend/child`) < childChance(d)) {
+        if (d <= horizon && !wedBy(d) && present(s, a, d) && present(s, b, d) && hash01(`${pair}/friend/child`) < childChance(d)) {
           day = d;
           detail = "childhood";
         }
@@ -511,7 +509,7 @@ export function lives(s: Settlement): Map<string, LifeEvent[]> {
         // Past the horizon the headcount is not settled, so the chance is not either: stop first.
         if (d <= horizon && !wedBy(d) && present(s, a, d) && present(s, b, d)) {
           const chance = Math.min(FRIENDSHIP.maxChance, adultChance(d) * (sameTrade ? FRIENDSHIP.sameTradeWeight : 1));
-          if (hashString(`${pair}/friend/adult`) < chance) {
+          if (hash01(`${pair}/friend/adult`) < chance) {
             day = d;
             detail = sameTrade ? "work" : "adulthood";
           }
