@@ -15,7 +15,7 @@
  * model is still closed when the counter is.
  */
 import { NextResponse } from "next/server";
-import { ageYears, grievance, present } from "@echo/planet";
+import { ageYears, dayPlans, doorOf, grievance, homeState, present, residentsOn } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -64,10 +64,25 @@ export async function POST(req: Request) {
   if (ageYears(me, day) < 4) return bad("too_young", 422);
 
   const w = whereNow(s, village.plan, me, day, hour, changes);
-  if (!w || !w.visible) return bad("not_out", 409);
-  if (w.boat !== null) return bad("at_sea", 409);
-  const distanceM = Math.hypot(w.x - pos.x, w.y - pos.y);
-  if (distanceM > TALK_REACH_M) return bad("too_far", 403);
+  if (!w) return bad("not_out", 409);
+  if (!w.visible) {
+    // At home (C54): awake, and the stranger in the same house with them, or nothing.
+    const home = residentsOn(s, village.plan, day).find((r) => r.person.id === me.id)?.plot;
+    if (!home) return bad("not_out", 409);
+    const d = dayPlans(s, village.plan, day, changes).plans.find((x) => x.person === me.id);
+    const state = homeState(d, hour, doorOf(home));
+    if (state === "asleep") return bad("asleep", 409);
+    if (state !== "awake") return bad("not_out", 409);
+    const c = Math.cos(home.facing);
+    const sn = Math.sin(home.facing);
+    const along = (pos.x - home.x) * c + (pos.y - home.y) * sn;
+    const across = -(pos.x - home.x) * sn + (pos.y - home.y) * c;
+    if (Math.abs(along) > home.depthM / 2 + 0.6 || Math.abs(across) > home.widthM / 2 + 0.6) return bad("not_out", 409);
+  } else {
+    if (w.boat !== null) return bad("at_sea", 409);
+    const distanceM = Math.hypot(w.x - pos.x, w.y - pos.y);
+    if (distanceM > TALK_REACH_M) return bad("too_far", 403);
+  }
 
   // A wrong done to their own household, that they know of and that you have not made good (C45):
   // they will not talk to you. Said as what they do, never as a number.

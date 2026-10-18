@@ -31,8 +31,13 @@ import {
   dayPlans,
   comingOn,
   gatheringsOn,
+  doorOf,
+  homeState,
   lives,
   needsOn,
+  residentsOn,
+  roomHeading,
+  roomToLocal,
   occupationOn,
   timeOfDay,
   whereabouts,
@@ -46,6 +51,8 @@ import {
   type LifeEvent,
   type Mooring,
   type Need,
+  type Plot,
+  type Room,
   type Person,
   type SettledParcel,
   type WorldClock,
@@ -98,6 +105,16 @@ export interface VillagersLayer extends WorldLayer {
   coming(): readonly Coming[];
   /** One villager says something to the stranger, in a bubble over them, for `seconds` (C50: thanks). */
   say(id: string, text: string, seconds?: number): void;
+  /**
+   * The stranger is inside a house (C54), or null: its people who are at home are drawn in it —
+   * asleep in their beds, at the table, or, when the door has been forced, up against the back wall.
+   */
+  setIndoors(info: { plot: Plot; room: Room; floor: number; forced: boolean } | null): void;
+  /**
+   * Someone who asked the stranger in (C54): while the stranger is in their house, they are in it too,
+   * at the table. Presentation only, as `hold` is — their day, as everyone else sees it, is unchanged.
+   */
+  host(id: string | null, plot: number | null): void;
   /**
    * A household's boat is out with the stranger (C45): its mooring is drawn empty, in this view only,
    * until `lend(null)`. The schedule — the family's fisher rowing out at dawn — is untouched.
@@ -200,6 +217,10 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   let spoken: { id: string; text: string; until: number } | null = null;
   let near: NearVillager | null = null;
   let held: { id: string; x: number; y: number; activity: string } | null = null;
+  let indoors: { plot: Plot; room: Room; floor: number; forced: boolean } | null = null;
+  let hosting: { id: string; plot: number } | null = null;
+  /** Who sleeps in the house the stranger is in, today. */
+  let indoorsOf: { key: string; ids: string[] } = { key: "", ids: [] };
   let released: { id: string; x: number; y: number; at: number } | null = null;
   /** How long a released villager takes to walk back into their day, seconds. */
   const RELEASE_S = 2.5;
@@ -307,7 +328,10 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       let nearest: { id: string; d: number; x: number; y: number; z: number } | null = null;
 
       crowd.begin();
+      const hostIn = hosting && indoors && indoors.plot.index === hosting.plot ? hosting.id : null;
       for (const d of state.plans) {
+        // The one who asked the stranger in is inside with them (C54), not where their day has them.
+        if (d.person === hostIn) continue;
         const w = whereabouts(d, hour, state.boats, state.moorings);
         if (held && held.id === d.person) {
           // Talking: where they stood when it began, turned to the player, sitting if they sat.
@@ -376,6 +400,41 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         const eligible = held ? held.id === d.person : dist < SPEAKING_M;
         if (eligible && (!nearest || dist < nearest.d)) {
           nearest = { id: d.person, d: dist, x: tx * frame.tileM, y: y + 1.95 * look.scale * (frame.tileM / 1.6), z: ty * frame.tileM };
+        }
+      }
+      // Inside a house (C54): its people who are home, where the room puts them.
+      if (indoors) {
+        const key = `${indoors.plot.index}|${day}|${village.changes.length}`;
+        if (indoorsOf.key !== key) {
+          indoorsOf = { key, ids: residentsOn(village.settlement, village.plan, day).filter((r) => r.plot.index === indoors!.plot.index).map((r) => r.person.id) };
+        }
+        const door = doorOf(indoors.plot);
+        for (const id of indoorsOf.ids) {
+          const p = people.get(id);
+          if (!p || p.deathDay <= day || p.birthDay > day) continue;
+          const d = state.plans.find((x) => x.person === id);
+          const home = id === hostIn ? "awake" : homeState(d, hour, door);
+          if (home === "out" || home === "away") continue;
+          const spot = indoors.forced ? indoors.room.wall.get(id) : home === "asleep" ? indoors.room.beds.get(id) : indoors.room.seats.get(id);
+          if (!spot) continue;
+          const at = roomToLocal(indoors.plot, spot.u, spot.v);
+          const [tx, ty] = frame.fromLocalM(at.x, at.y);
+          const activity = indoors.forced ? "stand" : home === "asleep" ? "sleep" : "sit";
+          const lift = activity === "sleep" ? 0.47 : 0;
+          const heading = roomHeading(indoors.plot, spot.heading);
+          const look = looks.get(id) ?? lookFor(p.id, occupationOn(p, day), ageYears(p, day), p.sex);
+          looks.set(id, look);
+          crowd.pose(
+            { x: tx * frame.tileM, y: indoors.floor + lift, z: ty * frame.tileM, yaw: heading + Math.PI / 2, activity, speed: 0, time: seconds, phase0: hashUnit(id) * Math.PI * 2 },
+            look,
+          );
+          if (activity !== "sleep") {
+            // Awake at home: someone the stranger can speak to, in the room with them.
+            lastAt.set(id, { x: at.x, y: at.y, activity, sx: tx * frame.tileM, sy: indoors.floor, sz: ty * frame.tileM });
+            const dist = Math.hypot(at.x - mx, at.y - my);
+            const eligible = held ? held.id === id : dist < SPEAKING_M;
+            if (eligible && (!nearest || dist < nearest.d)) nearest = { id, d: dist, x: tx * frame.tileM, y: indoors.floor + 1.95 * look.scale * (frame.tileM / 1.6), z: ty * frame.tileM };
+          }
         }
       }
       crowd.end();
@@ -542,6 +601,12 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       deeds = [...list];
     },
     needs: () => needs,
+    setIndoors(info) {
+      indoors = info;
+    },
+    host(id, plot) {
+      hosting = id !== null && plot !== null ? { id, plot } : null;
+    },
     gatherings: () => (village ? gatheringsOn(village.settlement, village.plan, state.day) : []),
     coming: () => (village ? comingOn(village.settlement, village.plan, state.day, village.changes) : []),
     say(id, text, seconds = SAY_S) {

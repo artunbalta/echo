@@ -33,6 +33,7 @@ import {
 
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { VillagersLayer } from "./villagersLayer";
+import type { InteriorLayer } from "./interiorLayer";
 import { buildMarks } from "./villageGeometry";
 
 export interface NearThing extends Thing {
@@ -191,7 +192,9 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
         if (d > reach) return;
         if (!best || d < best.distanceM) best = { ...t, verbs, distanceM: d };
       };
-      for (const t of things) if (Math.hypot(t.x - mx, t.y - my) < LOOK_M + t.sizeM) consider(t);
+      // Inside a house (C54), its own door is behind you: you do not knock on it from within.
+      const within = ctx.layer<InteriorLayer>("interior")?.inside()?.plot;
+      for (const t of things) if (Math.hypot(t.x - mx, t.y - my) < LOOK_M + t.sizeM && t.ref !== `house:${within}`) consider(t);
       const gx = Math.floor(mx / GRID_M);
       const gy = Math.floor(my / GRID_M);
       for (let i = -1; i <= 1; i++) {

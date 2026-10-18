@@ -571,7 +571,8 @@ export type SaidChange =
   | { kind: "goal"; goal: string; about: string | null; trade: string | null }
   | { kind: "drop"; goal: string }
   | { kind: "court"; about: string }
-  | { kind: "return" };
+  | { kind: "return" }
+  | { kind: "invite" };
 
 export interface Offer {
   /** The JSON the model would return for it. */
@@ -609,8 +610,8 @@ export function decisionsOffered(
   day: number,
   changes: readonly LifeChange[],
   meetings: number,
-  /** C53: whom the stranger could tell them of, and the village they came from (by name), if any. */
-  between: { singles?: readonly Introducible[]; home?: string | null } = {},
+  /** C53: whom the stranger could tell them of, and the village they came from (by name), if any. C54: whether they are at their own door. */
+  between: { singles?: readonly Introducible[]; home?: string | null; atHome?: boolean } = {},
 ): Offer[] {
   const offers: Offer[] = [];
   const fits = (p: Proposal) => checkChange(s, me, day, p, changes).ok;
@@ -653,6 +654,9 @@ export function decisionsOffered(
     });
   }
   if (fits({ kind: "stay" })) offers.push({ change: { kind: "stay" }, means: "not to leave after all" });
+  // C54: at their own door, or in their own house — they may ask the stranger in. Nothing is decided
+  // about their life by it; it opens their door to this stranger for the day.
+  if (between.atHome) offers.push({ change: { kind: "invite" }, means: "to ask the stranger into your house, today, if you would have them in — they could come in through the door" });
   // C53: word sent by the stranger to someone they could marry; going home to where they came from.
   if (trusted) {
     for (const x of between.singles ?? []) {
@@ -745,6 +749,7 @@ export const REPLY_SCHEMA = {
           additionalProperties: false,
         },
         { type: "object", properties: { kind: { type: "string", enum: ["return"] } }, required: ["kind"], additionalProperties: false },
+        { type: "object", properties: { kind: { type: "string", enum: ["invite"] } }, required: ["kind"], additionalProperties: false },
       ],
     },
   },
@@ -773,7 +778,7 @@ export function parseReply(text: string): Reply | null {
   let change: SaidChange | null = null;
   if (c && typeof c === "object") {
     const k = (c as { kind?: unknown }).kind;
-    if (k === "leave" || k === "stay" || k === "trade" || k === "goal" || k === "drop" || k === "court" || k === "return") change = c as SaidChange;
+    if (k === "leave" || k === "stay" || k === "trade" || k === "goal" || k === "drop" || k === "court" || k === "return" || k === "invite") change = c as SaidChange;
   }
   return { say: o.say.trim(), remember: o.remember.trim(), change };
 }
@@ -812,6 +817,8 @@ export function proposalFrom(change: SaidChange, s: Settlement, singles: readonl
     }
     case "return":
       return { kind: "return" };
+    case "invite":
+      return null; // not a change to a life: the route answers it itself (C54)
   }
 }
 

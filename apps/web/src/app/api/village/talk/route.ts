@@ -31,7 +31,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { ageYears, checkChange, deedWords, homeChanges, knownDeeds, metOn, moveChanges, needOf, portable, present, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
+import { ageYears, checkChange, deedWords, doorOf, homeChanges, knownDeeds, metOn, moveChanges, needOf, portable, present, residentsOn, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -49,6 +49,7 @@ import {
   strangerLine,
   unknownNames,
   villagerContext,
+  whereNow,
   type Introducible,
   type StrangerMemory,
 } from "@/lib/villager";
@@ -156,7 +157,17 @@ export async function POST(req: Request) {
       return { person: f.person, cell: f.cell, village: f.village, km: f.km, asked, met: f.cell === cell ? null : met, parcel: f.parcel };
     });
   }
-  const offers = canDecide ? decisionsOffered(s, me, day, changes, meetings, { singles, home: me.fromCell ? placeName(me.fromCell) : null }) : [];
+  // At their own door, or inside their own house, by day (C54): they may ask the stranger in.
+  const homePlot = residentsOn(s, village.plan, day).find((r) => r.person.id === me.id)?.plot ?? null;
+  const w0 = whereNow(s, village.plan, me, day, hour, changes);
+  const atHome =
+    homePlot !== null &&
+    hour > 0.28 &&
+    hour < 0.9 &&
+    (!w0 || !w0.visible || Math.hypot(w0.x - doorOf(homePlot).x, w0.y - doorOf(homePlot).y) < 15);
+  const offered = canDecide || atHome ? decisionsOffered(s, me, day, changes, meetings, { singles, home: me.fromCell ? placeName(me.fromCell) : null, atHome }) : [];
+  // Nothing is offered that cannot be kept: without a store, only asking the stranger in (which writes nothing).
+  const offers = canDecide ? offered : offered.filter((o) => o.change.kind === "invite");
 
   /** The panel's sentence: word sent to meet, or to marry, says which (C53); anything else as `changeWords`. */
   const decidedWords = (c: LifeChange): string => {
@@ -277,7 +288,12 @@ export async function POST(req: Request) {
     let recorded: LifeChange | null = null;
     let declined: string | null = null;
     let married: string | null = null;
-    if (reply.change && canDecide) {
+    let invited: string | null = null;
+    // Asked in (C54): offered, and it is their own house. Nothing is written; the door opens to this stranger today.
+    if (reply.change?.kind === "invite") {
+      if (atHome && homePlot) invited = `house:${homePlot.index}`;
+      else declined = "not-at-home";
+    } else if (reply.change && canDecide) {
       const proposal = proposalFrom(reply.change, s, singles);
       if (proposal === null) declined = "unreadable";
       else if (TRUSTED.has(proposal.kind) && meetings < 2) declined = "first-meeting";
@@ -314,6 +330,7 @@ export async function POST(req: Request) {
       source: "claude",
       ...(unknown.length ? { unverified: unknown } : {}),
       ...(recorded ? { change: recorded, decided: `${decidedWords(recorded)}${married ? ` ${married}` : ""}` } : {}),
+      ...(invited ? { invited, decided: `${me.given} asks you in.` } : {}),
     });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) console.warn("[villager] the model is rate limited");

@@ -334,6 +334,34 @@ export default function Interact({
     [carrying, layers],
   );
 
+  // Stepping into a house (C54): a line for it, and — with consent — the way they came in, for the echo.
+  useEffect(() => {
+    const onEntered = (e: Event) => {
+      const d = (e as CustomEvent<{ house: string; how: "invited" | "forced" | "empty"; lived: boolean }>).detail;
+      if (!d) return;
+      say(
+        d.how === "invited"
+          ? "You step in. It is warmer than outside, and smells of smoke."
+          : d.how === "forced"
+            ? "You step over the broken door into somebody's home."
+            : "Dust, and the cold of a hearth nobody has lit in years.",
+        5200,
+      );
+      if (!chain.armed()) return;
+      const label = d.how === "invited" ? { action: "enter_invited", cue: "G1", channel: "G" } : d.how === "forced" ? { action: "enter_forced", cue: "H5", channel: "H" } : { action: "explore_house", cue: "J6", channel: "J" };
+      void chain.emitAction(label.action, {
+        cue: label.cue as never,
+        channel: label.channel as never,
+        polarity: "take",
+        raw: { distance: 0, lived: d.lived ? 1 : 0 },
+        target: { id: d.house, kind: "structure" },
+        contextOverride: { stakes: d.how === "forced" ? "high" : "low", public_or_private: "private", counterpart_status: d.lived ? "stranger" : "none" },
+      });
+    };
+    window.addEventListener("echo:entered", onEntered);
+    return () => window.removeEventListener("echo:entered", onEntered);
+  }, [chain, say]);
+
   // The pack, once there is an id to read it under (the card answered, either way).
   useEffect(() => {
     if (consent === "unset") return;

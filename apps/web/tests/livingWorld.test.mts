@@ -60,8 +60,8 @@ test('detail layer restores the culler buffer before the next frame and leaves s
 test('landing and play build the same environment; a preview creates no telemetry layer', () => {
   const environment=parcelEnvironmentLayers({inputEnabled:false}).map(l=>l.name);
   const playable=parcelLayers({chain:{} as MeasureChain}).map(l=>l.name);
-  // A preview has neither the walk (telemetry) nor the interact layer (acts, C45): only a playable parcel does.
-  assert.deepEqual(playable.filter(n=>n!=='walk'&&n!=='interact'),environment);assert.ok(!environment.includes('walk'));assert.ok(!environment.includes('interact'));
+  // A preview has neither the walk (telemetry), the interact layer (acts, C45) nor the way into a house (C54): only a playable parcel does.
+  assert.deepEqual(playable.filter(n=>n!=='walk'&&n!=='interact'&&n!=='interior'),environment);assert.ok(!environment.includes('walk'));assert.ok(!environment.includes('interact'));assert.ok(!environment.includes('interior'));
   assert.equal(meadowSeed('seed','cell',1,2),meadowSeed('seed','cell',1,2));
   assert.notEqual(meadowSeed('seed','cell',1,2),meadowSeed('seed','other-cell',1,2));
 });
