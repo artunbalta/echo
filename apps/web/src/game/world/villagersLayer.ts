@@ -58,6 +58,8 @@ import {
   type WorldClock,
 } from "@echo/planet";
 
+import { earshotOf } from "@/lib/soundscape";
+
 import { Crowd, hashUnit, lookFor, type Look } from "./crowd";
 import type { InteractLayer } from "./interactLayer";
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
@@ -115,6 +117,11 @@ export interface VillagersLayer extends WorldLayer {
    * at the table. Presentation only, as `hold` is — their day, as everyone else sees it, is unchanged.
    */
   host(id: string | null, plot: number | null): void;
+  /**
+   * What can be heard of the village near a point (C56): people out of doors weighted by nearness,
+   * pairs talking (the bubbles shown), and who is at work at what trade — the tool is theirs.
+   */
+  earshot(x: number, y: number, r: number): { people: number; talking: number; working: { id: string; occupation: string; activity: string; x: number; y: number }[] };
   /** Where someone was drawn out of doors last frame (C55: a dog keeps to its person as drawn), or null. */
   whereIs(id: string): { x: number; y: number; heading: number; visible: boolean; boat: number | null } | null;
   /**
@@ -606,6 +613,18 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     needs: () => needs,
     setIndoors(info) {
       indoors = info;
+    },
+    earshot(x, y, r) {
+      const day = worldDayIndex(options.clock, Date.now());
+      const drawn = [...lastAt].map(([id, at]) => ({ id, x: at.x, y: at.y, activity: at.activity }));
+      // A bubble sits in the scene (x east, z south), over the pair talking under it.
+      const talks = bubbles.filter((b) => b.at !== null && b.el.style.display !== "none").map((b) => ({ x: b.at!.x, y: -b.at!.z }));
+      const heard = earshotOf(drawn, talks, x, y, r);
+      const working = heard.working.flatMap((w) => {
+        const p = people.get(w.id);
+        return p ? [{ ...w, occupation: occupationOn(p, day) }] : [];
+      });
+      return { people: heard.people, talking: heard.talking, working };
     },
     whereIs(id) {
       const at = lastAt.get(id);

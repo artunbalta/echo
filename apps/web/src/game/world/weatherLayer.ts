@@ -22,6 +22,8 @@ import type { SkyLayer } from "./skyLayer";
 export interface WeatherLayer extends WorldLayer {
   /** What is falling and blowing now, for tests and the HUD. */
   weather(): Weather | null;
+  /** How many times lightning has flashed on this page: the ears count it to roll the thunder (C56). */
+  lightning(): number;
 }
 
 /** How many streaks a downpour is, in the box round the camera. */
@@ -39,6 +41,7 @@ export function weatherLayer(options: { clock: WorldClock }): WeatherLayer {
   let flash = 0;
   let nextFlash = 4;
   let elapsed = 0;
+  let flashes = 0;
   const rainPos = new Float32Array(RAIN_MAX * 6);
   const snowPos = new Float32Array(SNOW_MAX * 3);
   const seeds = new Float32Array(Math.max(RAIN_MAX, SNOW_MAX) * 3);
@@ -87,6 +90,7 @@ export function weatherLayer(options: { clock: WorldClock }): WeatherLayer {
         nextFlash -= dt;
         if (nextFlash <= 0) {
           flash = 1;
+          flashes++;
           nextFlash = 5 + Math.random() * 11;
         }
       }
@@ -145,6 +149,7 @@ export function weatherLayer(options: { clock: WorldClock }): WeatherLayer {
     },
 
     weather: () => current,
+    lightning: () => flashes,
 
     dispose() {
       for (const o of [rain, snow]) {

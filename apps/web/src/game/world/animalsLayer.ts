@@ -39,6 +39,8 @@ export interface AnimalsLayer extends WorldLayer {
   following(): string | null;
   /** How many animals were drawn last frame, for tests and the frame budget. */
   drawn(): number;
+  /** Every animal drawn last frame within `r` of a local point, birds and all: what can be heard (C56). */
+  audible(x: number, y: number, r: number): { id: string; kind: Animal["kind"]; x: number; y: number; d: number; coastal: boolean }[];
 }
 
 const SPHERES_PER = 6;
@@ -67,6 +69,8 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
   /** Each animal's offset from where the hour has it, for shying away and following: this viewer's. */
   const offset = new Map<string, { x: number; y: number }>();
   const lastPos = new Map<string, { x: number; y: number; kind: Animal["kind"]; name: string | null }>();
+  /** Everything drawn last frame, for the ears. */
+  const heard: { id: string; kind: Animal["kind"]; x: number; y: number }[] = [];
   const m = new THREE.Matrix4();
   const root = new THREE.Matrix4();
   const part = new THREE.Matrix4();
@@ -197,6 +201,7 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
       si = 0;
       ci = 0;
       drawnCount = 0;
+      heard.length = 0;
       // The dog most taken to this stranger, if any has taken to them enough, comes to their side.
       let best: string | null = null;
       for (const [id, b] of bonds) if (b >= ANIMALS.follows && (!best || b > (bonds.get(best) ?? 0))) best = id;
@@ -245,6 +250,7 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
         const ground = a.kind === "fish" ? 0.02 : a.kind === "bird" ? Math.max(0, frame.heightAtTile(tx, ty)) : Math.max(0, frame.heightAtTile(tx, ty));
         drawOne(a, at, x, y, ground, t, near);
         drawnCount++;
+        heard.push({ id: a.id, kind: a.kind, x, y });
         if (a.kind === "dog" || a.kind === "goat" || a.kind === "hen") lastPos.set(a.id, { x, y, kind: a.kind, name: a.name });
       }
       spheres.count = si;
@@ -268,6 +274,15 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
       bonds = list;
     },
     following: () => follower,
+    audible(x, y, r) {
+      const coastal = animals.some((a) => a.kind === "fish");
+      const out: { id: string; kind: Animal["kind"]; x: number; y: number; d: number; coastal: boolean }[] = [];
+      for (const h of heard) {
+        const d = Math.hypot(h.x - x, h.y - y);
+        if (d <= r) out.push({ ...h, d, coastal });
+      }
+      return out;
+    },
     drawn: () => drawnCount,
 
     dispose() {
