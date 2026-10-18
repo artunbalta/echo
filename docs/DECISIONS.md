@@ -3210,3 +3210,82 @@ were.
   - The frame is 93–94 calls of 120 inside a house.
 
 **Not done.** See ⚑44.
+
+## C55 — goats, hens, dogs, birds and fish; a dog that takes to you; `pet_attach` filled
+
+Feature 9 of the twenty.
+
+**Who keeps what** (`lib/animals.ts` `animalsOf`) is the households':
+
+- **goats** (four to eight) for a house with a herder in it, on a pasture past the outermost field
+  by day and in a pen by the house at night;
+- **hens** for two houses in five, round the door from first light to dusk, then shut in;
+- **a dog** for three houses in ten. It goes a step behind the house's eldest while they are out of
+  doors and lies on the step while they are in;
+- **strays**: a village of any size has one or two, belonging to nobody, about the green by day and
+  curled by the well at night;
+- **birds**: two flocks wheel overhead, gulls over the dock and crows over the fields;
+- **fish**: two schools off the dock show their backs at the surface, and now and then one leaps.
+
+**Where they are is arithmetic on the hour,** as the villagers' is (C41): a few slow sines inside a
+circle for a herd or a yard, a fixed step behind a person for a dog. So every viewer sees the same
+goat. What an animal does about this stranger is the browser's and only this viewer's (`animalsLayer`):
+
+- hens and goats get out of the way of someone walking at them;
+- a dog that has taken to the stranger comes to their side and follows them about, and waits at the
+  door while they are inside a house.
+
+**Two draws for every animal in the village.** Every body, head, wing and fish is an instance of one
+unit sphere, and every leg, tail and horn one of a unit cylinder, coloured per instance; only the
+spheres cast. Kamgull with 102 animals is 109 of 120 calls.
+
+**Acting on them** (the registry, C45: everything can be acted on):
+
+- **a dog:** stroke it, feed it (berries or grain only — a dog is not offered a stone, and a stone
+  held out to one stays in the pack), play with it, or shoo it away;
+- **a goat:** scratch its head, or chase the herd;
+- **hens:** scatter grain for them, or chase them.
+
+The act route holds an act to the animal as the hour has it, with room for a hen that shied. It
+needs no room for a dog that has taken to the stranger, which may be anywhere at their heel.
+Deeds are recorded under the dog's name, and a stray's belong to nobody.
+
+**The bond and `pet_attach`.** A bond is what a stranger has done for one dog, read off their deeds
+(`bondWith`): 0.1 an act and 0.2 a day it was done on, within 90 days, with shooing taking 0.3 back.
+At 0.6 the dog follows you. That needs two days: one afternoon of fuss is not enough (a test pins
+both).
+
+What the echo hears is the catalogue's D11, which ingest.py already reads into `pet_attach` by
+`raw.amount` — the feature that sat empty in the engine. The amount is the bond: 0.3 + 0.6 × bond
+for a stroke, a meal or a game; 0.05 for shooing; nothing for K5. K5 is "ignores the pet": sixty
+seconds with a dog at your heel and no kindness to it, once a page, sent as D11 with nothing in it.
+No ML change (C7).
+
+**Fixed in C52 on the way.** C52 sent joining a wedding, and keeping apart from one, under the
+catalogue's unrouted G4 names. ingest.py reads the clearing's own `group_join` and `group_avoid`
+(G1) by name, so they go under those now.
+
+**Villagers know their animals.** They know their dog by name ("Your house keeps your dog Nell, who
+goes everywhere at your heel"), their goats and hens, and the village's strays. They talk about a
+stranger who has made a friend of the stray, or chased the goats. The dogs' names are names a reply
+may use: the first real-model check spent a retry on "Nell".
+
+**Measured.**
+
+- `animals.test.ts`, 5 tests: who keeps what; one name per dog in a village; the herd on the
+  pasture and in its pen; hens shut in; a dog at its person's heel and on the step; the same for
+  anyone; the bond over days.
+- `animals.test.mts`, 5 tests: D11 with the bond in it; food is food; a stray's stroke recorded and
+  held to its place; the stone stays in the pack; two days of kindness, and then the dog is wherever
+  the stranger is.
+- Eleven injected defects, all caught.
+- Real model: Naand on their dog, "yes, she's mine, her name is Nell, she never leaves me wherever I
+  go". One call once the name was allowed.
+- Browser, Senstrand:
+  - hens round a door;
+  - dogs at their people's heels and a stray on the green (once its legs were slimmed: the first look
+    was a dog on stilts);
+  - fish backs off the dock;
+  - a stray, set to have taken to the stranger, at their heel 1.27 m off after a walk.
+
+**Not done.** See ⚑45.

@@ -239,6 +239,11 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
       give: `The stranger left ${ITEMS[d.item ?? ""]?.name ?? "a gift"} at ${name}.`,
       work: `The stranger did a shift at the mine. Not bad at it, either.`,
       "peer-in": `I saw the stranger looking in at windows.`,
+      stroke: `The stranger's made a friend of ${name}.`,
+      feed: d.kind === "hen" ? "The stranger was feeding the hens, if you please." : `The stranger's been feeding ${name}. Spoiling it.`,
+      play: `I saw the stranger playing with ${name}. Like a child.`,
+      shoo: `The stranger shooed ${name} off. Didn't care for that.`,
+      chase: `The stranger's been chasing ${name} about. What for?`,
       attend: d.kind === "grave" ? "The stranger came to the burial. Stood at the back, quiet." : d.kind === "villager" ? "The stranger came to the wedding, did you see?" : "The stranger called at the door for the baby, with the rest of us.",
     };
     const l = line[d.verb];

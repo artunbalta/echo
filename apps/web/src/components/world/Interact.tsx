@@ -24,8 +24,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ITEMS, PACK_SIZE, RECIPES, canMake, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type LifeChange, type Pack, type Recipe, type Verb } from "@echo/planet";
+import { ITEMS, PACK_SIZE, RECIPES, bondWith, canMake, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type LifeChange, type Pack, type Recipe, type Verb } from "@echo/planet";
 
+import type { AnimalsLayer } from "@/game/world/animalsLayer";
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
@@ -135,13 +136,24 @@ export default function Interact({
     if (text) lineTimer.current = setTimeout(() => setLine(null), ms);
   }, []);
 
+  const deedsRef = useRef<Deed[]>([]);
+  /** A dog at your heel (C55): since when, and when you last did anything for it. */
+  const heel = useRef<{ id: string | null; since: number; lastKind: number; told: boolean }>({ id: null, since: 0, lastKind: 0, told: false });
   /** Your own deeds here (C49), for the villagers' talk: what they may be saying about you. */
   const refreshDeeds = useCallback(async () => {
     try {
       await ensureIdentity();
       const res = await fetch(`/api/village/deeds?cell=${encodeURIComponent(cell)}`, { headers: identityHeaders() });
       const data = (await res.json().catch(() => ({}))) as { deeds?: unknown[] };
-      if (Array.isArray(data.deeds)) layers().villagers?.setDeeds(data.deeds as never);
+      if (Array.isArray(data.deeds)) {
+        layers().villagers?.setDeeds(data.deeds as never);
+        deedsRef.current = data.deeds as Deed[];
+        // How much each dog has taken to this stranger (C55): the animals layer brings the one that has to their side.
+        const today = worldDayIndex(worldClock(WORLD_EPOCH), Date.now());
+        const bonds = new Map<string, number>();
+        for (const d of deedsRef.current) if (d.thing.startsWith("animal:")) bonds.set(d.thing.slice(7), bondWith(deedsRef.current, d.thing.slice(7), today));
+        layers().ctx?.layer<AnimalsLayer>("animals")?.setBonds(bonds);
+      }
     } catch {
       // the villagers will talk about other things
     }
@@ -174,6 +186,10 @@ export default function Interact({
         }
         if (data.error === "pack_full") {
           say(`Your pack is full: ${PACK_SIZE} things. Put something down first (I).`);
+          return;
+        }
+        if (data.error === "not_food") {
+          say("It sniffs at it, and turns away.");
           return;
         }
         if (data.error === "not_carried") {
@@ -260,7 +276,12 @@ export default function Interact({
       }
       // The echo hears of it, finished or not, only with consent (the chain refuses otherwise).
       const at = interact?.bodyAt() ?? { x: a.thing.x, y: a.thing.y };
-      const m = measurementFor(a.verb, a.thing, { heldMs, decisionMs: a.decisionMs, abandoned, distanceM: a.thing.distanceM }, interact?.audience(at.x, at.y) ?? 0);
+      // For a dog (C55), the stroke weighs what the bond weighs: a little from a stranger, a lot from a friend.
+      const animal = a.thing.ref.startsWith("animal:") ? a.thing.ref.slice(7) : null;
+      const bond = animal ? bondWith(deedsRef.current, animal, worldDayIndex(worldClock(WORLD_EPOCH), Date.now())) : 0;
+      const amount = a.thing.kind === "dog" ? 0.3 + 0.6 * bond : a.thing.kind === "goat" ? 0.35 : undefined;
+      if (done && animal && a.thing.kind === "dog" && a.verb.id !== "shoo") heel.current.lastKind = performance.now();
+      const m = measurementFor(a.verb, a.thing, { heldMs, decisionMs: a.decisionMs, abandoned, distanceM: a.thing.distanceM, amount }, interact?.audience(at.x, at.y) ?? 0);
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
       if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
@@ -415,6 +436,15 @@ export default function Interact({
         }
         setTalkable(null);
         return;
+      }
+      // A dog at your heel that you never so much as look at (C55): once a page, the catalogue's K5 —
+      // sent as D11 with nothing in it, which is how ingest.py reads `pet_attach` as none.
+      const dog = layers().ctx?.layer<AnimalsLayer>("animals")?.following() ?? null;
+      const h = heel.current;
+      if (dog !== h.id) heel.current = { id: dog, since: performance.now(), lastKind: h.lastKind, told: h.told };
+      else if (dog && !h.told && performance.now() - Math.max(h.since, h.lastKind) > 60_000 && chain.armed()) {
+        h.told = true;
+        void chain.emitAction("ignores_pet", { cue: "D11" as never, channel: "D" as never, polarity: "refuse", raw: { amount: 0, dwell_ms: Math.round(performance.now() - Math.max(h.since, h.lastKind)) }, target: { id: `animal:${dog}`, kind: "pet" }, contextOverride: { stakes: "low", public_or_private: "private", counterpart_status: "none" } });
       }
       const n = interact?.nearest() ?? null;
       if (n && seenSince.current?.ref !== n.ref) seenSince.current = { ref: n.ref, at: performance.now() };

@@ -75,10 +75,15 @@ export function attendStep(state: AttendState, gatherings: readonly Gathering[],
   return out;
 }
 
-/** What being there is measured as: the catalogue's label, cue and channel (ingest.py routes none of them yet). */
-export function attendanceLabel(e: AttendEvent): { action: string; cue: "I7" | "G4"; channel: "I" | "G"; polarity: "take" | "refuse" } {
-  if (e.kind === "stayed-apart") return { action: "stays_solo", cue: "G4", channel: "G", polarity: "refuse" };
-  return e.gathering.kind === "funeral" ? { action: "mourns", cue: "I7", channel: "I", polarity: "take" } : { action: "joins_group", cue: "G4", channel: "G", polarity: "take" };
+/**
+ * What being there is measured as. A burial is the catalogue's I7 `mourns`, which ingest.py does not
+ * route yet. Joining a wedding or a new child's callers, and keeping apart from a wedding, are the
+ * clearing's own `group_join` and `group_avoid` (G1, packages/shared/src/social.ts), which ingest.py
+ * reads by name — C52 sent them as the catalogue's unrouted G4 names until C55 found the routed pair.
+ */
+export function attendanceLabel(e: AttendEvent): { action: string; cue: "I7" | "G1"; channel: "I" | "G"; polarity: "take" | "refuse" } {
+  if (e.kind === "stayed-apart") return { action: "group_avoid", cue: "G1", channel: "G", polarity: "refuse" };
+  return e.gathering.kind === "funeral" ? { action: "mourns", cue: "I7", channel: "I", polarity: "take" } : { action: "group_join", cue: "G1", channel: "G", polarity: "take" };
 }
 
 /** How long until a world day and hour, in real minutes, in words: "in about 20 minutes". */

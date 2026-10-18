@@ -64,6 +64,7 @@ import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
 import { interactLayer } from "./interactLayer";
 import { interiorLayer } from "./interiorLayer";
+import { animalsLayer } from "./animalsLayer";
 import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
 import type { ReactionReading } from "@/components/world/Inspector";
@@ -154,6 +155,8 @@ export function parcelEnvironmentLayers({ slice, inputEnabled = true, touch, clo
     detailLayer(),
     playerLayer({ inputEnabled, touch }),
     villagersLayer({ clock }),
+    // Goats, hens, dogs, birds and fish (C55): after the villagers, whose people the dogs keep to.
+    animalsLayer({ clock }),
     meadowLayer(),
     // The weather over all of it (C48): last, so it leans on a sky every other layer has already read.
     weatherLayer({ clock }),

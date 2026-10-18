@@ -1932,3 +1932,21 @@ consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** OPEN, all of it, written down rather than discovered.
 
+## ⚑ 45. What C55 does not do yet, and what it trusts (2026-10-18)
+
+- **No talking to the dog.** D11 is "pet talk" in the catalogue: what a person says to a pet, as a
+  valence. Here it is what they do for it. The panel could carry a turn to a dog as a valence and
+  never its text; it does not yet.
+- **A dog follows you only in its own village**, and only on this page. It does not come along to
+  another parcel, and its following is not stored — the bond is, as deeds.
+- **The bond is the stranger's deeds, so it is erased with them** (C45's erasure), and a dog's own
+  memory of you is nothing more.
+- **Goats only where a herder lives.** Senstrand, a fishing village, has none. Whether pasture ground
+  should bring a herd without a herder is not decided.
+- **Birds do not land and fish do not flee.** Both are presentation: a flock wheels, a school circles.
+- **An owned dog that has taken to the stranger leaves its person to follow them.** Its person says
+  nothing about it.
+- **The animals are outside the frame budget's old headroom (⚑36):** +2 calls, +1 shadow, everywhere.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+

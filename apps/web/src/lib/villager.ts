@@ -35,6 +35,7 @@ import {
   causeOfDeath,
   checkChange,
   chronicle,
+  animalsOf,
   comingOn,
   dayPlans,
   gatheringName,
@@ -46,6 +47,7 @@ import {
   occupationOn,
   present,
   relation,
+  residentsOn,
   settlementSummary,
   temperamentOf,
   weatherAt,
@@ -326,6 +328,19 @@ export function villagerContext(
   }
   if (family.length) lines.push(family.join(" "));
 
+  // The animals of their house (C55): their dog by name, the goats, the hens.
+  const beasts = animalsOf(s, plan, day);
+  const mineDog = beasts.find((a) => a.kind === "dog" && a.follows === me.id);
+  const homeOf = residentsOn(s, plan, day).find((r) => r.person.id === me.id);
+  const house = homeOf ? (me.partnerDay !== null && me.partnerDay <= day ? me.household : me.bornInto) : null;
+  const goats = beasts.filter((a) => a.kind === "goat" && a.household === house).length;
+  const hens = beasts.filter((a) => a.kind === "hen" && a.household === house).length;
+  const keep = [mineDog ? `your dog ${mineDog.name}, who goes everywhere at your heel` : null, goats ? `${goats} goats` : null, hens ? "hens" : null].filter(Boolean);
+  if (keep.length) lines.push(`Your house keeps ${keep.join(", ")}.`);
+  for (const a of beasts.filter((x) => x.kind === "dog" && x.follows && x.follows !== me.id && house !== null && x.household === house)) lines.push(`The family's dog, ${a.name}, follows ${people.get(a.follows!)?.given ?? "one of you"} about.`);
+  const strays = beasts.filter((a) => a.id.startsWith("stray:")).map((a) => a.name);
+  if (strays.length) lines.push(`${strays.join(" and ")} ${strays.length > 1 ? "are" : "is"} the village's stray${strays.length > 1 ? "s" : ""}, belonging to nobody.`);
+
   // Between villages (C53): where they came from, where they went and came back from, and word sent.
   // Other villages' names, and the people of them named here, are names a reply may use.
   const elsewhere = new Set<string>();
@@ -487,7 +502,8 @@ export function villagerContext(
   const graves = s.people.filter((p) => p.deathDay <= day && present(s, p, p.deathDay - 1)).length;
   lines.push(`There are ${graves} graves in the yard beyond the houses.`);
 
-  const names = new Set<string>([s.name, ...elsewhere]);
+  // The village's dogs have names too (C55), and a reply may say them.
+  const names = new Set<string>([s.name, ...elsewhere, ...beasts.map((a) => a.name).filter((n): n is string => n !== null)]);
   for (const p of s.people) {
     names.add(p.given);
     names.add(p.family);

@@ -76,11 +76,11 @@ test("C52: a wedding watched from across the green and never joined is G4's refu
     if (kind === "wedding") {
       assert.equal(events.length, 1, "watching a wedding from apart was read twice, or not at all");
       assert.equal(events[0].kind, "stayed-apart");
-      assert.deepEqual(attendanceLabel(events[0]), { action: "stays_solo", cue: "G4", channel: "G", polarity: "refuse" });
+      assert.deepEqual(attendanceLabel(events[0]), { action: "group_avoid", cue: "G1", channel: "G", polarity: "refuse" });
     } else assert.equal(events.length, 0, "a burial watched from apart was read as something");
   }
   assert.equal(attendanceLabel({ kind: "joined", gathering: fake("funeral"), dwellMs: 1, distanceM: 1 }).action, "mourns");
-  assert.equal(attendanceLabel({ kind: "joined", gathering: fake("naming"), dwellMs: 1, distanceM: 1 }).action, "joins_group");
+  assert.equal(attendanceLabel({ kind: "joined", gathering: fake("naming"), dwellMs: 1, distanceM: 1 }).action, "group_join");
 });
 
 test("C52: the news says a world hour in real minutes", () => {

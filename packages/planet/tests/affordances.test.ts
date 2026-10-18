@@ -56,7 +56,8 @@ test("an act sent under a NAMED label has that handler in ingest.py; a GENERIC o
         const ok =
           (channel === "F" && (cue.startsWith("F1") || cue.startsWith("F7") || /save|give/.test(action))) ||
           (channel === "G" && ["approach", "initiate", "greet"].includes(action)) ||
-          (channel === "G" && action === "knock_door"); // carries `distance`, which the G branch reads
+          (channel === "G" && action === "knock_door") || // carries `distance`, which the G branch reads
+          (channel === "D" && cue.startsWith("D11")); // the pet branch: `pet_attach` from raw.amount (C55)
         assert.ok(ok, `${k}/${verb.id}: "${action}" on ${cue} would not take the generic route it claims`);
       } else {
         assert.ok(!new RegExp(`"${action}"`).test(ingest), `${k}/${verb.id}: "${action}" has a handler in ingest.py; call it named`);
