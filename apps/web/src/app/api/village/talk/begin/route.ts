@@ -1,0 +1,94 @@
+/**
+ * Begin a conversation with a villager (DECISIONS C44): the stranger has pressed E.
+ *
+ * The server finds the villager where the closed form has them NOW and refuses a stranger who is not
+ * near them, or a villager who is indoors or out at sea — then counts the meeting in the villager's
+ * memory of this stranger and signs a token every line of the conversation carries. Nothing is spent:
+ * there is no model call here. See `lib/villageTalk.ts` for why the check is at the beginning and
+ * what it does not prove.
+ *
+ * THE LIMIT FAILS OPEN HERE, and only here. This route spends nothing and writes one row per stranger
+ * per villager (an upsert on its key), so "the counter is down" is not a cost; the line that calls a
+ * model is still closed when the counter is.
+ */
+import { NextResponse } from "next/server";
+import { ageYears, present } from "@echo/planet";
+
+import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
+import { subjectOf, subjectRejection } from "@/lib/subject";
+import { recognition, whereNow } from "@/lib/villager";
+import { TALK_REACH_M, loadVillage, signConversation } from "@/lib/villageTalk";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const CELL = /^[0-9a-f]{15}$/;
+const PERSON = /^[0-9a-f]{16}$/;
+
+const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
+
+export async function POST(req: Request) {
+  const caller = subjectOf(req);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+  let body: { cell?: unknown; person?: unknown; at?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return bad("bad_request");
+  }
+  const { cell, person, at } = body;
+  if (typeof cell !== "string" || !CELL.test(cell)) return bad("bad_cell");
+  if (typeof person !== "string" || !PERSON.test(person)) return bad("bad_person");
+  const pos = at as { x?: unknown; y?: unknown } | undefined;
+  if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number" || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return bad("bad_position");
+
+  const rate = await rateLimit(req, { bucket: "villager", windowMs: 10 * 60 * 1000, max: 40, onUnavailable: "allow" });
+  if (!rate.ok) {
+    const { body: error, status } = rateLimitRejection(rate);
+    return NextResponse.json(error, { status });
+  }
+
+  const now = Date.now();
+  const loaded = await loadVillage(cell, now);
+  if (!loaded) return bad("no_village", 404);
+  const { village, changes, store, day, hour } = loaded;
+  const s = village.settlement;
+  const me = s.people.find((p) => p.id === person);
+  if (!me || !present(s, me, day)) return bad("no_such_villager", 404);
+  if (ageYears(me, day) < 4) return bad("too_young", 422);
+
+  const w = whereNow(s, village.plan, me, day, hour, changes);
+  if (!w || !w.visible) return bad("not_out", 409);
+  if (w.boat !== null) return bad("at_sea", 409);
+  const distanceM = Math.hypot(w.x - pos.x, w.y - pos.y);
+  if (distanceM > TALK_REACH_M) return bad("too_far", 403);
+
+  const conv = signConversation(caller.subject, cell, person, now);
+  if (!conv) return bad("identity_unconfigured", 503);
+
+  // The meeting, counted. A store that cannot be read or written costs the villager their memory of
+  // you, not the conversation.
+  let known: Awaited<ReturnType<NonNullable<typeof store>["memoryOf"]>> = null;
+  if (store) {
+    known = await store.memoryOf(caller.subject, cell, person);
+    if (known !== null) {
+      const before = known === "none" ? null : known;
+      await store.remember(caller.subject, cell, person, {
+        note: before?.note ?? "",
+        meetings: (before?.meetings ?? 0) + 1,
+        firstDay: before?.firstDay ?? day,
+        lastDay: day,
+      });
+    }
+  }
+  const memory = known && known !== "none" ? { ...known, meetings: known.meetings + 1 } : null;
+  return NextResponse.json({
+    conv,
+    meetings: memory?.meetings ?? 1,
+    recognised: recognition(memory, me.given, day),
+    remembers: store !== null && known !== null,
+  });
+}

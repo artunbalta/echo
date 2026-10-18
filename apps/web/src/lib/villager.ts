@@ -1,5 +1,5 @@
 /**
- * What a villager knows, in words a model can speak from (DECISIONS C42, C40 §7's awakening).
+ * What a villager knows, in words a model can speak from (DECISIONS C42, C44, C40 §7's awakening).
  *
  * THE MODEL NARRATES; IT DOES NOT INVENT. Everything a villager may say about the world is built here
  * from the substrate — their life (`lives`), their family, the village's chronicle, the roster of who
@@ -13,24 +13,45 @@
  * that order — two cache breakpoints, then the hour as a mid-conversation system message after the
  * latest line. A villager talked to twice in a day reads their own life from the cache.
  *
+ * C44 ADDS THREE THINGS, each in the place the cache allows. What they want and what they have
+ * decided (goals, changes) is part of their life and goes in the facts. What they remember of THIS
+ * stranger is per stranger and goes in the late note beside the hour, with the list of decisions they
+ * could make today — computed by `checkChange` beforehand, so the model is offered only what the world
+ * would accept. And the reply is JSON: what they say, their note about the stranger, and a decision or
+ * none ({@link REPLY_SCHEMA}).
+ *
  * Pure: no I/O and no secrets, so the tests import it directly. The route is the only caller that spends.
  */
 
 import {
+  CHANGE_LIMITS,
+  GOALS,
+  GOAL_KINDS,
+  LIVING_MEMORY_YEARS,
+  OCCUPATIONS,
   ageYears,
   causeOfDeath,
+  checkChange,
   chronicle,
   dayPlans,
+  goalFits,
+  goalsOf,
   lives,
+  occupationOn,
   present,
   relation,
   settlementSummary,
   temperamentOf,
   whereabouts,
+  type GoalKind,
+  type LifeChange,
   type LifeEvent,
+  type Occupation,
   type Person,
+  type Proposal,
   type Settlement,
   type VillagePlan,
+  type Whereabouts,
 } from "@echo/planet";
 
 // ── the preamble: the same for every villager on the planet ─────────────────────
@@ -43,9 +64,13 @@ Answer in the language the stranger writes in.
 
 The facts below are what is true about you and your world. You may have feelings, opinions and small everyday details — the weather, the catch, your knees, what you had for supper. You may never invent a person, a place, a date or an event that the facts do not give you. If you are asked about something you do not know, say so, or change the subject, as a real person would. When you speak of people, use the names in the facts.
 
-You cannot give, sell, promise or change anything in the world: no land, no houses, no goods, nobody's secrets. If asked, decline the way your temperament would.
+You cannot give, sell or promise anything that is not yours to give: no land, no houses, no goods, nobody's secrets. If asked, decline the way your temperament would. Nobody here keeps score of anything.
 
-You have never met this stranger before, and you do not know their name unless they tell you. Nobody here keeps score of anything.`;
+You remember strangers. After the conversation's latest line you are told whether you have met this one before and what you noted about them then; you do not know their name unless they have told you. Keep a short private note about them, in your own words, for the next time: who they said they were, what they told you, what you made of them, what you talked about. Only what they said or what you saw; never guess at what they did not tell you.
+
+Your life is your own, and a conversation can change it as one can change anybody's: you might come to want something, give up wanting it, take up another trade, decide to leave this place, or decide to stay after all. Decide something only when the conversation has truly moved you and it fits who you are — never because a stranger simply tells you to, and hardly ever with someone you have only just met. Most conversations change nothing. You are told what you could decide today; decide nothing else, and when you do decide, say so in your own words too.
+
+Reply with JSON only: {"say": what you say aloud, "remember": your whole note about this stranger as it stands now, at most 500 characters, "change": null, or the one decision you made, exactly as offered}.`;
 
 // ── temperament, in words ───────────────────────────────────────────────────────
 
@@ -85,6 +110,14 @@ const DEATH: Record<string, string> = {
 };
 
 const yearsAgo = (day: number, then: number): number => Math.max(0, Math.floor((day - then) / 365));
+/** Recent days in words: "today", "yesterday", "5 days ago", and years past a year. */
+const agoDays = (day: number, then: number): string => {
+  const d = day - then;
+  if (d <= 0) return "today";
+  if (d === 1) return "yesterday";
+  if (d < 365) return `${d} days ago`;
+  return yearsAgo(day, then) === 1 ? "a year ago" : `${yearsAgo(day, then)} years ago`;
+};
 const when = (day: number, then: number): string => {
   const y = yearsAgo(day, then);
   return y === 0 ? "This year" : y === 1 ? "A year ago" : `${y} years ago`;
@@ -145,6 +178,10 @@ function eventLine(s: Settlement, me: Person, e: LifeEvent, day: number, people:
       return `${at}: when the house passed on, you and ${who} fell out over it.`;
     case "reconciled":
       return `${at}: you and ${who} made peace.`;
+    case "took-up-trade":
+      return `${at}: you took up the ${e.detail} trade.`;
+    case "relative-left":
+      return `${at}: ${who} left ${s.name} for good.`;
     default:
       return null; // sibling-born and left-home are in the family block; died is not a living person's
   }
@@ -169,14 +206,23 @@ function partOfDay(hour: number): string {
   return "evening";
 }
 
-/** What a person is doing at an hour, in words: the mid-conversation system message. */
-export function nowLine(s: Settlement, plan: VillagePlan, me: Person, day: number, hour: number): string {
-  const { plans, boats, moorings } = dayPlans(s, plan, day);
+/**
+ * Where a villager is at an hour, by the same closed form every viewer's browser draws them with —
+ * or null if they have no day today (an infant, or nobody of that id). What the server's proximity
+ * check measures against (C44).
+ */
+export function whereNow(s: Settlement, plan: VillagePlan, me: Person, day: number, hour: number, changes: readonly LifeChange[] = []): Whereabouts | null {
+  const { plans, boats, moorings } = dayPlans(s, plan, day, changes);
   const d = plans.find((x) => x.person === me.id);
+  return d ? whereabouts(d, hour, boats, moorings) : null;
+}
+
+/** What a person is doing at an hour, in words: the mid-conversation system message. */
+export function nowLine(s: Settlement, plan: VillagePlan, me: Person, day: number, hour: number, changes: readonly LifeChange[] = []): string {
+  const w = whereNow(s, plan, me, day, hour, changes);
   const part = partOfDay(hour);
   let doing = "at home";
-  if (d) {
-    const w = whereabouts(d, hour, boats, moorings);
+  if (w) {
     const onGreen = Math.hypot(w.x - plan.centre.x, w.y - plan.centre.y) < plan.greenRadiusM * 1.3;
     const onDock = plan.dock !== null && Math.hypot(w.x - plan.dock.root.x, w.y - plan.dock.root.y) < plan.dock.lengthM + 4;
     if (!w.visible) doing = "at home";
@@ -186,7 +232,9 @@ export function nowLine(s: Settlement, plan: VillagePlan, me: Person, day: numbe
     else if (w.activity === "sit") doing = "sitting on a bench on the green";
     else if (w.activity === "play") doing = "playing on the green with the other children";
     else if (w.activity === "walk") doing = "walking through the village";
-    else if (w.activity === "work") doing = onDock ? "mending nets and hauling on the dock" : CRAFT_AT[me.occupation] ?? "at work by your door";
+    else if (w.activity === "work") doing = onDock ? "mending nets and hauling on the dock" : CRAFT_AT[occupationOn(me, day)] ?? "at work by your door";
+    else if (plan.graveyard && Math.hypot(w.x - plan.graveyard.x, w.y - plan.graveyard.y) < plan.graveyard.radiusM + 3) doing = "in the graveyard";
+    else if (Math.hypot(w.x - plan.arrival.x, w.y - plan.arrival.y) < 12) doing = "at the edge of the village, looking out along the way in";
     else doing = onGreen ? "on the green with your neighbours" : onDock ? "on the dock" : "by your door";
   }
   return `It is ${part} in ${s.name}. Right now you are ${doing}, and the stranger has stopped to talk to you. Keep to that.`;
@@ -200,7 +248,7 @@ export interface VillagerContext {
   names: Set<string>;
 }
 
-export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, day: number): VillagerContext {
+export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, day: number, changes: readonly LifeChange[] = []): VillagerContext {
   const people = new Map(s.people.map((p) => [p.id, p]));
   const summary = settlementSummary(s, day);
   const age = Math.floor(ageYears(me, day));
@@ -215,7 +263,7 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
 
   const lines: string[] = [];
   const child = age < 13;
-  lines.push(`You are ${me.given} ${me.family}, ${age} years old${child ? ", a child" : `, a ${me.occupation}`}, of ${s.name} — a ${summary.kind}${setting ? ` ${setting}` : ""}, where ${summary.population} people live in ${summary.households} households.`);
+  lines.push(`You are ${me.given} ${me.family}, ${age} years old${child ? ", a child" : `, a ${occupationOn(me, day)}`}, of ${s.name} — a ${summary.kind}${setting ? ` ${setting}` : ""}, where ${summary.population} people live in ${summary.households} households.`);
   const words = temperamentWords(temperamentOf(s, me));
   if (words.length) lines.push(`By temperament you are ${words.join("; ")}.`);
   if (child) lines.push("Speak like the child you are: simply, and about the things a child notices.");
@@ -224,17 +272,25 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
   const family: string[] = [];
   if (me.partner !== null) {
     const p = s.people[me.partner];
-    family.push(p.deathDay > day ? `You are married to ${p.given}.` : `Your ${p.sex === "f" ? "wife" : "husband"} ${p.given} ${DEATH[causeOfDeath(p)] ?? "died"} ${when(day, p.deathDay).toLowerCase()}.`);
+    family.push(
+      p.leftDay <= day && p.leftDay < p.deathDay
+        ? `Your ${p.sex === "f" ? "wife" : "husband"} ${p.given} left ${s.name} ${when(day, p.leftDay).toLowerCase()}.`
+        : p.deathDay > day
+          ? `You are married to ${p.given}.`
+          : `Your ${p.sex === "f" ? "wife" : "husband"} ${p.given} ${DEATH[causeOfDeath(p)] ?? "died"} ${when(day, p.deathDay).toLowerCase()}.`,
+    );
   }
   const kids = me.children.map((i) => s.people[i]).filter((c) => c.birthDay <= day);
-  const living = kids.filter((c) => c.deathDay > day);
+  const gone = kids.filter((c) => c.deathDay > day && c.leftDay <= day);
+  if (gone.length) family.push(`Children who have left ${s.name}: ${gone.map((c) => c.given).join(", ")}.`);
+  const living = kids.filter((c) => c.deathDay > day && c.leftDay > day);
   if (living.length) family.push(`Your children: ${living.map((c) => `${c.given} (${Math.floor(ageYears(c, day))})`).join(", ")}.`);
   const lost = kids.filter((c) => c.deathDay <= day);
   if (lost.length) family.push(`Children you lost: ${lost.map((c) => `${c.given}, ${when(day, c.deathDay).toLowerCase()}`).join("; ")}.`);
   if (me.parents) {
     const [m, f] = [s.people[me.parents[0]], s.people[me.parents[1]]];
     family.push(`Your mother is ${m.given}${m.deathDay <= day ? " (dead)" : ""}; your father is ${f.given}${f.deathDay <= day ? " (dead)" : ""}.`);
-    const sibs = s.people[me.parents[0]].children.map((i) => s.people[i]).filter((x) => x.index !== me.index && x.birthDay <= day && x.deathDay > day);
+    const sibs = s.people[me.parents[0]].children.map((i) => s.people[i]).filter((x) => x.index !== me.index && x.birthDay <= day && x.deathDay > day && x.leftDay > day);
     if (sibs.length) family.push(`Your living brothers and sisters: ${sibs.map((x) => x.given).join(", ")}.`);
   } else if (me.incomer) {
     family.push("Your own people are far away; you have not seen them in years.");
@@ -260,12 +316,44 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
     lines.push(`You remember ${said.join("; ")}.`);
   }
 
+  // What they want, and what they have decided (C44).
+  if (!child) {
+    const goals = goalsOf(s, me, day, changes);
+    const wants = goals.active.map((g) =>
+      g.source === "talk" ? `${g.text} (you decided this ${agoDays(day, g.since)}, after talking with a stranger)` : g.text,
+    );
+    if (wants.length) lines.push(`What you want: ${wants.join("; ")}.`);
+    if (goals.done.length) lines.push(`What you set out to do and did: ${goals.done.map((g) => `${g.text}, done ${agoDays(day, g.doneDay!)}`).join("; ")}.`);
+  }
+  const leaving = me.leftDay !== Infinity && me.leftDay > day;
+  if (leaving) {
+    const withMe = s.people.filter((p) => p.index !== me.index && p.leftDay === me.leftDay && present(s, p, day));
+    const own = changes.some((c) => c.person === me.id && c.kind === "leave");
+    lines.push(
+      `${own ? "You have decided to leave" : "Your family has decided to leave"} ${s.name} for good, in ${me.leftDay - day} days${withMe.length ? `, with ${withMe.map((p) => p.given).join(" and ")}` : ""}.`,
+    );
+  }
+
+  // What everybody in the village knows has been decided lately, by others.
+  const lately = changes
+    .filter((c) => c.person !== me.id && day - c.madeDay <= 90 && (c.kind === "leave" || c.kind === "stay" || c.kind === "trade"))
+    .map((c) => {
+      const p = people.get(c.person);
+      if (!p) return null;
+      const ago = agoDays(day, c.madeDay);
+      if (c.kind === "leave") return p.leftDay <= day ? `${p.given} ${p.family} left ${s.name} for good ${agoDays(day, p.leftDay)}` : `${p.given} ${p.family} decided ${ago} to leave ${s.name}`;
+      if (c.kind === "stay") return `${p.given} ${p.family} decided ${ago} to stay after all`;
+      return `${p.given} ${p.family} took up the ${c.occupation} trade ${ago}`;
+    })
+    .filter((x): x is string => x !== null);
+  if (lately.length) lines.push(`Lately in ${s.name}: ${lately.join("; ")}.`);
+
   // Everyone knows everyone: the village as it is today.
   const roster = s.people.filter((p) => present(s, p, day) && p.index !== me.index);
   lines.push(`Who lives in ${s.name} now: ${roster.map((p) => {
     const r = kin(s, me, p);
     const a = Math.floor(ageYears(p, day));
-    return `${p.given} ${p.family} (${a}${a >= 13 ? `, ${p.occupation}` : ""}${r ? `, ${r}` : ""})`;
+    return `${p.given} ${p.family} (${a}${a >= 13 ? `, ${occupationOn(p, day)}` : ""}${r ? `, ${r}` : ""})`;
   }).join("; ")}.`);
   const graves = s.people.filter((p) => p.deathDay <= day && present(s, p, p.deathDay - 1)).length;
   lines.push(`There are ${graves} graves in the yard beyond the houses.`);
@@ -310,9 +398,250 @@ export function unknownNames(reply: string, allowed: Set<string>, said: readonly
 export function mockReply(s: Settlement, me: Person, day: number, turn: number): string {
   const age = Math.floor(ageYears(me, day));
   const lines = [
-    `I'm ${me.given}${age >= 13 ? `, ${me.occupation} here in ${s.name}` : ` — I live in ${s.name}`}.`,
+    `I'm ${me.given}${age >= 13 ? `, ${occupationOn(me, day)} here in ${s.name}` : ` — I live in ${s.name}`}.`,
     me.partner !== null && s.people[me.partner].deathDay > day ? `My ${s.people[me.partner].sex === "f" ? "wife" : "husband"} ${s.people[me.partner].given} will be wondering where I've got to.` : `It's a quiet place, ${s.name}. You get used to it.`,
     `I can't stand here all day, stranger. There's work.`,
   ];
   return lines[turn % lines.length];
 }
+
+// ── the stranger, as this villager remembers them (C44) ─────────────────────────
+
+/** What a villager remembers of a stranger, as the route reads it from the store. */
+export interface StrangerMemory {
+  note: string;
+  /** Conversations begun, counting this one. */
+  meetings: number;
+  firstDay: number;
+  lastDay: number;
+}
+
+/** The late note's account of who this stranger is to the villager. */
+export function strangerLine(memory: StrangerMemory | null, day: number): string {
+  if (memory === null || memory.meetings <= 1) {
+    return memory && memory.note
+      ? `You have just met this stranger, earlier in this same conversation. Your note so far: ${memory.note}`
+      : "You have never met this stranger before.";
+  }
+  const before = memory.meetings - 1;
+  const first = agoDays(day, memory.firstDay);
+  return (
+    `You have met this stranger before: ${before === 1 ? "once" : `${before} times`}, the first time ${first}. ` +
+    (memory.note ? `Your note about them: ${memory.note}` : "You noted nothing about them.")
+  );
+}
+
+// ── what they could decide today (C44) ──────────────────────────────────────────
+
+/** A decision as the model returns it: the shape {@link REPLY_SCHEMA} allows. */
+export type SaidChange =
+  | { kind: "leave"; in_days: number }
+  | { kind: "stay" }
+  | { kind: "trade"; trade: string }
+  | { kind: "goal"; goal: string; about: string | null; trade: string | null }
+  | { kind: "drop"; goal: string };
+
+export interface Offer {
+  /** The JSON the model would return for it. */
+  change: SaidChange;
+  /** What it means, in the villager's terms. */
+  means: string;
+}
+
+/** Strangers need to have met a villager before for these, however moving the conversation. */
+const TRUSTED_KINDS = new Set(["leave", "trade"]);
+
+/**
+ * Every decision this villager could make today, as offers for the model. Each was run through
+ * `checkChange` against the world as it now is, so an offer is one the route will accept. `meetings`
+ * gates what a near stranger could talk anyone into: leaving and taking up a trade want a second
+ * meeting at least.
+ */
+export function decisionsOffered(s: Settlement, me: Person, day: number, changes: readonly LifeChange[], meetings: number): Offer[] {
+  const offers: Offer[] = [];
+  const fits = (p: Proposal) => checkChange(s, me, day, p, changes).ok;
+  const full = (p: Person) => `${p.given} ${p.family}`;
+  const trusted = meetings >= 2;
+
+  // Goals: each kind once, with the plainest person it could be about.
+  const kin = s.people.filter((p) => p.index !== me.index && relation(s, p, me) !== "none");
+  for (const kind of GOAL_KINDS) {
+    const spec = GOALS[kind];
+    if (kind === "learn-trade") {
+      if (goalFits(s, me, day, kind, null, "healer")) {
+        offers.push({ change: { kind: "goal", goal: kind, about: null, trade: "<a trade>" }, means: "to want to learn another trade (name it)" });
+      }
+      continue;
+    }
+    if (!spec.needsTarget) {
+      if (fits({ kind: "goal", goal: kind })) offers.push({ change: { kind: "goal", goal: kind, about: null, trade: null }, means: `to want ${spec.text}` });
+      continue;
+    }
+    for (const p of kin) {
+      if (!fits({ kind: "goal", goal: kind, target: p.id })) continue;
+      offers.push({ change: { kind: "goal", goal: kind, about: full(p), trade: null }, means: `to want ${spec.text.replace("{name}", p.given)}` });
+      break;
+    }
+  }
+  for (const g of goalsOf(s, me, day, changes).active) {
+    offers.push({ change: { kind: "drop", goal: g.id }, means: `to give up wanting ${g.text}` });
+  }
+  if (trusted && fits({ kind: "trade", occupation: occupationOn(me, day) === "labourer" ? "farmer" : "labourer" })) {
+    offers.push({ change: { kind: "trade", trade: "<a trade>" }, means: "to take up another trade, from tomorrow (name it)" });
+  }
+  if (trusted && fits({ kind: "leave", inDays: 7 })) {
+    const partner = me.partner !== null && present(s, s.people[me.partner], day) ? s.people[me.partner] : null;
+    const young = me.children.map((i) => s.people[i]).filter((c) => present(s, c, day) && ageYears(c, day) < 16);
+    const taking = [partner ? `${partner.given}` : null, young.length ? "your young children" : null].filter(Boolean).join(" and ");
+    offers.push({
+      change: { kind: "leave", in_days: 7 },
+      means: `to leave ${s.name} for good, in ${CHANGE_LIMITS.leaveNoticeMinDays} to ${CHANGE_LIMITS.leaveNoticeMaxDays} days${taking ? `, taking ${taking}` : ""}`,
+    });
+  }
+  if (fits({ kind: "stay" })) offers.push({ change: { kind: "stay" }, means: "not to leave after all" });
+  return offers;
+}
+
+/** The late note's list of decisions, or the sentence that there are none worth offering. */
+export function decisionsLine(offers: readonly Offer[], meetings: number): string {
+  const lines = offers.map((o) => `- ${JSON.stringify(o.change)} — ${o.means}`);
+  const trust = meetings >= 2 ? "" : " Leaving this place or taking up another trade is not something you would decide with someone you have only just met.";
+  return lines.length === 0
+    ? `There is nothing you could decide about your life today: "change" is null.${trust}`
+    : `What you could decide today, if this conversation truly moves you — otherwise "change" is null:\n${lines.join("\n")}${trust}`;
+}
+
+// ── the reply ───────────────────────────────────────────────────────────────────
+
+const NULLABLE_STRING = { anyOf: [{ type: "string" }, { type: "null" }] } as const;
+
+/** The JSON the model must answer in: what they say, their note, and at most one decision. */
+export const REPLY_SCHEMA = {
+  type: "object",
+  properties: {
+    say: { type: "string" },
+    remember: { type: "string" },
+    change: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["leave"] }, in_days: { type: "integer" } },
+          required: ["kind", "in_days"],
+          additionalProperties: false,
+        },
+        { type: "object", properties: { kind: { type: "string", enum: ["stay"] } }, required: ["kind"], additionalProperties: false },
+        {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["trade"] }, trade: { type: "string", enum: [...OCCUPATIONS] } },
+          required: ["kind", "trade"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: ["goal"] },
+            goal: { type: "string", enum: [...GOAL_KINDS] },
+            about: NULLABLE_STRING,
+            trade: { anyOf: [{ type: "string", enum: [...OCCUPATIONS] }, { type: "null" }] },
+          },
+          required: ["kind", "goal", "about", "trade"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: { kind: { type: "string", enum: ["drop"] }, goal: { type: "string" } },
+          required: ["kind", "goal"],
+          additionalProperties: false,
+        },
+      ],
+    },
+  },
+  required: ["say", "remember", "change"],
+  additionalProperties: false,
+} as const;
+
+export interface Reply {
+  say: string;
+  remember: string;
+  change: SaidChange | null;
+}
+
+/** The model's JSON, read defensively: a shape the schema should have prevented is "no reply". */
+export function parseReply(text: string): Reply | null {
+  let v: unknown;
+  try {
+    v = JSON.parse(text.trim().replace(/^```(?:json)?\s*|\s*```$/g, ""));
+  } catch {
+    return null;
+  }
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.say !== "string" || typeof o.remember !== "string") return null;
+  const c = o.change;
+  let change: SaidChange | null = null;
+  if (c && typeof c === "object") {
+    const k = (c as { kind?: unknown }).kind;
+    if (k === "leave" || k === "stay" || k === "trade" || k === "goal" || k === "drop") change = c as SaidChange;
+  }
+  return { say: o.say.trim(), remember: o.remember.trim(), change };
+}
+
+/** A decision the model made, as a `Proposal` the world can check: names resolved to ids. */
+export function proposalFrom(change: SaidChange, s: Settlement): Proposal | null {
+  const isTrade = (t: string | null | undefined): t is Occupation => !!t && (OCCUPATIONS as readonly string[]).includes(t);
+  switch (change.kind) {
+    case "leave":
+      return Number.isFinite(change.in_days) ? { kind: "leave", inDays: change.in_days } : null;
+    case "stay":
+      return { kind: "stay" };
+    case "trade":
+      return isTrade(change.trade) ? { kind: "trade", occupation: change.trade } : null;
+    case "drop":
+      return typeof change.goal === "string" ? { kind: "drop", goalId: change.goal } : null;
+    case "goal": {
+      if (!(GOAL_KINDS as readonly string[]).includes(change.goal)) return null;
+      const goal = change.goal as GoalKind;
+      let target: string | null = null;
+      if (change.about) {
+        const name = change.about.trim().toLowerCase();
+        const matches = s.people.filter((p) => `${p.given} ${p.family}`.toLowerCase() === name);
+        if (matches.length !== 1) return null;
+        target = matches[0].id;
+      }
+      return { kind: "goal", goal, target, occupation: isTrade(change.trade) ? change.trade : null };
+    }
+  }
+}
+
+/** A recorded change, in words for the panel: "Senka has decided to build a boat of her own." */
+export function changeWords(c: LifeChange, s: Settlement, day: number): string {
+  const p = s.people.find((q) => q.id === c.person);
+  const name = p ? p.given : "They";
+  const their = p?.sex === "f" ? "her" : "his";
+  const target = c.target ? s.people.find((q) => q.id === c.target) : undefined;
+  switch (c.kind) {
+    case "leave":
+      return `${name} has decided to leave ${s.name} for good, in ${c.day - day} days.`;
+    case "stay":
+      return `${name} has decided to stay in ${s.name} after all.`;
+    case "trade":
+      return `${name} will take up the ${c.occupation} trade from tomorrow.`;
+    case "drop":
+      return `${name} has let go of something ${p?.sex === "f" ? "she" : "he"} wanted.`;
+    case "goal": {
+      const spec = c.goal ? GOALS[c.goal] : null;
+      if (!spec) return `${name} has decided something.`;
+      const text = spec.text.replace("{name}", target?.given ?? "someone").replace("{trade}", c.occupation ?? "trade").replace(/\bmy\b/g, their).replace(/\bme\b/g, p?.sex === "f" ? "her" : "him");
+      return `${name} has decided ${text.startsWith("to ") ? "" : "to want "}${text}.`;
+    }
+  }
+}
+
+/** For the panel's first line: the oldest of a villager's memories of you, in words, or null. */
+export function recognition(memory: StrangerMemory | null, name: string, day: number): string | null {
+  if (memory === null || memory.meetings <= 1) return null;
+  return `${name} remembers you — you last spoke ${agoDays(day, memory.lastDay)}.`;
+}
+
+export { LIVING_MEMORY_YEARS };

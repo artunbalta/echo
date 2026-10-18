@@ -22,6 +22,7 @@ import { vec3ToLatLng } from "./geo.js";
 import { geographySampler } from "./geography.js";
 import { createSceneHeight, createTangentPatch, DEFAULT_REGION_OPTIONS, DEFAULT_SCENE_OPTIONS, type TangentPatch } from "./scene.js";
 import { settlementAt, type Settlement } from "./society.js";
+import type { LifeChange } from "./changes.js";
 import type { Calibration, TerrainField } from "./terrain.js";
 import { VILLAGE, villagePlan, type VillageGround, type VillagePlan } from "./village.js";
 import { nearestWaterFrom, regionBound, walkableAt, type SpawnPoint } from "./walkable.js";
@@ -32,6 +33,11 @@ export interface VillageAtOptions {
   commons: readonly string[];
   /** World day to read the settlement at. */
   day: number;
+  /**
+   * What conversations have changed here (C44). The browser fetches them before it builds the
+   * village and the talk route reads them before it answers, so both build the same people.
+   */
+  changes?: readonly LifeChange[];
   /** Region rings. The parcel route's k. */
   k?: number;
   heightScaleM?: number;
@@ -44,6 +50,8 @@ export interface SettledParcel {
   ground: VillageGround;
   /** The arrival point as a spawn, in the shape the rest of the world already takes. */
   spawn: SpawnPoint;
+  /** The changes the village was generated with: the schedule reads them for the evening (C44). */
+  changes: readonly LifeChange[];
 }
 
 /**
@@ -90,7 +98,8 @@ export function villageAt(
   if (getResolution(cell) !== PLANET_PARAMS.startResolution) return null;
   // The census's own path (scripts/census-planet.ts), so the village here is the village it counted.
   const geography = geographySampler(field, calibration, radiusKm, { commons: options.commons })(cell);
-  const settlement = settlementAt(seed, cell, geography, options.day);
+  const changes = options.changes ?? [];
+  const settlement = settlementAt(seed, cell, geography, options.day, changes);
   if (settlement === null) return null;
 
   const patch = createTangentPatch(cell, radiusKm);
@@ -113,5 +122,5 @@ export function villageAt(
     x: plan.arrival.x,
     y: plan.arrival.y,
   };
-  return { settlement, plan, ground, spawn };
+  return { settlement, plan, ground, spawn, changes };
 }

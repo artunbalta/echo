@@ -34,3 +34,6 @@ export * from "./village.js";
 export * from "./villageAt.js";
 // Everyone's day, as a closed form of the hour (C41).
 export * from "./schedule.js";
+// What conversations change about a life, and what a villager wants (C44).
+export * from "./changes.js";
+export * from "./goals.js";

@@ -55,7 +55,9 @@
  * when this route was terrain and a player, so it is the route's input that wants a guard, not this
  * list, but nobody should discover it from a spinner.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import type { LifeChange } from "@echo/planet";
 
 import ConsentCard from "@/components/world/ConsentCard";
 import TouchControls from "@/components/world/TouchControls";
@@ -148,9 +150,38 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
     [chain, touch, stations, onReaction],
   );
 
+  // The village's changes (C44), fetched BEFORE the world is built so the browser generates the same
+  // people the talk route does. One small request; a parcel with no commons has no village and does
+  // not wait, and a request that fails or takes too long builds the seed's village, as the route would.
+  const hasVillage = Boolean(manifest.commons);
+  const [changes, setChanges] = useState<readonly LifeChange[] | null>(hasVillage ? null : []);
+  useEffect(() => {
+    if (!hasVillage) return;
+    let live = true;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 2500);
+    fetch(`/api/village/changes?cell=${encodeURIComponent(manifest.cell)}`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { changes?: LifeChange[] } | null) => {
+        if (live) setChanges(Array.isArray(d?.changes) ? d.changes : []);
+      })
+      .catch(() => {
+        if (live) setChanges([]);
+      })
+      .finally(() => clearTimeout(timer));
+    return () => {
+      live = false;
+      ctl.abort();
+      clearTimeout(timer);
+    };
+  }, [manifest.cell, hasVillage]);
+
+  if (changes === null) return <div className="relative h-full w-full" data-phase="changes" />;
+
   return (
     <WorldCanvas
       {...manifest}
+      changes={changes}
       layers={layers}
       onWorld={(w) => {
         world.current = w;

@@ -36,7 +36,7 @@
  */
 
 import { DAYS_PER_YEAR, yearsToDays } from "./worldclock.js";
-import { hash01, stream, type Household, type Person, type Settlement } from "./society.js";
+import { hash01, occupationOn, stream, type Household, type Person, type Settlement } from "./society.js";
 import { present } from "./life.js";
 
 // ── what the module needs and returns ───────────────────────────────────────────
@@ -657,7 +657,10 @@ export interface SettlementSummary {
 export function settlementSummary(s: Settlement, day: number): SettlementSummary {
   const living = s.people.filter((p) => present(s, p, day));
   const trades = new Map<string, number>();
-  for (const p of living) trades.set(p.occupation, (trades.get(p.occupation) ?? 0) + 1);
+  for (const p of living) {
+    const trade = occupationOn(p, day);
+    trades.set(trade, (trades.get(trade) ?? 0) + 1);
+  }
   const n = living.length;
   const share = (...ks: string[]) => ks.reduce((a, k) => a + (trades.get(k) ?? 0), 0) / Math.max(1, n);
   const size = n >= 60 ? "town" : n < 15 ? "hamlet" : "village";

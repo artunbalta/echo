@@ -23,6 +23,7 @@ import {
   boatAt,
   dayPlans,
   lives,
+  occupationOn,
   timeOfDay,
   whereabouts,
   worldDayIndex,
@@ -64,6 +65,10 @@ export interface VillagersLayer extends WorldLayer {
   nearest(): NearVillager | null;
   /** Metres from the player to a villager drawn last frame, or null if they are not out. */
   distanceTo(id: string): number | null;
+  /** The player's position last frame, planet-local metres: what `begin` is told (C44). */
+  playerPosition(): { x: number; y: number } | null;
+  /** The same village with new changes (C44): new people, new days, the same houses. */
+  apply(village: SettledParcel): void;
   /**
    * Stop one villager where they stand, facing the player, for as long as a conversation lasts; null
    * lets them go, and they walk back into their day over a couple of seconds rather than jumping to
@@ -142,14 +147,21 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
 
   const refresh = (day: number) => {
     const v = village!;
-    const next = dayPlans(v.settlement, v.plan, day);
+    const next = dayPlans(v.settlement, v.plan, day, v.changes);
     state = { day, ...next };
     for (const d of next.plans) {
       if (!looks.has(d.person)) {
         const p = people.get(d.person)!;
-        looks.set(d.person, lookFor(p.id, p.occupation, ageYears(p, day)));
+        looks.set(d.person, lookFor(p.id, occupationOn(p, day), ageYears(p, day)));
       }
     }
+  };
+  const adopt = (v: SettledParcel) => {
+    village = v;
+    const s = v.settlement;
+    people = new Map(s.people.map((p) => [p.id, p]));
+    names = new Map(s.people.map((p) => [p.id, p.given]));
+    life = lives(s);
   };
 
   return {
@@ -159,10 +171,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       village = ctx.region.village ?? null;
       if (!village || signal.aborted) return;
       frame = ctx.frame;
-      const s = village.settlement;
-      people = new Map(s.people.map((p) => [p.id, p]));
-      names = new Map(s.people.map((p) => [p.id, p.given]));
-      life = lives(s);
+      adopt(village);
 
       const day = worldDayIndex(options.clock, Date.now());
       refresh(day);
@@ -283,7 +292,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       drawn = crowd.placed();
       if (nearest) {
         const p = people.get(nearest.id)!;
-        near = { id: p.id, name: `${p.given} ${p.family}`, occupation: p.occupation, age: Math.floor(ageYears(p, day)), distanceM: nearest.d };
+        near = { id: p.id, name: `${p.given} ${p.family}`, occupation: occupationOn(p, day), age: Math.floor(ageYears(p, day)), distanceM: nearest.d };
       } else near = null;
 
       if (label) {
@@ -296,10 +305,15 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           title.textContent = `${p.given} ${p.family}`;
           const sub = document.createElement("div");
           sub.style.cssText = "opacity:.75";
-          sub.textContent = `${age} · ${p.occupation}`;
+          // A child has a trade drawn for later, not one they work at: the panel says "a child", and so does this.
+          sub.textContent = `${age} · ${age >= 13 ? occupationOn(p, day) : "a child"}`;
           const line = document.createElement("div");
           line.style.cssText = "margin-top:3px;color:#e8c98a";
-          line.textContent = lifeLine(life.get(p.id) ?? [], day, names);
+          // A decision to go is the most telling thing about anyone, and everyone can see it (C44).
+          line.textContent =
+            p.leftDay !== Infinity && p.leftDay > day
+              ? `Leaving ${village!.settlement.name} in ${p.leftDay - day} day${p.leftDay - day === 1 ? "" : "s"}.`
+              : lifeLine(life.get(p.id) ?? [], day, names);
           label.append(title, sub, line);
         }
         labelled = nearest ? { id: nearest.id, x: nearest.x, y: nearest.y, z: nearest.z } : null;
@@ -324,6 +338,14 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     drawn: () => drawn,
     plans: () => state.plans,
     nearest: () => near,
+    playerPosition: () => (Number.isFinite(playerAt.x) ? { x: playerAt.x, y: playerAt.y } : null),
+
+    apply(v) {
+      if (!village) return;
+      adopt(v);
+      labelled = null; // the plate is rebuilt for whoever is nearest, from the new life
+      refresh(worldDayIndex(options.clock, Date.now()));
+    },
 
     distanceTo(id) {
       const at = lastAt.get(id);

@@ -33,6 +33,7 @@ import {
   DEFAULT_SCENE_OPTIONS,
   WORLD_EPOCH,
   type Calibration,
+  type LifeChange,
   type RegionBound,
   type SettledParcel,
   type SpawnPoint,
@@ -240,6 +241,11 @@ export interface PlanetWorldOptions {
   commons?: readonly string[];
   /** World day to read the village at. Defaults to today on the world's own clock (C24). */
   day?: number;
+  /**
+   * What conversations have changed in this cell's village (C44), fetched before the world is built
+   * so the browser generates the same people the talk route does. Absent: the seed's village.
+   */
+  changes?: readonly LifeChange[];
 }
 
 /** What one layer cost in the frame that was sampled, split by pass. */
@@ -464,11 +470,27 @@ export class PlanetWorld {
         k,
         heightScaleM,
         resolutionM,
+        changes: options.changes ?? [],
       });
     } catch (e) {
       console.error(`[village] ${options.cell}: the village could not be built`, e);
       return null;
     }
+  }
+
+  /**
+   * The village again, with these changes (C44): what the page does when a conversation decided
+   * something, so the stranger sees it without a reload. The people and their days are regenerated;
+   * the houses stay the build day's either way (⚑35), and a change takes effect days later anyhow.
+   * Null where there is no village, and the village is left as it was.
+   */
+  revillage(changes: readonly LifeChange[]): SettledParcel | null {
+    if (!this.region.village) return null;
+    const v = this.settle({ ...this.options, changes }, this.options.k ?? 1, this.frame.heightScaleM, this.frame.resolutionM);
+    if (!v) return null;
+    (this.region as { village?: SettledParcel | null }).village = v;
+    this.context().layer<WorldLayer & { apply?: (v: SettledParcel) => void }>("villagers")?.apply?.(v);
+    return v;
   }
 
   /** The layer context, for layers and for tests. */
