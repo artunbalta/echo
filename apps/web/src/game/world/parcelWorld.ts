@@ -63,6 +63,7 @@ import { sliceLayer } from "./sliceLayer";
 import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
 import { interactLayer } from "./interactLayer";
+import { interiorLayer } from "./interiorLayer";
 import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
 import type { ReactionReading } from "@/components/world/Inspector";
@@ -166,6 +167,8 @@ export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock =
   layers.push(walkLayer({ chain, playerTile }));
   // Everything within reach, and the marks acts have left (C45). Last, so it reads every layer above.
   layers.push(interactLayer({ clock }));
+  // Inside a house (C54): after the marks, whose forced doors it opens.
+  layers.push(interiorLayer({ clock }));
   if (slice) layers.push(sliceLayer({ chain, playerTile, onReaction: slice.onReaction, onBeat: slice.onBeat }));
   return layers;
 }

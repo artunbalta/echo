@@ -3126,3 +3126,87 @@ village generated to a later horizon (L2 makes it the same people, plus the week
     year"), and the chatter is about them ("Megtrin still doesn't know where anything is").
 
 **Not done.** See ⚑43.
+
+## C54 — inside a house: asked in, or forced; the family asleep; the door on the floor
+
+Feature 8 of the twenty.
+
+**A room for every house** (`lib/interiors.ts` `roomOf`): one room, laid out from who sleeps there.
+
+- **Beds:** a bed each, heads to the back wall, from the side away from the hearth; along the far
+  side wall when the back is full; a crowded house shares the last bed. A couple shares one bed, and
+  a child under four sleeps in a cradle.
+- **The hearth** is under the chimney, against the side wall a quarter of the way back, where the
+  drawing puts the chimney, with a fire while anyone lives there.
+- **Furniture:** a table in the front half with a bench at either end, everyone with a seat; a chest
+  and a shelf of pots where there is room; the trade's tools by the front wall (nets, a loom, an
+  anvil, a wheel, sacks).
+- **An emptied house** has a stool, a pot and dust.
+
+It is pure, built in the house's own frame round the doorway and chimney the drawing placed
+(`villageGeometry.ts` now hands them over). So the house a stranger forces at dusk holds the same
+beds for anyone who looks. A first layout put beds along both side walls and left no room for a
+table in a 5.5 m house; the test of nothing solid standing in anything else found it.
+
+**Who is home** (`schedule.ts` `homeState`) is read from the day plan:
+
+- out while a leg or a stay holds;
+- away if the last of the day ended anywhere but their own door;
+- at home otherwise.
+
+At home means asleep, except for supper by the fire just after coming in (0.05 of a day) and the
+moments before going out in the morning. Without that, the schedule had nobody ever awake at home,
+and a house would only ever hold sleepers.
+
+**Which doors open.** A house is open to the stranger in three cases:
+
+- **asked in**: a new talk decision, `invite`, offered only at or inside their own house by day. It
+  writes nothing, and the door is open to that stranger for the world day;
+- **forced**: C45's mark;
+- **empty**: nobody lives there.
+
+Otherwise the door is the wall it always was, and knocking, looking in and forcing are where they
+were.
+
+- Open means floor inside the walls and in the doorway, and wall everywhere else
+  (`blockedByHouse`). The room's furniture blocks a body too.
+- Someone who asked the stranger in is in the house with them, at the table: presentation only, as
+  `hold` is.
+
+**What is drawn** (`interiorLayer.ts`):
+
+- **The cut.** The one house the stranger is in is cut away above 1.45 m in the houses' own shader,
+  window glow included, so the room is seen from above like a doll's house; the doorway of an open
+  house they stand at is a hole. The depth pass gets the same cut, or the cut roof would still shade
+  the room.
+- **The room** is one instanced mesh, plus one for the fire: two draw calls while inside and none
+  otherwise. It stands on the skirt's top, 0.25 m above the line the walls are drawn from. The first
+  browser look had the floor and the furniture's feet buried in the stone.
+- **The people at home** are the villagers layer's: asleep on their backs in their beds (a new
+  `sleep` pose), at the table, or — when the door has been forced — up and against the back wall,
+  facing the doorway.
+- **Talking.** Someone awake at home can be spoken to, by a stranger in the house with them; the
+  begin route checks it, and refuses "asleep" and through-the-wall attempts.
+- **The first time in,** a line, and — with consent — the way in for the echo: `enter_invited` (G1),
+  `enter_forced` (H5) or `explore_house` (J6). All are unrouted (C7).
+
+**Measured.**
+
+- `interiors.test.ts`, 6 tests: a place for everyone; nothing in anything; the doorway clear; a fire
+  in every lived-in hearth; the trade; the empty house; the forced mark; home and asleep; the frame.
+- `interiors.test.mts`, 4 tests: the door; asked in at the door, and writing nothing; not asked in
+  away from home; spoken to at supper from inside, not through the wall, and not asleep.
+- Eleven injected defects, all caught.
+- Real model, 2 calls, about $0.04:
+  - Naand, a weaver at their own door, to a cold and polite stranger: "come in, sit by the hearth and warm up" —
+    invited;
+  - Lookkast, to "get out of my way, show me what's in your house": "nobody goes into anybody's house
+    like that; say what you want politely" — not invited.
+- Browser, Senstrand:
+  - an empty house by day ("Dust, and the cold of a hearth nobody has lit in years.");
+  - a house asked into at night, its old man asleep on his back by the fire;
+  - a forced house at night: Roonstind, 65, up against the back wall, the door on the floor, and
+    someone you can talk to.
+  - The frame is 93–94 calls of 120 inside a house.
+
+**Not done.** See ⚑44.

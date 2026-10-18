@@ -144,7 +144,7 @@ export interface Pose {
   /** Yaw, three's rotation.y: 0 faces +z. */
   yaw: number;
   /** `mourn` (C52): standing at a grave, head bowed, hands together in front. */
-  activity: "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish" | "mourn";
+  activity: "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish" | "mourn" | "sleep";
   /** Gait speed relative to the player's walk; 0 stands. */
   speed: number;
   /** Seconds, for the gait and the working arms. */
@@ -182,6 +182,11 @@ export class Crowd {
   private readonly scaleV = new THREE.Vector3();
   private readonly at0 = new THREE.Vector3();
   private readonly k = new THREE.Matrix4();
+  private readonly lie = new THREE.Quaternion();
+  /** Lying on the back: the body's up turned to the way it faces, its face turned up (C54). */
+  private static readonly LYING = new THREE.Quaternion()
+    .setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)
+    .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
   /** Long hair: the cap, stretched to fall from the crown to below the nape and set back off the face. */
   private static readonly LONG_HAIR = new THREE.Matrix4().compose(new THREE.Vector3(0, -0.404, -0.06), new THREE.Quaternion(), new THREE.Vector3(1.05, 2.09, 1));
   /** A skirt: the pelvis frustum from the waist to below the knee, wide enough for a stride. */
@@ -236,12 +241,17 @@ export class Crowd {
     const work = Math.sin(p.time * Math.PI * 2 * 1.3 + p.phase0);
     const sitting = p.activity === "sit" || p.activity === "row";
 
-    // Root: feet on the ground, facing `yaw`, at the body's own scale.
+    // Root: feet on the ground, facing `yaw`, at the body's own scale. Asleep (C54), the feet are at
+    // the foot of the bed and the body lies the way it faces, head toward the bed's head, face up.
+    const sleeping = p.activity === "sleep";
     this.q.setFromAxisAngle(this.v.set(0, 1, 0), p.yaw);
+    if (sleeping) this.q.multiply(this.lie.copy(Crowd.LYING));
     const s = this.unitM * look.scale;
     this.root.compose(this.at0.set(p.x, p.y, p.z), this.q, this.scaleV.set(s, s, s));
 
-    const bobY = (speed > 0 ? Math.cos(phase * 2) * 0.009 * amount : Math.sin(p.time * 1.7 + p.phase0) * 0.002) - 0.035 * amount - 0.055 * run - (sitting ? 0.2 : 0);
+    const bobY = sleeping
+      ? Math.sin(p.time * 0.9 + p.phase0) * 0.004 // breathing
+      : (speed > 0 ? Math.cos(phase * 2) * 0.009 * amount : Math.sin(p.time * 1.7 + p.phase0) * 0.002) - 0.035 * amount - 0.055 * run - (sitting ? 0.2 : 0);
     this.at(this.root, 0, bobY, 0, 0, 0, Math.sin(phase) * 0.022 * amount, this.body);
     this.at(this.body, 0, 0.455, 0, 0, Math.sin(phase) * 0.055 * amount, 0, this.hips);
     if (look.skirt) this.put("pelvis", this.k.multiplyMatrices(this.hips, Crowd.SKIRT), look.cloth);
@@ -269,7 +279,11 @@ export class Crowd {
       let hip: number;
       let knee: number;
       let ankle: number;
-      if (sitting) {
+      if (sleeping) {
+        hip = 0;
+        knee = 0.05;
+        ankle = 0.3;
+      } else if (sitting) {
         hip = -1.45;
         knee = 1.5;
         ankle = 0;
@@ -316,6 +330,9 @@ export class Crowd {
         // Hands together in front, low.
         arm = -0.28;
         elbow = -0.75;
+      } else if (sleeping) {
+        arm = -0.05;
+        elbow = -0.25;
       }
       this.at(this.spine, side * 0.15, 0.275, 0, arm, 0, side * 0.065, this.j1);
       this.put("upperArm", this.j1, look.cloth);

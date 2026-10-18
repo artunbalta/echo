@@ -44,6 +44,7 @@ function trouble(status: number, error: string | undefined, name: string): strin
   if (status === 429) return `${name} has had enough talk for now. Come back in a while.`;
   if (error === "too_far") return `${name} is too far away to hear you.`;
   if (error === "not_out") return `${name} has gone indoors.`;
+  if (error === "asleep") return `${name} is asleep.`;
   if (error === "at_sea") return `${name} is out at sea.`;
   if (error === "no_conversation") return `${name} has lost the thread. Say hello again.`;
   if (status === 401 || status === 403) return "You need to answer the card first.";
@@ -205,7 +206,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
         headers: identityHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ cell, person: talking.id, message: text, history, conv: conv.current }),
       });
-      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; change?: LifeChange; decided?: string };
+      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; change?: LifeChange; decided?: string; invited?: string };
       if (!res.ok || !data.reply) {
         if (data.error === "no_conversation") conv.current = null;
         setTurns(before);
@@ -216,6 +217,11 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
         if (data.change && data.decided) {
           next.push({ role: "decided", text: data.decided });
           adopt(data.change);
+        }
+        // Asked in (C54): their door is open to you for the day — the interior layer hears of it.
+        if (data.invited) {
+          if (data.decided) next.push({ role: "decided", text: data.decided });
+          window.dispatchEvent(new CustomEvent("echo:invited", { detail: { house: data.invited, host: talking.id } }));
         }
         setTurns(next);
         if (voice) {

@@ -174,7 +174,7 @@ function corners(x: number, y: number, heading: number, along: number, across: n
   return out;
 }
 
-const placement = (frame: WorldFrame, x: number, y: number, heading: number, h: number): THREE.Matrix4 =>
+export const placement = (frame: WorldFrame, x: number, y: number, heading: number, h: number): THREE.Matrix4 =>
   new THREE.Matrix4().compose(sceneAt(frame, x, y, h), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading), new THREE.Vector3(1, 1, 1));
 
 /** A small deterministic stream for the cosmetic variation a plot carries (door side, window count). */
@@ -196,7 +196,7 @@ const STOREY_M = 2.6;
  * One house in its own frame: +x is the way the door faces (the plot's depth), z is across (its
  * width), the floor is y = 0. Lit windows go to `glow`, which only a lived-in house gets.
  */
-function house(m: Mesher, glow: Mesher, plot: Plot, state: PlotState, sw: Swatch, pitch: number, skirt: number, seed: string): void {
+function house(m: Mesher, glow: Mesher, plot: Plot, state: PlotState, sw: Swatch, pitch: number, skirt: number, seed: string): { door: number; hearth: number } {
   const d = plot.depthM;
   const w = plot.widthM;
   const r = variation(`${seed}/plot/${plot.index}`);
@@ -208,7 +208,7 @@ function house(m: Mesher, glow: Mesher, plot: Plot, state: PlotState, sw: Swatch
     for (const [x, z, sx, sz] of [[d / 2, 0, 0.4, w], [-d / 2, 0, 0.4, w], [0, w / 2, d, 0.4], [0, -w / 2, d, 0.4]] as const) {
       m.box(x, 0.3, z, sx, 0.36, sz, STONE_OLD);
     }
-    return;
+    return { door: 0, hearth: 0 };
   }
   if (state === "ruin") {
     // Walls fallen to uneven stumps, one side open, no roof.
@@ -219,7 +219,7 @@ function house(m: Mesher, glow: Mesher, plot: Plot, state: PlotState, sw: Swatch
       m.box(x, h / 2, z, sx, h, sz, RUIN);
     });
     m.box(0.3, 0.12, 0, d * 0.8, 0.18, 0.22, mix(PALETTE.trunk, PALETTE.humus, 0.5)); // the fallen ridge beam
-    return;
+    return { door: 0, hearth: 0 };
   }
 
   const H = STOREY_M * plot.storeys;
@@ -274,6 +274,7 @@ function house(m: Mesher, glow: Mesher, plot: Plot, state: PlotState, sw: Swatch
   const cx = -d / 4;
   const roofAt = ridge - (Math.abs(cx) / (d / 2)) * rise;
   m.box(cx, (roofAt + ridge + 0.9) / 2, cz, 0.7, ridge + 0.9 - roofAt + 0.4, 0.7, STONE, STONE);
+  return { door: doorZ, hearth: cz };
 }
 
 /** The well on the green: a stone ring, two posts, a little roof. */
@@ -295,8 +296,19 @@ function well(m: Mesher, sw: Swatch): void {
 export interface VillageForms {
   built: THREE.BufferGeometry;
   glow: THREE.BufferGeometry;
-  /** House footprints for the mover, local metres: centre, heading, half extents. */
-  footprints: { x: number; y: number; heading: number; halfAlong: number; halfAcross: number }[];
+  /**
+   * House footprints for the mover, local metres: centre, heading, half extents. A house's also says
+   * which plot it is, what state it is in, where its floor is, and — in the house's own frame, `z`
+   * across as it is drawn — where its doorway and its chimney are (C54: the room inside is built round them).
+   */
+  footprints: {
+    x: number;
+    y: number;
+    heading: number;
+    halfAlong: number;
+    halfAcross: number;
+    house?: { plot: number; state: PlotState; floor: number; door: number; hearth: number; depthM: number; widthM: number };
+  }[];
   triangles: number;
 }
 
@@ -347,9 +359,16 @@ export function buildVillage(frame: WorldFrame, v: SettledParcel, day: number): 
     const mat = placement(frame, plot.x, plot.y, plot.facing, floor);
     built.setTransform(mat);
     glow.setTransform(mat);
-    house(built, glow, plot, state, sw, plan.style.pitch, floor - low + 0.4, seed);
+    const at = house(built, glow, plot, state, sw, plan.style.pitch, floor - low + 0.4, seed);
     if (state !== "foundation") {
-      footprints.push({ x: plot.x, y: plot.y, heading: plot.facing, halfAlong: plot.depthM / 2 + 0.2, halfAcross: plot.widthM / 2 + 0.2 });
+      footprints.push({
+        x: plot.x,
+        y: plot.y,
+        heading: plot.facing,
+        halfAlong: plot.depthM / 2 + 0.2,
+        halfAcross: plot.widthM / 2 + 0.2,
+        house: { plot: plot.index, state, floor, door: at.door, hearth: at.hearth, depthM: plot.depthM, widthM: plot.widthM },
+      });
     }
   }
 

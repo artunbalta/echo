@@ -54,3 +54,5 @@ export * from "./needs.js";
 export * from "./events.js";
 // Between villages: going, coming home, marrying someone from elsewhere (C53).
 export * from "./moves.js";
+// Inside a house (C54).
+export * from "./interiors.js";

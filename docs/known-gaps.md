@@ -1914,3 +1914,21 @@ consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** OPEN, all of it, written down rather than discovered.
 
+## ⚑ 44. What C54 does not do yet, and what it trusts (2026-10-18)
+
+- **An invitation is the page's.** It lasts the world day in this browser and is gone on a reload.
+  It is not stored, and the server does not check it: walking in through a door you were asked
+  through changes nothing shared, so nothing has to.
+- **Entering a forced house with the family home is not a deed of its own.** Forcing the door
+  already is (C45, trespass, weight 3). What the family, against the back wall, think of the
+  stranger standing in their room is not modelled beyond that.
+- **One room.** A two-storey house's upstairs is not drawn; everyone sleeps downstairs.
+- **The cut takes off everything of the village inside the house's box** above 1.45 m, including a
+  neighbour's eaves that reach into it.
+- **Sleepers can be walked through.** Beds are solid; a body in one is the bed.
+- **The doorway is a hole whatever the door's state.** A door you were asked through is drawn
+  open, not as a door standing open on its hinges.
+- **The labels are unrouted** (C7): `enter_invited`, `enter_forced`, `explore_house`.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+

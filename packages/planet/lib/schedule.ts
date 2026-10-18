@@ -661,3 +661,43 @@ export function dayAndHour(worldDay: number): { day: number; hour: number } {
 export function personLabel(s: Settlement, p: Person, day: number): string {
   return `${p.given} ${p.family} · ${Math.floor(ageYears(p, day))} · ${occupationOn(p, day)}`;
 }
+
+/** Where someone is when they are not out of doors (C54): asleep at home, awake at home, or away. */
+export type HomeState = "out" | "asleep" | "awake" | "away";
+
+/** Awake at home after coming in for the night, by the fire, and before going out in the morning. */
+export const AT_HOME = { supper: 0.05, rising: 0.015 } as const;
+
+/**
+ * Whether someone is home at an hour, and asleep, from their day plan: out while a leg or a stay
+ * holds; asleep before their first step of the day and after the last (the moment on the step
+ * before going in, `bed()`); awake at home if the last of the day so far ended at their own door;
+ * away if it ended anywhere else — beyond the village, at sea, gone. No plan at all is the carried:
+ * at home always, asleep at night.
+ */
+export function homeState(d: DayPlan | undefined, t: number, door: Point): HomeState {
+  if (!d) return t < SCHEDULE.wake || t > SCHEDULE.gatherEnd ? "asleep" : "awake";
+  for (const l of d.legs) if (t >= l.t0 && t < l.t1) return "out";
+  for (const s of d.stays) if (t >= s.t0 && t < s.t1) return "out";
+  let lastEnd = -Infinity;
+  let at: Point | null = null;
+  let isLast = true;
+  for (const l of d.legs) if (l.t1 <= t && l.t1 > lastEnd) {
+    lastEnd = l.t1;
+    at = l.to;
+  }
+  for (const s of d.stays) if (s.t1 <= t && s.t1 > lastEnd) {
+    lastEnd = s.t1;
+    at = s.at;
+  }
+  if (at === null) {
+    // The night before the day began — and, the last moments of it, up and getting ready.
+    const first = Math.min(...d.legs.map((l) => l.t0), ...d.stays.map((s) => s.t0));
+    return first - t < AT_HOME.rising ? "awake" : "asleep";
+  }
+  for (const l of d.legs) if (l.t0 >= lastEnd) isLast = false;
+  for (const s of d.stays) if (s.t0 >= lastEnd) isLast = false;
+  if (Math.hypot(at.x - door.x, at.y - door.y) > 1.5) return "away";
+  // In for the night: supper by the fire first, then bed.
+  return isLast ? (t - lastEnd < AT_HOME.supper ? "awake" : "asleep") : "awake";
+}
