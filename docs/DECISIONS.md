@@ -2916,3 +2916,94 @@ trades.
 
 **Also fixed.** The C44 evening test read the real clock. On a stormy world day (4966) the evening is
 cut short (C48) and the test failed. It is now pinned to a dry day.
+
+## C52 — a burial, a wedding, a new child's callers, on the day
+
+Feature 6 of the twenty.
+
+**Read off the lives, not scheduled** (`lib/events.ts` `gatheringsOn`). The closed form already says
+when people die, pair and are born, so a gathering is a fact about the day:
+
+- a person who died here yesterday is buried at their grave this afternoon (0.58–0.68);
+- two people who pair today are married on the green (0.58–0.70);
+- a child born yesterday has callers at the family's door (0.60–0.66).
+
+Every viewer and the server see the same burial, as they see the same rain.
+
+**Who comes is the ties** (`social.ts`), read the day before, because the dead are not in today's
+graph:
+
+- family and friends always come;
+- neighbours and workmates mostly come (70% to a burial, 80% to a wedding);
+- of everyone else, 25% come to a burial and 45% to a wedding;
+- children come only with their family, and infants are carried.
+
+They stand in rings round the middle, the closest first, facing in. The couple face each other, and
+the parents stand on their step.
+
+**The day goes to it** (`schedule.ts`):
+
+- Whatever someone was doing ends early enough to walk there by the start. A village is 100 m and
+  more across, and a 60–100 s walk was why 64 of 124 people missed the first attempt. Now 118 of 124
+  (95%) are in their place at the middle of the hour.
+- Workers from beyond the village come back straight to it.
+- A household with a fisher going keeps its boat in.
+- Mourners stand with their heads bowed (a `mourn` pose).
+- After a burial the family go straight home; everyone else sets off for the green.
+
+**How often, measured.** A village has about 0.6 burials, 0.6 weddings and 0.8 namings a year. A
+world year is 73 real hours, so one village has an event about every 36 real hours, and each lasts
+about a minute. Nobody would stumble on one. So **the village says what is coming** (`comingOn`),
+and only what people would know:
+
+- a wedding a week ahead;
+- a child "any day now", ten days ahead;
+- a death only on the day it happens, with the burial tomorrow.
+
+A small "In the village" card shows it, with world time turned into real minutes ("in about 9
+minutes"). Villagers say it in chatter and know it in conversation, with their own part in it:
+"Today is your wedding day", "you go with the family and home after", "you are not going". A scan of
+one cell in seven of the planet found five burials due within ten real minutes.
+
+**Being there is presence, not a button** (`lib/gatherings.ts`).
+
+- **Joining.** Two-fifths of the gathering inside its rings, in real time, counts as being at it.
+- **The deed.** The village hears of it through `POST /api/village/attend`. The server rebuilds the
+  day and holds the claim to that gathering, this hour and within reach. It records a deed, once:
+  - everyone there saw it;
+  - it belongs to the family, or to the couple;
+  - at a burial it is respect, weight 2 (word reaches friends);
+  - at a wedding or a naming it is kindness, weight 1.
+- **The echo hears of it, with consent:**
+  - `mourns` (I7) at a burial;
+  - `joins_group` (G4) at a wedding or a door;
+  - `stays_solo` (G4's refusal) for a wedding watched from across the green and never joined.
+- **Who it was for.** Whether the stranger had talked to them (`knew_them`, counterpart `peer` or
+  `stranger`) comes from the server, which alone knows it.
+- **Routing.** ingest.py routes none of these labels yet (C7), so they reach the posterior through
+  the label embedding only.
+
+**Measured.**
+
+- `events.test.ts`, 10 tests: the frequencies; burial the day after a death; the wedding couple;
+  family always there; rings a step apart, facing in; over 90% in place mid-hour; the boat in; the family
+  home; what is known ahead and what is never foretold; determinism.
+- Ten injected defects, all caught. Two had passed silently first, and their tests were tightened.
+- `gatherings.test.mts`, 8 tests: presence; the refusal twin; the route held to the hour, the place
+  and once; `knew`; what villagers know of the day.
+- Real model, 2 calls, about $0.04, on Senstrand's burial day:
+  - the dead's sibling: "my sister Haikmu died yesterday, we bury her this afternoon, we'll go as a
+    family";
+  - a neighbour who was not going: "Haikmu's funeral is this afternoon; I'm not going, but most of
+    the village will be there".
+
+- Browser, live on the real clock. Tasalt (`847581bffffffff`) was found by the scan. The card said
+  "Lin died today; the burial is tomorrow afternoon · in about 8 minutes", and then "Lin's burial,
+  this afternoon · now". Ten mourners stood heads bowed round the grave. Standing with them gave the
+  line "You stand with the mourners. Nobody asks who you are.", `/api/village/attend` returned
+  `recorded`, and `mourns` reached `/api/observe/behavioral` with a 200 (mocked: ML offline). Frame:
+  107 of 120 calls.
+- Found in that browser run: a mourner asked the stranger for berries at the graveside (C50's
+  bubble). Nobody at a gathering now asks for anything while it holds.
+
+**Not done.** See ⚑42.

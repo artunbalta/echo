@@ -29,6 +29,8 @@ import {
   chatter,
   weatherAt,
   dayPlans,
+  comingOn,
+  gatheringsOn,
   lives,
   needsOn,
   occupationOn,
@@ -37,7 +39,9 @@ import {
   worldDayIndex,
   SCHEDULE,
   type BoatDay,
+  type Coming,
   type DayPlan,
+  type Gathering,
   type Deed,
   type LifeEvent,
   type Mooring,
@@ -88,6 +92,10 @@ export interface VillagersLayer extends WorldLayer {
   setDeeds(deeds: readonly Deed[]): void;
   /** What each villager would ask for this week (C50), as this page has the village: for tests and the HUD. */
   needs(): ReadonlyMap<string, Need>;
+  /** Today's burials, weddings and callers (C52), as the schedule has them. */
+  gatherings(): readonly Gathering[];
+  /** The village's news today: what it knows is coming (C52). */
+  coming(): readonly Coming[];
   /** One villager says something to the stranger, in a bubble over them, for `seconds` (C50: thanks). */
   say(id: string, text: string, seconds?: number): void;
   /**
@@ -415,12 +423,16 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           needsKey = key;
           needs = needsOn(s, village.plan, day, village.changes, marks ? [...marks.values()] : []);
         }
-        // Someone near the stranger with a need says it, once (C50). Not while a conversation holds anyone.
+        // Someone near the stranger with a need says it, once (C50). Not while a conversation holds anyone,
+        // and not from inside a burial, a wedding or a new child's callers (C52): nobody asks a stranger
+        // for berries at a graveside.
         if (!held && (!spoken || spoken.until < seconds)) {
+          const busy = new Set<string>();
+          for (const g of gatheringsOn(s, village.plan, day)) if (hour >= g.t0 - 0.02 && hour <= g.t1 + 0.02) for (const id of g.places.keys()) busy.add(id);
           let asker: { id: string; d: number } | null = null;
           for (const [id, at] of lastAt) {
             const n = needs.get(id);
-            if (!n || asked.has(n.id) || at.activity === "row") continue;
+            if (!n || asked.has(n.id) || at.activity === "row" || busy.has(id)) continue;
             const d = Math.hypot(at.x - mx, at.y - my);
             if (d < ASK_M && (!asker || d < asker.d)) asker = { id, d };
           }
@@ -522,6 +534,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       deeds = [...list];
     },
     needs: () => needs,
+    gatherings: () => (village ? gatheringsOn(village.settlement, village.plan, state.day) : []),
+    coming: () => (village ? comingOn(village.settlement, village.plan, state.day) : []),
     say(id, text, seconds = SAY_S) {
       spoken = { id, text, until: performance.now() / 1000 + seconds };
       chatterClock = 1; // shown at the next frame, not the next tick

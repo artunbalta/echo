@@ -35,7 +35,10 @@ import {
   causeOfDeath,
   checkChange,
   chronicle,
+  comingOn,
   dayPlans,
+  gatheringName,
+  gatheringsOn,
   goalFits,
   goalsOf,
   lives,
@@ -232,7 +235,16 @@ export function nowLine(s: Settlement, plan: VillagePlan, me: Person, day: numbe
   if (w) {
     const onGreen = Math.hypot(w.x - plan.centre.x, w.y - plan.centre.y) < plan.greenRadiusM * 1.3;
     const onDock = plan.dock !== null && Math.hypot(w.x - plan.dock.root.x, w.y - plan.dock.root.y) < plan.dock.lengthM + 4;
+    // At today's burial, wedding or new child's door (C52), in their place in it.
+    const at = gatheringsOn(s, plan, day).find((g) => {
+      const place = g.places.get(me.id);
+      return place && hour >= g.t0 && hour <= g.t1 + 0.02 && Math.hypot(w.x - place.at.x, w.y - place.at.y) < 1.5;
+    });
+    const name = (id: string) => s.people.find((p) => p.id === id)?.given ?? "them";
     if (!w.visible) doing = "at home";
+    else if (at && at.kind === "funeral") doing = `standing at ${name(at.about[0])}'s grave with the mourners — this is the burial`;
+    else if (at && at.kind === "wedding") doing = at.centre.includes(me.id) ? `being married on the green, in front of everyone, to ${name(at.about.find((id) => id !== me.id)!)}` : `at ${gatheringName(s, at)}, on the green`;
+    else if (at && at.kind === "naming") doing = at.centre.includes(me.id) ? "on your step with the callers, who have come to see the baby" : `at ${at.centre.map(name).join(" and ")}'s door with the callers, come to see the new baby`;
     else if (w.activity === "row") doing = "rowing your family's boat";
     else if (w.activity === "fish") doing = "out at sea in your family's boat, fishing";
     else if (w.activity === "stoop") doing = "working in the field";
@@ -348,6 +360,30 @@ export function villagerContext(s: Settlement, plan: VillagePlan, me: Person, da
     if (wants.length) lines.push(`What you want: ${wants.join("; ")}.`);
     if (goals.done.length) lines.push(`What you set out to do and did: ${goals.done.map((g) => `${g.text}, done ${agoDays(day, g.doneDay!)}`).join("; ")}.`);
   }
+  // Today's burial, wedding or callers, and what the village knows is coming (C52).
+  const today: string[] = [];
+  for (const g of gatheringsOn(s, plan, day)) {
+    const name = (id: string) => people.get(id)?.given ?? "someone";
+    if (g.kind === "wedding" && g.centre.includes(me.id)) today.push(`Today is your wedding day: you marry ${name(g.about.find((id) => id !== me.id)!)} on the green this afternoon`);
+    else if (g.kind === "funeral" && g.family.includes(me.id)) {
+      const dead = people.get(g.about[0]);
+      const who = dead ? kin(s, me, dead) : "";
+      today.push(`${name(g.about[0])}${who ? `, ${who},` : ""} died yesterday; the burial is this afternoon, and you go with the family and home after`);
+    }
+    else if (g.kind === "naming" && g.centre.includes(me.id)) today.push("Your baby was born yesterday; this afternoon the family and your friends call at the door");
+    else if (g.places.has(me.id)) today.push(`This afternoon is ${gatheringName(s, g)}, and you are going`);
+    else today.push(`This afternoon is ${gatheringName(s, g)}; you are not going`);
+  }
+  for (const c of comingOn(s, plan, day)) {
+    if (c.day === day && c.kind !== "expecting") continue;
+    if (c.kind === "expecting" && c.about.includes(me.id)) today.push("You are expecting a child, any day now");
+    else if (c.kind === "wedding" && c.about.includes(me.id)) {
+      const other = c.about.find((id) => id !== me.id)!;
+      today.push(`You are to marry ${people.get(other)?.given ?? "them"} ${c.day - day === 1 ? "tomorrow" : `in ${c.day - day} days`}`);
+    } else today.push(c.words);
+  }
+  if (today.length) lines.push(`In ${s.name} now: ${today.join("; ")}.`);
+
   const leaving = me.leftDay !== Infinity && me.leftDay > day;
   if (leaving) {
     const withMe = s.people.filter((p) => p.index !== me.index && p.leftDay === me.leftDay && present(s, p, day));

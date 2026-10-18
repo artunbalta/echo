@@ -143,7 +143,8 @@ export interface Pose {
   z: number;
   /** Yaw, three's rotation.y: 0 faces +z. */
   yaw: number;
-  activity: "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish";
+  /** `mourn` (C52): standing at a grave, head bowed, hands together in front. */
+  activity: "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish" | "mourn";
   /** Gait speed relative to the player's walk; 0 stands. */
   speed: number;
   /** Seconds, for the gait and the working arms. */
@@ -252,6 +253,10 @@ export class Crowd {
     if (p.activity === "stoop") torsoX += 0.5 + work * 0.06;
     if (p.activity === "row") torsoX += 0.25 + Math.sin(p.time * 3) * 0.25;
     if (p.activity === "stoop" || p.activity === "work") headX = 0.2;
+    if (p.activity === "mourn") {
+      headX = 0.42;
+      torsoX += 0.05;
+    }
     this.at(this.body, 0, 0.43, 0, torsoX, -Math.sin(phase) * 0.065 * amount, 0, this.spine);
     this.put("torso", this.spine, look.cloth);
     this.at(this.spine, 0, 0.36, 0, headX, Math.sin(phase) * 0.025 * amount, 0, this.neck);
@@ -307,6 +312,10 @@ export class Crowd {
       } else if (p.activity === "sit") {
         arm = -0.35;
         elbow = -0.9;
+      } else if (p.activity === "mourn") {
+        // Hands together in front, low.
+        arm = -0.28;
+        elbow = -0.75;
       }
       this.at(this.spine, side * 0.15, 0.275, 0, arm, 0, side * 0.065, this.j1);
       this.put("upperArm", this.j1, look.cloth);

@@ -125,6 +125,13 @@ export function deedWords(s: Settlement, me: Person, k: Known, day: number): str
     "respect": `paid their respects at ${thing}`,
     "tidy": `tidied ${thing}`,
     "work": `worked a shift at ${thing}`,
+    // Being there (C52): the thing is the gathering, by name.
+    "attend":
+      d.kind === "house"
+        ? `called at ${ours ? "your" : "the"} door with the others, for the new baby`
+        : d.kind === "villager"
+          ? `came to ${ours ? "your wedding" : d.thingName}`
+          : `came to ${d.thingName}`,
   };
   let act = what[d.verb] ?? `did something to ${thing}`;
   // A gift of what this villager is especially glad of — a hook to a fisher, a shell to a child (C47).

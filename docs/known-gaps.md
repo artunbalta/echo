@@ -1867,3 +1867,26 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Migration 0022 is applied nowhere**, like 0019–0021 (⚑37).
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 42. What C52 does not do yet, and what it trusts (2026-10-18)
+
+- **Weddings are rare in the present.** Senstrand pairs nobody in 3.3 world years, and Kamgull one
+  couple. That is the society's demography (C40). Whether the planet's marriage rate is right is
+  unmeasured.
+- **A village is walked in real time and lived in a compressed one.** A world day is twelve
+  minutes, and a walk across the village is up to two. So a burial an hour long by the village's
+  clock is a real minute and a half, and the evening after a burial can be over before the mourners
+  reach the green. The schedule copes, and the scale itself is C41's.
+- **No coffin, no flowers, no music.** A burial is people in rings with their heads bowed. Sound is
+  feature 10.
+- **The grave is the build day's (⚑35).** Someone who died after the page was built is buried at a
+  slot their grave is not yet drawn at, until a reload.
+- **The stranger's position is their browser's word**, as in ⚑39/⚑40. The server checks it is
+  within reach at the hour, not that it was there for two-fifths of the gathering.
+- **The labels are unrouted.** `mourns`, `joins_group` and `stays_solo` reach ingest.py by the label
+  embedding only (C7); I7's "consoles_survivor" and "visits_grave" later are not read.
+- **Phones do not see the news card** (`max-sm:hidden`); feature 20.
+- **Migration**: none needed. Deeds of verb `attend` use 0020's `village_deeds` unchanged.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+

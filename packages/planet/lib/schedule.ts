@@ -32,6 +32,7 @@ import { eveningOf, type GoalPlace } from "./goals.js";
 import { navGraph, pathLength, route } from "./nav.js";
 import { weatherOn } from "./weather.js";
 import { friendCircles } from "./social.js";
+import { gatheringsOn, type Gathering } from "./events.js";
 import { temperaments } from "./life.js";
 import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 
@@ -62,7 +63,8 @@ export const SCHEDULE = {
 } as const;
 
 /** What a person is doing, for the pose. */
-export type Activity = "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish";
+/** `mourn`: standing at a grave with the head bowed (C52). */
+export type Activity = "walk" | "work" | "stoop" | "sit" | "stand" | "play" | "row" | "fish" | "mourn";
 
 export interface Whereabouts {
   x: number;
@@ -263,7 +265,24 @@ export function dayPlans(
   // The day's weather (C48): in a storm no boat goes out, and rain or snow sends everyone in early.
   const weather = weatherOn(s.seed, s.cell, s.geography, day, s);
   const wet = weather.kind === "rain" || weather.kind === "snow" || weather.kind === "storm" ? weather.fall : 0;
-  const boats = moorings.map((m, i) => (weather.kind === "storm" ? null : boatDay(plan, m, i, day)));
+  // A burial, a wedding, a new child's callers (C52): whoever goes, goes after work; and a household
+  // with a fisher among them keeps its boat in for the day.
+  const gatherings = gatheringsOn(s, plan, day);
+  const going = new Map<string, { g: Gathering; at: Point; heading: number }>();
+  for (const g of gatherings) {
+    for (const id of [...g.centre, ...g.guests]) {
+      const place = g.places.get(id);
+      if (place && !going.has(id)) going.set(id, { g, ...place });
+    }
+  }
+  const ashore = new Set<number>();
+  if (going.size > 0) {
+    for (const p of s.people) {
+      if (!going.has(p.id) || occupationOn(p, day) !== "fisher") continue;
+      ashore.add(p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto);
+    }
+  }
+  const boats = moorings.map((m, i) => (weather.kind === "storm" || ashore.has(m.household) ? null : boatDay(plan, m, i, day)));
   const boatOf = new Map(moorings.map((m, i) => [m.household, i]));
   const away = plan.dock ? toward(plan.dock.root, plan.centre) : toward(plan.arrival, plan.centre) + Math.PI;
   const fieldFor = (plot: Plot) =>
@@ -348,13 +367,60 @@ export function dayPlans(
     if (!rows) stay(clock + 0.006, plot.facing, "stand");
 
     let boat: number | null = null;
+    const gathering = going.get(p.id) ?? null;
+    /**
+     * To the gathering and through it (C52). A village is a hundred metres and more across and a
+     * stroll is a stroll, so whatever the day was doing ends early enough to walk there by the start:
+     * the last stay is cut short, or the last walk home from beyond the village is set off sooner.
+     */
+    const attend = () => {
+      if (!gathering) return;
+      const leave = gathering.g.t0 - walkLength(here, gathering.at) / v - 0.002;
+      if (clock > leave) {
+        const lastStay = stays[stays.length - 1];
+        const lastLeg = legs[legs.length - 1];
+        if (lastStay && lastStay.t1 === clock) {
+          lastStay.t1 = Math.max(lastStay.t0, leave);
+          clock = lastStay.t1;
+        } else if (lastLeg && lastLeg.t1 === clock) {
+          const before = Math.max(0, ...stays.filter((x) => x.t1 <= lastLeg.t0).map((x) => x.t1), ...legs.filter((x) => x !== lastLeg && x.t1 <= lastLeg.t0).map((x) => x.t1));
+          const shift = Math.min(clock - leave, lastLeg.t0 - before);
+          lastLeg.t0 -= shift;
+          lastLeg.t1 -= shift;
+          clock = lastLeg.t1;
+        }
+      }
+      go(gathering.at);
+      stay(gathering.g.t1 + j("gather") * 0.3, gathering.heading, gathering.g.kind === "funeral" ? "mourn" : "stand");
+    };
     if (age < SCHEDULE.childYears) {
-      go(greenSpot(plan, p.id, 0.55));
+      const play = greenSpot(plan, p.id, 0.55);
+      go(play);
+      if (gathering) {
+        stay(gathering.g.t0, 0, "play", plan.greenRadiusM * 0.45);
+        attend();
+        if (gathering.g.kind === "funeral" && gathering.g.family.includes(p.id)) {
+          bed();
+          plans.push({ person: p.id, legs, stays, pace, boat });
+          continue;
+        }
+        go(play);
+      }
       stay(SCHEDULE.childBed + j("play") - 0.08 * wet, 0, "play", plan.greenRadiusM * 0.45);
       bed();
     } else if (age >= SCHEDULE.elderYears) {
       const seat = benchSeat(plan, p.id);
       go(seat.at);
+      if (gathering) {
+        stay(gathering.g.t0, seat.heading, "sit");
+        attend();
+        if (gathering.g.kind === "funeral" && gathering.g.family.includes(p.id)) {
+          bed();
+          plans.push({ person: p.id, legs, stays, pace, boat });
+          continue;
+        }
+        go(seat.at);
+      }
       stay(SCHEDULE.elderBed + j("bed") - 0.1 * wet, seat.heading, "sit");
       bed();
     } else {
@@ -399,10 +465,11 @@ export function dayPlans(
         go(out);
         // Back so as to be in by the end of work, but never before they got there: a slow walker on
         // a long road would otherwise be on the way back while still on the way out.
-        const back = greenSpot(plan, p.id, 1.15);
+        // On a gathering's day the way back goes straight to it, to be there by the start (C52).
+        const back = gathering ? gathering.at : greenSpot(plan, p.id, 1.15);
         const via = way(out, back);
         const dur = pathLength([out, ...via, back]) / v;
-        const t0 = Math.max(clock, work - dur);
+        const t0 = Math.max(clock, (gathering ? gathering.g.t0 : work) - dur);
         legs.push({ t0, t1: t0 + dur, from: out, to: back, via });
         here = back;
         clock = t0 + dur;
@@ -414,6 +481,13 @@ export function dayPlans(
         stay(work, plot.facing, "work");
       } else {
         stay(work, plot.facing, "work", 1);
+      }
+      attend();
+      // After a burial, the dead's family go home to their grief; everyone else to the green.
+      if (gathering && gathering.g.kind === "funeral" && gathering.g.family.includes(p.id)) {
+        bed();
+        plans.push({ person: p.id, legs, stays, pace, boat });
+        continue;
       }
       // The evening: on the green with everyone, unless a conversation has sent it somewhere (C44).
       const evening = changed.has(p.id) ? eveningOf(s, p, day, changes) : null;
