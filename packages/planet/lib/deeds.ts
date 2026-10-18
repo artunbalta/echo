@@ -125,6 +125,12 @@ export function deedWords(s: Settlement, me: Person, k: Known, day: number): str
     "respect": `paid their respects at ${thing}`,
     "tidy": `tidied ${thing}`,
     "work": `worked a shift at ${thing}`,
+    // An animal (C55): a dog by its name, the goats, the hens.
+    "stroke": `made a fuss of ${ours && d.kind === "dog" ? `your dog ${d.thingName}` : d.thingName}`,
+    "feed": d.kind === "hen" ? `scattered grain for ${ours ? "your hens" : d.thingName}` : `fed ${ours && d.kind === "dog" ? `your dog ${d.thingName}` : d.thingName}`,
+    "play": `played with ${ours && d.kind === "dog" ? `your dog ${d.thingName}` : d.thingName}`,
+    "shoo": `shooed ${ours && d.kind === "dog" ? `your dog ${d.thingName}` : d.thingName} away`,
+    "chase": `chased ${ours ? (d.kind === "hen" ? "your hens" : "your goats") : d.thingName} about`,
     // Being there (C52): the thing is the gathering, by name.
     "attend":
       d.kind === "house"

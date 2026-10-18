@@ -115,6 +115,8 @@ export interface VillagersLayer extends WorldLayer {
    * at the table. Presentation only, as `hold` is — their day, as everyone else sees it, is unchanged.
    */
   host(id: string | null, plot: number | null): void;
+  /** Where someone was drawn out of doors last frame (C55: a dog keeps to its person as drawn), or null. */
+  whereIs(id: string): { x: number; y: number; heading: number; visible: boolean; boat: number | null } | null;
   /**
    * A household's boat is out with the stranger (C45): its mooring is drawn empty, in this view only,
    * until `lend(null)`. The schedule — the family's fisher rowing out at dawn — is untouched.
@@ -203,7 +205,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   const tint = new THREE.Color();
   let drawn = 0;
   /** Where each visible villager stood last frame, local metres. Reused; the hook may not allocate per person. */
-  const lastAt = new Map<string, { x: number; y: number; activity: string; sx: number; sy: number; sz: number }>();
+  const lastAt = new Map<string, { x: number; y: number; activity: string; sx: number; sy: number; sz: number; heading?: number }>();
   /** What two villagers standing together say (C49): three bubbles at most, near the stranger. */
   let deeds: Deed[] = [];
   const bubbles: { el: HTMLDivElement; at: THREE.Vector3 | null; key: string }[] = [];
@@ -374,11 +376,12 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         if (seen) {
           seen.x = w.x;
           seen.y = w.y;
+          seen.heading = w.heading;
           seen.activity = w.activity;
           seen.sx = tx * frame.tileM;
           seen.sy = y;
           seen.sz = ty * frame.tileM;
-        } else lastAt.set(d.person, { x: w.x, y: w.y, activity: w.activity, sx: tx * frame.tileM, sy: y, sz: ty * frame.tileM });
+        } else lastAt.set(d.person, { x: w.x, y: w.y, activity: w.activity, sx: tx * frame.tileM, sy: y, sz: ty * frame.tileM, heading: w.heading });
         const look = looks.get(d.person)!;
         const gait = w.activity === "walk" || w.activity === "play" ? (SCHEDULE.walkMps * w.speed) / PLAYER_WALK_MPS : 0;
         crowd.pose(
@@ -603,6 +606,11 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     needs: () => needs,
     setIndoors(info) {
       indoors = info;
+    },
+    whereIs(id) {
+      const at = lastAt.get(id);
+      if (!at || at.activity === "sleep" || at.activity === "row" || at.activity === "fish") return null;
+      return { x: at.x, y: at.y, heading: at.heading ?? 0, visible: true, boat: null };
     },
     host(id, plot) {
       hosting = id !== null && plot !== null ? { id, plot } : null;

@@ -28,9 +28,16 @@
  */
 import { NextResponse } from "next/server";
 import {
+  ANIMALS,
   WRONGS,
   add,
   activeEffects,
+  animalAt,
+  animalsOf,
+  bondWith,
+  dayPlans,
+  residentsOn,
+  whereabouts,
   meets,
   metChange,
   needOf,
@@ -106,6 +113,27 @@ export async function POST(req: Request) {
   if (scatter) {
     if (scatter.classId !== kind || Math.hypot(scatter.x, scatter.y) > REGION_M) return bad("no_such_thing", 404);
     place = { x: scatter.x, y: scatter.y, sizeM: 1, owners: [], name: `a ${thingName(kind)}` };
+  } else if (thing.startsWith("animal:")) {
+    // An animal (C55): the village's, where the hour has it — with room for a hen that shied from the
+    // stranger, and none needed for a dog that has taken to them and is at their heel.
+    const a = animalsOf(s, village.plan, day).find((x) => x.id === thing.slice(7));
+    const kindOf = a?.kind === "hen" ? "hen" : a?.kind === "goat" ? "goat" : a?.kind === "dog" ? "dog" : null;
+    if (!a || kindOf !== kind) return bad("no_such_thing", 404);
+    const { plans, boats, moorings } = dayPlans(s, village.plan, day, changes);
+    const at = animalAt(a, hour, (id) => {
+      const d = plans.find((x) => x.person === id);
+      return d ? whereabouts(d, hour, boats, moorings) : null;
+    });
+    if (at.activity === "hidden") return bad("no_such_thing", 404);
+    const owners =
+      a.household === null
+        ? []
+        : residentsOn(s, village.plan, day)
+            .filter(({ person: p }) => (p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto) === a.household)
+            .map(({ person: p }) => p.id);
+    const bond = a.kind === "dog" ? bondWith((await store?.deedsFor(caller.subject, cell)) ?? [], a.id, day) : 0;
+    const name = a.name ?? (a.kind === "hen" ? "the hens" : "the goats");
+    place = { x: bond >= ANIMALS.follows ? pos.x : at.x, y: bond >= ANIMALS.follows ? pos.y : at.y, sizeM: 4, owners, name };
   } else if (thing.startsWith("villager:")) {
     const p = s.people.find((q) => q.id === thing.slice(9));
     if (!p || !present(s, p, day) || kind !== "villager") return bad("no_such_thing", 404);
@@ -131,6 +159,8 @@ export async function POST(req: Request) {
   if (verb.needs === "carrying") {
     if (pack === null) return bad("pack_unavailable", 503);
     if (typeof body.item !== "string") return bad("bad_item");
+    // Food for an animal is food (C55): nothing comes out of the pack for a stone held out to a dog.
+    if (verb.takes && !verb.takes.includes(body.item)) return bad("not_food", 409);
     const next = remove(pack, body.item);
     if (!next) return bad("not_carried", 409);
     pack = next;

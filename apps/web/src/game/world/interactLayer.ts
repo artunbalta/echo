@@ -34,6 +34,7 @@ import {
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { VillagersLayer } from "./villagersLayer";
 import type { InteriorLayer } from "./interiorLayer";
+import type { AnimalsLayer } from "./animalsLayer";
 import { buildMarks } from "./villageGeometry";
 
 export interface NearThing extends Thing {
@@ -217,6 +218,9 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
           break;
         }
       }
+      // An animal within reach (C55): a dog, a goat, a hen.
+      const beast = ctx.layer<AnimalsLayer>("animals")?.nearest(mx, my, 2.6);
+      if (beast) consider({ ref: `animal:${beast.id}`, kind: beast.kind, x: beast.x, y: beast.y, sizeM: 0.3, owners: [], name: beast.name ?? (beast.kind === "hen" ? "the hens" : beast.kind === "goat" ? "a goat" : "a dog") });
       // Somebody within arm's length is the nearest thing; further off, `T` still talks to them.
       const v = ctx.layer<VillagersLayer>("villagers")?.nearest();
       if (v && v.distanceM < 3) {

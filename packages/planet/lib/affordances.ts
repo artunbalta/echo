@@ -40,7 +40,8 @@ export const VILLAGE_THINGS = ["house", "ruin", "field", "bench", "well", "dock"
 export type VillageThing = (typeof VILLAGE_THINGS)[number];
 
 /** Not drawn by the plan or the scatter, and still things a person can act on. */
-export const OTHER_THINGS = ["villager", "water"] as const;
+/** C55: the animals a stranger can act on — a dog (anyone's, or nobody's), a goat, a hen. */
+export const OTHER_THINGS = ["villager", "water", "dog", "goat", "hen"] as const;
 export type OtherThing = (typeof OTHER_THINGS)[number];
 
 /** Every kind of thing: the village's, the others, and every scatter class by its id. */
@@ -57,7 +58,8 @@ export type DeedReading = "help" | "kindness" | "respect" | "harm" | "theft" | "
 
 export const WRONGS: ReadonlySet<DeedReading> = new Set(["harm", "theft", "trespass", "disrespect"]);
 
-export type CueChannel = "A" | "C" | "F" | "G" | "H" | "I" | "J";
+/** `D` since C55: D11, the pet cue, is the one D-channel cue an act (not a conversation) sends. */
+export type CueChannel = "A" | "C" | "D" | "F" | "G" | "H" | "I" | "J";
 
 export interface Measure {
   /** The line in cue-catalog.md. */
@@ -94,6 +96,8 @@ export interface Verb {
   needs?: "carrying" | "empty-handed" | "aboard";
   /** What the hand holds afterwards, for a verb that picks something up. */
   gives?: string;
+  /** For a verb that gives what is carried: the only things it can give (food, to an animal; C55). */
+  takes?: readonly string[];
   /** One line of what happens, for the player: the act's beat, which fires whether or not anything is measured. */
   beat: string;
 }
@@ -211,6 +215,22 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
     v({ id: "talk", label: "Talk", holdS: 0, pose: "still", reachM: 7, stakes: "low", measure: m("G1", "initiate", "generic"), effect: null, deed: null, owner: "none", beat: "" }),
     v({ id: "give", label: "Give what you carry", holdS: 1, pose: "gather", reachM: 3, stakes: "low", measure: m("F7", "give_gift", "generic"), effect: null, deed: { reading: "kindness", weight: 2 }, owner: "household", needs: "carrying", beat: "They take it, surprised." }),
   ],
+  // C55. A dog: the one creature here a stranger can make a friend of. D11 is the catalogue's pet cue,
+  // which ingest.py reads into `pet_attach` by its amount (`acts.ts` sends the bond as it).
+  dog: [
+    v({ id: "stroke", label: "Stroke the dog", holdS: 3, pose: "kneel", reachM: 1.8, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", beat: "It leans into your hand." }),
+    v({ id: "feed", label: "Give it something to eat", holdS: 1.5, pose: "kneel", reachM: 1.8, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", needs: "carrying", takes: ["berries", "a handful of grain"], beat: "Gone in a moment, and it looks for more." }),
+    v({ id: "play", label: "Play with it", holdS: 4, pose: "gather", reachM: 2.5, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", beat: "It runs rings round you, and comes back for more." }),
+    v({ id: "shoo", label: "Shoo it away", holdS: 1, pose: "push", reachM: 2.5, stakes: "low", measure: m("D11", "shoo_pet", "generic"), effect: null, deed: { reading: "disrespect", weight: 1 }, owner: "household", beat: "It backs off, and watches you from further away." }),
+  ],
+  goat: [
+    v({ id: "scratch", label: "Scratch its head", holdS: 2.5, pose: "kneel", reachM: 1.8, stakes: "low", measure: m("D11", "warm_to_pet", "generic"), effect: null, deed: null, owner: "household", beat: "It pushes back against your fingers, and then tries to eat your sleeve." }),
+    v({ id: "chase", label: "Chase the goats", holdS: 2, pose: "push", reachM: 3, stakes: "medium", measure: m("H5", "chase_animals", "unrouted"), effect: null, deed: { reading: "harm", weight: 1 }, owner: "household", beat: "They scatter, bleating, and the herder will hear of it." }),
+  ],
+  hen: [
+    v({ id: "feed", label: "Scatter grain for them", holdS: 2, pose: "gather", reachM: 2.5, stakes: "low", measure: m("F7", "feed_hens", "generic"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", needs: "carrying", takes: ["a handful of grain", "berries"], beat: "They come at a run, and peck round your feet." }),
+    v({ id: "chase", label: "Chase the hens", holdS: 1.5, pose: "push", reachM: 2.5, stakes: "medium", measure: m("H5", "chase_animals", "unrouted"), effect: null, deed: { reading: "harm", weight: 1 }, owner: "household", beat: "Feathers, and a great deal of noise." }),
+  ],
   water: [
     v({ id: "wade", label: "Wade in", holdS: 2, pose: "still", reachM: 3, stakes: "low", measure: m("I3", "wade_in", "unrouted"), effect: null, deed: null, owner: "none", beat: "Colder than you meant it to be." }),
     v({ id: "play", label: "Skip a stone", holdS: 1.5, pose: "gather", reachM: 3, stakes: "low", measure: m("I2", "skip_stone", "unrouted"), effect: null, deed: null, owner: "none", beat: "Three, four… five." }),
@@ -236,7 +256,7 @@ export function verbOf(kind: ThingKind, id: string): Verb | null {
 export function thingName(kind: ThingKind): string {
   const NAMES: Record<string, string> = {
     house: "house", ruin: "ruin", field: "field", bench: "bench", well: "well", dock: "dock", boat: "boat",
-    grave: "grave", mine: "mine", villager: "villager", water: "water's edge",
+    grave: "grave", mine: "mine", villager: "villager", water: "water's edge", dog: "dog", goat: "goat", hen: "hen",
     "berry-bush": "berry bush", "fallen-log": "fallen log", "dead-tree": "dead tree", "buttress-tree": "great tree",
     "canopy-palm": "palm", "vine-tangle": "tangle of vines", "grass-tuft": "tuft of grass", "dead-shrub": "dry shrub",
     "moss-patch": "moss", "lichen-rock": "lichen-covered rock", "snow-drift": "snow drift", "dune-ripple": "sand",

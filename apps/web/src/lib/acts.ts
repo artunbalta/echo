@@ -31,6 +31,11 @@ export interface Manner {
   abandoned: boolean;
   /** Metres from the body to the thing when the act began. */
   distanceM: number;
+  /**
+   * For the pet cue (D11, C55): how much there is in it — the bond the stranger has with this dog, as
+   * ingest.py reads `pet_attach` from `raw.amount`. Absent, a stroke is 0.6.
+   */
+  amount?: number;
 }
 
 export interface Measurement {
@@ -45,6 +50,7 @@ const PLACES = new Set(["field", "grave", "water"]);
 export function targetKindOf(kind: ThingKind): TargetKind {
   if (kind === "self") return "self"; // making something (C47)
   if (kind === "villager") return "npc";
+  if (kind === "dog") return "pet"; // the schema's own word for it (C55)
   if (STRUCTURES.has(kind)) return "structure";
   if (PLACES.has(kind)) return "place";
   return "resource";
@@ -64,6 +70,8 @@ export function measurementFor(verb: Verb, thing: { ref: string; kind: ThingKind
   if (verb.pose === "sit") raw.still_ms = Math.round(manner.heldMs);
   // An approach is read by the G route only with a distance (ingest.py's G branch).
   if (measure.channel === "G" || measure.channel === "A") raw.distance = Number(manner.distanceM.toFixed(2));
+  // The pet cue's amount (C55): a stroke from someone it barely knows is a little; shooing it is nothing.
+  if (measure.cue.startsWith("D11")) raw.amount = Number((measure.action === "shoo_pet" ? 0.05 : (manner.amount ?? 0.6)).toFixed(3));
   const context: Partial<EventContext> = {
     stakes: verb.stakes,
     audience_size: audience,
@@ -96,6 +104,8 @@ export function verbsInHand(verbs: readonly Verb[], held: string | null, aboard 
   return verbs.filter((v) => {
     if (v.needs === "aboard") return aboard;
     if (aboard) return false;
+    // A verb that takes only some things (food, to an animal; C55) is for the hand that holds one of them.
+    if (v.needs === "carrying" && v.takes) return held !== null && v.takes.includes(held);
     return v.needs === "carrying" ? held !== null : v.needs === "empty-handed" ? room : true;
   });
 }

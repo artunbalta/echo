@@ -56,3 +56,5 @@ export * from "./events.js";
 export * from "./moves.js";
 // Inside a house (C54).
 export * from "./interiors.js";
+// Goats, hens, dogs, birds and fish (C55).
+export * from "./animals.js";
