@@ -20,10 +20,11 @@
 
 import type { DeedReading, ThingKind } from "./affordances.js";
 import { WRONGS } from "./affordances.js";
+import { ITEMS, gladOf } from "./items.js";
 import { present } from "./life.js";
 import type { LifeChange } from "./changes.js";
 import { dayPlans, whereabouts } from "./schedule.js";
-import type { Person, Settlement } from "./society.js";
+import { ageYears, occupationOn, type Person, type Settlement } from "./society.js";
 import { residentsOn, type VillagePlan } from "./village.js";
 
 export const DEEDS = {
@@ -52,6 +53,8 @@ export interface Deed {
   witnesses: string[];
   /** `Person.id`s of whoever it was done to. */
   owners: string[];
+  /** For a gift: what it was, by item id (C47). */
+  item?: string;
 }
 
 export type How = "saw" | "theirs" | "heard";
@@ -117,7 +120,7 @@ export function deedWords(s: Settlement, me: Person, k: Known, day: number): str
     "knock": `knocked at ${thing}`,
     "peer-in": `looked in at the window of ${thing}`,
     "force-door": `forced the door of ${thing}`,
-    "give": `left a gift at ${thing}`,
+    "give": d.kind === "villager" ? `gave ${ours ? "you" : d.thingName} ${ITEMS[d.item ?? ""]?.name ?? "a gift"}` : `left ${ITEMS[d.item ?? ""]?.name ?? "a gift"} at ${thing}`,
     "tend": `helped weed ${thing}`,
     "trample": d.kind === "grave" ? `walked over ${thing}` : `trampled the crop in ${thing}`,
     "pick-up": `took ${d.kind === "mine" ? "ore from the mine" : `from ${thing}`}`,
@@ -128,7 +131,9 @@ export function deedWords(s: Settlement, me: Person, k: Known, day: number): str
     "tidy": `tidied ${thing}`,
     "work": `worked a shift at ${thing}`,
   };
-  const act = what[d.verb] ?? `did something to ${thing}`;
+  let act = what[d.verb] ?? `did something to ${thing}`;
+  // A gift of what this villager is especially glad of — a hook to a fisher, a shell to a child (C47).
+  if (d.verb === "give" && d.item && ours && gladOf(d.item, occupationOn(me, day), ageYears(me, day))) act += " — something you were glad of";
   const source =
     k.how === "saw" ? "You saw the stranger" : k.how === "theirs" ? "The stranger" : `${s.people.find((p) => p.id === k.from)?.given ?? "Your family"} told you the stranger`;
   return `${source} ${act}, ${ago}.`;

@@ -54,6 +54,8 @@ const USER_KEYED: [string, string][] = [
   ["villager_memories", "subject"],
   // C45. What this person did in each village, with who saw it. Deleted: the villagers forget it.
   ["village_deeds", "subject"],
+  // C47. What they carried.
+  ["player_items", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point

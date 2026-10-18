@@ -37,6 +37,7 @@ require_.cache[SERVER_ONLY] = { id: SERVER_ONLY, filename: SERVER_ONLY, path: SE
 const { POST: ACT } = await import("../src/app/api/world/act/route");
 const { POST: BEGIN } = await import("../src/app/api/village/talk/begin/route");
 const { GET: CHANGES } = await import("../src/app/api/village/changes/route");
+const PACK = await import("../src/app/api/player/pack/route");
 const { planet } = await import("../src/lib/planet");
 const { resetMemoryStore, villageStore } = await import("../src/lib/villageStore");
 const { measurementFor, targetKindOf, touchesTheWorld, verbsInHand } = await import("../src/lib/acts");
@@ -210,4 +211,53 @@ test("C45: wrongs are bounded — a stranger who has done enough harm in a villa
   for (let i = 0; i < 6; i++) await act({ cell: CELL, thing: field.ref, kind: "field", verb: "trample", at: { x: field.x, y: field.y } });
   const res = await act({ cell: CELL, thing: field.ref, kind: "field", verb: "trample", at: { x: field.x, y: field.y } });
   assert.equal(res.status, 429);
+});
+
+// ── the pack (C47) ──────────────────────────────────────────────────────────────
+
+const packReq = (method: "GET" | "POST", body?: unknown) =>
+  (method === "GET" ? PACK.GET : PACK.POST)(
+    new Request("https://echo.test/api/player/pack", {
+      method,
+      headers: { "content-type": "application/json", authorization: `Bearer ${token()}` },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }),
+  );
+
+test("C47: what you pick up is in your pack, checked and kept; a full pack takes nothing and marks nothing", async () => {
+  const shell = { cell: CELL, thing: "shell@10.0,10.0", kind: "shell", verb: "pick-up", at: { x: 10, y: 10 } };
+  const first = (await (await act(shell)).json()) as { pack: Record<string, number>; effect?: unknown };
+  assert.deepEqual(first.pack, { shell: 1 });
+  assert.deepEqual(((await (await packReq("GET")).json()) as { pack: unknown }).pack, { shell: 1 });
+  await villageStore()!.setPack(SUBJECT, { reed: 8 });
+  const full = await act({ ...shell, thing: "shell@11.0,10.0", at: { x: 11, y: 10 } });
+  assert.equal(full.status, 409);
+  assert.equal(((await full.json()) as { error: string }).error, "pack_full");
+  const marks = (await villageStore()!.effectsFor(CELL, DAY))!;
+  assert.equal(marks.filter((e) => e.thing === "shell@11.0,10.0").length, 0, "a full pack still took the shell from the beach");
+});
+
+test("C47: a gift is of something actually carried, and the villager's deed says what it was", async () => {
+  const gift = { cell: CELL, thing: house.ref, kind: "house", verb: "give", at: { x: house.x, y: house.y }, item: "necklace" };
+  const none = await act(gift);
+  assert.equal(none.status, 409);
+  assert.equal(((await none.json()) as { error: string }).error, "not_carried");
+  assert.equal(((await villageStore()!.deedsFor(SUBJECT, CELL)) ?? []).length, 0, "an uncarried gift was recorded");
+  await villageStore()!.setPack(SUBJECT, { necklace: 1 });
+  const ok = (await (await act(gift)).json()) as { pack: Record<string, number> };
+  assert.deepEqual(ok.pack, {});
+  const [d] = (await villageStore()!.deedsFor(SUBJECT, CELL))!;
+  assert.equal(d.item, "necklace");
+  assert.equal(d.reading, "kindness");
+});
+
+test("C47: making something takes its makings out of the pack and puts the thing in; nothing comes from nothing", async () => {
+  await villageStore()!.setPack(SUBJECT, { reed: 5 });
+  const made = (await (await packReq("POST", { op: "make", recipe: "basket" })).json()) as { pack: Record<string, number> };
+  assert.deepEqual(made.pack, { reed: 1, basket: 1 });
+  const again = await packReq("POST", { op: "make", recipe: "basket" });
+  assert.equal(again.status, 409);
+  assert.equal((await packReq("POST", { op: "make", recipe: "gold" })).status, 404);
+  const dropped = (await (await packReq("POST", { op: "drop", item: "basket" })).json()) as { pack: Record<string, number> };
+  assert.deepEqual(dropped.pack, { reed: 1 });
 });

@@ -1837,7 +1837,8 @@ consecutive salts anywhere this matters has **not** been audited.
   who saw the act is computed by the server's clock. A browser whose sky is frozen sees a different
   audience from the server's witnesses (the measurement's `audience_size` is the browser's).
 - **Taking is not having.** What you carry lives in the page. It is gone on reload, and a gift is
-  trusted to have been carried. There is no inventory store.
+  trusted to have been carried. There is no inventory store. *CLOSED by C47: the pack is the
+  server's (`player_items`), a pick-up needs room in it, and a gift is checked to be in it.*
 - **The boat is per-viewer.** Others see the family's boat at its mooring while you row it. Nothing
   is synchronised in real time (C27's shared unit is the parcel, and this is a presentation).
 - **No violence toward people.** There is no verb that hurts a villager. That is deliberate in v1:

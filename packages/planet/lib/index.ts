@@ -41,3 +41,6 @@ export * from "./goals.js";
 export * from "./affordances.js";
 export * from "./things.js";
 export * from "./deeds.js";
+// What a stranger carries and makes (C47), and how villagers walk round things (C46).
+export * from "./items.js";
+export * from "./nav.js";

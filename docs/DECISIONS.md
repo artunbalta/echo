@@ -2666,3 +2666,33 @@ people walking: villagers talking to each other, interiors, animals and live eve
   - A day's plans for the biggest village are about 50 ms, the graph included.
   - The midnight test moved from 0.92 to 0.95: since routing, the last young people reach their doors
     just after 0.917, ten past ten. Midnight is what the test claims.
+
+## C47 — a pack you keep, and things you can make
+
+Feature 2 of the twenty.
+
+- **What can be carried** (`lib/items.ts`). Everything a verb gives is an item: shell, stone, reed,
+  driftwood, dry branch, dry twigs, berries, a handful of grain, ore. So is everything a recipe makes:
+  a reed basket, a shell necklace, a hook and line, a stone hammer, a torch, a raft. `items.test.ts`
+  fails if a verb gives something unknown, or if a recipe needs something nothing in the world gives.
+- **No price** (Design Law 1). Items have a name and who is especially glad of one — a fisher of a
+  hook, a child of a shell, the old of berries — and nothing else. The test checks that no other field
+  creeps in.
+- **The pack is the server's** (`player_items`, migration 0021). It holds eight things.
+  - **Picking up.** A pick-up goes through `/api/world/act`, which needs room in the pack before
+    anything is marked. A full pack takes nothing, and leaves the shell on the beach.
+  - **Giving.** A gift names the item; the server checks it is in the pack, takes it out, and records
+    it on the deed. The villager can then say so, and says when it was something they were glad of.
+    This closes ⚑40's "a gift is trusted to have been carried".
+  - **Shown to be checked.** Both checks were removed in turn, and the tests failed.
+- **Making something is an act.** It has a pose, a length and a measurement, done in the hands:
+  - The raft is sent as `assemble_raft`, ingest.py's own build handler (ts_build), with
+    `abandon_build` as its refusal twin. It is made at the water's edge and launched with R; that is
+    the start of feature 11.
+  - The other recipes are F6 investment in building, sent unrouted under their own labels. No
+    anchored feature has their definition.
+- **The panel.** I opens the pack: hold a thing (for a gift), throw it away, or make what you can.
+  G puts the held thing back.
+- **Measured in a browser** (Senstrand): four reeds cut by their own verb, the pack at 4/8, a basket
+  woven in eight seconds, and the pack left holding `{basket: 1}`. One bug was found on the way: the
+  hand kept showing a reed that had gone into the basket.

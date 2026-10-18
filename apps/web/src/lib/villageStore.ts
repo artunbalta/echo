@@ -13,7 +13,7 @@
  */
 import "server-only";
 
-import type { Deed, LifeChange, WorldEffect } from "@echo/planet";
+import type { Deed, LifeChange, Pack, WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 
@@ -42,6 +42,9 @@ export interface VillageStore {
   /** One stranger's deeds in one cell (C45). Null: unreadable. */
   deedsFor(subject: string, cell: string): Promise<Deed[] | null>;
   addDeed(subject: string, cell: string, deed: Omit<Deed, "id">): Promise<Deed | null>;
+  /** What a stranger carries (C47). Null: unreadable. An empty pack for someone who has never carried anything. */
+  packOf(subject: string): Promise<Pack | null>;
+  setPack(subject: string, pack: Pack): Promise<boolean>;
 }
 
 interface EffectRow {
@@ -65,6 +68,7 @@ interface DeedRow {
   hour: number;
   witnesses: string[];
   owners: string[];
+  item?: string | null;
 }
 const deedFromRow = (r: DeedRow): Deed => ({
   id: `d${r.id}`,
@@ -78,6 +82,7 @@ const deedFromRow = (r: DeedRow): Deed => ({
   hour: r.hour,
   witnesses: r.witnesses ?? [],
   owners: r.owners ?? [],
+  ...(r.item ? { item: r.item } : {}),
 });
 
 /** Ids are compared as strings in `byMade`, so they are padded to sort the way they were made. */
@@ -193,7 +198,7 @@ function supabaseStore(): VillageStore | null {
     async deedsFor(subject, cell) {
       const { data, error } = await admin
         .from("village_deeds")
-        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners")
+        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners, item")
         .eq("subject", subject)
         .eq("cell", cell)
         .order("id", { ascending: true })
@@ -217,11 +222,22 @@ function supabaseStore(): VillageStore | null {
           hour: d.hour,
           witnesses: d.witnesses,
           owners: d.owners,
+          item: d.item ?? null,
         })
-        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners")
+        .select("id, verb, kind, thing, thing_name, reading, weight, day, hour, witnesses, owners, item")
         .single();
       if (error) return warn("addDeed", error.message), null;
       return deedFromRow(data as DeedRow);
+    },
+    async packOf(subject) {
+      const { data, error } = await admin.from("player_items").select("pack").eq("subject", subject).maybeSingle();
+      if (error) return warn("packOf", error.message), null;
+      return (data?.pack as Pack | undefined) ?? {};
+    },
+    async setPack(subject, pack) {
+      const { error } = await admin.from("player_items").upsert({ subject, pack, updated_at: new Date().toISOString() }, { onConflict: "subject" });
+      if (error) return warn("setPack", error.message), false;
+      return true;
     },
   };
 }
@@ -236,6 +252,7 @@ interface MemoryState {
   memories: Map<string, VillagerMemory>;
   effects?: Map<string, WorldEffect[]>;
   deeds?: Map<string, Deed[]>;
+  packs?: Map<string, Pack>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -282,6 +299,14 @@ function memoryStore(): VillageStore {
       memory.deeds.set(`${subject}|${cell}`, [...(memory.deeds.get(`${subject}|${cell}`) ?? []), deed]);
       return deed;
     },
+    async packOf(subject) {
+      return { ...(memory.packs?.get(subject) ?? {}) };
+    },
+    async setPack(subject, pack) {
+      memory.packs ??= new Map();
+      memory.packs.set(subject, { ...pack });
+      return true;
+    },
   };
 }
 
@@ -305,5 +330,6 @@ export function resetMemoryStore(): void {
   memory.memories.clear();
   memory.effects?.clear();
   memory.deeds?.clear();
+  memory.packs?.clear();
   memory.next = 1;
 }
