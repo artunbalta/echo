@@ -66,6 +66,7 @@ import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
+import SoundToggle from "@/components/world/SoundToggle";
 import VillagerTalk from "@/components/world/VillagerTalk";
 import WorldCanvas from "@/components/world/WorldCanvas";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
@@ -247,6 +248,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
           the village told. It opens the conversation above with `T`. */}
       <Interact world={() => world.current} cell={manifest.cell} consent={consent} chain={chain} coarse={coarse} />
       <Gatherings world={() => world.current} cell={manifest.cell} consent={consent} chain={chain} />
+      {/* The sound of the place (C56), and the person's say over it. */}
+      <SoundToggle world={() => world.current} />
 
       {/* The one thing a person can read without knowing a key exists. It is handed the same chain
           state the inspector gets, so the glance and the panel cannot disagree; what it may say

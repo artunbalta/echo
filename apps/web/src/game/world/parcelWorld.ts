@@ -64,6 +64,7 @@ import { terrainLayer } from "./terrainChunks";
 import { walkLayer } from "./walkLayer";
 import { interactLayer } from "./interactLayer";
 import { interiorLayer } from "./interiorLayer";
+import { soundLayer } from "./soundLayer";
 import { animalsLayer } from "./animalsLayer";
 import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
@@ -172,6 +173,9 @@ export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock =
   layers.push(interactLayer({ clock }));
   // Inside a house (C54): after the marks, whose forced doors it opens.
   layers.push(interiorLayer({ clock }));
+  // The sound of the place (C56): last, so it hears the frame every layer above has settled; only
+  // where someone is playing — a landing preview is silent.
+  layers.push(soundLayer({ clock }));
   if (slice) layers.push(sliceLayer({ chain, playerTile, onReaction: slice.onReaction, onBeat: slice.onBeat }));
   return layers;
 }

@@ -3289,3 +3289,88 @@ may use: the first real-model check spent a retry on "Nell".
   - a stray, set to have taken to the stranger, at their heel 1.27 m off after a walk.
 
 **Not done.** See ⚑45.
+
+## C56 — the sound of the place: the sea, the wind, the village, feet and tools
+
+Feature 10 of the twenty. What was promised: the sea, the wind, the village's murmur, footsteps and
+tools.
+
+**What is heard** is read off what is already true where the stranger stands. `lib/soundscape.ts`
+`mixFor` is pure and takes the hour, the metres to open water, the day's weather (`weatherAt`), who is
+near and talking, and whether the stranger is indoors. It gives each bed's level:
+
+- **the sea**, loud at the water's edge and gone by 120 m, with a storm making it roar. It breathes in
+  slow waves and comes from the side the water is on;
+- **the wind**, from the weather's wind, in gusts;
+- **the rain**, from what is falling (snow falls almost silent);
+- **the murmur**: the people out of doors near (the nearer the more), the pairs talking under the
+  chatter bubbles, louder on the evening green, quieter in rain, nearly gone at night. It fills
+  rather than clips, so thirty people are louder than a dozen;
+- **insects** on dry nights, more inland than on the coast; **birds** at first light;
+- **indoors**, the outside through the walls (about a quarter, and duller) and the fire in the room.
+
+**One at a time, from where they are:**
+
+- the stranger's **own steps**, heard when the gait draws a foot landing (`playerLayer.footfalls`,
+  the same phase `gaitFootTarget` plants on), so a run is quicker because the legs are. They sound
+  of what is underfoot: the dock's boards and a house's floor, the shallows, the beach near the sea,
+  grass, snow while it snows. A jump lands with a thud; the oars dip every third stroke;
+- **tools**, for the four nearest people at work: the smith's anvil, the carpenter's hammer, a hoe for
+  someone stooped in a field, the miner's and stonecutter's pick, the forester's axe, the weaver's
+  loom. Each person keeps their own rhythm, and the stranger's own digging, building and pushing are
+  heard too;
+- **animals** within 35 m (C55): hens, goats, dogs, gulls by the sea, crows inland;
+- **thunder** a moment after each flash (C48).
+
+These are panned left or right as the camera faces, and fall off with distance to nothing at 25 m
+(35 m for animals).
+
+**No recordings.** Everything is made in WebAudio from one looped buffer of noise and a few
+oscillators, filtered and shaped. There is nothing to download or license.
+
+**The person's say:**
+
+- nothing plays before their first key or click, as a browser requires;
+- `M`, or a small button beside the way back (top right), mutes it, kept in this browser;
+- a muted page and a hidden tab stop the audio graph entirely. A hidden tab draws no frames, so
+  nothing else would turn the sea down.
+
+The layer is in playable parcels only: a landing preview is silent (the layer-order tests pin both).
+
+**Nothing here is a measurement and nothing is a fact about the world.** It is the one layer only for
+the person playing. No deed, no change, no echo signal.
+
+**Measured.**
+
+- `soundscape.test.mts`, 16 tests. Nine are on the mix: the sea's fade, storm, wind, rain, snow, the
+  murmur's people/talk/evening/rain/night and its fill, insects and birds, walls and hearth, ground,
+  trade tools, falloff, and what earshot counts. Seven run the layer against a stand-in WebAudio:
+  - silent without WebAudio and before a gesture;
+  - the water found from the ground;
+  - walls muffling and a wooden floor;
+  - one step per foot the gait puts down (none standing, more running, a splash every third stroke,
+    a landing);
+  - a smith to the east heard on the right, to the west on the left, and silent at supper;
+  - thunder after a flash;
+  - mute kept, and the graph stopped when muted or hidden.
+- Twenty injected defects, all caught. The first run missed one: talk was counted from anywhere,
+  because the villagers layer's count was untested. The count moved into the pure `earshotOf`, and a
+  test now covers it.
+- Browser, Senstrand:
+  - silent until the first click;
+  - on the dock, the sea 0.65 underfoot on wood; 120 m inland, no sea;
+  - insects at night, birds at dawn;
+  - steps heard equal feet drawn landing: 5/5 and 6/6 walking, 9/9 running in two seconds;
+  - asked into a house: wood underfoot, the outside a quarter through, the hearth, −33 dBFS against
+    −21 at the door;
+  - `M`: −88 dBFS and stored; `M` again: back.
+- Levels on the page's own meter at noon:
+  - the dock with people on it −22 dBFS, the green −27, a calm day's wind inland −40, the coast on a
+    dry night −30;
+  - in a downpour, which came on during the check, the dock −20.5 and inland −23.
+  - The first levels were −35 and below: a 420 Hz lowpass keeps a fiftieth of the noise's power.
+- The first footsteps ran on a clock of their own at 0.62 s, about half the drawn gait's 2.9 a second.
+- The button was first drawn under "Back to the planet". It now sits beside it, clear of the meter at
+  390 px.
+
+**Not done.** See ⚑46.

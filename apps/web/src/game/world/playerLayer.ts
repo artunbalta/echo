@@ -97,6 +97,12 @@ export interface PlayerLayer extends WorldLayer {
   /** Out of the boat, onto the tile given. */
   ashore(at: { x: number; y: number }): void;
   aboard(): boolean;
+  /**
+   * How many times a foot has come down since the page opened, as the gait draws it: a foot lands
+   * each time the gait's phase passes a half turn (`gaitFootTarget`'s stance begins at 0.5 of the
+   * cycle, and the two feet are half a cycle apart). The ears hear a step on each (C56).
+   */
+  footfalls(): number;
 }
 
 /** A rower's pace on open water, metres per second: slower than a walk, and it does not run. */
@@ -361,6 +367,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
     mover() {
       return state;
     },
+    footfalls: () => Math.floor((animTime * 9) / Math.PI),
     camera() {
       return cam;
     },

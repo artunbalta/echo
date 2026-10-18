@@ -1950,3 +1950,27 @@ consecutive salts anywhere this matters has **not** been audited.
 
 **Status:** OPEN, all of it, written down rather than discovered.
 
+
+## ⚑ 46. What C56 does not do yet, and what it trusts (2026-10-18)
+
+- **Nobody has listened to it.** Every check above is a level on a meter or a count of sounds. Whether
+  the gull sounds like a gull, the anvil like an anvil, or the murmur like people rather than a
+  bandpassed hiss is a judgement for a human ear. It is the first thing to do with this feature.
+- **Only the stranger's own feet are heard.** Villagers walk silently, and their talk is a murmur,
+  not voices (voice is feature 14).
+- **A house between the stranger and a smith does not muffle the anvil.** Distance is the only
+  thing between a sound and the ear; there is no echo off walls and no reverb in a room.
+- **Any water below sea level is "the sea"**, a lake included. It is found on a ring of twelve
+  directions every 10 m, so it can be up to 10 m off.
+- **Rain indoors is the rain outside, muffled**, not rain drumming on a roof. The hearth crackles in
+  any lived house at any hour.
+- **Snow underfoot only while it is snowing.** Lying snow is not tracked, and nor are paths, fields
+  and stone underfoot: all of them are "grass".
+- **Thunder's delay is random** (0.4–2 s), not the strike's distance.
+- **Mute is this browser's**, not the account's.
+- **Not tried on a phone.** iOS's silent switch silences WebAudio. What the graph costs on a phone
+  (one-shots make a few nodes each, about ten a second) is not measured; that is feature 20's.
+- **The levels were set on one desktop browser in one village at noon.** There is no loudness
+  matching across devices or headphones.
+
+**Status:** OPEN, all of it, written down rather than discovered.
