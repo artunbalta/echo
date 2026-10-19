@@ -151,6 +151,17 @@ export default function RecognitionMeter({ posterior, log, consent }: Recognitio
         <div className="panel mt-1.5 rounded-lg px-3 py-2 text-[10px] leading-snug text-parchment/70">
           {measured ? <MeasuredDetail r={measured} /> : <PlainDetail line={line} />}
           <p className="mt-1.5 text-parchment/35">{coarse ? "the ` button opens the inspector" : "` opens the inspector"}</p>
+          {/* The mirror (C61): what this number is made of, act by act. */}
+          <p
+            data-open-mirror
+            className="mt-1 cursor-pointer text-echo/80 hover:text-echo"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.dispatchEvent(new Event("echo:mirror"));
+            }}
+          >
+            {coarse ? "tap to look in the mirror" : "Y · look in the mirror"}
+          </p>
         </div>
       )}
     </div>

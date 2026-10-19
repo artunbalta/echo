@@ -3886,3 +3886,103 @@ The voice route speaks only words that have a token:
     voice.
 
 **Not done.** See ⚑50.
+
+## C61 — the mirror: how your echo sees you, act by act, and your say over it
+
+Feature 15 of the twenty. What was promised: a screen showing how the echo sees you, with its
+evidence (which behaviour changed what), and the consent and erasure controls in one place.
+
+**A narrow exception to C7, chosen by the user.** The engine reported only the length of each act's
+move (`delta_mu`), and nothing at all for walking, which updates the posterior about every 1.5 s.
+So "which act moved which axis" could not be worked out from outside, and two snapshots apart
+always had walking mixed in. The other honest route was to read the engine before every act, and
+that costs up to three language-model calls a read (`GET /persona` scores reconstruction). So
+`services/ml/echo_ml/app.py` gained report fields, on three responses:
+
+- `/observe/behavioral`, `/telemetry` and `/observe` now say `delta` (μ after minus before, per
+  axis), `version_before` and `version`;
+- a 21-line change. The learning, the routing and what is stored are untouched;
+- `test_moved_report.py` pins that the moves are exact, add up to the posterior, and change nothing;
+- C7 otherwise stands. The engine must be redeployed for the fields to exist; until then the mirror
+  shows "not in this record" for everything new.
+
+**The record** (`echo_ledger`, migration 0027; `lib/ledger.ts`). After each forward, the routes keep
+what the engine reported:
+
+| Route | Row |
+|---|---|
+| `/api/observe/behavioral` | one per act: the label, cue, take or refuse, the context, what it was read as |
+| `/api/telemetry`, a choice | one per choice |
+| `/api/telemetry`, another signal | one per signal (lingering, pet talk, …) |
+| `/api/telemetry`, walking | one per stretch: windows fold into the last row while it is a walk, under ten minutes old, and the versions meet |
+
+The folding is atomic in the database (`echo_ledger_walk`). A mocked answer, an engine from before
+C61, and an update that moved nothing write nothing. The record is raw (90 days, `retention.ts`)
+and erased with the person.
+
+**The account adds up** (`lib/mirror.ts` `mirrorOf`, pure). The prior is zero, so where the echo
+puts you is the sum of every move it ever made.
+
+- **What is on record is itemised.** Contributors are grouped by act, taken and turned down apart,
+  and ranked per axis by size either way.
+- **The rest is one line, "not in this record"**: older than the record, before it began, or by a
+  route that records nothing.
+- **Missing updates are counted** from the version jumps.
+- **An engine that started over** (version going back) voids what came before it. Two requests
+  finishing out of order are not taken for that: the step back must be more than 20 updates, or
+  come after a quiet minute.
+- **The engine is read after the record**, so no row describes a move it had not made yet.
+
+**The screen** (`Mirror.tsx`; `Y`, or "look in the mirror" on the recognition meter; Esc closes):
+
+- **Where it puts you.** Eight lines between their two words, with a band as wide as its
+  uncertainty. A word appears only where the engine would say one ("strongly calm"), otherwise "in
+  between" or "not sure yet".
+- **Why.** Pick a line: what moved it most, either way, then "not in this record", then the
+  features it reads that line from.
+- **When others can see you.** The engine's public-minus-private difference, said only when it is
+  at least 0.1.
+- **What it saw lately.** Each act with what it moved and what it was read as. Sizes are words
+  (barely, a little, noticeably, a lot); the numbers are in the hover titles.
+- **Your say:**
+  - stop watching, or let it watch again. Before C61 a "no" could not be undone on a parcel: the
+    card only asks once;
+  - stop using ElevenLabs (C60);
+  - erase everything, with the same cascade as `/account`, sent with the signed identity (the
+    account page sends none), and every local key cleared.
+
+The engine is read when the mirror opens, not polled: rate bucket `mirror`, 30 reads in ten minutes.
+
+**Found on the way.**
+
+- **Walking pushes everyone the same way.** On a fresh echo, one window, whatever it holds:
+  - pace +0.14 to +0.29, towards fast;
+  - intellect −0.06 to −0.15, towards playful.
+
+  Openness itself responds correctly (−0.33 for no new ground, +0.26 for new winding ground). The
+  mirror showed it first ("Walking about → playful, a lot"). Not fixed: it is the engine's (⚑51).
+- **A "no" to watching could not be taken back on a parcel.** It now can, from the mirror.
+- **`GET /persona` asks the language model** to score reconstruction, and `/play`'s `useEcho` polls it
+  every 3 s. That is a cost to look at; the mirror never polls.
+
+**Measured.**
+
+- `mirror.test.mts`, 8 tests:
+  - the account adds up, with gaps counted;
+  - restarts, against requests out of order;
+  - restart after the record, and rows after the read;
+  - words only where sure, sizes, and 'watched';
+  - the record: only what the engine reported, and folding;
+  - the routes against a small running engine: acts, walks and a choice recorded, and the mirror
+    adding up to the engine's read with one unrecorded update counted exactly;
+  - the caller's own; the record alone without the engine; mocks never recorded;
+  - retention and erasure.
+- `test_moved_report.py`, 4 tests. The ML suite is 204 of 204.
+- 28 injected defects, three of them in the engine, all caught. The first pass missed one, two walks
+  in one batch with a gap between, now pinned.
+- The real engine, run locally with no keys and nothing persisted, behind the dev server, Senstrand:
+  - consented, walked, looked closely three times, sat once;
+  - the mirror: 9 rows, 0 missing updates, "not in this record" 0.00 on every axis;
+  - stop watching, then watch again, from the mirror: the consent key and the meter followed.
+
+**Not done.** See ⚑51.

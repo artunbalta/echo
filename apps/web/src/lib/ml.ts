@@ -150,7 +150,7 @@ export function observeEvent(body: {
   context?: Record<string, unknown>;
   action?: string;
   telemetry?: Record<string, unknown>;
-}): Promise<{ ok: boolean; mocked?: boolean }> {
+}): Promise<{ ok: boolean; mocked?: boolean } & Moved> {
   return call(
     "/observe",
     { method: "POST", body: JSON.stringify({ context: {}, action: "", telemetry: {}, ...body }) },
@@ -163,7 +163,7 @@ export function telemetryEvent(body: {
   userId: string;
   sessionId?: string;
   event: { type: string; payload?: Record<string, unknown> };
-}): Promise<{ ok: boolean; mocked?: boolean }> {
+}): Promise<{ ok: boolean; mocked?: boolean } & Moved> {
   return call("/telemetry", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
 }
 
@@ -192,7 +192,7 @@ export function selectSituation(body: {
   );
 }
 
-export interface BehavioralObserveResult {
+export interface BehavioralObserveResult extends Moved {
   ok?: boolean;
   mocked?: boolean;
   /** When mocked, WHY: "ml_service_url_unset" (env missing in this runtime) | "ml_forward_failed"
@@ -204,6 +204,18 @@ export interface BehavioralObserveResult {
   persona?: { mu: number[]; Sigma?: number[][]; version?: number };
   delta_mu?: number;
   cond_persona?: { mu: number[] };
+  /** What the engine read the act as: the telemetry features it used. */
+  telemetry_used?: Record<string, unknown>;
+}
+
+/**
+ * An update's own move, which the engine reports since the mirror (DECISIONS C61): μ after minus
+ * before on each axis, and the versions it moved between. Absent from an engine older than that.
+ */
+export interface Moved {
+  delta?: number[];
+  version_before?: number;
+  version?: number;
 }
 
 /**

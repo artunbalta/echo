@@ -2074,3 +2074,26 @@ consecutive salts anywhere this matters has **not** been audited.
   card is changed to ask.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 51. What C61 does not do yet, and what it trusts (2026-10-19)
+
+- **The engine must be redeployed** with C61's report fields. Until then, nothing new is recorded and
+  everything shows as "not in this record". Migration 0027 must be applied too; until then, rows
+  live in each server's memory.
+- **Walking biases every echo towards fast and playful.** Every window does it, whatever it holds:
+  pace +0.14 to +0.29, intellect −0.06 to −0.15 on a fresh echo. Measured, not explained. A guess:
+  the empty action text's embedding, centred by the measurement model, loads on those axes. An
+  engine change, so the user's decision (C7).
+- **No forgetting one act.** The posterior is a running filter, and an update cannot be taken out
+  of it. Only "erase everything" exists.
+- **The mirror reads the latest 1000 rows.** Older moves are counted, not itemised.
+- **`/play` (WorldClient) and the island flows write no record.** What they move shows as "not in
+  this record".
+- **Folding walks in memory is per server instance.** Several instances each start their own walk
+  rows. The table's function is atomic.
+- **The conditional posteriors are not shown**, only the pooled one and 'when others can see you'.
+- **The words are the engine's poles** (`AXIS_POLES`). On some axes they are not what the measure
+  reads: pace is "unhurried / fast" while its anchor is saving for later.
+- **Not tried on a phone.** There the mirror opens from the meter, not from `Y`.
+
+**Status:** OPEN, all of it, written down rather than discovered.
