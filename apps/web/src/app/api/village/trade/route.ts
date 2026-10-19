@@ -37,6 +37,7 @@ import {
   witnessesOf,
   type Deed,
 } from "@echo/planet";
+import { isAiling } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
   } else {
     const home = residentsOn(s, village.plan, day).find((r) => r.person.id === me.id)?.plot;
     const d = dayPlans(s, village.plan, day, changes).plans.find((x) => x.person === me.id);
-    if (!home || homeState(d, hour, doorOf(home)) !== "awake") return bad("not_out", 409);
+    if (!home || homeState(d, hour, doorOf(home), isAiling(me, day)) !== "awake") return bad("not_out", 409);
     const c = Math.cos(home.facing);
     const sn = Math.sin(home.facing);
     const along = (pos.x - home.x) * c + (pos.y - home.y) * sn;

@@ -297,7 +297,7 @@ export function chatter(s: Settlement, speaker: Person, listener: Person, day: n
       }
     }
     for (const c of comingOn(s, ctx.plan, day, ctx.changes ?? [])) {
-      if (c.day === day && c.kind !== "expecting") continue; // today's gatherings are above
+      if (c.day === day && c.kind !== "expecting" && c.kind !== "ailing" && c.kind !== "omen") continue; // today's gatherings are above
       if (c.about.includes(speaker.id)) continue;
       options.push(`${c.words}.`);
     }

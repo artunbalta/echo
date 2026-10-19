@@ -103,8 +103,9 @@ export default function Gatherings({ world, cell, consent, chain }: { world: () 
         items.push({ key: g.id, text, when });
       }
       for (const c of coming) {
-        if (c.day === day && c.kind !== "expecting") continue;
-        const when = c.kind === "expecting" ? "any day" : realWhen(day, hour, c.day, GATHERINGS[c.kind][0]);
+        if (c.day === day && c.kind !== "expecting" && c.kind !== "ailing" && c.kind !== "omen") continue;
+        // What is feared (C66) is talked of now; what is planned, for when it will be.
+        const when = c.kind === "expecting" ? "any day" : c.kind === "ailing" ? "now" : c.kind === "omen" ? (c.day === day ? "today" : "tomorrow") : realWhen(day, hour, c.day, GATHERINGS[c.kind][0]);
         items.push({ key: `${c.kind}:${c.about.join("+")}`, text: c.words, when });
       }
       const shown = items.slice(0, 4);

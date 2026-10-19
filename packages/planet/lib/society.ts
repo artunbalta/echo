@@ -16,8 +16,16 @@
  * demographic layer is READ-ONLY to players, because the moment one life can be saved or ended, that
  * person leaves the closed form and so does every descendant.
  *
+ * C66 OPENS ONE LOCK, AND KEEPS THE CLOSED FORM. A death after `MORTALITY.fromDay` (2026-10-20) is
+ * no longer the lifespan drawn at birth: it is decided by a yearly risk (`mortality.ts`), from the
+ * person's own stream, and a stranger can meet it — fetch the healer, keep a fisher ashore — as a
+ * change on its own day. It is still arithmetic at any instant, still the same for every visitor, and
+ * nothing before the change's day moves (L2): a death drawn for that day or earlier stands as drawn.
+ * A saved life, like any change, moves only that person's future and what follows from it.
+ *
  * WHAT IS MUTABLE AND WHAT IS NOT, restated here because this file is where it is enforced:
- *   IMMUTABLE, and computed here — birth, lifespan, death, parentage, pairing, household.
+ *   IMMUTABLE, and computed here — birth, parentage, pairing, household, and every death on or before
+ *     `MORTALITY.fromDay`. A later death is computed here too, and changes only through a change (C66).
  *   MUTABLE, and NOT in this file — relationships with players, regard, reputation, wealth,
  *     employment changes, where someone is standing this afternoon. Those are the sparse delta
  *     (SOC-6.C) and they never come back here.
@@ -62,6 +70,7 @@
  */
 
 import { arrivalsOf, pairsOf, resolveChanges, type Arrival, type LifeChange, type PortablePerson, type Resolved } from "./changes.js";
+import { fateOf, type Cause } from "./mortality.js";
 import type { hashString } from "./terrain.js";
 import { DAYS_PER_YEAR, daysToYears, yearsToDays } from "./worldclock.js";
 
@@ -240,6 +249,15 @@ export interface Person {
   lifespanDays: number;
   /** `birthDay + lifespanDays`. Stored so no caller has to remember which way the arithmetic goes. */
   deathDay: number;
+  /**
+   * Why they die, for a death decided by the risk model (C66, `mortality.ts`); null or absent for one
+   * drawn at birth on or before `MORTALITY.fromDay`, which is history.
+   */
+  deathCause?: Cause | null;
+  /** For a death of illness: the first day they lie ill (C66). */
+  ailingFrom?: number | null;
+  /** For a fisher lost at sea: the day they go out and do not come back (C66). */
+  seaDay?: number | null;
   /** `[mother, father]` as indices, or null for a founder or an incomer. */
   parents: readonly [number, number] | null;
   children: number[];
@@ -642,8 +660,23 @@ function addPerson(ctx: Ctx, spec: NewPerson): Person | null {
   person.pairAgeDays = Math.round(yearsToDays(PAIRING.minAgeYears + r() * PAIRING.ageSpanYears));
   person.occupation = occupationFor(ctx, r, spec.parents, spec.birthDay);
   applyChanges(ctx, person);
+  settleFate(ctx, person);
   ctx.people.push(person);
   return person;
+}
+
+/**
+ * A death not yet lived is the risk model's (C66): `deathDay` as drawn stands if it falls on or before
+ * `MORTALITY.fromDay`; otherwise it is decided year by year, with whatever strangers have done for
+ * them here. Called wherever a death is set, after it is.
+ */
+function settleFate(ctx: Ctx, p: Person): void {
+  const f = fateOf(p.seedKey, p.birthDay, (day) => occupationOn(p, day), p.deathDay, ctx.changes.get(p.id)?.fate ?? []);
+  p.deathDay = f.deathDay;
+  p.lifespanDays = f.deathDay - p.birthDay;
+  p.deathCause = f.cause;
+  p.ailingFrom = f.ailingFrom;
+  p.seaDay = f.seaDay;
 }
 
 function applyChanges(ctx: Ctx, person: Person): void {
@@ -695,6 +728,8 @@ function addArrival(ctx: Ctx, spec: PortablePerson, day: number, fromCell: strin
     trades: [],
   };
   applyChanges(ctx, person);
+  // Their death is their own, the same in any village: the risk model keyed on who they are (C66).
+  settleFate(ctx, person);
   ctx.people.push(person);
   return person;
 }
@@ -1004,6 +1039,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
         const rest = Math.round(yearsToDays(2 + r() * 45));
         partner.lifespanDays = Math.min(arrived + rest, Math.round(yearsToDays(VITALS.maxYears)));
         partner.deathDay = partner.birthDay + partner.lifespanDays;
+        settleFate(ctx, partner);
       }
     }
 
@@ -1162,6 +1198,7 @@ export function settlementAt(
         const settled = foundedDay - p.birthDay;
         p.lifespanDays = Math.min(settled + Math.round(yearsToDays(1 + rf() * 40)), Math.round(yearsToDays(VITALS.maxYears)));
         p.deathDay = p.birthDay + p.lifespanDays;
+        settleFate(ctx, p);
       }
     }
     founded.push({ a, b, household, family });

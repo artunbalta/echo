@@ -478,8 +478,11 @@ export function villagerContext(
     else today.push(`This afternoon is ${gatheringName(s, g)}; you are not going`);
   }
   for (const c of comingOn(s, plan, day, changes)) {
-    if (c.day === day && c.kind !== "expecting") continue;
-    if (c.kind === "expecting" && c.about.includes(me.id)) today.push("You are expecting a child, any day now");
+    if (c.day === day && c.kind !== "expecting" && c.kind !== "ailing" && c.kind !== "omen") continue;
+    // A death on its way (C66), as the one it is coming to knows it.
+    if (c.kind === "ailing" && c.about.includes(me.id)) today.push("You are ill and keep to your bed, and you fear it is serious");
+    else if (c.kind === "omen" && c.about.includes(me.id)) today.push(`You mean to go out in the boat ${c.day === day ? "today" : "tomorrow"}, though the sky does not look right; the catch will not wait`);
+    else if (c.kind === "expecting" && c.about.includes(me.id)) today.push("You are expecting a child, any day now");
     else if (c.kind === "wedding" && c.about.includes(me.id)) {
       const other = c.about.find((id) => id !== me.id)!;
       today.push(`You are to marry ${people.get(other)?.given ?? "them"} ${c.day - day === 1 ? "tomorrow" : `in ${c.day - day} days`}`);
@@ -899,6 +902,11 @@ export function changeWords(c: LifeChange, s: Settlement, day: number, placeName
       const text = spec.text.replace("{name}", target?.given ?? "someone").replace("{trade}", c.occupation ?? "trade").replace(/\bmy\b/g, their).replace(/\bme\b/g, p?.sex === "f" ? "her" : "him");
       return `${name}'s ${text.replace(/^(a |to )/, "")} is nearer for your help.`.replace("'s own", "'s");
     }
+    // A death met on its way (C66): what was done, never what will come of it.
+    case "tend":
+      return c.by === "herbs" ? `You left herbs for ${name}.` : `You fetched the healer to ${name}.`;
+    case "ashore":
+      return `${name} stays ashore ${c.day === day ? "today" : "tomorrow"}, at your asking.`;
   }
 }
 

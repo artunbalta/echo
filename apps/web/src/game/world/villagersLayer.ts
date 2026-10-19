@@ -30,6 +30,7 @@ import {
   weatherAt,
   dayPlans,
   comingOn,
+  isAiling,
   gatheringsOn,
   doorOf,
   homeState,
@@ -423,7 +424,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           const p = people.get(id);
           if (!p || p.deathDay <= day || p.birthDay > day) continue;
           const d = state.plans.find((x) => x.person === id);
-          const home = id === hostIn ? "awake" : homeState(d, hour, door);
+          // The ill lie in bed all day (C66).
+          const home = id === hostIn ? "awake" : homeState(d, hour, door, isAiling(p, day));
           if (home === "out" || home === "away") continue;
           const spot = indoors.forced ? indoors.room.wall.get(id) : home === "asleep" ? indoors.room.beds.get(id) : indoors.room.seats.get(id);
           if (!spot) continue;

@@ -4254,3 +4254,97 @@ no `DATABASE_URL` to apply them with, and only the user has one.
 Until the migrations are applied, a local server against that Supabase also keeps no villager
 memory, deed, pack or house (their tables are missing). `VILLAGE_STORE=memory` keeps them in the
 server's memory instead.
+
+## C66 — death is a risk, not a lifespan drawn at birth, and a stranger can meet it
+
+Feature 18 of the twenty. What was promised: a lifespan is not drawn at birth; it becomes a risk that
+depends on circumstances. Taking someone to the healer, or keeping them from going to sea, can
+lengthen a life. This opens C26's last lock.
+
+**How far it reaches, decided by the user: from today on** (`MORTALITY.fromDay` = world day 5160,
+2026-10-20 00:00 UTC). L2 says the past does not move, so:
+
+- every death drawn at birth for that day or earlier stands as drawn: the dead, the graves, the
+  families;
+- everyone alive on it is who they were;
+- every death not yet lived is decided once, by the new model.
+
+Measured across 40 real villages against the model before it:
+
+- 1,420 deaths on or before the switch unchanged, none moved or missing;
+- everyone alive on the switch day the same people;
+- all 223 deaths after it redrawn.
+
+`fromDay` is to be moved to the day this ships, never back.
+
+**The model** (`packages/planet/lib/mortality.ts`, pure). Each year of a life, a yearly risk is
+weighed against a number of the person's own:
+
+- **Age**: a child's years, then Gompertz–Makeham.
+- **The sea** for a fisher, **the mine** for a miner, while working (14–70).
+- **Calibrated over 40,000 lives** to live as long as the drawn model did: one child in ten before
+  six; adults' mean 67.0 years (it was 67), p10 53, p90 79; nobody past 96. About one fisher in nine
+  is lost at sea.
+- **Five numbers a year, always, in a fixed order**, from the person's own stream. Whether a year was
+  survived or turned, the years after it are weighed the same.
+
+**A death is never sudden, and can be met.**
+
+- **Illness.** A week or two in bed first (`ailingFrom`). The ill keep to their beds, at home (no day
+  plan; `homeState` says asleep), and the village says so: "Saa is ill, and keeps to bed".
+  - **Fetch the healer**, at the door of the house, if the village has a healer who is not the one
+    lying ill.
+  - **Leave herbs**, if you carry them.
+
+  Either may turn it: with a healer 0.75 under 30, 0.6 under 60, 0.35 under 80, 0.15 after. Herbs do
+  half as well.
+- **The sea.** A fisher is lost on a day they go out under a wrong sky. Their boat goes out, storm or
+  none, and does not turn for home. With no boat in the water, they fish off the rocks. The village
+  says so that day, and the evening before.
+  - **Ask them to stay ashore**, that evening or that dawn before the boat goes. It saves them that
+    year.
+
+Both write a life change (`tend`, with `by`, or `ashore`; migration 0030) on its own day, which the
+generator reads when it creates the person: a saved life's spouse never "remarried". Each is also a
+kindness the village sees (a deed), and measured as costly help (`help_at_cost`). The verbs appear
+only when there is a death to meet (`fates.ts` `fateTurn`); the act route asks the same, and refuses
+otherwise (409 `nothing_to_turn`). Whether it was enough, the stranger learns as the village does: when
+the day passes.
+
+**Found on the way.**
+
+- **Not every fisher has a boat** (Paakrost: "I'm still dreaming of that one"), and a boat can be
+  drawn up ashore. A boatless fisher is lost off the rocks, and the news says so.
+- **"Kept ashore" now wins over "lost"** in the day's boats, even before the village is rebuilt with
+  the change.
+- **The village's news skipped every same-day item** as a gathering. The ill and the wrong sky are
+  now kept, in the news on screen, in what villagers know, and in their gossip.
+
+**Measured.**
+
+- `mortality.test.ts` (planet), 7 tests:
+  - the calibration, and no farmer lost at sea;
+  - the past stands, and later deaths are the model's, deterministic;
+  - ashore saves only on the day;
+  - tending turns only inside the illness, often with a healer, less with herbs, less with age; a
+    saved life runs the same however it was tended;
+  - in a village: deaths after the switch are the model's, the ill have no day out, they are in
+    bed, and the news says so;
+  - a fisher's last day: the boat stays out, the word comes the evening before, kept ashore the boat
+    stays in and they live on, and no other death before that day moved;
+  - when each verb is offered.
+- `fates.test.mts` (web), 2 tests, through the real act route in Senstrand after the switch:
+  - herbs at an ill neighbour's door: the change written, the herbs gone, the death exactly what the
+    model says, the healer only where there is one, nothing at a well house's door, and the village's
+    words;
+  - kept ashore the evening before, refused once the boat had gone and for a fisher with no wrong
+    sky.
+- The L2 prefix test stays green.
+- 20 injected defects, all caught, among them "the draws shift with the years".
+- Browser, the page's clock moved to 2026-10-21:
+  - "IN THE VILLAGE: Saa is ill, and keeps to bed · now";
+  - at her family's door, no healer offered (Senstrand has none), and no herbs (none carried).
+- In Senstrand over the next ten years: 58 illnesses, the first Saa's on world day 5293. Paakrost is
+  lost at sea on day 5979, unless someone keeps him ashore.
+
+**Not done.** See ⚑55.

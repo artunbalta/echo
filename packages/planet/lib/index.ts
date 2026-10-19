@@ -70,3 +70,6 @@ export * from "./trade.js";
 export * from "./homes.js";
 // What the director sets out for a stranger, and where (C63).
 export * from "./director.js";
+// How people die from now on, and what a stranger can do about it (C66).
+export * from "./mortality.js";
+export * from "./fates.js";

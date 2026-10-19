@@ -24,6 +24,7 @@
  * Pure. No clock, no I/O, and only type imports, so `society.ts` can read it without a cycle.
  */
 
+import type { Intervention } from "./mortality.js";
 import type { Occupation } from "./society.js";
 
 /** A move or a marriage between villages, as one village's generator reads it (C53). */
@@ -68,7 +69,8 @@ export function pairsOf(changes: readonly LifeChange[]): { a: string; b: string;
  * `arrive`, `court`, `pair` (C53): someone came here from another village (or came home); someone
  * here has said they would marry someone a stranger told them of; and a marriage that came of it.
  */
-export type ChangeKind = "leave" | "stay" | "trade" | "goal" | "drop" | "met" | "arrive" | "court" | "pair";
+/** `tend` and `ashore` (C66): a stranger met a death coming — fetched the healer, or kept a fisher ashore. */
+export type ChangeKind = "leave" | "stay" | "trade" | "goal" | "drop" | "met" | "arrive" | "court" | "pair" | "tend" | "ashore";
 
 /**
  * A person as another village needs them (C53): everything the generator would have drawn for them
@@ -136,6 +138,8 @@ export interface LifeChange {
   fromCell?: string;
   /** `arrive`: who came. */
   spec?: PortablePerson;
+  /** `tend` (C66): who tended them, the healer or herbs. */
+  by?: "healer" | "herbs";
 }
 
 /** The demographic half of a person's changes: everything `settlementAt` has to know. */
@@ -146,6 +150,8 @@ export interface Resolved {
   toCell: string | null;
   /** Trades taken up, oldest first. */
   trades: { day: number; occupation: Occupation }[];
+  /** What a stranger did for them as a death came (C66): `mortality.ts` weighs it. */
+  fate: Intervention[];
 }
 
 /** Changes in the order they were made: day, then id. The one order every reader agrees on. */
@@ -165,7 +171,7 @@ export function resolveChanges(changes: readonly LifeChange[]): Map<string, Reso
   const of = (person: string): Resolved => {
     let r = out.get(person);
     if (r === undefined) {
-      r = { leftDay: Infinity, toCell: null, trades: [] };
+      r = { leftDay: Infinity, toCell: null, trades: [], fate: [] };
       out.set(person, r);
     }
     return r;
@@ -183,6 +189,8 @@ export function resolveChanges(changes: readonly LifeChange[]): Map<string, Reso
         r.leftDay = Infinity;
         r.toCell = null;
       }
+    } else if (c.kind === "tend" || c.kind === "ashore") {
+      of(c.person).fate.push({ kind: c.kind, day: c.day, ...(c.by ? { by: c.by } : {}) });
     } else if (c.kind === "trade" && c.occupation !== undefined) {
       const r = of(c.person);
       if (r.leftDay <= c.madeDay) continue;
