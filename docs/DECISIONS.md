@@ -4237,3 +4237,20 @@ line says where it went.
   - "Done" took it away, and it was not told again.
 
 **Not done.** See ⚑54.
+
+## C65 — under `next dev`, a missing limiter no longer leaves the villagers deaf
+
+The user, talking to Hul in their own local server, got "Hul cannot hear you just now". The talk
+route refuses a paid reply it cannot count (C42, ⚑37), and locally nothing can be counted.
+Migration 0018's `rate_limit_hit` is not in their Supabase; in fact none of 0018–0029 is. There is
+no `DATABASE_URL` to apply them with, and only the user has one.
+
+- **On any deployment** (`NODE_ENV=production`, or any `VERCEL_ENV`) it still refuses: a public
+  deployment never sends unlimited paid replies.
+- **Under `next dev`**, on the developer's own machine and key, it goes ahead.
+
+`villagerTalk.test.mts` pins both halves.
+
+Until the migrations are applied, a local server against that Supabase also keeps no villager
+memory, deed, pack or house (their tables are missing). `VILLAGE_STORE=memory` keeps them in the
+server's memory instead.

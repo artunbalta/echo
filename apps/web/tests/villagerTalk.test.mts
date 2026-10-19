@@ -281,6 +281,20 @@ test("with the counter down the line fails closed, and nothing is spent", async 
   const res = await talk({ cell: CELL, person: villager, message: "Hello", conv });
   assert.equal(res.status, 503);
   assert.deepEqual(spend(), []);
+  // Under `next dev`, on the developer's own machine, a missing limiter does not leave them deaf (C65).
+  const env = { vercel: process.env.VERCEL_ENV, node: process.env.NODE_ENV };
+  delete process.env.VERCEL_ENV;
+  (process.env as Record<string, string>).NODE_ENV = "development";
+  try {
+    const dev = await talk({ cell: CELL, person: villager, message: "Hello", conv });
+    assert.equal(dev.status, 200, await dev.clone().text());
+    assert.equal(spend().length, 1);
+  } finally {
+    process.env.VERCEL_ENV = env.vercel;
+    if (env.node === undefined) delete (process.env as Record<string, string | undefined>).NODE_ENV;
+    else (process.env as Record<string, string>).NODE_ENV = env.node;
+    counter = 1;
+  }
 });
 
 test("a real caller is answered, and the request is the one C42 and C44 describe", async () => {
