@@ -131,7 +131,11 @@ export async function POST(req: Request) {
     return answer({ reply: mockReply(s, me, day, turn, needOf(s, village.plan, me, day, changes, effects)?.text ?? null), source: "mock" });
   }
 
-  const rate = await rateLimit(req, { bucket: "villager", windowMs: 10 * 60 * 1000, max: 40, onUnavailable: "deny" });
+  // A paid reply is refused when it cannot be counted (C42) — on any deployment. Under `next dev`, on
+  // the developer's own machine and key, it goes ahead: there a missing limiter (migration 0018 not
+  // yet applied) left the villagers deaf for no one's protection (C65).
+  const deployed = process.env.NODE_ENV === "production" || !!process.env.VERCEL_ENV;
+  const rate = await rateLimit(req, { bucket: "villager", windowMs: 10 * 60 * 1000, max: 40, onUnavailable: deployed ? "deny" : "allow" });
   if (!rate.ok) {
     const { body: error, status } = rateLimitRejection(rate);
     return NextResponse.json(error, { status });
