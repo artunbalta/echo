@@ -66,6 +66,9 @@ const USER_KEYED: [string, string][] = [
   ["echo_ledger", "subject"],
   // C63. What the director set out for them, and what they did.
   ["player_stagings", "subject"],
+  // C64. When they were last here, and what their echo did while they were away.
+  ["player_presence", "subject"],
+  ["echo_outings", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point

@@ -66,6 +66,7 @@ import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
+import EchoAway from "@/components/world/EchoAway";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
 import SoundToggle from "@/components/world/SoundToggle";
@@ -383,6 +384,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
       <Director world={() => world.current} cell={here} consent={consent} chain={chain} />
+      {/* What your echo did while you were away, and where it waits (C64). */}
+      <EchoAway world={() => world.current} cell={here} consent={consent} />
       {/* The sound of the place (C56), and the person's say over it. */}
       <SoundToggle world={() => world.current} />
 

@@ -41,6 +41,9 @@ export const RAW_TABLES: readonly { table: string; column: string }[] = [
   { table: "echo_ledger", column: "at" },
   // What the director set out for someone, and how they answered it (0028, C63).
   { table: "player_stagings", column: "created_at" },
+  // When someone was last here, and what their echo did while they were away (0029, C64).
+  { table: "player_presence", column: "last_seen_at" },
+  { table: "echo_outings", column: "made_at" },
   // The older telemetry envelope, same shape, different route (0001).
   { table: "telemetry_events", column: "ts" },
   // Who approached whom, and when (0001).

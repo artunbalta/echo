@@ -2127,3 +2127,27 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Twenty minutes and two hours are choices**, not measurements.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 54. What C64 does not do yet, and what it trusts (2026-10-19)
+
+- **Nobody else sees your echo.** Its body waits only for you. Another player in that village does
+  not meet it: there is no presence between players in the new world.
+- **It only talks.** It does not act, gather, trade, build or help, and nothing it does is
+  measured, by design. An echo that did things would need its own say in the world, not yours.
+- **Its words come from little of you.** In the new world the engine keeps action labels, not
+  speech, so the small model has traits and acts to go on and no words of yours. It speaks like a
+  polite newcomer more than like you.
+- **Fresh buckets are at "copilot", so a new echo holds back every line** until you have answered
+  enough of them. That is the old copilot's rule. Nine or so agreeing answers earn a bucket.
+- **The villagers take it for you.** Their notes and meeting counts change, and "Forget me" erases
+  them as for any meeting. They are never told it was an echo.
+- **Measured from the page, not proved.** A page left open in a background tab is "here". A closed
+  laptop is "away" from its last heartbeat (at most two minutes off).
+- **One outing at a time, made when you come back**, which takes up to about 45 s while you play.
+  Two tabs opening together could each fill the same absence: same id, so one is kept, but the
+  model calls may be made twice.
+- **Cost** is bounded but real: up to six small-model turns of four drafts each, and up to six
+  villager replies, at most once every three hours per person.
+- **Not tried on a phone.**
+
+**Status:** OPEN, all of it, written down rather than discovered.
