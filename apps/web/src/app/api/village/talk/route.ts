@@ -31,7 +31,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
-import { ageYears, checkChange, deedWords, doorOf, homeChanges, knownDeeds, knownLandings, landingWords, metOn, moveChanges, needOf, portable, present, residentsOn, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
+import { ageYears, checkChange, doorOf, homeChanges, metOn, moveChanges, needOf, portable, present, residentsOn, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
@@ -55,6 +55,7 @@ import {
 } from "@/lib/villager";
 import { destinationFor, singlesMet, villageNamed, writeMove } from "@/lib/moves";
 import { loadVillage, signLine, verifyConversation } from "@/lib/villageTalk";
+import { strangerNotes } from "@/lib/strangerNotes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -233,31 +234,8 @@ export async function POST(req: Request) {
     ...history.map((t): Anthropic.Beta.BetaMessageParam => ({ role: t.role === "stranger" ? "user" : "assistant", content: t.text })),
     { role: "user", content: message },
   ];
-  // What this villager knows of what the stranger has DONE here (C45): seen, found, or heard from family.
-  const deeds = store ? ((await store.deedsFor(caller.subject, cell)) ?? []) : [];
-  const seen = knownDeeds(s, me, deeds, day, village.plan).slice(-8);
-  const doings = seen.length
-    ? `What you know of this stranger's doings in ${s.name}:\n- ${seen.map((k) => deedWords(s, me, k, day)).join("\n- ")}\nLet it colour how you speak to them, as it would anyone's.`
-    : "";
-  // How they came (C57): in out of the sea on a raft, seen or heard of, and from which direction.
-  const landings = store ? ((await store.landingsIn(caller.subject, cell)) ?? []) : [];
-  const ashore = knownLandings(me, landings, day).slice(-3);
-  for (const k of ashore) if (k.landing.fromName) names.add(k.landing.fromName);
-  const came = ashore.length ? `How this stranger came to ${s.name}, as far as you know:\n- ${ashore.map((k) => landingWords(s, k, day)).join("\n- ")}` : "";
-  // A stranger's own house on this land (C59): how far it has got, where, and whether it is this one's.
-  const house = store ? ((await store.homeIn(cell)) ?? null) : null;
-  let homeLine = "";
-  if (house) {
-    const mine = (await store!.homeOf(caller.subject))?.cell === cell;
-    const what = ["has marked out a house", "has laid the foundation stones of a house", "has the walls of a house up", "has the roof on a house", "has built a house"][Math.max(0, Math.min(4, house.stage))];
-    const dx = house.x - village.plan.centre.x;
-    const dy = house.y - village.plan.centre.y;
-    const dir = ["east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"][((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8];
-    const where = `${Math.round(Math.hypot(dx, dy) / 10) * 10} metres ${dir} of the green`;
-    homeLine = mine
-      ? `This stranger ${what} of their own on this land, ${where}: the land is theirs, by the registry's say.`
-      : `A stranger ${what} of their own on this land, ${where} — not the one in front of you.`;
-  }
+  // What they know of the stranger's doings, landings and house (shared with the echo's outings, C64).
+  const { deeds, doings, came, homeLine } = await strangerNotes(store, caller.subject, cell, village, me, day, names);
   // What they would ask for this week (C50), which a stranger may already have met.
   const effects = store ? ((await store.effectsFor(cell, day)) ?? []) : [];
   const wanting = needLine(s, village.plan, me, day, changes, effects, deeds);

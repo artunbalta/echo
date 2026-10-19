@@ -16,6 +16,7 @@ import "server-only";
 import type { Deed, Home, Landing, LifeChange, Look, Pack, Staging, WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
+import type { Outing } from "@/lib/echoTypes";
 
 export interface VillagerMemory {
   /** In the villager's words. */
@@ -62,7 +63,41 @@ export interface VillageStore {
   stagingsOf(subject: string): Promise<Staging[] | null>;
   /** Write one, new or answered. */
   saveStaging(s: Staging): Promise<boolean>;
+  /** When and where a stranger was last in the world (C64): null for never, undefined when unreadable. */
+  seenOf(subject: string): Promise<{ at: string; cell: string } | null | undefined>;
+  markSeen(subject: string, cell: string, at: string): Promise<boolean>;
+  /** The echo's outings for a stranger (C64), newest first, the last 10. Null: unreadable. */
+  outingsOf(subject: string): Promise<Outing[] | null>;
+  saveOuting(o: Outing): Promise<boolean>;
 }
+
+interface OutingRow {
+  id: string;
+  subject: string;
+  cell: string | null;
+  village: string | null;
+  away_from: string;
+  away_to: string;
+  made_at: string;
+  read_at: string | null;
+  encounters: Outing["encounters"] | null;
+  waits: Outing["waits"];
+  reason: string | null;
+}
+
+const outingFromRow = (r: OutingRow): Outing => ({
+  id: r.id,
+  subject: r.subject,
+  cell: r.cell,
+  village: r.village,
+  awayFrom: new Date(r.away_from).toISOString(),
+  awayTo: new Date(r.away_to).toISOString(),
+  madeAt: new Date(r.made_at).toISOString(),
+  readAt: r.read_at ? new Date(r.read_at).toISOString() : null,
+  encounters: r.encounters ?? [],
+  waits: r.waits ?? null,
+  reason: r.reason,
+});
 
 const STAGING_COLUMNS = "id, subject, cell, situation, x, y, facing, owner, owner_name, info_gain, created_at, resolved, resolved_at";
 
@@ -373,6 +408,29 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("setLook", error.message), false;
       return true;
     },
+    async seenOf(subject) {
+      const { data, error } = await admin.from("player_presence").select("last_seen_at, last_cell").eq("subject", subject).maybeSingle();
+      if (error) return warn("seenOf", error.message), undefined;
+      return data ? { at: new Date(data.last_seen_at as string).toISOString(), cell: data.last_cell as string } : null;
+    },
+    async markSeen(subject, cell, at) {
+      const { error } = await admin.from("player_presence").upsert({ subject, last_cell: cell, last_seen_at: at }, { onConflict: "subject" });
+      if (error) return warn("markSeen", error.message), false;
+      return true;
+    },
+    async outingsOf(subject) {
+      const { data, error } = await admin.from("echo_outings").select("id, subject, cell, village, away_from, away_to, made_at, read_at, encounters, waits, reason").eq("subject", subject).order("made_at", { ascending: false }).limit(10);
+      if (error) return warn("outingsOf", error.message), null;
+      return (data as OutingRow[]).map(outingFromRow);
+    },
+    async saveOuting(o) {
+      const { error } = await admin.from("echo_outings").upsert(
+        { id: o.id, subject: o.subject, cell: o.cell, village: o.village, away_from: o.awayFrom, away_to: o.awayTo, made_at: o.madeAt, read_at: o.readAt, encounters: o.encounters, waits: o.waits, reason: o.reason },
+        { onConflict: "id" },
+      );
+      if (error) return warn("saveOuting", error.message), false;
+      return true;
+    },
     async stagingsOf(subject) {
       const { data, error } = await admin.from("player_stagings").select(STAGING_COLUMNS).eq("subject", subject).order("created_at", { ascending: false }).limit(50);
       if (error) return warn("stagingsOf", error.message), null;
@@ -432,6 +490,8 @@ interface MemoryState {
   homes?: Map<string, Home>;
   looks?: Map<string, Look>;
   stagings?: Map<string, Staging[]>;
+  presence?: Map<string, { at: string; cell: string }>;
+  outings?: Map<string, Outing[]>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -510,6 +570,24 @@ function memoryStore(): VillageStore {
       memory.homes.set(subject, structuredClone(h));
       return true;
     },
+    async seenOf(subject) {
+      const p = memory.presence?.get(subject);
+      return p ? { ...p } : null;
+    },
+    async markSeen(subject, cell, at) {
+      memory.presence ??= new Map();
+      memory.presence.set(subject, { at, cell });
+      return true;
+    },
+    async outingsOf(subject) {
+      return (memory.outings?.get(subject) ?? []).map((x) => structuredClone(x)).sort((a, b) => b.madeAt.localeCompare(a.madeAt)).slice(0, 10);
+    },
+    async saveOuting(o) {
+      memory.outings ??= new Map();
+      const list = (memory.outings.get(o.subject) ?? []).filter((x) => x.id !== o.id);
+      memory.outings.set(o.subject, [...list, structuredClone(o)]);
+      return true;
+    },
     async stagingsOf(subject) {
       return (memory.stagings?.get(subject) ?? []).map((x) => structuredClone(x)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50);
     },
@@ -560,6 +638,8 @@ export function resetMemoryStore(): void {
   memory.landings?.clear();
   memory.homes?.clear();
   memory.stagings?.clear();
+  memory.presence?.clear();
+  memory.outings?.clear();
   memory.looks?.clear();
   memory.next = 1;
 }

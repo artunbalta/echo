@@ -68,6 +68,7 @@ import { soundLayer } from "./soundLayer";
 import { marketLayer } from "./marketLayer";
 import { homeLayer } from "./homeLayer";
 import { directorLayer } from "./directorLayer";
+import { echoBodyLayer } from "./echoBodyLayer";
 import { animalsLayer } from "./animalsLayer";
 import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
@@ -182,6 +183,8 @@ export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock =
   layers.push(homeLayer());
   // What the director set out for this stranger (C63): asked of by the interact layer, like the house.
   layers.push(directorLayer());
+  // Your echo, waiting where it last met someone while you were away (C64).
+  layers.push(echoBodyLayer());
   // The sound of the place (C56): last, so it hears the frame every layer above has settled; only
   // where someone is playing — a landing preview is silent.
   layers.push(soundLayer({ clock }));

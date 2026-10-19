@@ -4114,3 +4114,126 @@ raw, 90 days, erased with the person.
     again.
 
 **Not done.** See ⚑53.
+
+## C64 — the echo's body: it goes out while you are away, and tells you
+
+Feature 17 of the twenty. What was promised: an AI twin that goes about the world in your absence,
+meets villagers, and tells you what it did when you return, carrying the old world's copilot over.
+
+**What the old world had.** The copilot: every line was the engine's (`/agent/turn`), spoken *as*
+the person, and put to the autonomy gate.
+
+- `auto`: said.
+- `ask` or `copilot`: proposed instead.
+- "That's me" / "Not me": fed back (`/feedback`), training the reward head, the calibration, and
+  each bucket's level from copilot to auto.
+
+But it had no true away mode. Its "handover" ran in the open tab and stopped at a key press, and
+nothing anywhere played for an absent person. The new world has no presence record and no worker.
+
+**When.** An absence is found on return:
+
+- the page says it is here every two minutes and as it closes (`player_presence`, 0029);
+- on opening, a gap of at least 30 minutes, with no outing in the last 3 hours, is filled then;
+- the world is a function of the seed and the clock, so "then" is exact: who was out, where, doing
+  what, on the day it was.
+
+**Where and whom** (`lib/echoOuting.ts`):
+
+- **The village**: the last one you were in, else your house's, else the last you talked in.
+- **The people**: up to three. Those you know there come first, greeted as known ("smalltalk").
+  Then people you have never met ("first_greeting"), the old world's own two buckets.
+- **When**: each one out of doors and ashore, by day, at their own hour of the absence.
+
+**What it says.** Each line is the engine's, through the gate, as before:
+
+- it opens the way the old world did: "(You walk up to Hela, who looks up at you.)";
+- it is told where it is, that it is the stranger and not the villager, what earlier people on this
+  outing said, and to answer with words only;
+- held back, the line is kept and told to you on return, for your answer.
+
+**What the villager hears and keeps.**
+
+- They are told what they would know of you (`lib/strangerNotes.ts`, now shared with the talk
+  route).
+- They remember the meeting as one with you, in their own note, and it is counted. That is what an
+  echo living your life is.
+- They are told there is nothing to decide. The echo never moves anyone's life: no leaving,
+  courting, trading or inviting, whatever the model offers.
+- The echo does nothing else to the world, and nothing it does is measured: its words are not you.
+
+**Its body.** On return it waits where it last talked with someone: your own body, translucent, a
+little cold, turned towards you (`echoBodyLayer`). Walk up to it and it tells you. Anywhere else a
+line says where it went.
+
+**The account** (`EchoAway.tsx`):
+
+- First the echo's own words, first person ("While you were away I went to Senstrand. I talked
+  with Paakrost, who said…"). In your own voice when you have one here (C62); the villagers in
+  theirs when you said yes to that (C60).
+- Then every meeting, line by line. To each line it said, "That's me" or "Not me"; to each it held
+  back, "I'd have said that" or "No".
+- Each answer goes to the engine with the confidence the gate had at the time, never one the page
+  sends. It can move the bucket, and the panel says so ("It has earned this: it may now speak for you
+  here on its own").
+
+**Limits.**
+
+- **No engine, no outing**: a stand-in's words are nobody's.
+- **Cost**: at most 3 people, 2 lines each.
+- **Time**: no new model call after 30 s. The route has 60 s.
+- **Dev only**: `ECHO_AWAY_MS` and `ECHO_OUTING_GAP_MS` shorten the waits, never in production.
+
+**Found on the way.**
+
+- **A second dev server on this checkout broke the user's.** Both wrote `.next`. A second one now
+  runs with `NEXT_DIST_DIR`, which next.config reads; its folder is ignored, and tsconfig already
+  includes its types so Next has nothing to rewrite. `next-env.d.ts` still flips while it runs, and
+  is put back.
+- **The echo's first line was nonsense.** "Sure — about "", here's how I'd put it.": an empty
+  message reads as a request. It now opens with the walk-up.
+- **The echo wrote stage directions** ("I pause, considering…"), and once spoke as the villager
+  ("welcome to Sesvil's corner"). Roles are now explicit, and `spokenOnly` keeps the quoted speech.
+- **It asked all three people the same thing** ("I've just arrived, where can I stay?"). It is now
+  told what earlier people said.
+- **All three meetings fell at one hour.** The slots were whole half-days apart; they are now
+  spread across the day.
+- **A race erased the absence it was asking about.** A heartbeat sent before the return question
+  was answered marked "here, now" first. Heartbeats now wait for it.
+
+**Measured.**
+
+- `echoAway.test.mts`, 8 tests:
+  - the waits, and the dev knob never in production;
+  - known people first, then new, at most three, only out by day; what it is told;
+  - words, not a stage play, and the walk-up;
+  - its own account, what it held back included, quoting what was most said;
+  - the outing:
+    - spoken where the gate allowed, held back where not;
+    - the villager keeps the meeting and was told there is nothing to decide, and no change was
+      written although the model offered one;
+    - nothing measured; voice tokens on the villagers' lines;
+    - a later meeting knows the earlier one; asked again, nothing new;
+  - a known friend first and greeted as known; answers carry the gate's own confidence; a veto
+    carries the line; once each; someone else's refused; told, never again;
+  - no engine, no outing and no villager asked; no village, it says so and spends nothing; yours
+    alone.
+- 22 injected defects, all caught. The first pass missed four, now pinned:
+  - two injection patterns were stale after the dev knob;
+  - stage directions said aloud;
+  - a later meeting knowing nothing of an earlier one.
+- Real, three times, with the engine run locally on the small model and Opus answering for the
+  villagers:
+  - the echo, having earned greetings, met three people in Senstrand in about 40 s;
+  - after the fixes it spoke as a newcomer;
+  - the villagers answered from their own lives: Paismein keeps the inn, it was market day, the
+    stall had a knife and a pot from Dragcrachadit, and Vuk asked the stranger to tend his
+    grandchild's grave.
+- Browser, a minute's absence by the dev knob:
+  - "It is waiting for you in Senstrand";
+  - its body stood in the rain where it had talked with Paakrost;
+  - walking up to it opened the account;
+  - "That's me" and "Not me" reached the engine;
+  - "Done" took it away, and it was not told again.
+
+**Not done.** See ⚑54.
