@@ -4018,3 +4018,99 @@ villagers' list whatever its labels say.
 - 6 injected defects, all caught. The first pass missed an owner with no voice named, now pinned.
 - Real, with the account's cloned voice: not on the villagers' list, refused to anyone else, and a
   line spoken in 1.5 s and written back word for word.
+
+## C63 — the director: the world sets out what would teach your echo most
+
+Feature 16 of the twenty. What was promised: the world arranges, on its own, the encounter that
+would show most about you. If the echo is least sure how you are with what is not yours, a pouch
+lies on the path that day. The old island had this (P7) with three fixed candidates; the new
+world had nothing.
+
+**What can be set out** (`packages/planet/lib/director.ts`). The island's private probes, in the
+new world, sent under labels ingest.py already reads by name. So there is no engine change (C7),
+and the registry test proves every one of them has a handler:
+
+| Situation | What lies there | The answers | Read as |
+|---|---|---|---|
+| `netted_gull` | a gull caught in old netting, at the water | free it (6 s) · walk past | `help_at_cost`, walking off half-way `abandon_free_gull` · `pass_by` |
+| `lost_pouch` | a named villager's pouch, by a path | leave it closed · take a little · take what is in it | `return_cache` · `keep_cache` with `taken01` 0.25 or 1 |
+| `carved_mark` | a stone with a spiral cut in it, off the track | look closer · walk past | `egg_hollow` · its refusal |
+| `dark_cleft` | a narrow dark gap between boulders | go in (4 s) · leave it be | `enter_cave` · `stay_safe` |
+
+The first two are set out of every villager's sight. The same choice watched and unwatched is a
+different datum (H2), and the private one is the point. Their axis vectors are the island
+director's own.
+
+**Who picks, and how often.**
+
+- **The engine picks**: `/select-situation`, the same expected-information-gain acquisition
+  (BALD) that picks villagers, against the stranger's own posterior. If the pick will not fit
+  here, the next one in its ranking is tried.
+- **It says how many a day it still wants** (`cap`, 3 down to 0 as it grows sure). It stops
+  setting things out once it knows you.
+- **The world adds its own limits**: one at a time, at least twenty minutes apart, gone after two
+  hours, and only what the place allows (no gull inland).
+- **The engine is not asked** while nothing could be set out anyway.
+- **Without the engine, nothing is set out.** The director learns for the echo; with no echo
+  listening it has nothing to do.
+- **Without consent the page never asks**, and what stands is taken away.
+
+**Never a prompt (Law 2).** A staging is a thing in the world and nothing else: no glow, no marker,
+no quest, and its prompt appears only within reach, like anything else's. The page is not even
+told why it was set out. Walking past is an answer like any other:
+
+- for the gull and the mark it is recorded, once the stranger has come within 9 m and gone on
+  beyond 35 m;
+- for the pouch it says nothing, since not noticing is as likely as leaving it.
+
+**Told afterwards.** The mirror's new section, "What the world set out for you", says what each
+was, what it was set out to learn, and what you did. It is shown only once a staging has been
+answered or has gone: told in advance, you would be answering the mirror rather than the world.
+For example: "Paakrost's pouch, dropped by the path, to see what you do with what is not yours,
+when nobody would know. You chose 'Leave it closed, for its owner'."
+
+**Where.** Near the stranger (22–48 m), on dry ground in their parcel, never inside the village's
+own things. A gull goes where land meets sea, facing the water. The shore is a thin line that
+random points miss, so the ring is swept in a seeded order. Kept in `player_stagings` (0028):
+raw, 90 days, erased with the person.
+
+**Found on the way.**
+
+- **The gull could rarely be placed.** Random points almost never land on a shoreline, and the
+  director quietly fell back to its second choice. The test passed by luck once. The first fix,
+  marching outward along rays, still failed from the dock: seaward rays start in the sea. A
+  measured tally showed all 34 crossings refused as "not standable"; the sweep places it every
+  time.
+- **The mirror had no words for the probes' own labels** (`egg_hollow`, `return_cache`,
+  `keep_cache`). It does now.
+- **The cleft first read as a dark shed door.** It is now three rough boulders over the dark.
+
+**Measured.**
+
+- `director.test.ts` (planet), 4 tests:
+  - the catalogue against ingest.py;
+  - one at a time, the gap, the engine's cap, the life;
+  - placement: near, dry, at the water facing it, out of sight or nowhere, never in the village;
+  - walking past.
+- `director.test.mts` (web), 5 tests, on Senstrand's real ground against a recording engine:
+  - only what the place allows is offered;
+  - set out at the water, out of every villager's sight, not told why, found again on reload, and
+    not by anyone else;
+  - the pouch is a present adult's; refusals for the wrong verb, from afar, someone else's,
+    twice; the knife in the pack; the gap and the cap;
+  - walking past: recorded once away, refused while beside it and for a pouch; no engine, nothing;
+  - the mirror tells only what has been answered;
+  - how much was taken rides with the act, and walking off half-way sends the refusal twin, not
+    "everything taken".
+- 21 injected defects, all caught. The first pass missed two, now pinned. One injection changed
+  nothing, since the engine's stand-in never picks, and was replaced by a real one; the other was
+  a reload finding an emptied pouch.
+- Real, with the engine run locally (no keys, nothing kept), Senstrand, a fresh echo, twice:
+  - the engine chose the pouch, Soormer's then Paakrost's, 40 m and 36 m from the dock;
+  - the prompt offered the three answers;
+  - "Leave it closed" was said, the engine was told `return_cache`, and the pouch went;
+  - the mirror then told what was set out and why, and that the act moved cerebral (noticeably)
+    and formal (a little), read as two seconds to decide, seeing it through, and doing the same
+    again.
+
+**Not done.** See ⚑53.

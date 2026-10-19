@@ -96,6 +96,7 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   abandon_build: ["Left a build unfinished"],
   abandon_free_gull: ["Walked away from the caught gull"],
   abandon_gather: ["Stopped gathering half-way"],
+  abandon_take_cache: ["Began to take from a found pouch, and stopped"],
   ask_return: ["Asked for something back"],
   asks_question: ["Asked a villager a question"],
   assemble_raft: ["Built a raft"],
@@ -126,6 +127,7 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   drink_water: ["Drank from the water"],
   drop_pebble: ["Dropped a pebble in"],
   eat_meal: ["Ate a meal"],
+  egg_hollow: ["Went to look at a carved mark", "Walked past a carved mark"],
   eat_now: ["Ate it there and then", "Did not eat it"],
   enter_cave: ["Went into a cave", "Stayed out of a cave"],
   enter_forced: ["Forced your way in"],
@@ -169,6 +171,8 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   prepare_before_travel: ["Prepared before setting out", "Set out unprepared"],
   push_through: ["Pushed through the undergrowth"],
   return_boat: ["Brought a boat back"],
+  return_cache: ["Left a found pouch for its owner"],
+  keep_cache: ["Kept what was in a found pouch"],
   save_berries: ["Kept the berries for later", "Did not keep them"],
   self_disclosure: ["Told a villager about yourself"],
   shirk_work: ["Shirked the work"],
@@ -270,6 +274,43 @@ export function readAsWords(readAs: Record<string, unknown> | null): string[] {
     .sort((a, b) => b.n - a.n)
     .slice(0, 3)
     .map((s) => s.words);
+}
+
+// ── what the world set out (C63) ────────────────────────────────────────────────
+
+/** One encounter the director set out, as the mirror tells it afterwards. */
+export interface SetOut {
+  id: string;
+  at: string;
+  /** What it was, and what it was set out to learn. */
+  name: string;
+  asks: string;
+  /** What the stranger did: a verb's label, "walked past", or "left it be" when it went unanswered. */
+  answer: string;
+}
+
+/**
+ * What was set out, answered or gone, newest first. One still standing is never shown: told about it
+ * in advance, the stranger would be answering the mirror rather than the world.
+ */
+export function setOutOf(
+  stagings: readonly { id: string; situation: string; createdAt: string; resolved: string | null; resolvedAt: string | null; ownerName?: string | null }[],
+  catalogue: Readonly<Record<string, { name: string; asks: string; verbs: readonly { id: string; label: string }[] }>>,
+  now: number,
+  lifeMs: number,
+): SetOut[] {
+  return stagings
+    .filter((s) => s.resolved !== null || now - Date.parse(s.createdAt) >= lifeMs)
+    .filter((s) => catalogue[s.situation])
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 12)
+    .map((s) => {
+      const c = catalogue[s.situation]!;
+      const answer = s.resolved === null ? "left it be" : s.resolved === "passed" ? "walked past" : (c.verbs.find((v) => v.id === s.resolved)?.label ?? s.resolved);
+      // Whose it was, where it was somebody's.
+      const name = s.ownerName ? c.name.replace(/^someone's/, `${s.ownerName}'s`) : c.name;
+      return { id: s.id, at: s.resolvedAt ?? s.createdAt, name, asks: c.asks, answer };
+    });
 }
 
 // ── the reading ─────────────────────────────────────────────────────────────────

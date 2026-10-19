@@ -68,3 +68,5 @@ export * from "./markets.js";
 export * from "./trade.js";
 // A stranger's own house on their own land (C59).
 export * from "./homes.js";
+// What the director sets out for a stranger, and where (C63).
+export * from "./director.js";

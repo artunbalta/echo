@@ -24,10 +24,10 @@ import { PERSONA_AXIS_KEYS, type PersonaAxisKey } from "@echo/shared";
 
 import type { ConsentState } from "@/game/world/measure";
 import { identityHeaders, identityToken, peekUserId } from "@/lib/identity";
-import type { Contributor, MirrorView, Move } from "@/lib/mirror";
+import type { Contributor, MirrorView, Move, SetOut } from "@/lib/mirror";
 import { cloudWanted, setCloudWanted } from "@/lib/villagerVoice";
 
-type Loaded = MirrorView & { capped?: boolean; source?: string };
+type Loaded = MirrorView & { capped?: boolean; source?: string; setOut?: SetOut[] };
 
 /** What erasing everything removes from this browser, besides what the server erases. */
 const LOCAL_KEYS = ["echo.userId", "echo.name", "echo.consent", "echo.character", "echo.identityToken", "echo.voiceCloud", "echo.villagerVoice", "echo.email"];
@@ -248,6 +248,29 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
             <p className="mt-2 text-[11px] text-white/40">
               {view.rows} things on record{view.since ? `, since ${when(view.since)}` : ""}
               {view.capped ? "; older ones are counted in “not in this record”" : ""}.
+            </p>
+          </div>
+        ) : null}
+
+        {view?.setOut?.length ? (
+          <div className="mt-6" data-mirror-setout>
+            <h3 className="mb-2 text-xs uppercase tracking-wide text-white/45">What the world set out for you</h3>
+            <ul className="space-y-1.5 text-[13px]">
+              {view.setOut.map((o) => (
+                <li key={o.id}>
+                  <span className="text-white/85">
+                    {o.name[0]!.toUpperCase()}
+                    {o.name.slice(1)}
+                  </span>
+                  <span className="text-white/45">, to see {o.asks}. </span>
+                  <span className="text-[#e2edc8]/80">You {o.answer === "walked past" || o.answer === "left it be" ? o.answer : `chose “${o.answer}”`}.</span>
+                  <span className="text-[11px] text-white/35"> {when(o.at)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-[11px] text-white/40">
+              It sets one out only when it is unsure of you, and fewer as it grows sure. None is a test you can fail: walking past is an answer
+              like any other.
             </p>
           </div>
         ) : null}

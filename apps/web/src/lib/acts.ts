@@ -66,6 +66,8 @@ export function measurementFor(verb: Verb, thing: { ref: string; kind: ThingKind
     decision_latency_ms: Math.round(Math.max(0, manner.decisionMs)),
     thoroughness01: Number(fraction.toFixed(3)),
   };
+  // What a verb always carries (C63: how much of a found pouch was taken), unless it was walked away from.
+  if (verb.raw && finished) Object.assign(raw, verb.raw);
   // Sitting is the one act whose whole content is its stillness (sit_still reads still_ms).
   if (verb.pose === "sit") raw.still_ms = Math.round(manner.heldMs);
   // An approach is read by the G route only with a distance (ingest.py's G branch).

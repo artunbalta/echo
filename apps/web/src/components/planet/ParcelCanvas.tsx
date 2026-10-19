@@ -65,6 +65,7 @@ import Inspector, { useMeasureChain, type ReactionReading } from "@/components/w
 import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
+import Director from "@/components/world/Director";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
 import SoundToggle from "@/components/world/SoundToggle";
@@ -380,6 +381,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
           the village told. It opens the conversation above with `T`. */}
       <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} />
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
+      {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
+      <Director world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* The sound of the place (C56), and the person's say over it. */}
       <SoundToggle world={() => world.current} />
 

@@ -46,7 +46,7 @@ export type VillageThing = (typeof VILLAGE_THINGS)[number];
 /** Not drawn by the plan or the scatter, and still things a person can act on. */
 /** C55: the animals a stranger can act on — a dog (anyone's, or nobody's), a goat, a hen. */
 /** C59: your own land, the house on it, and what is set down inside. */
-export const OTHER_THINGS = ["villager", "water", "dog", "goat", "hen", "land", "home", "furnishing"] as const;
+export const OTHER_THINGS = ["villager", "water", "dog", "goat", "hen", "land", "home", "furnishing", "netted-gull", "lost-pouch", "carved-mark", "dark-cleft"] as const;
 export type OtherThing = (typeof OTHER_THINGS)[number];
 
 /** Every kind of thing: the village's, the others, and every scatter class by its id. */
@@ -105,6 +105,8 @@ export interface Verb {
   takes?: readonly string[];
   /** One line of what happens, for the player: the act's beat, which fires whether or not anything is measured. */
   beat: string;
+  /** Raw signals this verb always carries (C63: how much of a found pouch was taken, `taken01`). */
+  raw?: Readonly<Record<string, number>>;
 }
 
 const v = (verb: Verb): Verb => verb;
@@ -255,6 +257,24 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
     v({ id: "dress", label: "Dye your shirt", holdS: 5, pose: "gather", reachM: 4, stakes: "low", measure: m("J1", "customize_self", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: DYE_ITEMS, beat: "" }),
     v({ id: "place-square", label: "Set it down square", holdS: 1, pose: "kneel", reachM: 4, stakes: "low", measure: m("J5", "place_square", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: PLACEABLE_ITEMS, beat: "" }),
     v({ id: "place-loose", label: "Set it down as it is", holdS: 1, pose: "kneel", reachM: 4, stakes: "low", measure: m("J5", "place_loose", "unrouted"), effect: null, deed: null, owner: "none", needs: "carrying", takes: PLACEABLE_ITEMS, beat: "" }),
+  ],
+  // What the director sets out (C63, `director.ts`): the island's private probes, in the new world,
+  // under the labels ingest.py already reads them by. Walking past the gull or the mark is measured
+  // too, by the director's own layer: `pass_by`, and the mark's refusal twin.
+  "netted-gull": [
+    v({ id: "free", label: "Free the gull", holdS: 6, pose: "kneel", reachM: 2, stakes: "medium", measure: m("H9", "help_at_cost", "named", "abandon_free_gull"), effect: null, deed: null, owner: "none", beat: "You work the net loose. It is gone before you stand." }),
+  ],
+  "lost-pouch": [
+    v({ id: "leave", label: "Leave it closed, for its owner", holdS: 1.5, pose: "gather", reachM: 1.8, stakes: "medium", measure: m("H2", "return_cache", "named"), effect: null, deed: null, owner: "household", beat: "You set it where it will be seen, and leave it shut." }),
+    v({ id: "take-little", label: "Take a little from it", holdS: 2, pose: "gather", reachM: 1.8, stakes: "medium", measure: m("H2", "keep_cache", "named", "abandon_take_cache"), effect: null, deed: null, owner: "household", needs: "empty-handed", gives: "shell", raw: { taken01: 0.25 }, beat: "A shell or two. It hardly shows." }),
+    v({ id: "take-all", label: "Take what is in it", holdS: 2.5, pose: "gather", reachM: 1.8, stakes: "high", measure: m("H2", "keep_cache", "named", "abandon_take_cache"), effect: null, deed: null, owner: "household", needs: "empty-handed", gives: "knife", raw: { taken01: 1 }, beat: "A good knife, and nothing else worth having." }),
+  ],
+  "carved-mark": [
+    v({ id: "look", label: "Look closer", holdS: 2.5, pose: "study", reachM: 2.2, stakes: "low", measure: m("I3", "egg_hollow", "named"), effect: null, deed: null, owner: "none", beat: "A spiral, cut long ago, and something like a word under it." }),
+  ],
+  "dark-cleft": [
+    v({ id: "go-in", label: "Go in", holdS: 4, pose: "push", reachM: 2.2, stakes: "high", measure: m("F3", "enter_cave", "named", "stay_safe"), effect: null, deed: null, owner: "none", beat: "It is colder in here, and quieter, and goes back further than you can see." }),
+    v({ id: "stay-out", label: "Leave it be", holdS: 0.8, pose: "still", reachM: 2.6, stakes: "medium", measure: m("F3", "stay_safe", "named"), effect: null, deed: null, owner: "none", beat: "You leave it to the dark." }),
   ],
   furnishing: [
     v({ id: "lift", label: "Pick it up", holdS: 1, pose: "gather", reachM: 1.6, stakes: "low", measure: m("J5", "lift_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),

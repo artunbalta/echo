@@ -175,6 +175,8 @@ export interface SituationPick {
   selected: string | null;
   cap: number;
   uncertainty01?: number;
+  /** Every candidate by expected information gain, best first (C63 sets out the next where the first will not fit). */
+  ranking?: { candidate: string; info_gain: number; p: number }[];
   mocked?: boolean;
 }
 
