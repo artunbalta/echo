@@ -135,7 +135,8 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
       aria-label="The mirror"
       className="absolute inset-x-0 top-14 z-40 mx-auto max-h-[84vh] w-[min(900px,94vw)] overflow-y-auto rounded-2xl border border-white/15 bg-[#16241f]/95 text-[#f4e9d0] shadow-2xl backdrop-blur-xl"
       onMouseDown={(e) => {
-        if (!(e.target instanceof HTMLButtonElement)) e.preventDefault();
+        // The world keeps its keys: nothing here takes focus, except a button, and your id to copy.
+        if (!(e.target instanceof HTMLButtonElement) && !(e.target instanceof Element && e.target.closest("[data-mirror-id]"))) e.preventDefault();
       }}
     >
       <header className="flex items-baseline justify-between gap-3 px-6 pt-5">
@@ -303,7 +304,10 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
               </p>
             )}
           </div>
-          <p className="mt-3 text-[11px] leading-snug text-white/40">
+          <p className="mt-3 text-[11px] text-white/35" data-mirror-id>
+            Your id here: <span className="select-all font-mono">{peekUserId() || "none yet"}</span>
+          </p>
+          <p className="mt-1 text-[11px] leading-snug text-white/40">
             The record keeps ninety days; your echo keeps its read of you until you erase it. Nothing here is a score: it does not go up for doing
             more, and there is no right place to be on any line.
           </p>

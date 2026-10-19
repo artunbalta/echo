@@ -147,16 +147,68 @@ export async function speakCloud(line: { cell: string; person: string; text: str
   try {
     const res = await fetch("/api/village/voice", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(line) });
     if (!res.ok) return false;
-    const url = URL.createObjectURL(await res.blob());
-    hushCloud();
-    if (lastUrl) URL.revokeObjectURL(lastUrl);
-    lastUrl = url;
-    player ??= new Audio();
-    player.src = url;
-    await player.play();
+    const blob = await res.blob();
+    // Your own line first, when one is being said (C62): the reply waits for it rather than cutting in.
+    await selfLine;
+    await playBlob(blob);
     return true;
   } catch {
     return false;
+  }
+}
+
+async function playBlob(blob: Blob): Promise<HTMLAudioElement> {
+  const url = URL.createObjectURL(blob);
+  hushCloud();
+  if (lastUrl) URL.revokeObjectURL(lastUrl);
+  lastUrl = url;
+  player ??= new Audio();
+  player.src = url;
+  await player.play();
+  return player;
+}
+
+/** Resolves when the element stops: ended, paused, failed, or after twenty seconds at most. */
+function untilDone(a: HTMLAudioElement): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      for (const ev of ["ended", "pause", "error"]) a.removeEventListener(ev, done);
+      clearTimeout(t);
+      resolve();
+    };
+    const t = setTimeout(done, 20_000);
+    for (const ev of ["ended", "pause", "error"]) a.addEventListener(ev, done);
+  });
+}
+
+/** The stranger's own line while it is being said; a reply waits on it. */
+let selfLine: Promise<void> = Promise.resolve();
+
+/** Whether this stranger has a voice of their own here (C62): the owner's, and nobody else's. */
+export async function ownVoiceHere(headers: Record<string, string>): Promise<boolean> {
+  try {
+    const res = await fetch("/api/voice/self", { headers });
+    return res.ok && ((await res.json()) as { mine?: boolean }).mine === true;
+  } catch {
+    return false;
+  }
+}
+
+/** What the stranger typed, in their own voice (C62). Set before anything is awaited, so a reply fetched alongside waits for it. */
+export async function speakSelf(text: string, headers: Record<string, string>): Promise<boolean> {
+  if (typeof Audio === "undefined") return false;
+  let release!: () => void;
+  selfLine = new Promise<void>((r) => (release = r));
+  try {
+    const res = await fetch("/api/voice/self", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ text }) });
+    if (!res.ok) return false;
+    const a = await playBlob(await res.blob());
+    await untilDone(a);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    release();
   }
 }
 
