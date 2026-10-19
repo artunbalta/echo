@@ -2107,3 +2107,23 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Not tried on a phone or in Safari**, like C60.
 
 **Status:** OPEN.
+
+## ⚑ 53. What C63 does not do yet, and what it trusts (2026-10-19)
+
+- **Four situations.** The catalogue's other strong probes are not set out yet: a wager offered, a
+  queue, a fair split, a promise. Each needs a villager to play a part, which the schedule does not
+  yet allow.
+- **The axis vectors are the doc's priors**, not learned. The two island ones are copied, the other
+  two written by hand.
+- **"Out of sight" is the world's 30 m**, the same as everywhere else (C45). On an open beach a
+  villager at 40 m could plainly see.
+- **Nobody notices the pouch.** Taking a villager's pouch is not a deed: the owner does not miss it,
+  and nobody talks.
+- **Hands and pack.** Taking from the pouch needs empty hands, like any pick-up, and goes into the
+  pack.
+- **No phone check.**
+- **Only on the engine's word.** With ML down or unset, nothing is ever set out (by design), and
+  every test of it ran against a local engine.
+- **Twenty minutes and two hours are choices**, not measurements.
+
+**Status:** OPEN, all of it, written down rather than discovered.

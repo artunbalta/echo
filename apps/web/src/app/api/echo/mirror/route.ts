@@ -10,15 +10,20 @@
  * opened, not polled, and the rate bucket `mirror` keeps it to 30 reads in ten minutes.
  *
  * When the engine cannot be reached the record is still shown, marked as such (`live: false`).
+ *
+ * It also tells what the director set out for the caller (C63) once each has been answered or has
+ * gone, with what it was meant to learn: never while one still stands.
  */
 import { NextResponse } from "next/server";
 import { PERSONA_AXIS_KEYS } from "@echo/shared";
+import { DIRECTOR, SITUATIONS, verbsOf } from "@echo/planet";
 
 import { readLedger } from "@/lib/ledger";
-import { mirrorOf, type EchoNow } from "@/lib/mirror";
+import { mirrorOf, setOutOf, type EchoNow } from "@/lib/mirror";
 import { getPersona } from "@/lib/ml";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
+import { villageStore } from "@/lib/villageStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,5 +56,9 @@ export async function GET(req: Request) {
       ? { mu, var: variance, version: snap.persona!.version!, watched: vector(snap.self_monitoring?.delta), measurement: snap.measurement ?? null }
       : null;
   const reason = now ? undefined : snap.mocked ? (snap.reason ?? "engine_unreachable") : "engine_unreadable";
-  return NextResponse.json({ ...mirrorOf(now, record.rows, { reason }), capped: record.capped, source: record.source });
+  // What the director set out (C63), told now that it has been answered or has gone.
+  const stagings = (await villageStore()?.stagingsOf(caller.subject)) ?? [];
+  const catalogue = Object.fromEntries(Object.values(SITUATIONS).map((x) => [x.id, { name: x.name, asks: x.asks, verbs: verbsOf(x.kind) }]));
+  const setOut = setOutOf(stagings, catalogue, Date.now(), DIRECTOR.lifeMs);
+  return NextResponse.json({ ...mirrorOf(now, record.rows, { reason }), setOut, capped: record.capped, source: record.source });
 }

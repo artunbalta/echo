@@ -13,7 +13,7 @@
  */
 import "server-only";
 
-import type { Deed, Home, Landing, LifeChange, Look, Pack, WorldEffect } from "@echo/planet";
+import type { Deed, Home, Landing, LifeChange, Look, Pack, Staging, WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 
@@ -58,7 +58,45 @@ export interface VillageStore {
   /** A stranger's own look (C59): {} for none yet, null when unreadable. */
   lookOf(subject: string): Promise<Look | null>;
   setLook(subject: string, look: Look): Promise<boolean>;
+  /** What the director has set out for a stranger (C63), newest first, the last 50. Null: unreadable. */
+  stagingsOf(subject: string): Promise<Staging[] | null>;
+  /** Write one, new or answered. */
+  saveStaging(s: Staging): Promise<boolean>;
 }
+
+const STAGING_COLUMNS = "id, subject, cell, situation, x, y, facing, owner, owner_name, info_gain, created_at, resolved, resolved_at";
+
+interface StagingRow {
+  id: string;
+  subject: string;
+  cell: string;
+  situation: Staging["situation"];
+  x: number;
+  y: number;
+  facing: number;
+  owner: string | null;
+  owner_name: string | null;
+  info_gain: number | null;
+  created_at: string;
+  resolved: string | null;
+  resolved_at: string | null;
+}
+
+const stagingFromRow = (r: StagingRow): Staging => ({
+  id: r.id,
+  subject: r.subject,
+  cell: r.cell,
+  situation: r.situation,
+  x: r.x,
+  y: r.y,
+  facing: r.facing,
+  owner: r.owner,
+  ownerName: r.owner_name,
+  infoGain: r.info_gain,
+  createdAt: new Date(r.created_at).toISOString(),
+  resolved: r.resolved,
+  resolvedAt: r.resolved_at ? new Date(r.resolved_at).toISOString() : null,
+});
 
 interface HomeRow {
   cell: string;
@@ -335,6 +373,33 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("setLook", error.message), false;
       return true;
     },
+    async stagingsOf(subject) {
+      const { data, error } = await admin.from("player_stagings").select(STAGING_COLUMNS).eq("subject", subject).order("created_at", { ascending: false }).limit(50);
+      if (error) return warn("stagingsOf", error.message), null;
+      return (data as StagingRow[]).map(stagingFromRow);
+    },
+    async saveStaging(st) {
+      const { error } = await admin.from("player_stagings").upsert(
+        {
+          id: st.id,
+          subject: st.subject,
+          cell: st.cell,
+          situation: st.situation,
+          x: st.x,
+          y: st.y,
+          facing: st.facing,
+          owner: st.owner,
+          owner_name: st.ownerName,
+          info_gain: st.infoGain,
+          created_at: st.createdAt,
+          resolved: st.resolved,
+          resolved_at: st.resolvedAt,
+        },
+        { onConflict: "id" },
+      );
+      if (error) return warn("saveStaging", error.message), false;
+      return true;
+    },
     async addLanding(subject, cell, l) {
       const { data, error } = await admin
         .from("player_landings")
@@ -366,6 +431,7 @@ interface MemoryState {
   landings?: Map<string, Landing[]>;
   homes?: Map<string, Home>;
   looks?: Map<string, Look>;
+  stagings?: Map<string, Staging[]>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -444,6 +510,15 @@ function memoryStore(): VillageStore {
       memory.homes.set(subject, structuredClone(h));
       return true;
     },
+    async stagingsOf(subject) {
+      return (memory.stagings?.get(subject) ?? []).map((x) => structuredClone(x)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50);
+    },
+    async saveStaging(st) {
+      memory.stagings ??= new Map();
+      const list = (memory.stagings.get(st.subject) ?? []).filter((x) => x.id !== st.id);
+      memory.stagings.set(st.subject, [...list, structuredClone(st)]);
+      return true;
+    },
     async lookOf(subject) {
       return { ...(memory.looks?.get(subject) ?? {}) };
     },
@@ -484,6 +559,7 @@ export function resetMemoryStore(): void {
   memory.packs?.clear();
   memory.landings?.clear();
   memory.homes?.clear();
+  memory.stagings?.clear();
   memory.looks?.clear();
   memory.next = 1;
 }

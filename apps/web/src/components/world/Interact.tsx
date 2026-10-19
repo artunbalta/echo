@@ -30,6 +30,7 @@ import type { AnimalsLayer } from "@/game/world/animalsLayer";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { arrangementMeasurement, homeMeasurement } from "@/lib/homeMeasure";
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
+import type { DirectorLayer } from "@/game/world/directorLayer";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
@@ -91,8 +92,11 @@ const typing = () => {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 };
 
+/** What the director sets out (C63): acted on through its own route. */
+const STAGED = new Set<string>(["netted-gull", "lost-pouch", "carved-mark", "dark-cleft"]);
+
 const title = (t: NearThing) =>
-  t.kind === "villager" || t.kind === "home" || t.kind === "land" || t.kind === "furnishing" || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind);
+  t.kind === "villager" || t.kind === "home" || t.kind === "land" || t.kind === "furnishing" || STAGED.has(t.kind) || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind);
 
 export default function Interact({
   world,
@@ -384,6 +388,40 @@ export default function Interact({
     [cell, layers, say, chain],
   );
 
+  /** Answer what the director set out (C63): the route keeps the world straight; the pack follows. */
+  const stageIt = useCallback(
+    async (verb: Verb, thing: NearThing) => {
+      const { interact, player, ctx } = layers();
+      const at = interact?.bodyAt();
+      if (!at) return;
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/world/director", {
+          method: "POST",
+          headers: identityHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ op: "act", id: thing.ref.slice("staged:".length), verb: verb.id, at }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { pack?: Pack; error?: string };
+        if (!res.ok) {
+          say(data.error === "pack_full" ? `Your pack is full: ${PACK_SIZE} things. Put something down first (I).` : "It will not come away.");
+          return;
+        }
+        say(verb.beat);
+        ctx?.layer<DirectorLayer>("director")?.set(null);
+        if (data.pack) {
+          setPack(data.pack);
+          if (verb.gives) {
+            setCarrying(verb.gives);
+            player?.setCarrying(true);
+          }
+        }
+      } catch {
+        say("It will not come away.");
+      }
+    },
+    [layers, say],
+  );
+
   const finish = useCallback(
     (abandoned: boolean) => {
       const a = actingRef.current;
@@ -397,6 +435,14 @@ export default function Interact({
       // Your own land, house and things (C59): the home route.
       if (a.thing.kind === "land" || a.thing.kind === "home" || a.thing.kind === "furnishing") {
         if (done) void homeIt(a.verb, a.thing, heldMs);
+        return;
+      }
+      // What the director set out (C63): measured like any act, answered through its own route.
+      if (STAGED.has(a.thing.kind)) {
+        const at = interact?.bodyAt() ?? { x: a.thing.x, y: a.thing.y };
+        const m = measurementFor(a.verb, a.thing, { heldMs, decisionMs: a.decisionMs, abandoned, distanceM: a.thing.distanceM }, interact?.audience(at.x, at.y) ?? 0);
+        if (chain.armed()) void chain.emitAction(m.action, m.opts);
+        if (done) void stageIt(a.verb, a.thing);
         return;
       }
       // A trade comes back with something (C58): its own route, its own measurement.
@@ -444,7 +490,7 @@ export default function Interact({
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
       if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
-    [chain, consent, layers, record, say, tradeIt, homeIt],
+    [chain, consent, layers, record, say, tradeIt, homeIt, stageIt],
   );
 
   const begin = useCallback(

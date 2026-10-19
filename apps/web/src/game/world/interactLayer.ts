@@ -35,6 +35,7 @@ import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { VillagersLayer } from "./villagersLayer";
 import type { InteriorLayer } from "./interiorLayer";
 import type { HomeLayer } from "./homeLayer";
+import type { DirectorLayer } from "./directorLayer";
 import type { AnimalsLayer } from "./animalsLayer";
 import { buildMarks } from "./villageGeometry";
 
@@ -204,6 +205,9 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
       // your feet does not stand between you and the house you mean to mark out: a tie goes to the first.
       const homeNow = ctx.layer<HomeLayer>("home");
       for (const t of homeNow?.things(mx, my) ?? []) consider(t);
+      // What the director set out (C63): before the ground, so a shell at your feet does not stand
+      // between you and the gull.
+      for (const t of ctx.layer<DirectorLayer>("director")?.things(mx, my) ?? []) consider(t);
       // Inside a house (C54), its own door is behind you: you do not knock on it from within.
       const within = ctx.layer<InteriorLayer>("interior")?.inside()?.plot;
       for (const t of things) if (Math.hypot(t.x - mx, t.y - my) < LOOK_M + t.sizeM && t.ref !== `house:${within}`) consider(t);

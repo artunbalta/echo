@@ -64,6 +64,8 @@ const USER_KEYED: [string, string][] = [
   ["player_looks", "subject"],
   // C61. The mirror's record: every act and walk the echo was moved by, and by how much.
   ["echo_ledger", "subject"],
+  // C63. What the director set out for them, and what they did.
+  ["player_stagings", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
