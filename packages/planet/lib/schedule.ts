@@ -25,6 +25,7 @@
  * Pure: no clock, no I/O. Coordinates are planet-local metres, east and north, like the plan.
  */
 
+import { isAiling, isSeaDay } from "./mortality.js";
 import { WORLD_DAY_S } from "./worldclock.js";
 import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./society.js";
 import type { LifeChange } from "./changes.js";
@@ -281,7 +282,24 @@ export function dayPlans(
       ashore.add(p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto);
     }
   }
-  const boats = moorings.map((m, i) => (weather.kind === "storm" || ashore.has(m.household) ? null : boatDay(plan, m, i, day)));
+  // A fisher's last day (C66): they go out under a wrong sky, storm or none, and the boat does not
+  // turn for home. Kept ashore by a stranger that day (`ashore`), the boat stays in.
+  const houseOf = (p: { partnerDay: number | null; household: number; bornInto: number }) => (p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto);
+  for (const c of changes) {
+    if (c.kind !== "ashore" || c.day !== day) continue;
+    const p = s.people.find((x) => x.id === c.person);
+    if (p) ashore.add(houseOf(p));
+  }
+  const lost = new Set<number>();
+  for (const p of s.people) if (isSeaDay(p, day) && present(s, p, day)) lost.add(houseOf(p));
+  const boats = moorings.map((m, i) => {
+    // Kept ashore wins: the village is rebuilt with the change, and this holds even before it is.
+    if (lost.has(m.household) && !ashore.has(m.household)) {
+      const b = boatDay(plan, m, i, day);
+      return b ? { ...b, t: [b.t[0], b.t[1], 2, 2] as [number, number, number, number] } : null;
+    }
+    return weather.kind === "storm" || ashore.has(m.household) ? null : boatDay(plan, m, i, day);
+  });
   const boatOf = new Map(moorings.map((m, i) => [m.household, i]));
   const away = plan.dock ? toward(plan.dock.root, plan.centre) : toward(plan.arrival, plan.centre) + Math.PI;
   const fieldFor = (plot: Plot) =>
@@ -339,7 +357,8 @@ export function dayPlans(
   };
   for (const { person: p, plot } of residents) {
     const age = ageYears(p, day);
-    if (age < SCHEDULE.infantYears) continue;
+    // Infants are carried, and the ill keep to their beds (C66): neither has a day out of doors.
+    if (age < SCHEDULE.infantYears || isAiling(p, day)) continue;
     const t = temper.get(p.id)!;
     const trade = occupationOn(p, day);
     const pace = (0.86 + 0.14 * (t[3] + 1)) * (age >= SCHEDULE.elderYears ? 0.72 : age < SCHEDULE.childYears ? 1.1 : 1);
@@ -703,7 +722,9 @@ export const AT_HOME = { supper: 0.05, rising: 0.015 } as const;
  * away if it ended anywhere else — beyond the village, at sea, gone. No plan at all is the carried:
  * at home always, asleep at night.
  */
-export function homeState(d: DayPlan | undefined, t: number, door: Point): HomeState {
+export function homeState(d: DayPlan | undefined, t: number, door: Point, ill = false): HomeState {
+  // Lying ill (C66): in bed all day, as at night.
+  if (ill) return "asleep";
   if (!d) return t < SCHEDULE.wake || t > SCHEDULE.gatherEnd ? "asleep" : "awake";
   for (const l of d.legs) if (t >= l.t0 && t < l.t1) return "out";
   for (const s of d.stays) if (t >= s.t0 && t < s.t1) return "out";

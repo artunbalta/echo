@@ -56,6 +56,7 @@ import {
   type LifeChange,
   type Need,
 } from "@echo/planet";
+import { FATE_VERBS, fateTurn } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { villageStore } from "@/lib/villageStore";
@@ -152,6 +153,10 @@ export async function POST(req: Request) {
   }
   if (Math.hypot(place.x - pos.x, place.y - pos.y) > verb.reachM + place.sizeM + SLACK_M) return bad("too_far", 403);
 
+  // A death met on its way (C66): only when there is one to meet, and for whom the world says.
+  const turn = FATE_VERBS.has(verb.id) ? fateTurn(verb.id, thing, s, village.plan, day, hour) : null;
+  if (FATE_VERBS.has(verb.id) && !turn) return bad("nothing_to_turn", 409);
+
   // The pack (C47): what is picked up goes into it, and a gift comes out of it — checked here, so a
   // gift is of something actually carried, before anything about the act is recorded.
   let pack = verb.gives || verb.needs === "carrying" ? await store.packOf(caller.subject) : null;
@@ -220,6 +225,12 @@ export async function POST(req: Request) {
     recorded.push(c);
     met.push({ person: n.person, name: byId.get(n.person)?.given ?? "", words: thanksFor(n) });
   }
+  // The healer fetched, herbs left, a fisher kept ashore: a change in their life from today, which the
+  // risk model weighs (`mortality.ts`). Whether it is enough is the world's to say, later.
+  if (turn) {
+    const c = await store.addChange(cell, { person: turn.person.id, kind: turn.kind, madeDay: day, day: turn.day, ...(turn.by ? { by: turn.by } : {}) }, caller.subject);
+    if (c) recorded.push(c);
+  }
   if (pack !== null) await store.setPack(caller.subject, pack);
   let effect = null;
   if (verb.effect && verb.effect.lastsDays > 0) {
@@ -233,8 +244,9 @@ export async function POST(req: Request) {
     seenBy: witnesses.map((id) => byId.get(id)?.given).filter(Boolean),
     ...(effect ? { effect } : {}),
     ...(pack !== null ? { pack } : {}),
-    // The need met, and the change that says so, for the page to fold into its own village at once.
-    ...(met.length > 0 ? { met, changes: recorded } : {}),
+    // The need met, a death met, and the changes that say so, for the page to fold into its own village.
+    ...(met.length > 0 ? { met } : {}),
+    ...(recorded.length > 0 ? { changes: recorded } : {}),
   });
 }
 

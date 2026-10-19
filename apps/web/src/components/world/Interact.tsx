@@ -24,13 +24,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DYES, ITEMS, PACK_SIZE, RECIPES, STAGES, bondWith, canBuild, canMake, nextStage, packCount, thingName, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type Home, type LifeChange, type Look, type Pack, type Recipe, type Verb } from "@echo/planet";
+import { DYES, FATE_VERBS, ITEMS, PACK_SIZE, RECIPES, STAGES, bondWith, canBuild, canMake, fateTurn, nextStage, packCount, thingName, timeOfDay, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type Home, type LifeChange, type Look, type Pack, type Recipe, type Verb } from "@echo/planet";
 
 import type { AnimalsLayer } from "@/game/world/animalsLayer";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { arrangementMeasurement, homeMeasurement } from "@/lib/homeMeasure";
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
 import type { DirectorLayer } from "@/game/world/directorLayer";
+import type { LayerContext } from "@/game/world/PlanetWorld";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
@@ -91,6 +92,15 @@ const typing = () => {
   const el = document.activeElement;
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 };
+
+/** A death met on its way (C66): its verbs only while there is one to meet, as the act route will ask. */
+function fateVerbs(near: NearThing, ctx: LayerContext | null): readonly Verb[] {
+  if (!near.verbs.some((v) => FATE_VERBS.has(v.id))) return near.verbs;
+  const village = ctx?.region.village;
+  const now = Date.now();
+  const clock = worldClock(WORLD_EPOCH);
+  return near.verbs.filter((v) => !FATE_VERBS.has(v.id) || (village && fateTurn(v.id, near.ref, village.settlement, village.plan, worldDayIndex(clock, now), timeOfDay(clock, now)) !== null));
+}
 
 /** What the director sets out (C63): acted on through its own route. */
 const STAGED = new Set<string>(["netted-gull", "lost-pouch", "carved-mark", "dark-cleft"]);
@@ -261,12 +271,16 @@ export default function Interact({
         else if (seen.length <= 3 && seen.length > 1) say(`${seen.slice(0, -1).join(", ")} and ${seen.at(-1)} saw you.`, 5200);
         else if (seen.length > 3) say(`${seen.slice(0, 3).join(", ")} and ${seen.length - 3} others saw you.`, 5200);
         // The very thing somebody needed (C50): they say so, to your face if they are there.
-        if (data.met?.length) {
-          const { villagers } = layers();
+        // Every change the act made (a need met, C50; a death met, C66), folded into this page's village.
+        {
           const w = worldRef.current();
           const had = w?.region.village?.changes ?? [];
           const fresh = (data.changes ?? []).filter((c) => !had.some((h) => h.id === c.id));
           if (w && fresh.length) w.revillage([...had, ...fresh]);
+        }
+        if (data.met?.length) {
+          const { villagers } = layers();
+          const w = worldRef.current();
           for (const m of data.met) {
             const d = villagers?.distanceTo(m.person) ?? null;
             if (d !== null && d < 20) villagers?.say(m.person, m.words);
@@ -674,7 +688,7 @@ export default function Interact({
   const verbs = aboard
     ? [...(near && !aboard.own ? verbsInHand(near.verbs, carrying, true) : []), ...(fishing ? [{ ...fishing, label: "Fish over the side" }] : [])].slice(0, 4)
     : near
-      ? homeVerbs(near, verbsInHand(near.verbs, carrying, false, packCount(pack) < PACK_SIZE), homeNow?.home() ?? null, homeNow?.inside() ?? false, pack).slice(0, 4)
+      ? homeVerbs(near, verbsInHand(fateVerbs(near, layers().ctx), carrying, false, packCount(pack) < PACK_SIZE), homeNow?.home() ?? null, homeNow?.inside() ?? false, pack).slice(0, 4)
       : [];
   // What the next stage of your house takes, when it is to hand and you have not got it (C59).
   const shortFor = near?.kind === "home" && homeNow?.home() ? nextStage(homeNow.home()!) : null;

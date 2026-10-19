@@ -20,6 +20,8 @@
  * Pure.
  */
 
+import { mooringsOn } from "./schedule.js";
+import { isAiling, isSeaDay } from "./mortality.js";
 import type { LifeChange } from "./changes.js";
 import { present } from "./life.js";
 import { socialGraph } from "./social.js";
@@ -216,7 +218,8 @@ export function gatheringName(s: Settlement, g: Gathering): string {
 
 /** What a village knows is coming, and what it knows has just happened (C52). */
 export interface Coming {
-  kind: GatheringKind | "expecting";
+  /** `ailing` and `omen` (C66): a death coming, which a stranger might yet turn. */
+  kind: GatheringKind | "expecting" | "ailing" | "omen";
   /** The day of the gathering; for `expecting`, the day the child will be born (which nobody knows to the day). */
   day: number;
   about: string[];
@@ -235,6 +238,7 @@ export const COMING = {
  * The village's news, soonest first: today's gatherings, a death today (its burial is tomorrow), the
  * weddings of the coming week, the children due any day. What is known is what people know: a wedding
  * is planned, a birth is expected, and a death is never foretold — it is news on the day it happens.
+ * What is feared is talked of (C66): someone lying ill, a fisher going out under a wrong sky.
  */
 const aheadMemo = new WeakMap<Settlement, Map<number, Settlement | null>>();
 
@@ -265,6 +269,13 @@ export function comingOn(s: Settlement, plan: VillagePlan, day: number, changes:
     if (p.deathDay === day && present(s, p, day - 1) && plan.graveyard) {
       out.push({ kind: "funeral", day: day + 1, about: [p.id], words: `${p.given} died today; the burial is tomorrow afternoon` });
     }
+    // A death on its way (C66) is talked of, as it would be: not foretold, but feared.
+    if (!present(s, p, day)) continue;
+    if (isAiling(p, day)) out.push({ kind: "ailing", day, about: [p.id], words: `${p.given} is ill, and keeps to bed` });
+    // In the boat, or, with no boat of their own, off the rocks.
+    const boat = () => mooringsOn(s, plan, day).some((m) => !m.ashore && m.household === (p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto));
+    if (isSeaDay(p, day)) out.push({ kind: "omen", day, about: [p.id], words: boat() ? `The sky is wrong today, and ${p.given} means to go out anyway` : `The sea is running high today, and ${p.given} means to fish off the rocks anyway` });
+    if (isSeaDay(p, day + 1)) out.push({ kind: "omen", day: day + 1, about: [p.id], words: boat() ? `${p.given} means to go out tomorrow, and the old ones do not like the look of the sky` : `${p.given} means to fish off the rocks tomorrow, and the old ones do not like the look of the sea` });
   }
   // Weddings ahead, read off the village a week on: the seed's, and those a stranger brought about (C53).
   const week = aheadOf(s, day, changes);

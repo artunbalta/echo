@@ -176,6 +176,9 @@ const SCATTER: Record<string, Verb[]> = {
 /** Every village thing, and the people, and the water. */
 const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
   house: [
+    // When someone inside lies ill (C66, `fates.ts` decides when these are offered).
+    v({ id: "fetch-healer", label: "Fetch the healer for them", holdS: 6, pose: "still", reachM: 3, stakes: "medium", measure: m("H9", "help_at_cost", "named"), effect: null, deed: { reading: "kindness", weight: 2 }, owner: "household", beat: "You bring the healer, who sits with them a long while." }),
+    v({ id: "leave-herbs", label: "Leave herbs for them", holdS: 3, pose: "gather", reachM: 3, stakes: "low", measure: m("H9", "help_at_cost", "named"), effect: null, deed: { reading: "kindness", weight: 1 }, owner: "household", needs: "carrying", takes: ["herbs"], beat: "You leave the herbs with the family, and tell them how." }),
     v({ id: "knock", label: "Knock", holdS: 1.2, pose: "push", reachM: 2.2, stakes: "low", measure: m("G1", "knock_door", "generic"), effect: null, deed: { reading: "respect", weight: 1 }, owner: "household", beat: "You knock, and wait." }),
     v({ id: "peer-in", label: "Look in at the window", holdS: 2.5, pose: "study", reachM: 2.5, stakes: "medium", measure: m("H2", "peer_in_window", "unrouted"), effect: null, deed: { reading: "trespass", weight: 1 }, owner: "household", beat: "A table, a hearth, a coat on a peg. Someone's life." }),
     v({ id: "force-door", label: "Force the door", holdS: 5, pose: "push", reachM: 2.2, stakes: "high", measure: m("H5", "force_door", "unrouted", "back_off_door"), effect: { kind: "forced", lastsDays: 1 }, deed: { reading: "trespass", weight: 3 }, owner: "household", beat: "The bar splits. The door swings in on its own." }),
@@ -219,6 +222,8 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
     v({ id: "enter", label: "Go a little way inside", holdS: 4, pose: "study", reachM: 5, stakes: "high", measure: m("F3", "enter_cave", "named", "stay_safe"), effect: null, deed: null, owner: "none", beat: "Dark, and colder with every step, and somewhere water." }),
   ],
   villager: [
+    // A fisher set on going out under a wrong sky (C66, `fates.ts` decides when this is offered).
+    v({ id: "ask-ashore", label: "Ask them to stay ashore", holdS: 2.5, pose: "still", reachM: 2.5, stakes: "medium", measure: m("H9", "help_at_cost", "named"), effect: null, deed: { reading: "kindness", weight: 2 }, owner: "household", beat: "You talk them out of it. They are not pleased, but they will stay in." }),
     v({ id: "talk", label: "Talk", holdS: 0, pose: "still", reachM: 7, stakes: "low", measure: m("G1", "initiate", "generic"), effect: null, deed: null, owner: "none", beat: "" }),
     v({ id: "give", label: "Give what you carry", holdS: 1, pose: "gather", reachM: 3, stakes: "low", measure: m("F7", "give_gift", "generic"), effect: null, deed: { reading: "kindness", weight: 2 }, owner: "household", needs: "carrying", beat: "They take it, surprised." }),
     // Barter and labour (C58), with no price anywhere: the villager takes what they want or need, or

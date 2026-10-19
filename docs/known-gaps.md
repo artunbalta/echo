@@ -2151,3 +2151,26 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Not tried on a phone.**
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 55. What C66 does not do yet, and what it trusts (2026-10-19)
+
+- **Nothing changes until 2026-10-20 00:00 UTC**, by the user's choice. If this ships later,
+  `fromDay` must move to the ship day: a world day already seen must not change.
+- **A saved life bears no extra children.** Children are drawn when a pair forms. A woman who lives
+  longer for a stranger's healer has no more children than she would have had.
+- **A life saved in one village, lived in another, loses it.** Someone who moves (C53) is weighed
+  again in their new village with only that village's changes.
+- **The healer is a villager's trade, not a person who comes.** "Fetch the healer" does not move the
+  healer through the village. Many villages have none, and only herbs will do there.
+- **The ill cannot be talked to or visited in bed** beyond what C54 already allows; they are simply
+  not out.
+- **A death is never foretold beyond its warning**: one to two weeks of illness, one evening for the
+  sea. Most deaths are seen by nobody but the village.
+- **Rare, as deaths are**: in Senstrand about one a world year (three real days). Most visits see
+  none.
+- **The sea is not tied to the weather** (C48). The wrong sky is the fisher's own day, not the
+  cell's storm, so a "wrong sky" can fall on a fine day.
+- **The village index** (`villages-echo-capacity-1.json`) is unchanged; it does not depend on deaths
+  after the switch.
+
+**Status:** OPEN, all of it, written down rather than discovered.

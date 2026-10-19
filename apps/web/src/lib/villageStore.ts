@@ -216,6 +216,7 @@ interface ChangeRow {
   to_cell?: string | null;
   from_cell?: string | null;
   spec?: LifeChange["spec"] | null;
+  by?: LifeChange["by"] | null;
 }
 
 function fromRow(r: ChangeRow): LifeChange {
@@ -232,6 +233,7 @@ function fromRow(r: ChangeRow): LifeChange {
     ...(r.to_cell ? { toCell: r.to_cell } : {}),
     ...(r.from_cell ? { fromCell: r.from_cell } : {}),
     ...(r.spec ? { spec: r.spec } : {}),
+    ...(r.by ? { by: r.by } : {}),
   };
 }
 
@@ -244,7 +246,7 @@ function supabaseStore(): VillageStore | null {
     async changesFor(cell) {
       const { data, error } = await admin
         .from("village_changes")
-        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec")
+        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec, by")
         .eq("cell", cell)
         .order("id", { ascending: true })
         .limit(5000);
@@ -267,9 +269,10 @@ function supabaseStore(): VillageStore | null {
           to_cell: c.toCell ?? null,
           from_cell: c.fromCell ?? null,
           spec: c.spec ?? null,
+          ...(c.by ? { by: c.by } : {}),
           subject,
         })
-        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec")
+        .select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec, by")
         .single();
       if (error) return warn("addChange", error.message), null;
       return fromRow(data as ChangeRow);
