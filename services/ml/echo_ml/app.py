@@ -165,6 +165,16 @@ def health():
     return {"ok": True, "service": "echo-ml", "users": len(STORE.all_user_ids())}
 
 
+def _moved(before_mu, before_version: int, after: "P.Posterior") -> dict:
+    """One update's own move, for the web's mirror (C61): μ after − μ before on every axis, the
+    version it moved from and to. A report only — nothing reads it back, and nothing is stored."""
+    return {
+        "delta": [float(x) for x in (after.mu - np.asarray(before_mu, dtype=float))],
+        "version_before": int(before_version),
+        "version": int(after.version),
+    }
+
+
 # ── online loop: observe a user action (§9.8) ────────────────────────────────────
 @app.post("/observe")
 def observe(req: ObserveReq, authorization: str = Header(None)):
@@ -200,6 +210,9 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
             "behaviors": len(st.behaviors),
             "drift_kl": round(drift_kl, 3),
             "update": update_trace or None,   # robust-update trace: d², weight, surprising (WI-4)
+            # The mirror (web DECISIONS C61): this call's own move, per axis, and the version it
+            # moved from. Read-only report; nothing above depends on it.
+            **_moved(before.mu, before.version, st.posterior),
         }
 
 
@@ -222,6 +235,7 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
 
     with STORE.updating(obs["userId"]) as st:
         before = st.posterior.mu.copy()
+        before_version = st.posterior.version
         st.posterior = P.observe(st.posterior, obs["action"], obs["telemetry"])
 
         # Record the cue in the behavior index too (retrieval + the observable `behaviors` count) so the
@@ -248,6 +262,8 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
             "delta_mu": float(np.linalg.norm(st.posterior.mu - before)),
             "cond_persona": cp.to_dict(),
             "telemetry_used": obs["telemetry"],
+            # The mirror (web DECISIONS C61): this act's own move, per axis. Read-only report.
+            **_moved(before, before_version, st.posterior),
         }
 
 
@@ -255,6 +271,8 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
 def telemetry(req: TelemetryReq, authorization: str = Header(None)):
     _auth(authorization)
     with STORE.updating(req.userId) as st:
+        before = st.posterior.mu.copy()
+        before_version = st.posterior.version
         ev = req.event or {}
         t = ev.get("type")
         payload = ev.get("payload", {})
@@ -319,7 +337,9 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
                     tele["path_tortuosity"] = scalars["path_tortuosity"]
         if tele:
             st.posterior = P.observe(st.posterior, "", tele)
-        return {"ok": True, "uncertainty": float(np.mean(st.posterior.var))}
+        # The mirror (web DECISIONS C61): what this window did, per axis — walking moves the
+        # posterior too, and until now said nothing about it. Read-only report.
+        return {"ok": True, "uncertainty": float(np.mean(st.posterior.var)), **_moved(before, before_version, st.posterior)}
 
 
 # ── NPC dialogue (called by realtime) ────────────────────────────────────────────

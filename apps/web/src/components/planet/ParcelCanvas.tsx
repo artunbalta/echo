@@ -64,6 +64,7 @@ import TouchControls from "@/components/world/TouchControls";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
 import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
+import Mirror from "@/components/world/Mirror";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
 import SoundToggle from "@/components/world/SoundToggle";
@@ -386,6 +387,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
           state the inspector gets, so the glance and the panel cannot disagree; what it may say
           about it is decided in recognitionReading.ts. */}
       <RecognitionMeter posterior={posterior} log={log} consent={consent} />
+      {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
+      <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
 
       {/* Exactly one of these two is ever passed, and which one IS the mode: reactions where there
           are stations to react, the walk tally where there are none. */}

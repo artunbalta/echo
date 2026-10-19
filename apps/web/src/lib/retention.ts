@@ -36,6 +36,9 @@ export const RAW_RETENTION_DAYS = 90;
 export const RAW_TABLES: readonly { table: string; column: string }[] = [
   // The durable record of every measurement the landing world sends to the engine (0011).
   { table: "behavioral_events", column: "created_at" },
+  // What each of those did to the echo, for the mirror (0027, C61). A record of acts, so raw: a row
+  // that ages off is shown as "not in this record" rather than vanishing from the account.
+  { table: "echo_ledger", column: "at" },
   // The older telemetry envelope, same shape, different route (0001).
   { table: "telemetry_events", column: "ts" },
   // Who approached whom, and when (0001).

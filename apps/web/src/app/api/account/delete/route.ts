@@ -27,6 +27,7 @@ import { NextResponse } from "next/server";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { deleteUser } from "@/lib/ml";
 import { deleteIslandState } from "@/lib/island-state";
+import { forgetLedger } from "@/lib/ledger";
 import { erasureVerdict, type MlDeleteResult } from "@/lib/erasureResult";
 
 export const runtime = "nodejs";
@@ -61,6 +62,8 @@ const USER_KEYED: [string, string][] = [
   // C59. Their house and their look. The land goes back to being land.
   ["player_homes", "subject"],
   ["player_looks", "subject"],
+  // C61. The mirror's record: every act and walk the echo was moved by, and by how much.
+  ["echo_ledger", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
@@ -136,6 +139,8 @@ export async function POST(req: Request) {
 
   // ALL THREE, DESTRUCTURED. This was a three-element `Promise.all` read into two bindings, so
   // `deleteIslandState`'s result was silently discarded and could never reach `ok`.
+  // The mirror's record where it is held in this process (dev, or a write that failed): gone first.
+  forgetLedger(uid);
   const [ml, supabase, island] = await Promise.all([
     deleteUser(uid),
     supabaseDelete(uid),
