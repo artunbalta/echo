@@ -2097,3 +2097,13 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Not tried on a phone.** There the mirror opens from the meter, not from `Y`.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 52. What C62 does not do yet (2026-10-19)
+
+- **The owner is named by setting, not proven by sign-in.** An echo subject is a browser's anonymous
+  identity. Another browser of the owner's needs its id added too, and a cleared browser needs the
+  new one.
+- **The owner's lines are spoken only with ElevenLabs on.** No local fallback in their own voice exists.
+- **Not tried on a phone or in Safari**, like C60.
+
+**Status:** OPEN.

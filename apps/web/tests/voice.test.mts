@@ -20,7 +20,8 @@ const require_ = createRequire(import.meta.url);
 const SERVER_ONLY = require_.resolve("server-only");
 require_.cache[SERVER_ONLY] = { id: SERVER_ONLY, filename: SERVER_ONLY, path: SERVER_ONLY, loaded: true, exports: {}, children: [], paths: [] } as never;
 
-const { pickVoice, readVoice, resetVoices, voiceList } = await import("../src/lib/voices");
+const { ownVoice, pickVoice, readVoice, resetVoices, voiceList } = await import("../src/lib/voices");
+const SELF = await import("../src/app/api/voice/self/route");
 const { signLine, verifyLine, LINE_MS } = await import("../src/lib/villageTalk");
 const { POST: VOICE } = await import("../src/app/api/village/voice/route");
 const { POST: HEAR } = await import("../src/app/api/village/hear/route");
@@ -228,4 +229,50 @@ test("C60: what is said aloud comes back as words, and only words; what is not s
   assert.equal(((await (await hear(speech)).json()) as { error: string }).error, "no_ears");
   delete process.env.ELEVENLABS_API_KEY;
   assert.equal((await hear(speech)).status, 503);
+});
+
+// ── your own voice (C62) ────────────────────────────────────────────────────────
+
+const OWNER_VOICE = "v-f-young";
+const self = (method: "GET" | "POST", body?: unknown, subject = SUBJECT) => {
+  const req = new Request("https://echo.test/api/voice/self", { method, headers: { "content-type": "application/json", authorization: `Bearer ${signIdentity(subject, SECRET, Date.now())}` }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  return method === "GET" ? SELF.GET(req) : SELF.POST(req);
+};
+
+test("C62: your own voice is yours alone — bound to the owner's identity and one named voice, never guessed, never a villager's", async () => {
+  const keep = { owners: process.env.ECHO_OWNER_SUBJECTS, voice: process.env.ELEVENLABS_OWNER_VOICE_ID };
+  try {
+    delete process.env.ECHO_OWNER_SUBJECTS;
+    delete process.env.ELEVENLABS_OWNER_VOICE_ID;
+    assert.equal(ownVoice(SUBJECT), null, "a voice without anyone saying whose");
+    process.env.ELEVENLABS_OWNER_VOICE_ID = OWNER_VOICE;
+    assert.equal(ownVoice(SUBJECT), null, "a voice without an owner");
+    process.env.ECHO_OWNER_SUBJECTS = ` someone-else , ${SUBJECT} `;
+    assert.equal(ownVoice(SUBJECT)!.voiceId, OWNER_VOICE);
+    assert.equal(ownVoice("someone-else-again"), null);
+    delete process.env.ELEVENLABS_OWNER_VOICE_ID;
+    assert.equal(ownVoice(SUBJECT), null, "an owner without a named voice given one anyway");
+    process.env.ELEVENLABS_OWNER_VOICE_ID = OWNER_VOICE;
+    // The owner's voice is struck from the villagers' list, whatever its labels say.
+    assert.ok(!(await voiceList())!.some((v) => v.id === OWNER_VOICE));
+    // The route: the owner hears their words in it; anyone else is refused before ElevenLabs is asked.
+    assert.deepEqual(await (await self("GET")).json(), { mine: true });
+    assert.deepEqual(await (await self("GET", undefined, "f4f3e0fc-9999-4222-8333-444455556667")).json(), { mine: false });
+    assert.equal((await self("POST", { text: "Say this in his voice." }, "f4f3e0fc-9999-4222-8333-444455556667")).status, 403);
+    assert.equal(calls.filter((c) => c.url.includes("/v1/text-to-speech/")).length, 0);
+    const res = await self("POST", { text: "Good morning. Is the boat yours?" });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "audio/mpeg");
+    const tts = calls.filter((c) => c.url.includes("/v1/text-to-speech/"));
+    assert.equal(tts.length, 1);
+    assert.ok(tts[0]!.url.includes(`/v1/text-to-speech/${OWNER_VOICE}?`));
+    assert.equal(JSON.parse(String(tts[0]!.init!.body)).text, "Good morning. Is the boat yours?");
+    assert.equal((await self("POST", { text: "x".repeat(401) })).status, 413);
+    assert.equal((await self("POST", { text: "  " })).status, 400);
+  } finally {
+    for (const [k, v] of [["ECHO_OWNER_SUBJECTS", keep.owners], ["ELEVENLABS_OWNER_VOICE_ID", keep.voice]] as const) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 });

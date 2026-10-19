@@ -3986,3 +3986,35 @@ The engine is read when the mirror opens, not polled: rate bucket `mirror`, 30 r
   - stop watching, then watch again, from the mirror: the consent key and the meter followed.
 
 **Not done.** See ⚑51.
+
+## C62 — the owner's own voice, and nobody else's
+
+C60 kept every cloned voice from every villager. The account's owner then asked for theirs to be
+*their* voice in the world, since it is theirs. Now:
+
+- **Typed lines.** What they type to a villager is said in their own voice first, and the reply
+  waits for it rather than cutting in. Lines spoken into the microphone are not replayed: they
+  already were said.
+- **Their echo** (feature 17) will speak in it.
+
+**Bound on the server, never guessed** (`voices.ts` `ownVoice`; `/api/voice/self`). Two settings
+must both be set:
+
+- `ELEVENLABS_OWNER_VOICE_ID` names the voice;
+- `ECHO_OWNER_SUBJECTS` names whose it is, the id the mirror now shows under "Your id here".
+
+Anyone else asking for it gets 403 before ElevenLabs is asked. That matters because a voice anyone
+could type into is a voice anyone could put words in the mouth of. The owner's own words need no
+token, unlike a villager's line, since they choose them. The owner's voice is struck from the
+villagers' list whatever its labels say.
+
+**Measured.**
+
+- `voice.test.mts`, now 7 tests. The new one covers:
+  - both settings needed;
+  - others refused, with nothing sent to ElevenLabs;
+  - the villagers' list without the owner's voice;
+  - the owner's words in that voice.
+- 6 injected defects, all caught. The first pass missed an owner with no voice named, now pinned.
+- Real, with the account's cloned voice: not on the villagers' list, refused to anyone else, and a
+  line spoken in 1.5 s and written back word for word.

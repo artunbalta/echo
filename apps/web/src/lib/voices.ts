@@ -11,6 +11,13 @@
  * NEVER A CLONED VOICE. A cloned voice is somebody's own: the account this was built on holds one.
  * No villager ever speaks in it, whatever else the list lacks.
  *
+ * YOUR OWN VOICE, AND ONLY YOURS (C62). The account's owner asked for that cloned voice to be theirs
+ * in the world: the lines they type to villagers, and later their echo's. It is bound on the server
+ * to the subjects listed in `ECHO_OWNER_SUBJECTS`, and to the one voice named in
+ * `ELEVENLABS_OWNER_VOICE_ID`; both must be set, nothing is guessed from the list. Anyone else
+ * asking for it is refused, because a voice anyone could type into is a voice anyone could put words
+ * in the mouth of. And the owner's voice is struck from the villagers' list whatever its labels say.
+ *
  * The pace comes from the person: a child quicker, the old slower, and the lively quicker and less
  * even than the unhurried (the temperament's "lively and quick" axis, `life.ts` `temperamentOf`).
  * `pickVoice` is pure, and is what the tests pin; the list is read from the account and kept for an
@@ -109,6 +116,20 @@ export function pickVoice(p: { id: string; sex: "f" | "m"; ageYears: number; liv
 
 let catalogue: { at: number; voices: Voice[] } | null = null;
 
+const ownerVoiceId = () => (process.env.ELEVENLABS_OWNER_VOICE_ID ?? "").trim();
+
+/**
+ * The caller's own voice, when they are the owner it belongs to (C62); null for everyone else, and
+ * for everyone while either setting is missing. Steadier than a villager's: it is a person's voice,
+ * and it should sound like them.
+ */
+export function ownVoice(subject: string): VoiceChoice | null {
+  const id = ownerVoiceId();
+  const owners = (process.env.ECHO_OWNER_SUBJECTS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (!id || !owners.includes(subject)) return null;
+  return { voiceId: id, settings: { stability: 0.55, similarity_boost: 0.85, style: 0, use_speaker_boost: true, speed: 1 } };
+}
+
 /** The account's voices, kept for an hour; null without a key or when the list cannot be read. */
 export async function voiceList(): Promise<Voice[] | null> {
   if (!KEY()) return null;
@@ -117,7 +138,8 @@ export async function voiceList(): Promise<Voice[] | null> {
     const res = await fetch(`${API}/v2/voices?page_size=100&include_total_count=false`, { headers: { "xi-api-key": KEY() }, signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
     const data = (await res.json()) as { voices?: { voice_id: string; name?: string; category?: string; labels?: Record<string, string> }[] };
-    const voices = (data.voices ?? []).map(readVoice).filter((v) => !v.cloned);
+    const own = ownerVoiceId();
+    const voices = (data.voices ?? []).map(readVoice).filter((v) => !v.cloned && v.id !== own);
     if (voices.length === 0) return null;
     catalogue = { at: Date.now(), voices };
     return voices;

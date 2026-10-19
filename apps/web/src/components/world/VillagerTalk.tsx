@@ -29,7 +29,7 @@ import type { ConsentState } from "@/game/world/measure";
 import type { PlanetWorld } from "@/game/world/PlanetWorld";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
-import { canRecord, canSpeak, cloudWanted, hearIt, hush, hushCloud, recorder, setCloudWanted, setVoiceWanted, speak, speakCloud, unlockCloud, voiceWanted } from "@/lib/villagerVoice";
+import { canRecord, canSpeak, cloudWanted, hearIt, hush, hushCloud, ownVoiceHere, recorder, setCloudWanted, setVoiceWanted, speak, speakCloud, speakSelf, unlockCloud, voiceWanted } from "@/lib/villagerVoice";
 
 interface Turn {
   role: "stranger" | "villager" | "decided";
@@ -75,6 +75,19 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
   const rec = useRef(recorder());
   /** The key or the button is down: what a late microphone is checked against. */
   const holding = useRef(false);
+  /** This stranger has a voice of their own here (C62): typed lines are said in it. */
+  const [mine, setMine] = useState(false);
+  useEffect(() => {
+    if (!cloud || consent === "unset") return;
+    let live = true;
+    void ensureIdentity()
+      .then(() => ownVoiceHere(identityHeaders()))
+      .then((yes) => live && setMine(yes))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [cloud, consent]);
   useEffect(() => {
     const c = cloudWanted();
     setCloud(c);
@@ -201,7 +214,11 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
   const send = useCallback(async (spoken?: string) => {
     const text = (spoken ?? draft).trim();
     if (!talking || !text || pending) return;
-    if (voice && cloud) unlockCloud();
+    if (voice && cloud) {
+      unlockCloud();
+      // Typed, it is said in your own voice where you have one; spoken aloud, it already was.
+      if (mine && spoken === undefined) void speakSelf(text, identityHeaders());
+    }
     if (consent === "unset") {
       setNote("Answer the card first: talking needs the answer, either way.");
       return;
@@ -260,7 +277,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       setPending(false);
       setTimeout(() => input.current?.focus(), 0);
     }
-  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf, cloud]);
+  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf, cloud, mine]);
 
   const forget = useCallback(async () => {
     if (!talking || consent === "unset") return;
