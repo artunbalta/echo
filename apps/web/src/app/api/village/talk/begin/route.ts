@@ -19,6 +19,8 @@ import { ageYears, dayPlans, doorOf, grievance, homeState, present, residentsOn 
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
+import { villageStore } from "@/lib/villageStore";
+import { refuseBarred } from "@/lib/moderation";
 import { recognition, whereNow } from "@/lib/villager";
 import { TALK_REACH_M, loadVillage, signConversation } from "@/lib/villageTalk";
 
@@ -36,6 +38,9 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
+  // A stranger barred by a moderator changes nothing in the shared world (C67).
+  const barredNow = await refuseBarred(villageStore(), caller.subject);
+  if (barredNow) return barredNow;
   let body: { cell?: unknown; person?: unknown; at?: unknown };
   try {
     body = await req.json();

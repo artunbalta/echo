@@ -4348,3 +4348,96 @@ the day passes.
   lost at sea on day 5979, unless someone keeps him ashore.
 
 **Not done.** See ⚑55.
+
+## C67 — moderation: reports, undoing a stranger's traces, and bars
+
+Feature 19 of the twenty. What was promised: reporting abuse in the shared world, and undoing one
+player's traces in bulk.
+
+**What a stranger leaves that others live with.**
+
+- **Life changes** they talked villagers into (C44, C50, C53, C66): leaving, marrying, a trade, a
+  wish.
+- **Marks** their acts left (C45): a trampled field, a forced door.
+- **What villagers know of their deeds** (C45).
+- **Their house** (C59).
+
+Their conversations, notes, ledger, outings and stagings are their own and touch nobody.
+
+**Reporting** (`POST /api/moderation/report`). "Report something here" sits on the parcel's card,
+with three plain reasons ("Someone is ruining this village", "Something offensive is on this
+land", "Something else") and a note of at most 300 characters.
+
+- **Anyone may report**, consent or none: reporting is not being watched.
+- **A snapshot comes with it**: the server keeps who had left what in that cell over the last 14
+  world days (life changes, marks, deeds and wrongs, by subject), the reporter left out. A moderator
+  sees what was there when it was reported, not after.
+- **The reporter is never told whose it was.**
+- At most 6 reports an hour.
+
+**Moderating** (`/moderation`, `GET`/`POST /api/moderation`). Only for the subjects in
+`ECHO_MODERATORS`; anyone else is told the page is for moderators, and shown nothing. Reports come
+newest open first, with their snapshots. A stranger's whole trace is shown with a preview of what an
+undo would do, before anyone does it. Then: undo, bar (a week by default), lift a bar, dismiss.
+Every action is logged with the moderator (`moderation_actions`), and closes the report it was
+taken on. A moderator cannot act on themselves.
+
+**What an undo does, and cannot** (`lib/moderation.ts` `undoPlan`, pure). L2 says the past does not
+move. Undone today:
+
+| A trace | Undone as |
+|---|---|
+| a leaving still planned | a `stay` (C44's own cancel), today |
+| anything else not yet in effect (a wedding to come, an arrival, a trade from tomorrow) | withdrawn: nobody has lived it |
+| a wish talked into someone | let go (`drop`), today |
+| a trade talked into someone | the old one back, from tomorrow |
+| what already happened: a family left, a marriage, a meeting | stands, as history |
+| a mark still showing | healed today |
+| deeds | forgotten |
+| their house | taken down only if the moderator says so |
+
+The moderators' own changes are made under `moderation`, and are never anyone's traces to undo.
+
+**Bars.** A barred stranger is refused (403 `barred`) by everything that changes the shared world:
+acts, talk and its beginning, trade, their house. The panels say "A moderator has barred you from
+changing this world for now." A bar is read at most every 30 s a stranger. A store that cannot be
+read bars nobody.
+
+**Kept** (migration 0031): `moderation_reports`, `barred_subjects`, `moderation_actions`, and
+indexes for finding one stranger's marks and deeds. On erasure:
+
+- the reports a stranger filed and a bar on them are deleted;
+- what moderators did stays, with whom it was done to cleared.
+
+The in-memory store now keeps who made each change and mark, as the tables always did.
+
+**Found on the way.**
+
+- **The moderators' page wiped its own confirmation.** Reading the stranger again after an action
+  cleared what had just been said. The real browser run found it.
+- **A test passed for the wrong reason.** talk/begin refuses a far stranger with 403 too, so the
+  barred check now pins the reason. Defect injection found it.
+
+**Measured.**
+
+- `moderation.test.mts`, 5 tests:
+  - the undo plan: stays, drops, trades back, withdrawals, history standing, only showing marks
+    healed, no house unasked, nothing dated into the past;
+  - reports: a snapshot without the reporter, one from a stranger with no identity, moderators only;
+  - an undo in Senstrand: a planned leaving stayed, a wish dropped, a trade given back, a mark
+    healed, deeds forgotten, the moderators' reversals never traces, logged;
+  - the village through yesterday exactly the same people, partners, leavings and trades: the past
+    did not move;
+  - a bar: no act and no talk, others untouched, and lifted;
+  - the erasure lists.
+- 16 injected defects, all caught. The first pass missed one (the talk route barred for the wrong
+  reason), now pinned.
+- Browser:
+  - a griefer trampled three of Senstrand's fields while eight villagers watched;
+  - a reporter filed "Someone is trampling every field on the green side";
+  - someone else was turned away from `/moderation`;
+  - the moderator saw the report with the griefer's marks, deeds and three wrongs, previewed, undid
+    (three marks healed, deeds forgotten) and barred for a week;
+  - the griefer's next trample came back 403 `barred`.
+
+**Not done.** See ⚑56.

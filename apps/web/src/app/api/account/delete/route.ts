@@ -69,6 +69,9 @@ const USER_KEYED: [string, string][] = [
   // C64. When they were last here, and what their echo did while they were away.
   ["player_presence", "subject"],
   ["echo_outings", "subject"],
+  // C67. Reports they filed, and a bar on them (their identity goes with this erasure anyway).
+  ["moderation_reports", "reporter"],
+  ["barred_subjects", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
@@ -78,6 +81,8 @@ const USER_NAMED: [string, string][] = [
   ["village_changes", "subject"],
   // C45. The marks acts left on the shared world: they heal on their own day, nameless meanwhile.
   ["world_effects", "subject"],
+  // C67. What moderators did stays answerable; whom it was done to does not outlive the erasure.
+  ["moderation_actions", "subject"],
 ];
 
 async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: string[] }> {

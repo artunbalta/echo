@@ -237,6 +237,10 @@ export default function Interact({
           say("Enough. The village has seen enough of you for one day.");
           return;
         }
+        if (data.error === "barred") {
+          say("A moderator has barred you from changing this world for now.");
+          return;
+        }
         if (data.error === "pack_full") {
           say(`Your pack is full: ${PACK_SIZE} things. Put something down first (I).`);
           return;

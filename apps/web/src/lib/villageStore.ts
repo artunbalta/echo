@@ -13,10 +13,11 @@
  */
 import "server-only";
 
-import type { Deed, Home, Landing, LifeChange, Look, Pack, Staging, WorldEffect } from "@echo/planet";
+import { WRONGS, type Deed, type Home, type Landing, type LifeChange, type Look, type Pack, type Staging, type WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 import type { Outing } from "@/lib/echoTypes";
+import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
 
 export interface VillagerMemory {
   /** In the villager's words. */
@@ -69,7 +70,29 @@ export interface VillageStore {
   /** The echo's outings for a stranger (C64), newest first, the last 10. Null: unreadable. */
   outingsOf(subject: string): Promise<Outing[] | null>;
   saveOuting(o: Outing): Promise<boolean>;
+  // ── moderation (C67) ──
+  /** Who left what in a cell since a world day, by subject (never the changes the moderators made). */
+  tracesIn(cell: string, sinceDay: number): Promise<CellTraces[] | null>;
+  /** Everything one stranger has left in the shared world. */
+  tracesOf(subject: string): Promise<Traces | null>;
+  deleteChange(cell: string, id: string): Promise<boolean>;
+  /** A mark healed: it lasts until this day, no longer. */
+  healMark(cell: string, id: string, day: number): Promise<boolean>;
+  /** The villagers forget what this stranger did, everywhere. */
+  forgetDeeds(subject: string): Promise<boolean>;
+  removeHome(subject: string): Promise<boolean>;
+  addReport(r: Omit<Report, "id">): Promise<Report | null>;
+  reports(limit: number): Promise<Report[] | null>;
+  resolveReport(id: string, by: string, outcome: string, at: string): Promise<boolean>;
+  barOf(subject: string): Promise<Bar | null | undefined>;
+  bar(b: Bar): Promise<boolean>;
+  lift(subject: string): Promise<boolean>;
+  logModeration(e: Omit<ModerationEntry, "id">): Promise<boolean>;
+  moderationLog(limit: number): Promise<ModerationEntry[] | null>;
 }
+
+/** The subject the moderators write their own changes under: never a stranger's, never undone. */
+export const MODERATION_SUBJECT = "moderation";
 
 interface OutingRow {
   id: string;
@@ -202,6 +225,8 @@ const deedFromRow = (r: DeedRow): Deed => ({
 
 /** Ids are compared as strings in `byMade`, so they are padded to sort the way they were made. */
 const changeId = (n: number | string) => `c${String(n).padStart(12, "0")}`;
+const numOf = (id: string) => Number(id.replace(/^[a-z]+/, ""));
+
 
 interface ChangeRow {
   id: number;
@@ -434,6 +459,124 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("saveOuting", error.message), false;
       return true;
     },
+    async tracesIn(cell, sinceDay) {
+      const [ch, ef, de] = await Promise.all([
+        admin.from("village_changes").select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec, by, subject").eq("cell", cell).gte("made_day", sinceDay).not("subject", "is", null).neq("subject", MODERATION_SUBJECT).limit(2000),
+        admin.from("world_effects").select("id, thing, kind, day, until_day, subject").eq("cell", cell).gte("day", sinceDay).not("subject", "is", null).limit(2000),
+        admin.from("village_deeds").select("subject, reading").eq("cell", cell).gte("day", sinceDay).limit(5000),
+      ]);
+      if (ch.error || ef.error || de.error) return warn("tracesIn", (ch.error ?? ef.error ?? de.error)!.message), null;
+      const by = new Map<string, CellTraces>();
+      const of = (subject: string) => by.get(subject) ?? (by.set(subject, { subject, changes: [], marks: [], deeds: 0, wrongs: 0 }), by.get(subject)!);
+      for (const r of ch.data as (ChangeRow & { subject: string })[]) of(r.subject).changes.push(fromRow(r));
+      for (const r of ef.data as (EffectRow & { subject: string })[]) of(r.subject).marks.push(effectFromRow(r));
+      for (const r of de.data as { subject: string; reading: Deed["reading"] }[]) {
+        const t = of(r.subject);
+        t.deeds++;
+        if (WRONGS.has(r.reading)) t.wrongs++;
+      }
+      return [...by.values()];
+    },
+    async tracesOf(subject) {
+      const [ch, ef, de, home] = await Promise.all([
+        admin.from("village_changes").select("id, person, kind, made_day, day, occupation, goal, target, goal_id, to_cell, from_cell, spec, by, cell").eq("subject", subject).order("id", { ascending: true }).limit(5000),
+        admin.from("world_effects").select("id, thing, kind, day, until_day, cell").eq("subject", subject).limit(5000),
+        admin.from("village_deeds").select("cell, reading").eq("subject", subject).limit(10000),
+        admin.from("player_homes").select("cell").eq("subject", subject).maybeSingle(),
+      ]);
+      if (ch.error || ef.error || de.error || home.error) return warn("tracesOf", (ch.error ?? ef.error ?? de.error ?? home.error)!.message), null;
+      const deeds = new Map<string, { cell: string; count: number; wrongs: number }>();
+      for (const r of de.data as { cell: string; reading: Deed["reading"] }[]) {
+        const d = deeds.get(r.cell) ?? { cell: r.cell, count: 0, wrongs: 0 };
+        d.count++;
+        if (WRONGS.has(r.reading)) d.wrongs++;
+        deeds.set(r.cell, d);
+      }
+      return {
+        changes: (ch.data as (ChangeRow & { cell: string })[]).map((r) => ({ cell: r.cell, change: fromRow(r) })),
+        marks: (ef.data as (EffectRow & { cell: string })[]).map((r) => ({ cell: r.cell, mark: effectFromRow(r) })),
+        deeds: [...deeds.values()],
+        home: home.data ? { cell: (home.data as { cell: string }).cell } : null,
+      };
+    },
+    async deleteChange(cell, id) {
+      const { error } = await admin.from("village_changes").delete().eq("cell", cell).eq("id", numOf(id));
+      if (error) return warn("deleteChange", error.message), false;
+      return true;
+    },
+    async healMark(cell, id, day) {
+      const { error } = await admin.from("world_effects").update({ until_day: day }).eq("cell", cell).eq("id", numOf(id));
+      if (error) return warn("healMark", error.message), false;
+      return true;
+    },
+    async forgetDeeds(subject) {
+      const { error } = await admin.from("village_deeds").delete().eq("subject", subject);
+      if (error) return warn("forgetDeeds", error.message), false;
+      return true;
+    },
+    async removeHome(subject) {
+      const { error } = await admin.from("player_homes").delete().eq("subject", subject);
+      if (error) return warn("removeHome", error.message), false;
+      return true;
+    },
+    async addReport(r) {
+      const { data, error } = await admin
+        .from("moderation_reports")
+        .insert({ reporter: r.reporter, cell: r.cell, reason: r.reason, note: r.note, day: r.day, made_at: r.madeAt, snapshot: r.snapshot })
+        .select("id")
+        .single();
+      if (error) return warn("addReport", error.message), null;
+      return { ...r, id: `r${(data as { id: number }).id}` };
+    },
+    async reports(limit) {
+      const { data, error } = await admin.from("moderation_reports").select("id, reporter, cell, reason, note, day, made_at, snapshot, resolved_at, resolved_by, outcome").order("id", { ascending: false }).limit(limit);
+      if (error) return warn("reports", error.message), null;
+      return (data as { id: number; reporter: string | null; cell: string; reason: Report["reason"]; note: string | null; day: number; made_at: string; snapshot: CellTraces[]; resolved_at: string | null; resolved_by: string | null; outcome: string | null }[]).map((r) => ({
+        id: `r${r.id}`,
+        reporter: r.reporter,
+        cell: r.cell,
+        reason: r.reason,
+        note: r.note,
+        day: r.day,
+        madeAt: new Date(r.made_at).toISOString(),
+        snapshot: r.snapshot ?? [],
+        resolvedAt: r.resolved_at ? new Date(r.resolved_at).toISOString() : null,
+        resolvedBy: r.resolved_by,
+        outcome: r.outcome,
+      }));
+    },
+    async resolveReport(id, by, outcome, at) {
+      const { error } = await admin.from("moderation_reports").update({ resolved_at: at, resolved_by: by, outcome }).eq("id", numOf(id));
+      if (error) return warn("resolveReport", error.message), false;
+      return true;
+    },
+    async barOf(subject) {
+      const { data, error } = await admin.from("barred_subjects").select("subject, until, reason, by_moderator, at").eq("subject", subject).maybeSingle();
+      if (error) return warn("barOf", error.message), undefined;
+      if (!data) return null;
+      const b = data as { subject: string; until: string; reason: string; by_moderator: string; at: string };
+      return { subject: b.subject, until: new Date(b.until).toISOString(), reason: b.reason, by: b.by_moderator, at: new Date(b.at).toISOString() };
+    },
+    async bar(b) {
+      const { error } = await admin.from("barred_subjects").upsert({ subject: b.subject, until: b.until, reason: b.reason, by_moderator: b.by, at: b.at }, { onConflict: "subject" });
+      if (error) return warn("bar", error.message), false;
+      return true;
+    },
+    async lift(subject) {
+      const { error } = await admin.from("barred_subjects").delete().eq("subject", subject);
+      if (error) return warn("lift", error.message), false;
+      return true;
+    },
+    async logModeration(e) {
+      const { error } = await admin.from("moderation_actions").insert({ moderator: e.moderator, subject: e.subject, action: e.action, report: e.report, detail: e.detail, at: e.at });
+      if (error) return warn("logModeration", error.message), false;
+      return true;
+    },
+    async moderationLog(limit) {
+      const { data, error } = await admin.from("moderation_actions").select("id, moderator, subject, action, report, detail, at").order("id", { ascending: false }).limit(limit);
+      if (error) return warn("moderationLog", error.message), null;
+      return (data as (Omit<ModerationEntry, "id"> & { id: number })[]).map((r) => ({ ...r, id: `m${r.id}`, at: new Date(r.at).toISOString() }));
+    },
     async stagingsOf(subject) {
       const { data, error } = await admin.from("player_stagings").select(STAGING_COLUMNS).eq("subject", subject).order("created_at", { ascending: false }).limit(50);
       if (error) return warn("stagingsOf", error.message), null;
@@ -495,6 +638,11 @@ interface MemoryState {
   stagings?: Map<string, Staging[]>;
   presence?: Map<string, { at: string; cell: string }>;
   outings?: Map<string, Outing[]>;
+  /** Who made each change and mark, by id (C67): the table keeps it in a column. */
+  whose?: Map<string, { subject: string; made: number }>;
+  reports?: Report[];
+  bars?: Map<string, Bar>;
+  log?: ModerationEntry[];
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -507,9 +655,10 @@ function memoryStore(): VillageStore {
     async changesFor(cell) {
       return [...(memory.changes.get(cell) ?? [])];
     },
-    async addChange(cell, c) {
+    async addChange(cell, c, subject) {
       const change: LifeChange = { ...c, id: changeId(memory.next++) };
       memory.changes.set(cell, [...(memory.changes.get(cell) ?? []), change]);
+      (memory.whose ??= new Map()).set(change.id, { subject, made: c.madeDay });
       return change;
     },
     async memoryOf(subject, cell, person) {
@@ -534,8 +683,9 @@ function memoryStore(): VillageStore {
     async effectsFor(cell, day) {
       return (memory.effects?.get(cell) ?? []).filter((e) => e.untilDay > day);
     },
-    async addEffect(cell, e) {
+    async addEffect(cell, e, subject) {
       const effect: WorldEffect = { ...e, id: `e${memory.next++}` };
+      (memory.whose ??= new Map()).set(effect.id, { subject, made: e.day });
       memory.effects ??= new Map();
       memory.effects.set(cell, [...(memory.effects.get(cell) ?? []), effect]);
       return effect;
@@ -591,6 +741,89 @@ function memoryStore(): VillageStore {
       memory.outings.set(o.subject, [...list, structuredClone(o)]);
       return true;
     },
+    async tracesIn(cell, sinceDay) {
+      const by = new Map<string, CellTraces>();
+      const of = (subject: string) => by.get(subject) ?? (by.set(subject, { subject, changes: [], marks: [], deeds: 0, wrongs: 0 }), by.get(subject)!);
+      for (const c of memory.changes.get(cell) ?? []) {
+        const w = memory.whose?.get(c.id);
+        if (w && w.subject !== MODERATION_SUBJECT && c.madeDay >= sinceDay) of(w.subject).changes.push({ ...c });
+      }
+      for (const e of memory.effects?.get(cell) ?? []) {
+        const w = memory.whose?.get(e.id);
+        if (w && e.day >= sinceDay) of(w.subject).marks.push({ ...e });
+      }
+      for (const [k, list] of memory.deeds ?? new Map<string, Deed[]>()) {
+        const [subject, at] = k.split("|");
+        if (at !== cell) continue;
+        for (const d of list) {
+          if (d.day < sinceDay) continue;
+          const t = of(subject!);
+          t.deeds++;
+          if (WRONGS.has(d.reading)) t.wrongs++;
+        }
+      }
+      return [...by.values()];
+    },
+    async tracesOf(subject) {
+      const changes: Traces["changes"] = [];
+      for (const [cell, list] of memory.changes) for (const c of list) if (memory.whose?.get(c.id)?.subject === subject) changes.push({ cell, change: { ...c } });
+      const marks: Traces["marks"] = [];
+      for (const [cell, list] of memory.effects ?? new Map<string, WorldEffect[]>()) for (const e of list) if (memory.whose?.get(e.id)?.subject === subject) marks.push({ cell, mark: { ...e } });
+      const deeds: Traces["deeds"] = [];
+      for (const [k, list] of memory.deeds ?? new Map<string, Deed[]>()) {
+        const [who, cell] = k.split("|");
+        if (who === subject && list.length) deeds.push({ cell: cell!, count: list.length, wrongs: list.filter((d) => WRONGS.has(d.reading)).length });
+      }
+      const h = memory.homes?.get(subject);
+      return { changes, marks, deeds, home: h ? { cell: h.cell } : null };
+    },
+    async deleteChange(cell, id) {
+      memory.changes.set(cell, (memory.changes.get(cell) ?? []).filter((c) => c.id !== id));
+      return true;
+    },
+    async healMark(cell, id, day) {
+      memory.effects?.set(cell, (memory.effects.get(cell) ?? []).map((e) => (e.id === id ? { ...e, untilDay: day } : e)));
+      return true;
+    },
+    async forgetDeeds(subject) {
+      for (const k of [...(memory.deeds?.keys() ?? [])]) if (k.startsWith(`${subject}|`)) memory.deeds!.delete(k);
+      return true;
+    },
+    async removeHome(subject) {
+      memory.homes?.delete(subject);
+      return true;
+    },
+    async addReport(r) {
+      const report = { ...r, id: `r${memory.next++}` };
+      (memory.reports ??= []).push(structuredClone(report));
+      return report;
+    },
+    async reports(limit) {
+      return [...(memory.reports ?? [])].reverse().slice(0, limit).map((r) => structuredClone(r));
+    },
+    async resolveReport(id, by, outcome, at) {
+      memory.reports = (memory.reports ?? []).map((r) => (r.id === id ? { ...r, resolvedAt: at, resolvedBy: by, outcome } : r));
+      return true;
+    },
+    async barOf(subject) {
+      const b = memory.bars?.get(subject);
+      return b ? { ...b } : null;
+    },
+    async bar(b) {
+      (memory.bars ??= new Map()).set(b.subject, { ...b });
+      return true;
+    },
+    async lift(subject) {
+      memory.bars?.delete(subject);
+      return true;
+    },
+    async logModeration(e) {
+      (memory.log ??= []).push({ ...e, id: `m${memory.next++}` });
+      return true;
+    },
+    async moderationLog(limit) {
+      return [...(memory.log ?? [])].reverse().slice(0, limit).map((e) => structuredClone(e));
+    },
     async stagingsOf(subject) {
       return (memory.stagings?.get(subject) ?? []).map((x) => structuredClone(x)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50);
     },
@@ -643,6 +876,10 @@ export function resetMemoryStore(): void {
   memory.stagings?.clear();
   memory.presence?.clear();
   memory.outings?.clear();
+  memory.whose?.clear();
+  memory.reports = [];
+  memory.bars?.clear();
+  memory.log = [];
   memory.looks?.clear();
   memory.next = 1;
 }
