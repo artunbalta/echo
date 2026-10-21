@@ -61,6 +61,7 @@ import { FATE_VERBS, fateTurn } from "@echo/planet";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { villageStore } from "@/lib/villageStore";
 import { subjectOf, subjectRejection } from "@/lib/subject";
+import { refuseBarred } from "@/lib/moderation";
 import { loadVillage } from "@/lib/villageTalk";
 
 export const runtime = "nodejs";
@@ -82,6 +83,9 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
+  // A stranger barred by a moderator changes nothing in the shared world (C67).
+  const barredNow = await refuseBarred(villageStore(), caller.subject);
+  if (barredNow) return barredNow;
   let body: { cell?: unknown; thing?: unknown; kind?: unknown; verb?: unknown; at?: unknown; item?: unknown };
   try {
     body = await req.json();

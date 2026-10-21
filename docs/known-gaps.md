@@ -2174,3 +2174,20 @@ consecutive salts anywhere this matters has **not** been audited.
   after the switch.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 56. What C67 does not do yet, and what it trusts (2026-10-21)
+
+- **A bar keys on an anonymous identity.** A stranger can clear their browser, or erase, and come
+  back as someone new. Strangers have no sign-in, so there is nothing stronger to bar.
+- **Withdrawing a wedding still to come** can, in rare cases, change who was free to marry in the
+  days between its being agreed and today: the generator keeps the promised pair apart. Measured
+  unchanged in the test village. Not ruled out.
+- **History stands.** A village emptied by a griefer's talk stays emptied. Their families went
+  somewhere, other strangers saw them go, and they could come back only by the world's own means.
+- **Snapshots name the stranger they caught.** A report's snapshot keeps the subjects in it after
+  those strangers erase. It is moderation's record, kept with the report.
+- **No player-facing notice that a report was acted on**, and no appeal.
+- **Moderators are named by setting** (`ECHO_MODERATORS`), like the owner's voice (C62).
+- **Offensive houses can only be taken down whole.** Colours cannot be reset one by one.
+
+**Status:** OPEN, all of it, written down rather than discovered.

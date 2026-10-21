@@ -41,6 +41,7 @@ const PARTING_M = 12;
 
 /** What a refusal from the routes means, in the villager's world rather than the server's. */
 function trouble(status: number, error: string | undefined, name: string): string {
+  if (error === "barred") return "A moderator has barred you from changing this world for now.";
   if (status === 429) return `${name} has had enough talk for now. Come back in a while.`;
   if (error === "too_far") return `${name} is too far away to hear you.`;
   if (error === "not_out") return `${name} has gone indoors.`;

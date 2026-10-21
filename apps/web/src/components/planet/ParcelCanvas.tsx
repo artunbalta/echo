@@ -67,6 +67,7 @@ import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
 import EchoAway from "@/components/world/EchoAway";
+import ReportPanel from "@/components/world/ReportPanel";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
 import SoundToggle from "@/components/world/SoundToggle";
@@ -347,6 +348,10 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       >
         <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">{owned ? "Your corner of the world" : (hereName ?? "Open land")}</p>
         <p className="mt-1 text-[10px] tracking-widest text-white/40" data-here={here}>{here}</p>
+        {/* Telling the moderators (C67): the one thing on this card that takes a click. */}
+        <button type="button" data-report-open onMouseDown={(e) => e.preventDefault()} onClick={() => window.dispatchEvent(new Event("echo:report"))} className="pointer-events-auto mt-1 text-[10px] text-white/35 underline decoration-white/20 hover:text-white/70">
+          Report something here
+        </button>
         {/* The legend has to be true on the device reading it. It said Shift and Space to people
             holding a phone, which is the one instruction on the route. */}
         <p className="mt-2 text-[#f4e9d0]/45 max-sm:text-[10px] max-sm:leading-relaxed">
@@ -386,6 +391,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       <Director world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* What your echo did while you were away, and where it waits (C64). */}
       <EchoAway world={() => world.current} cell={here} consent={consent} />
+      <ReportPanel cell={here} />
       {/* The sound of the place (C56), and the person's say over it. */}
       <SoundToggle world={() => world.current} />
 

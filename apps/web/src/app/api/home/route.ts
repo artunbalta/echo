@@ -51,6 +51,7 @@ import {
 import { planet } from "@/lib/planet";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
+import { refuseBarred } from "@/lib/moderation";
 import { villageStore } from "@/lib/villageStore";
 
 export const runtime = "nodejs";
@@ -85,6 +86,9 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
+  // A stranger barred by a moderator changes nothing in the shared world (C67).
+  const barredNow = await refuseBarred(villageStore(), caller.subject);
+  if (barredNow) return barredNow;
   let body: { op?: unknown; cell?: unknown; at?: unknown; facing?: unknown; part?: unknown; dye?: unknown; kind?: unknown; mode?: unknown; index?: unknown };
   try {
     body = await req.json();
