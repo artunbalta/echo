@@ -156,6 +156,27 @@ jobs:
             exit 1
           fi
 
+      # THE SCHEMA TAKES WHAT THE CODE WRITES (DECISIONS C70). The web tests run on the in-process
+      # store, which enforces no check and builds no index, so two defects in 0020 and 0023 passed every
+      # one of them and showed only on the first real Postgres: a moderator could not heal a mark made
+      # that day (C67's undo writes until_day = day), and the newest-first index `metBy` reads was never
+      # built, because its name was taken. Both are asked of the schema the runner just built; the
+      # insert is rolled back.
+      - name: gate — the schema takes what the code writes
+        run: |
+          set -euo pipefail
+          if ! docker exec -i echo-pg psql -v ON_ERROR_STOP=1 -qtA -U echo -d echo_planet \
+            -c "begin; insert into world_effects (cell, thing, kind, day, until_day) values ('ci-gate', 'field:0', 'trampled', 7, 7); rollback;"; then
+            echo "::error::world_effects refuses a mark healed on the day it was made, which C67's undo writes. See 0032."
+            exit 1
+          fi
+          recent=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select count(*) from pg_indexes where schemaname='public' and tablename='villager_memories' and indexdef like '%(subject, updated_at DESC)%';")
+          if [ "$recent" -lt 1 ]; then
+            echo "::error::villager_memories has no (subject, updated_at desc) index, so metBy sorts instead of reading in order. See 0032."
+            exit 1
+          fi
+
       # planet + shared + web. NOT realtime: apps/realtime/package.json has no `test` key, so
       # `--workspaces --if-present` skips it silently. Its suites are run explicitly below.
       # With PLANET_TEST_DATABASE_URL set, the planet suite runs its four skipped registry tests —

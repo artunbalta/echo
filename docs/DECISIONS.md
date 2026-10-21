@@ -4577,3 +4577,63 @@ stranger who writes Turkish is answered in Turkish. Nothing changed there.
   - the language toggle switched in place.
 
 **Not done.** See ⚑58.
+
+## C70 — two defects only a real Postgres showed, and a gate for them
+
+0018–0031 had never run on a real Postgres. The owner wanted them in one SQL file for the Supabase
+editor, so a combined file was built: every migration byte for byte, its `schema_migrations` row
+with the runner's checksum, and all of it in one transaction. It was dry-run first on a throwaway
+Postgres 16 with pgvector, brought to 0017 by the runner:
+
+- the schema came out identical to the runner's (pg_dump diff);
+- the ledger rows were identical, and the runner reported 0 pending with no drift;
+- a second run refused and changed nothing;
+- with a failure injected half-way, nothing was left behind.
+
+The owner then applied it to Supabase. The dry run showed two defects that every test had missed.
+The tests run on the in-process store, which enforces no check and builds no index.
+
+1. **A mark made today could not be healed today.**
+   - 0020 has `check (until_day > day)` on `world_effects`.
+   - C67's undo heals a mark by setting `until_day` to today. For a mark made today that is
+     `until_day = day`, and Postgres refused it: `violates check constraint "world_effects_check"`.
+   - The newest marks, which an undo is most often for, would have stayed for their whole term.
+   - Every read already shows a mark only while `until_day > day`, so the check is now
+     `until_day >= day`.
+   - Marks are still written with at least a day to run: the act route records an effect only when
+     `lastsDays > 0`. The one zero (the boat taken) is never stored.
+2. **The newest-first index 0023 asked for was never built.**
+   - 0023's `create index if not exists villager_memories_subject_idx … (subject, updated_at desc)`
+     reused the name 0019 had given a `(subject)` index.
+   - `if not exists` checks the name and nothing else, so Postgres skipped it with a notice.
+   - On 60,000 memories, `metBy` was a sort over a bitmap scan. With 0032's
+     `villager_memories_subject_recent_idx` it reads the index in order, with no sort.
+
+**0032** (`db/migrations/0032_heal_today_and_recent_index.sql`) fixes both, forward-only: the check
+is replaced by name, and the index is built under its own name; 0019's index stays. It is re-runnable
+(run twice, exit 0). The owner applies it with a one-file SQL, like the first.
+
+**So it does not happen again.**
+
+- **A CI gate** (`gate — the schema takes what the code writes`), in the gates job after the RLS gate,
+  on the schema `db:migrate:apply` just built:
+  - it inserts a same-day-healed mark, rolled back;
+  - it requires a `(subject, updated_at desc)` index on `villager_memories`.
+  - Run against a database at 0031 it is red on both counts; at 0032 it is green, whether 0032 went
+    in by the runner or by the one-file SQL.
+- **`apps/web/tests/migrations.test.mts`** reads `db/migrations` as text and pins three things:
+  - no index name is declared twice with different definitions. The 0019/0023 clash is listed, with
+    what superseded it;
+  - the newest-first index is built under a name of its own;
+  - the last word on `world_effects`' days allows `until_day = day`.
+  - Without 0032 all three are red.
+
+**Measured.**
+
+- Web 452/452.
+- Things that went right that day: 50 index statements in the folder; one other name is declared
+  twice (`world_effects_subject_idx`, 0020 and 0031), identically, which is harmless. Every column the
+  Supabase store reads and writes exists. Every `check (… in (…))` list matches the union the code
+  writes (change kinds, effect kinds, deed readings).
+
+**Not done.** See ⚑59.

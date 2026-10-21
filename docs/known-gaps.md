@@ -2225,3 +2225,19 @@ consecutive salts anywhere this matters has **not** been audited.
   not matter while the landing is English.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 59. The in-process store does not enforce the database's rules (2026-10-21)
+
+Every web test of a village, a mark, a deed or a report runs on `VILLAGE_STORE=memory`. That store
+keeps rows in a map, enforces no `check`, no `not null`, no key and no type, and builds no index.
+A write the database would refuse passes every test.
+
+C70 found two defects that way, on the first real Postgres. The CI gate now covers those two facts,
+not the class:
+
+- **Any other value the code writes that a check refuses** would still pass every test and fail
+  only in production.
+- **What closes it:** run the store's own methods against the migrated CI database, or make the
+  memory store enforce the same checks. Both are bigger than the fix that found the gap.
+
+**Status:** OPEN.
