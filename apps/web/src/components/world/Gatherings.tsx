@@ -3,7 +3,7 @@
 /**
  * The village's days that are not like the others, on the page (DECISIONS C52).
  *
- * THE NEWS. A small card says what the village knows: a burial this afternoon, a wedding in three
+ * THE NEWS. A few lines under the place's name (the HUD draws them, C68) say what the village knows: a burial this afternoon, a wedding in three
  * days, a woman expecting any day now — with the world's hours turned into real minutes, because a
  * world day is twelve of them and a wedding three days off is worth coming back for. It is what the
  * villagers themselves are saying (`comingOn`), nothing more: no list of things to do, and no count.
@@ -21,20 +21,24 @@ import type { PlanetWorld } from "@/game/world/PlanetWorld";
 import type { SkyLayer } from "@/game/world/skyLayer";
 import type { VillagersLayer } from "@/game/world/villagersLayer";
 import { attendanceLabel, attendStep, newAttendState, realWhen, type AttendEvent } from "@/lib/gatherings";
+import { t, useLang, type Key } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { publishNews, type NewsItem } from "@/lib/villageNews";
 
 const CLOCK = worldClock(WORLD_EPOCH);
 
 /** The beat when a stranger has been at it long enough to have been there. */
-const BEAT: Record<Gathering["kind"], string> = {
-  funeral: "You stand with the mourners. Nobody asks who you are.",
-  wedding: "You stand with the guests. Someone you have never met smiles at you.",
-  naming: "You wait with the callers. Inside, a baby is crying.",
+const BEAT: Record<Gathering["kind"], Key> = {
+  funeral: "gathering.funeral",
+  wedding: "gathering.wedding",
+  naming: "gathering.naming",
 };
 
 export default function Gatherings({ world, cell, consent, chain }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; chain: MeasureChain }) {
-  const [news, setNews] = useState<{ key: string; text: string; when: string }[]>([]);
   const [line, setLine] = useState<string | null>(null);
+  const lang = useLang();
+  const langRef = useRef(lang);
+  langRef.current = lang;
   const state = useRef(newAttendState());
   const consentRef = useRef(consent);
   consentRef.current = consent;
@@ -89,51 +93,47 @@ export default function Gatherings({ world, cell, consent, chain }: { world: () 
       const player = villagers.playerPosition();
 
       for (const e of attendStep(state.current, gatherings, hour, player, dt)) {
-        if (e.kind === "joined") say(BEAT[e.gathering.kind]);
+        if (e.kind === "joined") say(t(langRef.current, BEAT[e.gathering.kind]));
         void tell(e, player ?? e.gathering.at, e.gathering.centre.length + e.gathering.guests.length);
       }
 
-      // The news, as the villagers would say it, with the time in real minutes.
-      const items: { key: string; text: string; when: string }[] = [];
+      // The news, as the villagers would say it, with the time in real minutes. The HUD shows it
+      // under the place's name (C68); this only reads it.
+      const lang = langRef.current;
+      const items: NewsItem[] = [];
       const coming = villagers.coming();
       for (const g of gatherings) {
         const c = coming.find((x) => x.day === day && x.about.join() === g.about.join() && x.kind === g.kind);
         const text = c?.words ?? g.id;
-        const when = hour < g.t0 ? realWhen(day, hour, day, g.t0) : hour <= g.t1 ? "now" : "earlier today";
+        const when = hour < g.t0 ? realWhen(day, hour, day, g.t0, lang) : hour <= g.t1 ? t(lang, "news.now") : t(lang, "news.earlier");
         items.push({ key: g.id, text, when });
       }
       for (const c of coming) {
         if (c.day === day && c.kind !== "expecting" && c.kind !== "ailing" && c.kind !== "omen") continue;
         // What is feared (C66) is talked of now; what is planned, for when it will be.
-        const when = c.kind === "expecting" ? "any day" : c.kind === "ailing" ? "now" : c.kind === "omen" ? (c.day === day ? "today" : "tomorrow") : realWhen(day, hour, c.day, GATHERINGS[c.kind][0]);
+        const when =
+          c.kind === "expecting"
+            ? t(lang, "news.anyDay")
+            : c.kind === "ailing"
+              ? t(lang, "news.now")
+              : c.kind === "omen"
+                ? t(lang, c.day === day ? "news.today" : "news.tomorrow")
+                : realWhen(day, hour, c.day, GATHERINGS[c.kind][0], lang);
         items.push({ key: `${c.kind}:${c.about.join("+")}`, text: c.words, when });
       }
-      const shown = items.slice(0, 4);
-      setNews((was) => (was.length === shown.length && was.every((w, i) => w.key === shown[i].key && w.when === shown[i].when) ? was : shown));
+      publishNews(items.slice(0, 3));
     }, 250);
     return () => {
       clearInterval(id);
       if (lineTimer) clearTimeout(lineTimer);
+      publishNews([]);
     };
   }, [world, cell, chain]);
 
   return (
     <>
-      {news.length > 0 ? (
-        <section data-village-news className="pointer-events-none absolute left-6 top-6 z-20 w-[min(300px,40vw)] rounded-xl border border-white/10 bg-[#16241f]/80 px-4 py-3 text-[12px] leading-snug text-[#f4e9d0] backdrop-blur-md max-sm:hidden">
-          <p className="mb-1 text-[10px] uppercase tracking-widest text-white/45">In the village</p>
-          <ul className="space-y-1.5">
-            {news.map((n) => (
-              <li key={n.key} data-news-item={n.key}>
-                {n.text}
-                <span className="ml-1 text-white/45">· {n.when}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
       {line ? (
-        <p data-gathering-line className="pointer-events-none absolute bottom-56 left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-[#f4e9d0] [text-shadow:0_1px_10px_rgba(0,0,0,.75)]">
+        <p data-gathering-line className="hud-shadow hud-in pointer-events-none absolute bottom-56 left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-parchment">
           {line}
         </p>
       ) : null}

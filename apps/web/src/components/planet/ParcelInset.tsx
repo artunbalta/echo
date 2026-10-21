@@ -182,7 +182,7 @@ export default function ParcelInset({
       {/* Said before the click, not after it. The whole complaint was not knowing what you were
           pointing at, and "you cannot have this one" is the most useful thing to know early. */}
       {!assignable && !commonsName ? (
-        <p className="mt-1 font-pixel text-[10px] leading-relaxed text-[#7a9cbe]">
+        <p className="mt-1 font-pixel text-[10px] leading-relaxed text-echo-soft">
           Never assigned. Too little land.
         </p>
       ) : null}

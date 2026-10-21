@@ -4441,3 +4441,139 @@ The in-memory store now keeps who made each change and mark, as the tables alway
   - the griefer's next trample came back 403 `barred`.
 
 **Not done.** See ⚑56.
+
+## C68 — the world's screen, simplified: one HUD, one palette, a lighter phone
+
+Feature 20 of the twenty, first half. What was promised: the phone, performance, and Turkish. The
+owner asked for more on the way: "the interface should be simpler; the landing's colours are
+mismatched, it goes from green to purple; and in the world there is an information card everywhere,
+it is not playable, and the cards are very AI slop. Add taste. Keep everything needed, but simplify."
+
+**What was on screen on arriving in a village** (screenshots before, at 1440×900 and on an iPhone 13):
+
+- the meter's banner top centre: a header, a badge, a dashed rule and the line
+  `demo values · ml_forward_failed`;
+- the frame readout under it: fps, triangles and calls, in development, always;
+- the village news card top left;
+- the place card bottom left: the name, the cell's code, "Report something here", two lines of keys;
+- the sound pill and "Back to the planet" top right, and under them the minimap with a globe and
+  coordinates;
+- on a phone, the touch controls' third round button, labelled with a backtick.
+
+On a phone the meter, the readout, the place card and the minimap covered the top half of the screen.
+
+**What is there now** (`components/world/WorldHud.tsx`):
+
+- **top left, on the world rather than in a box**: the place's name, which steps back to 60% after
+  six seconds; under it the meter, now a small chip of eight dots and a thin line; under that, the
+  village's news, two or three lines (one on a phone);
+- **top right**: three buttons, the map, the menu, and "‹ Planet";
+- **the menu**: sound (M), how your echo sees you (Y), what is being measured (`), controls, report
+  something here, the language, and the cell's code at the foot;
+- **the controls**: said once, on a first visit, after the consent question, for nine seconds; again
+  from the menu;
+- **the map**: folded until asked for, and the choice kept.
+
+Nothing that was reachable is unreachable: every key still works, and everything a key does has a
+line in the menu for a thumb.
+
+**The meter says less, and in plain words** (`recognitionReading.ts` `headline`). Its words are on
+hover or a tap. "demo values · ml_forward_failed" became "your echo cannot hear you just now"; the
+reason is the inspector's to show, as it already did beside the posterior. The mirror does the same.
+The measured sentence is unchanged ("98% sure · names 2 of 8 · 25+ windows"); its states, its
+numbers and the rule that only one state has a percentage are what the tests pin, and they hold.
+
+**One register for everything over the world** (`globals.css`):
+
+- `.hud-pop` is the one surface for the menu, popovers, the consent card, the report form, the pack,
+  the talk panel, the mirror and the echo's report;
+- `.hud-btn` is the one button;
+- `.hud-shadow` is for text set on the world.
+
+The pixel face is gone from the world's chrome: serif for names and titles, sans for everything
+read. Keycaps are small outlined marks. The talk panel's privacy paragraph is one line ("Not
+stored, and not read into your echo. How this works"); every promise it made is behind the link,
+word for word. The consent card makes the same three promises in fewer words.
+
+**The palette.**
+
+- The theme gained `ink-deep`, `echo-soft`, `ember` and `danger`.
+- 25 files' green and stray hexes (#16241f, #e2edc8, #101c19, #c4d5b3…) now map to them.
+- The landing's hero lost its green gradient and stands on the page's own ink.
+- The globe clears to that ink.
+- "learns you." is set in the echo's violet.
+- The lower sections set sentences and form fields in sans, keeping pixel for headings.
+
+**The frame readout** is drawn only when the URL asks (`?debug=render`, `?debug=layers`, in any build).
+Development still measures and writes the `data-world-*` attributes the browser tests read.
+
+**A lighter phone** (`terrainChunks.ts`). On a coarse pointer the shadow map is 1024 on a side, not
+2048: a quarter of the texels, nothing else changed. Plain PCF was tried as well and dropped: it drew
+stair-stepped shadows across a house wall at 390 px; the soft filter hides the coarser texel. The pixel
+ratio cap and multisampling were already lean (C23).
+
+**Found on the way.**
+
+- **The entrance animation undid the centring.** `hud-in` animated `transform`, which replaced
+  Tailwind's `-translate-x-1/2` on every centred element, so the controls line sat off to the right.
+  It animates `translate` now, and a test reads the keyframes.
+- **The dev server had not seen the new colours.** A Tailwind config change needs a restart. The
+  first screenshots had no `ink-deep`, which is why the meter's dots vanished against a bright sky.
+  Re-shot after a restart.
+- **A test stubs `window` without `matchMedia`.** The pointer check now asks whether it exists.
+
+**Measured.**
+
+- `worldHud.test.mts`, 4 tests:
+  - arriving: name, mark, three buttons, and no menu, hint, news box, open map or readout;
+  - the three names for land;
+  - every old affordance is a menu line;
+  - the keyframes.
+- `renderDebug.test.mts` +1 (the readout only when asked).
+- `recognitionMeter.test.mts` +1 and one changed (the plain offline line, no route code).
+- `scatterSplit.test.mts` +1 (the shadow pad still covers a phone texel).
+- 17 injected defects across C68 and C69, all caught.
+- Web 449/449. Planet 313 plus the known flaky lattice timing test. Typecheck clean.
+- Browser specs:
+  - against my own server: minimap, touch, recognitionMeter, consentRevoke, stations, renderDebug and
+    smoke, 17/17;
+  - the minimap spec now opens the map, and the touch spec opens the menu for the inspector.
+- Screenshots before and after, desktop and phone, in English and Turkish.
+
+**Not done.** See ⚑57.
+
+## C69 — the world's chrome in Turkish
+
+Feature 20, second half.
+
+**What** (`lib/i18n.ts`). English and Turkish for everything the page itself says:
+
+- the HUD and the menu, the consent card and the controls;
+- the meter's words; Turkish sets the sign first: "%98 emin";
+- the prompts beside a thing, the pack line and panel, and the report form;
+- the echo's "while you were away" line;
+- the talk panel's chrome;
+- the build and failure line;
+- the three gathering beats, and the news's times ("yaklaşık 20 dakika sonra", "yarın").
+
+Every verb a thing offers, every recipe and every house stage has a Turkish label. The labels are
+keyed by their English text, because one verb id names different acts on different things (`play`
+is a snowball, a pebble and a dog). A test walks the registry and fails on any missing; it found
+five on the first run.
+
+**Which language.** The person's choice, from the menu, kept in this browser. Before any choice, the
+browser's first language if it is Turkish, else English. The server renders English and the page
+switches on the client, so hydration never disagrees. The document's `lang` follows.
+
+**The villagers.** Their prompt already says "answer in the language the stranger writes in", so a
+stranger who writes Turkish is answered in Turkish. Nothing changed there.
+
+**Measured.**
+
+- `i18n.test.mts`, 3 tests: verb coverage, detection, filling.
+- The Turkish meter line is in `recognitionMeter.test.mts`.
+- Browser:
+  - with `tr-TR`, the parcel opened in Turkish: consent card, "‹ Gezegen", menu;
+  - the language toggle switched in place.
+
+**Not done.** See ⚑58.

@@ -62,7 +62,6 @@ import { CROSSING, cellAtLocal, outsideBy, type Home, type LifeChange, type Look
 import ConsentCard from "@/components/world/ConsentCard";
 import TouchControls from "@/components/world/TouchControls";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
-import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
@@ -70,9 +69,9 @@ import EchoAway from "@/components/world/EchoAway";
 import ReportPanel from "@/components/world/ReportPanel";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
-import SoundToggle from "@/components/world/SoundToggle";
 import VillagerTalk from "@/components/world/VillagerTalk";
 import WorldCanvas from "@/components/world/WorldCanvas";
+import WorldHud from "@/components/world/WorldHud";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "@/game/world/parcelWorld";
 import { createTouchControls } from "@/game/world/touchInput";
@@ -197,6 +196,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
   const [here, setHere] = useState(manifest.cell);
   /** Whose shore it is, once a raft has brought the person to one that is not the page's. */
   const [hereName, setHereName] = useState<string | null>(null);
+  const [shore, setShore] = useState(false);
   const adopt = useRef<((next: PlanetWorld) => void) | null>(null);
   useEffect(() => {
     type Job = { cell: string; next: PlanetWorld | null; dropped: boolean };
@@ -253,7 +253,8 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       next.wake();
       adopt.current?.(next);
       setHere(j.cell);
-      setHereName(next.region.village?.settlement.name ?? "Another shore");
+      setHereName(next.region.village?.settlement.name ?? null);
+      setShore(true);
       try {
         window.history.replaceState(window.history.state, "", `/parcel/${j.cell}${window.location.search}`);
       } catch {
@@ -337,45 +338,34 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
           absent attribute cannot tell a parcel with no stations apart from a HUD that has not
           rendered yet, and the thing worth testing is precisely that a refused parameter left
           this saying "none". */}
-      {/* On a narrow screen this moves OUT of the bottom-left corner, because that corner is where
-          a left thumb goes and a 366 px card there is 94% of the width. It stacks into the top-left
-          column instead, under the meter, and the whole card is `max-sm:` — a WIDTH question, which
-          CSS can answer on its own, and deliberately not the coarse-pointer question, which decides
-          something else (whether the controls exist at all) and is asked in JavaScript. */}
-      <div
-        data-stations={stations ?? "none"}
-        className="pointer-events-none absolute bottom-6 left-6 rounded-2xl border border-white/15 bg-[#192a20]/75 px-5 py-4 text-xs text-[#f4f2e4]/80 backdrop-blur-xl max-sm:bottom-auto max-sm:left-3 max-sm:top-[5.5rem] max-sm:w-[58vw] max-sm:rounded-xl max-sm:px-3 max-sm:py-2"
-      >
-        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">{owned ? "Your corner of the world" : (hereName ?? "Open land")}</p>
-        <p className="mt-1 text-[10px] tracking-widest text-white/40" data-here={here}>{here}</p>
-        {/* Telling the moderators (C67): the one thing on this card that takes a click. */}
-        <button type="button" data-report-open onMouseDown={(e) => e.preventDefault()} onClick={() => window.dispatchEvent(new Event("echo:report"))} className="pointer-events-auto mt-1 text-[10px] text-white/35 underline decoration-white/20 hover:text-white/70">
-          Report something here
-        </button>
-        {/* The legend has to be true on the device reading it. It said Shift and Space to people
-            holding a phone, which is the one instruction on the route. */}
-        <p className="mt-2 text-[#f4e9d0]/45 max-sm:text-[10px] max-sm:leading-relaxed">
-          {coarse
-            ? "Stick · Walk　 Push far · Run　 Drag · Look　 Pinch · Zoom"
-            : "W A S D · Walk　 Shift · Run　 Space · Jump　 Drag · Look"}
-        </p>
-        <p className="mt-1 text-[#f4e9d0]/30 max-sm:text-[10px]">
-          {coarse ? "` opens the inspector, and so does the button" : "` opens the inspector"}
-        </p>
-      </div>
+      <span hidden data-stations={stations ?? "none"} />
+
+      {/* The place, the meter, the news, the map, the menu and the way back (C68): one HUD where
+          there were five cards. */}
+      <WorldHud
+        world={() => world.current}
+        name={hereName}
+        owned={owned}
+        shore={shore}
+        cell={here}
+        coarse={coarse}
+        consent={consent}
+        inspecting={inspecting}
+        onToggleInspector={() => setInspecting((v) => !v)}
+        meter={
+          // Handed the same chain state the inspector gets, so the glance and the panel cannot
+          // disagree; what it may say about it is decided in recognitionReading.ts.
+          <RecognitionMeter posterior={posterior} log={log} consent={consent} onInspect={() => setInspecting((v) => !v)} />
+        }
+      />
 
       {/* The beat's line, and nothing that names what to look for: the slice is judged on whether
           a person notices the consequence unprompted. */}
       {beat ? (
-        <p className="pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2 font-pixel text-sm text-[#f4e9d0]/80 max-sm:bottom-[13rem] max-sm:w-[80vw] max-sm:text-center [text-shadow:0_1px_12px_rgba(18,12,25,0.9)]">
+        <p className="hud-shadow hud-in pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2 font-serif text-[15px] text-parchment/85 max-sm:bottom-[13rem] max-sm:w-[80vw] max-sm:text-center">
           {beat}
         </p>
       ) : null}
-
-      {/* Where you are in your parcel and where the parcel is on the planet. It reads the world
-          out of the same ref the walk tally does, so it can never be handed a world this mount is
-          not showing. */}
-      <Minimap world={() => world.current} />
 
       <ConsentCard consent={consent} onAccept={() => chain.accept()} onDecline={() => chain.decline()} />
 
@@ -392,13 +382,6 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       {/* What your echo did while you were away, and where it waits (C64). */}
       <EchoAway world={() => world.current} cell={here} consent={consent} />
       <ReportPanel cell={here} />
-      {/* The sound of the place (C56), and the person's say over it. */}
-      <SoundToggle world={() => world.current} />
-
-      {/* The one thing a person can read without knowing a key exists. It is handed the same chain
-          state the inspector gets, so the glance and the panel cannot disagree; what it may say
-          about it is decided in recognitionReading.ts. */}
-      <RecognitionMeter posterior={posterior} log={log} consent={consent} />
       {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
       <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
 
@@ -418,11 +401,7 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       {/* Last, so it paints over the HUD it shares a screen with, and only where there is a thumb to
           use it. The consent card is answered first: see the header. */}
       {coarse && consent !== "unset" ? (
-        <TouchControls
-          handle={touch}
-          inspecting={inspecting}
-          onToggleInspector={() => setInspecting((v) => !v)}
-        />
+        <TouchControls handle={touch} />
       ) : null}
     </WorldCanvas>
   );

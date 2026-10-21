@@ -12,7 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { RENDER_DEBUG_QUERY, RENDER_LAYERS_QUERY, renderDebugFor } from "../src/lib/renderDebug";
+import { RENDER_DEBUG_QUERY, RENDER_LAYERS_QUERY, renderDebugFor, renderReadoutFor } from "../src/lib/renderDebug";
 
 /** A URL taken apart the way the browser takes it apart, which is what the effect reads. */
 const search = (href: string) => new URL(href, "http://localhost").search;
@@ -51,4 +51,15 @@ test("development reports without being asked, exactly as it did before", () => 
 test("layers wins over render however they are ordered, because it is the superset", () => {
   assert.equal(renderDebugFor("production", search("/parcel/x?debug=render&debug=layers")), "layers");
   assert.equal(renderDebugFor("production", search("/parcel/x?debug=layers&debug=render")), "layers");
+});
+
+// C68: development still measures unasked, but the table over the world is drawn only when asked for.
+test("the readout panel is drawn only when the URL asks, in development as in production", () => {
+  assert.equal(renderReadoutFor(""), false);
+  assert.equal(renderReadoutFor("?stations=slice"), false);
+  assert.equal(renderReadoutFor("?debug=nonsense"), false);
+  assert.equal(renderReadoutFor(`?${RENDER_DEBUG_QUERY}`), true);
+  assert.equal(renderReadoutFor(`?stations=slice&${RENDER_LAYERS_QUERY}`), true);
+  // And the measuring itself is untouched: development samples with no parameter at all.
+  assert.equal(renderDebugFor("development", ""), "frame");
 });

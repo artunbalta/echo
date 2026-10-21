@@ -48,6 +48,7 @@
 import * as THREE from "three";
 import { buildRegionScene, type RegionScene } from "@echo/planet";
 
+import { coarsePointer } from "../../lib/pointerKind";
 import { PALETTE } from "../three/palette";
 import { paintRegionGround } from "./groundColour";
 import { patchGroundGrain } from "./groundGrain";
@@ -125,6 +126,16 @@ export const DEFAULT_SHADOW_HALF_M = 120;
  */
 export const DEFAULT_SHADOW_MAP_SIZE = 2048;
 
+/**
+ * On a phone (C68), the shadow map at half the side: a quarter of the texels to render and to fetch
+ * from, on the part with half the bandwidth (see PlanetWorld's lean renderer, which already turned
+ * the pixel ratio and multisampling down for the same reason). It is a fragment cost and nothing
+ * else: the same things cast and the same box is covered; a texel covers 234 mm of ground instead of
+ * 117. The soft filter is KEPT: plain PCF was tried first and, at this texel size, drew stair-stepped
+ * shadow edges across a house wall on a 390 px screen; the soft kernel's blur is what hides them.
+ */
+export const LEAN_SHADOW_MAP_SIZE = 1024;
+
 /** A macrotask, so the browser can paint and an abort can land between two pieces of work. */
 const yieldToLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -132,7 +143,8 @@ export function terrainLayer(options: TerrainLayerOptions = {}): TerrainLayer {
   const fogNear = options.fogNearM ?? 150;
   const fogFar = options.fogFarM ?? 420;
   const shadowHalf = options.shadowHalfM ?? DEFAULT_SHADOW_HALF_M;
-  const shadowMapSize = options.shadowMapSize ?? DEFAULT_SHADOW_MAP_SIZE;
+  const lean = coarsePointer();
+  const shadowMapSize = options.shadowMapSize ?? (lean ? LEAN_SHADOW_MAP_SIZE : DEFAULT_SHADOW_MAP_SIZE);
 
   let region: RegionScene | null = null;
   const chunks: THREE.Mesh[] = [];

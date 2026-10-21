@@ -292,7 +292,7 @@ export default function Flow0Client() {
 
   // ── presentation ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-[#f4e9d0]">
+    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-parchment">
       <div
         ref={mountRef}
         className="absolute inset-0 transition-transform duration-[2500ms] ease-out"
@@ -310,17 +310,17 @@ export default function Flow0Client() {
         className="pointer-events-none absolute bottom-10 right-10 transition-opacity duration-1000"
         style={{ opacity: phase === "glyph" ? 0.5 : 0 }}
       >
-        <div className="grid grid-cols-3 gap-1 text-[10px] text-[#a06cd5]">
-          <span /><span className="rounded border border-[#a06cd5]/50 px-1.5 py-0.5">W</span><span />
-          <span className="rounded border border-[#a06cd5]/50 px-1.5 py-0.5">A</span>
-          <span className="rounded border border-[#a06cd5]/50 px-1.5 py-0.5">S</span>
-          <span className="rounded border border-[#a06cd5]/50 px-1.5 py-0.5">D</span>
+        <div className="grid grid-cols-3 gap-1 text-[10px] text-echo">
+          <span /><span className="rounded border border-echo/50 px-1.5 py-0.5">W</span><span />
+          <span className="rounded border border-echo/50 px-1.5 py-0.5">A</span>
+          <span className="rounded border border-echo/50 px-1.5 py-0.5">S</span>
+          <span className="rounded border border-echo/50 px-1.5 py-0.5">D</span>
         </div>
       </div>
 
       {/* a single quiet line; never a goal, never a score */}
       {whisper && (
-        <div className="pointer-events-none absolute left-1/2 top-10 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-[#f4e9d0]/80">
+        <div className="pointer-events-none absolute left-1/2 top-10 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-parchment/80">
           {whisper}
         </div>
       )}
@@ -328,14 +328,14 @@ export default function Flow0Client() {
       {/* the faint horizon island, revealed only from the hilltop (the seed of Flow 2) */}
       {horizon && (
         <div className="pointer-events-none absolute left-0 right-0 top-[22%] flex justify-center">
-          <div className="h-6 w-40 rounded-[100%] bg-[#a06cd5]/15 blur-[2px]" />
+          <div className="h-6 w-40 rounded-[100%] bg-echo/15 blur-[2px]" />
         </div>
       )}
 
       {/* the diegetic proximity prompt — what the thing beside you offers right now */}
       {phase === "roam" && near && !seeped && (
         <div className="absolute bottom-24 left-1/2 w-[min(92vw,440px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-black/60 p-4 text-center backdrop-blur">
-          <p className="mb-3 text-sm italic text-[#f4e9d0]/85">{near.label}</p>
+          <p className="mb-3 text-sm italic text-parchment/85">{near.label}</p>
           <div className="flex flex-wrap justify-center gap-2">
             {near.id === "scatter" ? (
               <>
@@ -361,13 +361,13 @@ export default function Flow0Client() {
       {/* the F0→F1 seep: the tide receded, a seed waits (no notification, no "Level 1"). Once the
           horizon island has been seen, the shallows become crossable — the F1→F2 seam. */}
       {seeped && (
-        <div className="absolute bottom-16 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-2xl border border-[#a06cd5]/20 bg-black/55 p-4 text-center backdrop-blur">
-          <p className="mb-3 text-sm italic text-[#f4e9d0]/85">
+        <div className="absolute bottom-16 left-1/2 w-[min(92vw,460px)] -translate-x-1/2 rounded-2xl border border-echo/20 bg-black/55 p-4 text-center backdrop-blur">
+          <p className="mb-3 text-sm italic text-parchment/85">
             a seed lies in the wet sand. {horizon ? "across the water, that other island waits." : "the water is shallow here now."}
           </p>
           <button
             onClick={cross}
-            className="rounded-lg border border-[#a06cd5]/50 px-4 py-1.5 text-xs text-[#f4e9d0] transition hover:border-[#a06cd5] hover:bg-[#a06cd5]/10"
+            className="rounded-lg border border-echo/50 px-4 py-1.5 text-xs text-parchment transition hover:border-echo hover:bg-echo/10"
           >
             wade into the shallows, toward the far shore
           </button>
@@ -375,7 +375,7 @@ export default function Flow0Client() {
       )}
 
       {!whisper && phase === "roam" && !near && !seeped && (
-        <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-[#f4e9d0]/55 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-parchment/55 backdrop-blur">
           walk with WASD / tap — the shore is yours
         </div>
       )}
@@ -387,7 +387,7 @@ function PromptBtn({ children, onClick }: { children: React.ReactNode; onClick: 
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border border-white/15 px-4 py-1.5 text-xs text-[#f4e9d0] transition hover:border-[#a06cd5]/60 hover:bg-white/5"
+      className="rounded-lg border border-white/15 px-4 py-1.5 text-xs text-parchment transition hover:border-echo/60 hover:bg-white/5"
     >
       {children}
     </button>

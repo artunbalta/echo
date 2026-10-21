@@ -301,7 +301,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           el.dataset.villagerChatter = "";
           el.style.cssText =
             "position:absolute;left:0;top:0;pointer-events:none;z-index:14;display:none;transform:translate(-50%,-100%);" +
-            "max-width:220px;padding:4px 9px;border-radius:12px;background:rgba(244,233,208,.88);color:#213522;" +
+            "max-width:220px;padding:4px 9px;border-radius:12px;background:rgba(244,233,208,.9);color:#1c1326;" +
             "font:11px/1.3 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)";
           host.appendChild(el);
           bubbles.push({ el, at: null, key: "" });

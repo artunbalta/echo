@@ -63,3 +63,13 @@ export function renderDebugFor(nodeEnv: string | undefined, search: string): Ren
 export function renderDebugEnabled(): RenderDebugLevel {
   return renderDebugFor(process.env.NODE_ENV, typeof window === "undefined" ? "" : window.location.search);
 }
+
+/**
+ * Whether the readout PANEL is drawn (C68), which is a narrower question than whether the frame is
+ * measured. Development measures without being asked, and the `data-world-*` attributes the browser
+ * tests read go on being written; but a table of triangle counts over the world is for whoever asked
+ * for it with `?debug=render` or `?debug=layers`, in any build, and for nobody else.
+ */
+export function renderReadoutFor(search: string): boolean {
+  return new URLSearchParams(search).getAll(RENDER_DEBUG_PARAM).some((v) => v === "render" || v === "layers");
+}

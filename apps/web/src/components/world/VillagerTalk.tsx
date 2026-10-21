@@ -23,6 +23,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { t as tr, useLang } from "@/lib/i18n";
+
 import type { LifeChange } from "@echo/planet";
 
 import type { ConsentState } from "@/game/world/measure";
@@ -56,6 +58,8 @@ function trouble(status: number, error: string | undefined, name: string): strin
 }
 
 export default function VillagerTalk({ world, cell, consent, coarse }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; coarse: boolean }) {
+  const lang = useLang();
+  const [how, setHow] = useState(false);
   const [near, setNear] = useState<NearVillager | null>(null);
   const [talking, setTalking] = useState<NearVillager | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -393,63 +397,59 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     <section
       data-talk-panel={talking.id}
       aria-label={`Talking to ${talking.name}`}
-      className="absolute bottom-6 left-1/2 z-40 w-[min(560px,92vw)] -translate-x-1/2 rounded-2xl border border-white/15 bg-[#16241f]/90 text-[#f4e9d0] shadow-2xl backdrop-blur-xl"
+      className="absolute bottom-6 left-1/2 z-40 w-[min(560px,92vw)] -translate-x-1/2 hud-pop hud-in text-parchment"
     >
       <header className="flex items-baseline justify-between gap-3 px-5 pt-4">
-        <p className="font-serif text-lg text-[#e4edcd]">
+        <p className="font-serif text-lg text-parchment">
           {talking.name}
-          <span className="ml-2 text-xs text-white/45">
-            {talking.age} · {talking.age >= 13 ? talking.occupation : "a child"}
+          <span className="ml-2 text-xs text-parchment/45">
+            {talking.age} · {talking.age >= 13 ? talking.occupation : tr(lang, "talk.child")}
           </span>
         </p>
-        <div className="flex shrink-0 items-baseline gap-3 text-xs text-white/50">
+        <div className="flex shrink-0 items-baseline gap-3 text-xs text-parchment/50">
           {canSpeak() || canRecord() ? (
-            <button type="button" onClick={toggleVoice} aria-pressed={voice} data-talk-voice className="hover:text-white">
-              {voice ? "Voice on" : "Voice off"}
+            <button type="button" onClick={toggleVoice} aria-pressed={voice} data-talk-voice className="hover:text-parchment">
+              {voice ? tr(lang, "talk.voiceOn") : tr(lang, "talk.voiceOff")}
             </button>
           ) : null}
-          <button type="button" onClick={() => void forget()} data-talk-forget className="hover:text-white">
-            Forget me
+          <button type="button" onClick={() => void forget()} data-talk-forget className="hover:text-parchment">
+            {tr(lang, "talk.forget")}
           </button>
-          <button type="button" onClick={end} className="hover:text-white">
-            Esc · leave
+          <button type="button" onClick={end} aria-label={tr(lang, "talk.leave")} className="hover:text-parchment">
+            {coarse ? tr(lang, "talk.leave") : `Esc · ${tr(lang, "talk.leave")}`}
           </button>
         </div>
       </header>
       {asking ? (
-        <div data-voice-question className="mx-5 mt-3 rounded-xl border border-[#e8c98a]/30 bg-[#e8c98a]/10 px-4 py-3 text-xs leading-relaxed text-[#f4e9d0]/85">
-          <p>
-            Hear villagers in voices of their own, and speak to them aloud? Their replies are sent to ElevenLabs to be spoken. What you
-            say aloud — recorded only while you hold the microphone, or Ctrl — is sent to ElevenLabs to be written down. Nothing of your
-            voice is kept here, and nothing about how you sound is read into your echo.
-          </p>
+        <div data-voice-question className="mx-5 mt-3 rounded-xl border border-ember/30 bg-ember/10 px-4 py-3 text-xs leading-relaxed text-parchment/85">
+          <p>{tr(lang, "talk.voiceAsk")}</p>
           <div className="mt-2 flex gap-2">
-            <button type="button" data-voice-yes onClick={() => answer(true)} className="rounded-full bg-[#e2edc8] px-3 py-1 font-medium text-[#213522]">
-              Yes, with ElevenLabs
+            <button type="button" data-voice-yes onClick={() => answer(true)} className="rounded-full bg-parchment px-3 py-1 font-medium text-ink">
+              {tr(lang, "talk.voiceYes")}
             </button>
-            <button type="button" data-voice-no onClick={() => answer(false)} className="rounded-full border border-white/20 px-3 py-1">
-              Only this browser&apos;s voice
+            <button type="button" data-voice-no onClick={() => answer(false)} className="rounded-full border border-parchment/20 px-3 py-1">
+              {tr(lang, "talk.voiceNo")}
             </button>
           </div>
         </div>
       ) : null}
       <div ref={log} className="mt-2 max-h-[38vh] space-y-2 overflow-y-auto px-5">
-        {greeting ? <p className="text-sm italic text-[#e8c98a]/80">{greeting}</p> : null}
-        {turns.length === 0 && !pending ? <p className="text-sm italic text-white/45">{first} stops and looks at you.</p> : null}
+        {greeting ? <p className="text-sm italic text-ember/80">{greeting}</p> : null}
+        {turns.length === 0 && !pending ? <p className="text-sm italic text-parchment/45">{tr(lang, "talk.looks", { name: first })}</p> : null}
         {turns.map((t, i) =>
           t.role === "decided" ? (
-            <p key={i} data-talk-decided className="rounded-lg bg-[#e8c98a]/10 px-3 py-1.5 text-sm italic text-[#e8c98a]">
+            <p key={i} data-talk-decided className="rounded-lg bg-ember/10 px-3 py-1.5 text-sm italic text-ember">
               {t.text}
             </p>
           ) : (
-            <p key={i} className={t.role === "stranger" ? "text-right text-sm text-white/70" : "text-sm leading-relaxed text-[#f4e9d0]"}>
-              {t.role === "villager" ? <span className="mr-1.5 text-[#e8c98a]">{first}:</span> : null}
+            <p key={i} className={t.role === "stranger" ? "text-right text-sm text-parchment/70" : "text-sm leading-relaxed text-parchment"}>
+              {t.role === "villager" ? <span className="mr-1.5 text-ember">{first}:</span> : null}
               {t.text}
             </p>
           ),
         )}
-        {pending ? <p className="text-sm italic text-white/45">{first} thinks…</p> : null}
-        {note ? <p className="text-sm italic text-[#e8c98a]/80">{note}</p> : null}
+        {pending ? <p className="text-sm italic text-parchment/45">{tr(lang, "talk.thinks", { name: first })}</p> : null}
+        {note ? <p className="text-sm italic text-ember/80">{note}</p> : null}
       </div>
       <form
         className="flex gap-2 px-5 pb-2 pt-3"
@@ -468,15 +468,15 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
               end();
             }
           }}
-          placeholder={`Say something to ${first}…`}
+          placeholder={tr(lang, "talk.placeholder", { name: first })}
           maxLength={400}
-          className="min-w-0 flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-white/35 focus:border-[#e2edc8]/60 focus:outline-none"
+          className="min-w-0 flex-1 rounded-full border border-parchment/15 bg-parchment/5 px-4 py-2 text-sm text-parchment placeholder:text-parchment/35 focus:border-echo/60 focus:outline-none"
         />
         {cloud && canRecord() ? (
           <button
             type="button"
             data-talk-mic={recording ? "on" : "off"}
-            aria-label="Hold to speak"
+            aria-label={tr(lang, "talk.hold")}
             onPointerDown={(e) => {
               e.preventDefault();
               void talkStart();
@@ -484,30 +484,41 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
             onPointerUp={() => void talkStop()}
             onPointerLeave={() => void talkStop()}
             disabled={pending}
-            className={`rounded-full px-3 py-2 text-sm ${recording ? "bg-[#e8c98a] text-[#213522]" : "border border-white/20 text-white/70"} disabled:opacity-40`}
+            className={`rounded-full px-3 py-2 text-sm ${recording ? "bg-ember text-ink" : "border border-parchment/20 text-parchment/70"} disabled:opacity-40`}
           >
-            {recording ? "Listening…" : "Hold to speak"}
+            {recording ? tr(lang, "talk.listening") : tr(lang, "talk.hold")}
           </button>
         ) : null}
-        <button type="submit" disabled={pending || !draft.trim()} className="rounded-full bg-[#e2edc8] px-4 py-2 text-sm font-medium text-[#213522] disabled:opacity-40">
-          Say
+        <button type="submit" disabled={pending || !draft.trim()} className="rounded-full bg-parchment px-4 py-2 text-sm font-medium text-ink disabled:opacity-40">
+          {tr(lang, "talk.say")}
         </button>
       </form>
-      <p className="px-5 pb-3 text-[10px] leading-snug text-white/35">
-        What you say goes to Claude to be answered and is not stored. {first} keeps a short note of your talk in their own words, so they
-        remember you — “Forget me” erases it. None of it is read into your echo. What {first} decides about their own life, everyone can see.
-        {cloud ? " Replies you hear spoken, and what you say aloud, also go to ElevenLabs, to be spoken and written down; nothing of your voice is kept here or measured." : ""}
-        {cloud && canRecord() ? " Hold the microphone, or Ctrl, to speak." : ""}{" "}
-        {cloud ? (
-          <button type="button" data-voice-withdraw onClick={withdraw} className="underline decoration-white/30 hover:text-white">
-            Stop using ElevenLabs
+      {/* What happens to what is said, in one line; the whole of it a tap away (C68). Every promise
+          the long paragraph made is still made, word for word, behind "How this works". */}
+      <div className="px-5 pb-3 text-[11px] leading-snug text-parchment/40">
+        <p>
+          {tr(lang, "talk.private")}{" "}
+          <button type="button" data-talk-how aria-expanded={how} onClick={() => setHow((h) => !h)} className="underline decoration-parchment/25 hover:text-parchment">
+            {tr(lang, "talk.how")}
           </button>
-        ) : cloud === false ? (
-          <button type="button" data-voice-ask onClick={() => setAsking(true)} className="underline decoration-white/30 hover:text-white">
-            Use ElevenLabs voices
-          </button>
+        </p>
+        {how ? (
+          <p data-talk-how-open className="mt-1.5 text-[10.5px] text-parchment/45">
+            {tr(lang, "talk.detail", { name: first })}
+            {cloud ? ` ${tr(lang, "talk.detailCloud")}` : ""}
+            {cloud && canRecord() ? ` ${tr(lang, "talk.detailMic")}` : ""}{" "}
+            {cloud ? (
+              <button type="button" data-voice-withdraw onClick={withdraw} className="underline decoration-parchment/30 hover:text-parchment">
+                {tr(lang, "talk.stopCloud")}
+              </button>
+            ) : cloud === false ? (
+              <button type="button" data-voice-ask onClick={() => setAsking(true)} className="underline decoration-parchment/30 hover:text-parchment">
+                {tr(lang, "talk.useCloud")}
+              </button>
+            ) : null}
+          </p>
         ) : null}
-      </p>
+      </div>
     </section>
   );
 }

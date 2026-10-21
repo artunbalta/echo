@@ -59,7 +59,7 @@ import { DEMO_SCATTER } from "../src/game/world/demoStations";
 import { spawnView, SPAWN_HORIZON_MARGIN_DEG } from "../src/game/world/spawnView";
 import { DUSK, KEY_DISTANCE_M, skyState } from "../src/game/world/skyLayer";
 import { SHADOW_PAD_M } from "../src/game/world/scatterSplit";
-import { DEFAULT_SHADOW_HALF_M, DEFAULT_SHADOW_MAP_SIZE } from "../src/game/world/terrainChunks";
+import { DEFAULT_SHADOW_HALF_M, DEFAULT_SHADOW_MAP_SIZE, LEAN_SHADOW_MAP_SIZE } from "../src/game/world/terrainChunks";
 import type { LayerContext, WorldFrame } from "../src/game/world/PlanetWorld";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -886,6 +886,14 @@ test("the shadow pass costs no more than the budget allows it, everywhere a play
  * numbers are imported from the layers that own them, so a wider box or a smaller map moves this
  * bound with them.
  */
+// A phone's shadow map is half the side (C68), so its texel is twice as long: the pad must still
+// cover the one texel its filter reaches there, or a phone alone would blink shadow edges.
+test("SHADOW_PAD_M still covers a texel of the phone's coarser shadow map", () => {
+  const texelM = (2 * DEFAULT_SHADOW_HALF_M) / LEAN_SHADOW_MAP_SIZE;
+  assert.ok(SHADOW_PAD_M >= texelM, `SHADOW_PAD_M ${SHADOW_PAD_M} m is under one ${(texelM * 1000).toFixed(0)} mm texel of the lean map`);
+  assert.ok(SHADOW_PAD_M <= 8 * texelM);
+});
+
 test("SHADOW_PAD_M is a filter margin and not a second frustum, in the shadow map's own texels", () => {
   const texelM = (2 * DEFAULT_SHADOW_HALF_M) / DEFAULT_SHADOW_MAP_SIZE;
   const allowedM = 8 * texelM;

@@ -2053,23 +2053,23 @@ export default function WorldClient() {
 
       {/* ── Flow 1 own-island embodied activities (raft build + beats) — diegetic overlays only ── */}
       {f1Whisper && (
-        <div className="pointer-events-none absolute left-1/2 top-14 z-20 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-[#f4e9d0]/85">
+        <div className="pointer-events-none absolute left-1/2 top-14 z-20 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-parchment/85">
           {f1Whisper}
         </div>
       )}
       {f1Counter && (
         <div className="pointer-events-none absolute left-8 top-1/2 z-20 -translate-y-1/2 rounded-xl border border-white/10 bg-black/45 px-4 py-3 text-center backdrop-blur">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-[#f4e9d0]/50">driftwood</div>
-          <div className="mt-1 text-lg tabular-nums text-[#f4e9d0]/90">
-            {f1Counter.gathered} <span className="text-[#f4e9d0]/40">/ {f1Counter.needed}</span>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-parchment/50">driftwood</div>
+          <div className="mt-1 text-lg tabular-nums text-parchment/90">
+            {f1Counter.gathered} <span className="text-parchment/40">/ {f1Counter.needed}</span>
           </div>
           {f1Counter.gathered >= f1Counter.needed && (
-            <div className="mt-1 text-[10px] italic text-[#a06cd5]/80">enough — or more</div>
+            <div className="mt-1 text-[10px] italic text-echo/80">enough — or more</div>
           )}
         </div>
       )}
       {f1Prompt && !nearby && (
-        <div className="pointer-events-none absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full border border-[#a06cd5]/30 bg-black/50 px-4 py-1.5 text-xs text-[#f4e9d0]/85 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full border border-echo/30 bg-black/50 px-4 py-1.5 text-xs text-parchment/85 backdrop-blur">
           {f1Prompt}
         </div>
       )}

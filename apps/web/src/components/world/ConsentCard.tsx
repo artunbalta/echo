@@ -12,11 +12,15 @@
  * person in the demo, so they are asked in exactly the same words. Two copies of this text is two
  * promises that can drift, and the one that drifts is the one nobody is reading.
  *
+ * THE WORDS ARE SHORTER NOW (C68), and they still make the same three promises: what it reads and
+ * what it never reads, that it can be stopped, and that no changes nothing.
+ *
  * `consent` is the chain's own state, and unset means OFF on this path: the card shows only while
  * the question is unanswered, and an answer of either kind is remembered by the chain, not here.
  */
 
 import type { ConsentState } from "@/game/world/measure";
+import { t, useLang } from "@/lib/i18n";
 
 export interface ConsentCardProps {
   consent: ConsentState;
@@ -25,29 +29,27 @@ export interface ConsentCardProps {
 }
 
 export default function ConsentCard({ consent, onAccept, onDecline }: ConsentCardProps) {
+  const lang = useLang();
   if (consent !== "unset") return null;
   return (
-    <div className="absolute inset-x-0 bottom-0 flex justify-center p-6">
-      <div className="pointer-events-auto max-w-md rounded border border-[#a06cd5]/30 bg-[#1c1326]/95 p-5 backdrop-blur-sm">
-        <p className="font-pixel text-sm text-[#f4e9d0]">Your echo can learn from how you move here.</p>
-        <p className="mt-2 text-xs leading-relaxed text-[#f4e9d0]/60">
-          It reads where you go and what you choose, never what you type, and you can stop it at any
-          time from the inspector. Say no and the world plays exactly the same.
-        </p>
-        <div className="mt-4 flex gap-3">
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center p-5">
+      <div className="hud-pop hud-in pointer-events-auto w-[min(420px,100%)] px-5 py-4">
+        <p className="font-serif text-[17px] leading-snug text-parchment">{t(lang, "consent.title")}</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-parchment/60">{t(lang, "consent.body")}</p>
+        <div className="mt-4 flex gap-2">
           <button
             type="button"
             onClick={onAccept}
-            className="rounded bg-[#a06cd5] px-4 py-2 font-pixel text-xs text-[#1c1326] transition-opacity hover:opacity-90"
+            className="rounded-full bg-parchment px-4 py-2 text-[13px] font-medium text-ink transition-opacity hover:opacity-90"
           >
-            Let it watch
+            {t(lang, "consent.yes")}
           </button>
           <button
             type="button"
             onClick={onDecline}
-            className="rounded border border-[#f4e9d0]/20 px-4 py-2 font-pixel text-xs text-[#f4e9d0]/70 transition-colors hover:border-[#f4e9d0]/40"
+            className="rounded-full border border-parchment/20 px-4 py-2 text-[13px] text-parchment/75 transition-colors hover:border-parchment/40 hover:text-parchment"
           >
-            Not this time
+            {t(lang, "consent.no")}
           </button>
         </div>
       </div>

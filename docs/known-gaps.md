@@ -2191,3 +2191,37 @@ consecutive salts anywhere this matters has **not** been audited.
 - **Offensive houses can only be taken down whole.** Colours cannot be reset one by one.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 57. What C68 does not do yet (2026-10-21)
+
+- **Not measured on a phone.** The lighter shadow map is reasoned, not measured: the frame has still
+  never been timed on real phone hardware (C23's admission stands). The browser runs were a desktop
+  GPU in a phone-sized window.
+- **The inspector is unchanged.** It is a measurement panel, opened on purpose, and still reads like
+  one: monospace, numbers and route codes. That is its job; it is the one panel that was not
+  simplified.
+- **The pack's crafting list and the thing names in prompts** keep their old styling below the
+  header.
+- **The landing's lower sections keep their pixel cards and pixel headings.** Only the sentences and
+  form fields moved to sans, and the legend book is untouched.
+- **The controls are said once per browser.** A person who missed them finds them in the menu, under
+  "Controls".
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 58. What C69 does not translate (2026-10-21)
+
+- **What the world says stays English:**
+  - the villagers' news (`comingOn` words, from the society module);
+  - the lines an act answers with ("You leave the herbs at the door…");
+  - thing names ("a well", "Hul's house");
+  - occupations;
+  - a talk's greeting.
+  Translating these means Turkish templates in `@echo/planet`, where the words are made, with names
+  inflected for Turkish suffixes.
+- **The mirror, the inspector, the echo's full report, the moderators' page and the landing** are
+  English.
+- **The landing's pixel face has no Turkish letters loaded** (`Pixelify_Sans`, latin subset). It does
+  not matter while the landing is English.
+
+**Status:** OPEN, all of it, written down rather than discovered.

@@ -236,7 +236,7 @@ export default function CharacterSelect() {
             Join Waitlist
           </h2>
           <Scarcity seats={seats} />
-          <p className="mx-auto mt-4 max-w-md font-pixel text-sm leading-relaxed text-parchment/60 sm:text-base">
+          <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-parchment/60 sm:text-base">
             Every figure here is someone who already arrived. The space in the middle is yours.
           </p>
         </header>
@@ -371,7 +371,7 @@ function Hero({ selected, entry }: { selected: Selection; entry: RosterEntry | n
   return (
     <div className="shrink-0">
       <div
-        className={`${HERO_SIZE} relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded-lg border-2 border-echo/20 bg-[#120c19]`}
+        className={`${HERO_SIZE} relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded-lg border-2 border-echo/20 bg-ink-deep`}
       >
         {entry ? <Portrait entry={entry} /> : <Silhouette />}
       </div>
@@ -437,7 +437,7 @@ const Tile = forwardRef<
       onClick={onSelect}
       onFocus={onSelect}
       onKeyDown={onKeyDown}
-      className={`${TILE_SIZE} relative block overflow-hidden rounded border-2 bg-[#120c19] outline-none transition-colors ${
+      className={`${TILE_SIZE} relative block overflow-hidden rounded border-2 bg-ink-deep outline-none transition-colors ${
         selected
           ? "border-parchment/70"
           : "border-echo/15 hover:border-parchment/40 focus-visible:border-parchment/60"
@@ -622,7 +622,7 @@ function FillChoice({
   }
 
   return (
-    <div className="mt-6 rounded-lg border-2 border-echo/25 bg-[#120c19] p-4">
+    <div className="mt-6 rounded-lg border-2 border-echo/25 bg-ink-deep p-4">
       <p className="mb-3 text-center font-pixel text-xs uppercase tracking-[0.2em] text-echo">
         Fill the empty slot
       </p>
@@ -706,7 +706,7 @@ function FillChoice({
               onChange={(e) => onConsent(e.target.checked)}
               className="mt-0.5 accent-echo"
             />
-            <span className="font-pixel text-[11px] leading-relaxed text-parchment/50">
+            <span className="text-xs leading-relaxed text-parchment/50">
               Send my photo to an image service outside the EU and UK to draw my character. It is
               deleted once the character is drawn. The character is kept, the photo is not. My own
               photo only.
@@ -714,11 +714,11 @@ function FillChoice({
           </label>
 
           {err && (
-            <p role="alert" className="mt-3 font-pixel text-[11px] text-red-300">
+            <p role="alert" className="mt-3 text-xs text-danger">
               {err}
             </p>
           )}
-          <p className="mt-3 font-pixel text-[11px] leading-relaxed text-parchment/30">
+          <p className="mt-3 text-xs leading-relaxed text-parchment/30">
             JPEG or PNG, at least 384px, under 10MB. Your place is kept the moment you join. The
             character is drawn afterwards and arrives by email.
           </p>
@@ -760,7 +760,7 @@ function Form({
   // button and a violet focus ring would dwarf the slot's glow and kill the one accent that matters.
   // Parchment is the bible's "human/warm" family, which is what a form field actually is.
   const input =
-    "w-full rounded border-2 border-parchment/20 bg-ink px-3 py-2.5 font-pixel text-sm text-parchment outline-none placeholder:text-parchment/30 focus:border-parchment/60";
+    "w-full rounded border-2 border-parchment/20 bg-ink px-3 py-2.5 text-[15px] text-parchment outline-none placeholder:text-parchment/30 focus:border-parchment/60";
   return (
     <form onSubmit={onSubmit} noValidate className="mx-auto max-w-md">
       <div className="flex flex-col gap-3">
@@ -804,7 +804,7 @@ function Form({
         </div>
 
         {error && (
-          <p role="alert" className="rounded border border-red-400/40 bg-red-900/20 px-3 py-2 font-pixel text-xs text-red-200">
+          <p role="alert" className="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
             {error}
           </p>
         )}
@@ -819,7 +819,7 @@ function Form({
         >
           {full ? "Full" : busy ? "Joining…" : "Join"}
         </button>
-        <p className="text-center font-pixel text-[11px] leading-relaxed text-parchment/35">
+        <p className="text-center text-xs leading-relaxed text-parchment/35">
           Name and email only. We write to you when there is something to see.
         </p>
       </div>
@@ -843,7 +843,7 @@ function Joined({
   return (
     <section id="waitlist" className="bg-ink px-5 py-24 sm:px-8 sm:py-32">
       <div className="mx-auto flex max-w-md flex-col items-center text-center">
-        <div className="box-content w-[144px] overflow-hidden rounded-lg border-2 border-echo/20 bg-[#120c19]">
+        <div className="box-content w-[144px] overflow-hidden rounded-lg border-2 border-echo/20 bg-ink-deep">
           {entry ? <Portrait entry={entry} fallbackScale={4} /> : <Silhouette breathing={false} />}
         </div>
         <h2 className="mt-8 font-pixel text-2xl font-bold uppercase tracking-[0.25em] text-parchment">
@@ -856,7 +856,7 @@ function Joined({
             Arrival {seat}
           </p>
         )}
-        <p className="mt-4 font-pixel text-sm leading-relaxed text-parchment/60">
+        <p className="mt-4 text-[15px] leading-relaxed text-parchment/60">
           {portraitPending
             ? // Honest about the wait AND about the seat: the place is already theirs, the drawing
               // is the only thing outstanding. No progress bar, because we cannot honestly promise

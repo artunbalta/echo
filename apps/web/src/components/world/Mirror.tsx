@@ -133,7 +133,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
     <section
       data-mirror={view ? (view.live ? "live" : "record") : "empty"}
       aria-label="The mirror"
-      className="absolute inset-x-0 top-14 z-40 mx-auto max-h-[84vh] w-[min(900px,94vw)] overflow-y-auto rounded-2xl border border-white/15 bg-[#16241f]/95 text-[#f4e9d0] shadow-2xl backdrop-blur-xl"
+      className="absolute inset-x-0 top-14 z-40 mx-auto max-h-[84vh] w-[min(900px,94vw)] overflow-y-auto hud-pop hud-in text-parchment"
       onMouseDown={(e) => {
         // The world keeps its keys: nothing here takes focus, except a button, and your id to copy.
         if (!(e.target instanceof HTMLButtonElement) && !(e.target instanceof Element && e.target.closest("[data-mirror-id]"))) e.preventDefault();
@@ -141,7 +141,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
     >
       <header className="flex items-baseline justify-between gap-3 px-6 pt-5">
         <div>
-          <h2 className="font-serif text-xl text-[#e4edcd]">The mirror</h2>
+          <h2 className="font-serif text-xl text-parchment">The mirror</h2>
           <p className="text-xs text-white/50">How your echo sees you, and what it saw that made it so.</p>
         </div>
         <div className="flex shrink-0 items-baseline gap-4 text-xs text-white/50">
@@ -155,15 +155,17 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
       </header>
 
       <div className="px-6 pb-5 pt-3 text-sm">
-        {trouble ? <p className="mb-3 italic text-[#e8c98a]/85">{trouble}</p> : null}
+        {trouble ? <p className="mb-3 italic text-ember/85">{trouble}</p> : null}
         {!watching ? (
           <p className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-white/70">
             Your echo is not watching you{consent === "unset" ? " yet" : " now"}: nothing you do here reaches it.
           </p>
         ) : null}
         {view && !view.live ? (
-          <p className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-white/70" data-mirror-offline>
-            Your echo could not be reached just now ({view.reason}). This is the record alone, without where it puts you.
+          // The route's reason rides in the title, for whoever is looking for it (C68); the sentence is
+          // what it means for the person reading.
+          <p className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-white/70" data-mirror-offline title={view.reason ?? undefined}>
+            Your echo cannot hear you just now. This is the record alone, without where it puts you.
           </p>
         ) : null}
         {view?.restarted ? (
@@ -199,10 +201,10 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
                         {view.live ? (
                           <>
                             <span
-                              className="absolute inset-y-0 rounded-full bg-[#e2edc8]/25"
+                              className="absolute inset-y-0 rounded-full bg-parchment/25"
                               style={{ left: pct(a.mu - a.sd), right: `calc(100% - ${pct(a.mu + a.sd)})` }}
                             />
-                            <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#e8c98a]" style={{ left: pct(a.mu) }} />
+                            <span className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ember" style={{ left: pct(a.mu) }} />
                           </>
                         ) : null}
                       </div>
@@ -263,7 +265,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
                     {o.name.slice(1)}
                   </span>
                   <span className="text-white/45">, to see {o.asks}. </span>
-                  <span className="text-[#e2edc8]/80">You {o.answer === "walked past" || o.answer === "left it be" ? o.answer : `chose “${o.answer}”`}.</span>
+                  <span className="text-echo-soft/80">You {o.answer === "walked past" || o.answer === "left it be" ? o.answer : `chose “${o.answer}”`}.</span>
                   <span className="text-[11px] text-white/35"> {when(o.at)}</span>
                 </li>
               ))}
@@ -282,11 +284,11 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
             <p className="flex flex-wrap items-baseline gap-x-3">
               <span className="text-white/80">Watching you: {watching ? "yes" : "no"}.</span>
               {watching ? (
-                <button type="button" data-mirror-stop onClick={onRevoke} className="text-[#e8c98a] underline decoration-[#e8c98a]/40 hover:text-white">
+                <button type="button" data-mirror-stop onClick={onRevoke} className="text-ember underline decoration-ember/40 hover:text-white">
                   Stop watching me
                 </button>
               ) : (
-                <button type="button" data-mirror-watch onClick={onAccept} className="text-[#e8c98a] underline decoration-[#e8c98a]/40 hover:text-white">
+                <button type="button" data-mirror-watch onClick={onAccept} className="text-ember underline decoration-ember/40 hover:text-white">
                   {consent === "unset" ? "Let it watch" : "Let it watch again"}
                 </button>
               )}
@@ -295,23 +297,23 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
             <p className="flex flex-wrap items-baseline gap-x-3">
               <span className="text-white/80">Villagers&apos; voices through ElevenLabs: {cloud === true ? "yes" : cloud === false ? "no" : "never asked"}.</span>
               {cloud ? (
-                <button type="button" data-mirror-voices-off onClick={() => (setCloudWanted(false), setCloud(false))} className="text-[#e8c98a] underline decoration-[#e8c98a]/40 hover:text-white">
+                <button type="button" data-mirror-voices-off onClick={() => (setCloudWanted(false), setCloud(false))} className="text-ember underline decoration-ember/40 hover:text-white">
                   Stop using ElevenLabs
                 </button>
               ) : null}
             </p>
             {erasing === "no" ? (
-              <button type="button" data-mirror-erase onClick={() => setErasing("asking")} className="text-[#f0a48a] underline decoration-[#f0a48a]/40 hover:text-white">
+              <button type="button" data-mirror-erase onClick={() => setErasing("asking")} className="text-danger underline decoration-danger/40 hover:text-white">
                 Erase everything
               </button>
             ) : erasing === "asking" ? (
-              <div className="rounded-lg border border-[#f0a48a]/30 bg-[#f0a48a]/10 px-3 py-2">
+              <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2">
                 <p className="text-white/85">
                   This erases your echo and everything it was told, this record, what villagers remember of you, what you did in their villages,
                   what you carry, your house and your look. Villages&apos; own histories keep what happened, without your name. It cannot be undone.
                 </p>
                 <div className="mt-2 flex gap-2">
-                  <button type="button" data-mirror-erase-yes onClick={() => void erase()} className="rounded-full bg-[#f0a48a] px-3 py-1 text-xs font-medium text-[#2a1712]">
+                  <button type="button" data-mirror-erase-yes onClick={() => void erase()} className="rounded-full bg-danger px-3 py-1 text-xs font-medium text-ink-deep">
                     Erase it all
                   </button>
                   <button type="button" onClick={() => setErasing("no")} className="rounded-full border border-white/20 px-3 py-1 text-xs">
@@ -322,7 +324,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
             ) : erasing === "going" ? (
               <p className="italic text-white/60">Erasing…</p>
             ) : (
-              <p className="italic text-[#f0a48a]" data-mirror-erase-failed>
+              <p className="italic text-danger" data-mirror-erase-failed>
                 {erasing}
               </p>
             )}
@@ -351,12 +353,12 @@ const stretches = (n: number) => (n === 1 ? "one stretch" : `${n} stretches`);
 
 /** A pole's word, lit when the engine leans that way and would say so. */
 function Pole({ word, lean, strong }: { word: string; lean: boolean; strong: boolean }) {
-  return <span className={lean ? "text-[#e8c98a]" : undefined}>{lean && strong ? `strongly ${word}` : word}</span>;
+  return <span className={lean ? "text-ember" : undefined}>{lean && strong ? `strongly ${word}` : word}</span>;
 }
 
 function MoveChip({ m }: { m: Move }) {
   return (
-    <span className="rounded-full bg-white/5 px-2 text-[11px] text-[#e2edc8]/80" title={`${m.axis} ${m.amount > 0 ? "+" : ""}${m.amount.toFixed(3)}`}>
+    <span className="rounded-full bg-white/5 px-2 text-[11px] text-echo-soft/80" title={`${m.axis} ${m.amount > 0 ? "+" : ""}${m.amount.toFixed(3)}`}>
       {ARROW(m)} {m.towards}, {m.words}
     </span>
   );
@@ -379,7 +381,7 @@ function Why({ view, axis }: { view: Loaded; axis: PersonaAxisKey }) {
                 · {c.kind === "walk" ? stretches(c.count) : c.count === 1 ? "once" : `${c.count} times`}
               </span>
             </span>
-            <span className="shrink-0 text-xs text-[#e2edc8]/80">
+            <span className="shrink-0 text-xs text-echo-soft/80">
               {ARROW(c)} {c.towards}, {c.words}
             </span>
           </li>

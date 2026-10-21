@@ -148,7 +148,7 @@ test("consent given and no posterior yet is waiting, not zero", () => {
   assert.doesNotMatch(headline(r), PERCENT);
 });
 
-test("a mocked posterior says so and carries the route's reason, with no percentage", () => {
+test("a mocked posterior says plainly that the echo cannot hear, with no percentage and no route code", () => {
   const posterior: Posterior = {
     mu: [0, 0, 0, 0, 0, 0, 0, 0],
     var: null,
@@ -161,8 +161,19 @@ test("a mocked posterior says so and carries the route's reason, with no percent
   const r = recognitionReading({ consent: "accepted", posterior, log: [window_(1)] });
   assert.equal(r.kind, "offline");
   const line = headline(r);
-  assert.match(line, /ml_service_url_unset/);
+  // The reason is the inspector's to show, beside the posterior it explains (DECISIONS C68); a
+  // person glancing at the meter is told what it means for them, not the route's error code.
+  assert.equal(line, "your echo cannot hear you just now");
+  assert.doesNotMatch(line, /ml_|_unset|_failed/);
   assert.doesNotMatch(line, PERCENT);
+  assert.equal(headline(r, "tr"), "yankın şu an seni duyamıyor");
+});
+
+test("in Turkish the percentage leads with its sign, and every state still has a sentence", () => {
+  const r = recognitionReading({ consent: "accepted", posterior: real(PRIOR), log: [] });
+  assert.equal(headline(r, "tr"), "%0 emin · henüz sana dair bir şey söyleyemiyor · 0 ölçüm");
+  assert.match(headline({ kind: "off", consent: "unset" }, "tr"), /^kapalı /);
+  assert.notEqual(headline({ kind: "off", consent: "unset" }, "tr"), headline({ kind: "off", consent: "declined" }, "tr"));
 });
 
 test("a real posterior with no covariance draws nothing rather than guessing", () => {

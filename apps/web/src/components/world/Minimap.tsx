@@ -463,9 +463,11 @@ export interface MinimapProps {
    * ref, so a getter is the only shape that cannot go stale.
    */
   world: () => PlanetWorld | null;
+  /** Shown, or folded away behind the HUD's map button (C68). Folded, it keeps its state and draws nothing. */
+  open?: boolean;
 }
 
-export default function Minimap({ world }: MinimapProps) {
+export default function Minimap({ world, open = true }: MinimapProps) {
   const [built, setBuilt] = useState<Built | null>(null);
   // The getter behind a ref, so the frame loop below is started ONCE. The mount passes an inline
   // arrow, which is a new function on every one of its renders, and the mount re-renders whenever
@@ -590,7 +592,9 @@ export default function Minimap({ world }: MinimapProps) {
       // is scaled rather than re-laid-out. A transform is the right tool precisely because it moves
       // NOTHING inside: every pixel of map arithmetic here, and the frame tests/e2e/minimap.spec.ts
       // measures, is derived from the element's own box, which scales with it.
-      className="panel pointer-events-none absolute right-6 top-[4.5rem] z-10 select-none p-2.5 max-sm:right-1 max-sm:top-[3.25rem] max-sm:origin-top-right max-sm:scale-[.62]"
+      // Under the HUD's row of buttons (C68), and on the HUD's own surface rather than the old glowing
+      // panel: the map is a tool, not an ornament.
+      className={`hud-pop hud-in pointer-events-none absolute right-4 top-[3.75rem] z-10 select-none p-2 max-sm:right-3 max-sm:origin-top-right max-sm:scale-[.62] ${open ? "" : "hidden"}`}
     >
       {/* data-minimap-map and data-minimap-marker are how tests/e2e/minimap.spec.ts finds the
           two boxes it measures the frame between. They carry no behaviour and they ship, because a
@@ -683,7 +687,7 @@ export default function Minimap({ world }: MinimapProps) {
             a readout; it is drawn with the same ink halo the beat line uses because it has to be
             legible over sand, over sea and over forest floor without a plate behind it. */}
         <span
-          className="absolute left-1/2 top-1 -translate-x-1/2 font-pixel text-[9px] leading-none text-parchment/70"
+          className="absolute left-1/2 top-1 -translate-x-1/2 text-[9px] font-semibold leading-none text-parchment/70"
           style={{ textShadow: "0 0 3px rgba(11,14,20,0.95), 0 1px 2px rgba(11,14,20,0.95)" }}
         >
           N
@@ -733,7 +737,7 @@ export default function Minimap({ world }: MinimapProps) {
             </svg>
           ) : null}
         </div>
-        <div className="font-pixel text-[10px] leading-relaxed">
+        <div className="text-[10px] leading-relaxed tabular-nums">
           <p className="text-parchment/75" data-minimap-coords>
             {built ? latLngLabel(built.planet.lat, built.planet.lng) : "Reading the ground"}
           </p>
