@@ -136,3 +136,20 @@ export interface EchoMeeting {
   feedbackB: Record<string, boolean>;
   reason: string | null;
 }
+
+// ── five minutes to you (C72) ───────────────────────────────────────────────────
+
+/** A visit made for showing the world to someone: whose echo theirs meets, and their own voice, if they gave it. */
+export interface DemoVisit {
+  subject: string;
+  host: string;
+  /** What the host's echo calls them. */
+  name: string;
+  startedAt: string;
+  /** Their voice, cloned at ElevenLabs with their yes; null when they gave none, or it is gone. */
+  voiceId: string | null;
+  /** The voice must be deleted by then. */
+  voiceUntil: string | null;
+  /** When it was deleted at ElevenLabs. */
+  voiceDeletedAt: string | null;
+}

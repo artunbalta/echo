@@ -25,6 +25,8 @@
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+
+import { DEMO, liveVisit } from "@/lib/demo";
 import {
   SITUATIONS,
   SITUATION_IDS,
@@ -141,7 +143,10 @@ export async function POST(req: Request) {
     if (!cell) return bad("bad_cell");
     const up = mine.find((s) => standing(s, now));
     if (up) return NextResponse.json({ staging: up.cell === cell ? shown(up) : null, reason: "standing" });
-    const early = mayStage(mine, Infinity, now);
+    // A demo visitor in their five minutes is set things out at a demo's pace (C72); everyone else at the world's.
+    const visit = await liveVisit(store, caller.subject, now);
+    const gap = visit ? DEMO.directorGapMs : DIRECTOR.gapMs;
+    const early = mayStage(mine, Infinity, now, gap);
     if (early) return NextResponse.json({ staging: null, reason: early });
 
     const { ground, owners } = await groundOf(cell, now);
@@ -149,7 +154,7 @@ export async function POST(req: Request) {
     if (!candidates.length) return NextResponse.json({ staging: null, reason: "nothing_fits" });
     const pick = await selectSituation({ userId: caller.subject, npcs: candidates.map((id) => ({ id, axes_vec: [...SITUATIONS[id].axes] })) });
     if (pick.mocked || !pick.selected) return NextResponse.json({ staging: null, reason: pick.mocked ? "no_engine" : "nothing_to_learn" });
-    const full = mayStage(mine, pick.cap, now);
+    const full = mayStage(mine, visit ? Math.max(pick.cap, DEMO.directorCap) : pick.cap, now, gap);
     if (full) return NextResponse.json({ staging: null, reason: full });
 
     const ranked = [pick.selected, ...(pick.ranking ?? []).map((r) => r.candidate)].filter(

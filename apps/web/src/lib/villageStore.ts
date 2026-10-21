@@ -16,7 +16,7 @@ import "server-only";
 import { WRONGS, type Deed, type Home, type Landing, type LifeChange, type Look, type Pack, type Staging, type WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
-import type { EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
+import type { DemoVisit, EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
 import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
 
 export interface VillagerMemory {
@@ -112,6 +112,21 @@ export interface VillageStore {
   answerMeeting(id: string, side: "a" | "b", feedback: Record<string, boolean>): Promise<boolean>;
   /** Told to one person: their own column. */
   readMeeting(id: string, side: "a" | "b", at: string): Promise<boolean>;
+  // ── five minutes to you (C72) ──
+  /** A visitor's visit: null for none, undefined when unreadable. */
+  demoVisitOf(subject: string): Promise<DemoVisit | null | undefined>;
+  saveDemoVisit(v: DemoVisit): Promise<boolean>;
+  dropDemoVisit(subject: string): Promise<boolean>;
+  /** Visits whose voice is past its day and not yet deleted. Null: unreadable. */
+  demoVoicesDue(now: string): Promise<DemoVisit[] | null>;
+  /** Visits begun before a moment, oldest first, a few at a time. Null: unreadable. */
+  demoVisitsBefore(at: string, limit: number): Promise<DemoVisit[] | null>;
+  /**
+   * Everything of one person this store holds, gone (§13): in the in-process store, every map, with the
+   * world's history kept and made nameless (C44, C45). Against Supabase it does nothing, because
+   * `api/account/delete` deletes and nulls the same rows by REST, table by table, and says which failed.
+   */
+  forgetSubject(subject: string): Promise<boolean>;
 }
 
 /** The subject the moderators write their own changes under: never a stranger's, never undone. */
@@ -369,6 +384,17 @@ const meetingRow = (m: EchoMeeting): MeetingRow => ({
 });
 const MEETING_COLUMNS = "id, pair, a, b, a_name, b_name, status, away_from, away_to, cell, village, day, hour, x, y, topic, lines, witnesses, made_at, making_at, read_a, read_b, feedback_a, feedback_b, reason";
 const pairFromRow = (r: { id: string; a: string; b: string; a_name: string; b_name: string; created_at: string }): EchoPair => ({ id: r.id, a: r.a, b: r.b, aName: r.a_name, bName: r.b_name, createdAt: new Date(r.created_at).toISOString() });
+interface DemoRow {
+  subject: string;
+  host: string;
+  name: string;
+  started_at: string;
+  voice_id: string | null;
+  voice_until: string | null;
+  voice_deleted_at: string | null;
+}
+const DEMO_COLUMNS = "subject, host, name, started_at, voice_id, voice_until, voice_deleted_at";
+const demoFromRow = (r: DemoRow): DemoVisit => ({ subject: r.subject, host: r.host, name: r.name, startedAt: new Date(r.started_at).toISOString(), voiceId: r.voice_id, voiceUntil: iso(r.voice_until), voiceDeletedAt: iso(r.voice_deleted_at) });
 
 function supabaseStore(): VillageStore | null {
   const admin = adminClient();
@@ -774,6 +800,37 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("readMeeting", error.message), false;
       return true;
     },
+    async demoVisitOf(subject) {
+      const { data, error } = await admin.from("demo_visits").select(DEMO_COLUMNS).eq("subject", subject).maybeSingle();
+      if (error) return warn("demoVisitOf", error.message), undefined;
+      return data ? demoFromRow(data as DemoRow) : null;
+    },
+    async saveDemoVisit(v) {
+      const { error } = await admin.from("demo_visits").upsert(
+        { subject: v.subject, host: v.host, name: v.name, started_at: v.startedAt, voice_id: v.voiceId, voice_until: v.voiceUntil, voice_deleted_at: v.voiceDeletedAt },
+        { onConflict: "subject" },
+      );
+      if (error) return warn("saveDemoVisit", error.message), false;
+      return true;
+    },
+    async dropDemoVisit(subject) {
+      const { error } = await admin.from("demo_visits").delete().eq("subject", subject);
+      if (error) return warn("dropDemoVisit", error.message), false;
+      return true;
+    },
+    async forgetSubject() {
+      return true;
+    },
+    async demoVisitsBefore(at, limit) {
+      const { data, error } = await admin.from("demo_visits").select(DEMO_COLUMNS).lt("started_at", at).order("started_at", { ascending: true }).limit(limit);
+      if (error) return warn("demoVisitsBefore", error.message), null;
+      return (data as DemoRow[]).map(demoFromRow);
+    },
+    async demoVoicesDue(now) {
+      const { data, error } = await admin.from("demo_visits").select(DEMO_COLUMNS).not("voice_id", "is", null).is("voice_deleted_at", null).lte("voice_until", now).limit(50);
+      if (error) return warn("demoVoicesDue", error.message), null;
+      return (data as DemoRow[]).map(demoFromRow);
+    },
     async meetingsOf(subject, limit) {
       const { data, error } = await admin.from("echo_meetings").select(MEETING_COLUMNS).or(`a.eq."${subject}",b.eq."${subject}"`).order("made_at", { ascending: false }).limit(limit);
       if (error) return warn("meetingsOf", error.message), null;
@@ -821,6 +878,7 @@ interface MemoryState {
   invites?: Map<string, EchoInvite>;
   pairs?: Map<string, EchoPair>;
   meetings?: Map<string, EchoMeeting>;
+  demos?: Map<string, DemoVisit>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -1074,6 +1132,43 @@ function memoryStore(): VillageStore {
       memory.meetings!.set(id, side === "a" ? { ...m, readA: at } : { ...m, readB: at });
       return true;
     },
+    async demoVisitOf(subject) {
+      const v = memory.demos?.get(subject);
+      return v ? { ...v } : null;
+    },
+    async saveDemoVisit(v) {
+      (memory.demos ??= new Map()).set(v.subject, { ...v });
+      return true;
+    },
+    async dropDemoVisit(subject) {
+      memory.demos?.delete(subject);
+      return true;
+    },
+    async forgetSubject(subject) {
+      const mine = (k: string) => k.startsWith(`${subject}|`);
+      for (const k of [...memory.memories.keys()]) if (mine(k)) memory.memories.delete(k);
+      for (const map of [memory.deeds, memory.landings] as (Map<string, unknown> | undefined)[]) for (const k of [...(map?.keys() ?? [])]) if (mine(k)) map!.delete(k);
+      for (const map of [memory.packs, memory.homes, memory.looks, memory.presence, memory.bars, memory.demos] as (Map<string, unknown> | undefined)[]) map?.delete(subject);
+      memory.stagings?.delete(subject);
+      memory.outings?.delete(subject);
+      for (const [code, i] of [...(memory.invites ?? new Map<string, EchoInvite>())]) if (i.subject === subject) memory.invites!.delete(code);
+      for (const [id, p] of [...(memory.pairs ?? new Map<string, EchoPair>())]) if (p.a === subject || p.b === subject) memory.pairs!.delete(id);
+      for (const [id, m] of [...(memory.meetings ?? new Map<string, EchoMeeting>())]) if (m.a === subject || m.b === subject) memory.meetings!.delete(id);
+      memory.reports = (memory.reports ?? []).filter((r) => r.reporter !== subject);
+      // The world's history stays, nameless: who made a change or a mark is forgotten (C44, C45).
+      for (const [id, w] of [...(memory.whose ?? new Map())]) if (w.subject === subject) memory.whose!.delete(id);
+      return true;
+    },
+    async demoVisitsBefore(at, limit) {
+      return [...(memory.demos?.values() ?? [])]
+        .filter((v) => v.startedAt < at)
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+        .slice(0, limit)
+        .map((v) => ({ ...v }));
+    },
+    async demoVoicesDue(now) {
+      return [...(memory.demos?.values() ?? [])].filter((v) => v.voiceId !== null && v.voiceDeletedAt === null && v.voiceUntil !== null && v.voiceUntil <= now).map((v) => ({ ...v }));
+    },
     async meetingsOf(subject, limit) {
       return [...(memory.meetings?.values() ?? [])]
         .filter((m) => m.a === subject || m.b === subject)
@@ -1124,5 +1219,6 @@ export function resetMemoryStore(): void {
   memory.invites?.clear();
   memory.pairs?.clear();
   memory.meetings?.clear();
+  memory.demos?.clear();
   memory.next = 1;
 }

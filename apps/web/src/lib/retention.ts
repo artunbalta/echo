@@ -60,6 +60,9 @@ export const RAW_TABLES: readonly { table: string; column: string }[] = [
   // someone's echo did, so raw, as an outing is. Codes are single use and a day long; swept with them.
   { table: "echo_meetings", column: "made_at" },
   { table: "echo_invites", column: "created_at" },
+  // A demo visit (0034, C72). Its cloned voice is gone within a day by its own sweep; the row, a record
+  // of someone being shown the world, goes on this clock.
+  { table: "demo_visits", column: "started_at" },
 ];
 
 /**

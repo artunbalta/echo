@@ -151,10 +151,14 @@ export function standing(s: Staging, now: number): boolean {
  * Whether a new staging may be set out now, from this stranger's stagings: none standing, the last
  * one at least `gapMs` ago, and fewer today than the engine still wants.
  */
-export function mayStage(stagings: readonly Staging[], cap: number, now: number): "standing" | "too_soon" | "enough_today" | null {
+/**
+ * Whether something may be set out now. `gapMs` is the world's own twenty minutes for everyone, and
+ * shorter only for a demo visitor in their five minutes (web DECISIONS C72), whose caller says so.
+ */
+export function mayStage(stagings: readonly Staging[], cap: number, now: number, gapMs: number = DIRECTOR.gapMs): "standing" | "too_soon" | "enough_today" | null {
   if (stagings.some((s) => standing(s, now))) return "standing";
   const last = Math.max(0, ...stagings.map((s) => Date.parse(s.createdAt)));
-  if (now - last < DIRECTOR.gapMs) return "too_soon";
+  if (now - last < gapMs) return "too_soon";
   const today = new Date(now).toISOString().slice(0, 10);
   if (stagings.filter((s) => s.createdAt.slice(0, 10) === today).length >= cap) return "enough_today";
   return null;

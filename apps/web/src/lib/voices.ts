@@ -223,3 +223,49 @@ export async function hearSpeech(audio: ArrayBuffer, type: string, language: str
     return null;
   }
 }
+
+// ── a visitor's own voice, for a day (C72) ──────────────────────────────────────
+
+/**
+ * Clone a voice from one recording (ElevenLabs instant voice cloning). Only for a demo visitor who has
+ * just said yes to exactly this, and the caller deletes it within a day (`removeVoice`). Null when it
+ * could not be made; the reason is logged, never shown.
+ */
+export async function addVoice(name: string, audio: ArrayBuffer, type: string, description: string): Promise<string | null> {
+  if (!KEY()) return null;
+  try {
+    const form = new FormData();
+    form.append("name", name);
+    form.append("description", description);
+    form.append("remove_background_noise", "true");
+    const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : type.includes("mpeg") ? "mp3" : "webm";
+    form.append("files", new Blob([audio], { type }), `voice.${ext}`);
+    const res = await fetch(`${API}/v1/voices/add`, { method: "POST", headers: { "xi-api-key": KEY() }, body: form, signal: AbortSignal.timeout(45_000) });
+    if (!res.ok) {
+      console.warn(`[voice] cloning answered ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+      return null;
+    }
+    const data = (await res.json()) as { voice_id?: string };
+    return data.voice_id ?? null;
+  } catch (e) {
+    console.warn(`[voice] cloning failed: ${(e as Error).message}`);
+    return null;
+  }
+}
+
+/** Delete a cloned voice at ElevenLabs. True when it is gone (or was never there). */
+export async function removeVoice(voiceId: string): Promise<boolean> {
+  if (!KEY()) return false;
+  try {
+    const res = await fetch(`${API}/v1/voices/${encodeURIComponent(voiceId)}`, { method: "DELETE", headers: { "xi-api-key": KEY() }, signal: AbortSignal.timeout(20_000) });
+    // Already gone counts as gone.
+    if (res.ok || res.status === 404) return true;
+    const text = await res.text().catch(() => "");
+    if (res.status === 400 && /not.?found|does not exist|voice_not_found/i.test(text)) return true;
+    console.warn(`[voice] deleting ${voiceId} answered ${res.status}: ${text.slice(0, 200)}`);
+    return false;
+  } catch (e) {
+    console.warn(`[voice] deleting ${voiceId} failed: ${(e as Error).message}`);
+    return false;
+  }
+}
