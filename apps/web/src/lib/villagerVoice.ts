@@ -233,7 +233,7 @@ export const RECORD_MS = 15_000;
  * after it lets the microphone go at once and answers `"let-go"`, rather than recording a stranger
  * who is no longer holding anything.
  */
-export function recorder() {
+export function recorder(maxMs: number = RECORD_MS) {
   let rec: MediaRecorder | null = null;
   let stream: MediaStream | null = null;
   let chunks: Blob[] = [];
@@ -287,7 +287,7 @@ export function recorder() {
         began = performance.now();
         timer = setTimeout(() => {
           if (r.state === "recording") r.stop();
-        }, RECORD_MS);
+        }, maxMs);
         return "on";
       } catch {
         rec = null;

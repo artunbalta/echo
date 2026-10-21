@@ -2266,3 +2266,22 @@ not the class:
   echo's words to the other person, and those passed that echo's own gate.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 61. What C72 does not do yet (2026-10-22)
+
+- **A full erase needs the tables.** It says "Gone" only on a database with 0033 and 0034 applied, and
+  with the engine reachable. Until then it honestly says not everything could be erased.
+- **The owner's echo must already be trained.** About ten "that's me" answers in its buckets, or it
+  too will only rehearse. In a local engine without `ECHO_ML_PERSIST`, that training is lost when the
+  engine restarts.
+- **The owner's voice needs its own setting.** The host's lines are in the owner's own voice only with
+  `ELEVENLABS_OWNER_VOICE_ID` and `ECHO_OWNER_SUBJECTS`; otherwise they use a browser voice.
+- **A five-minute echo says little of its own.** The visitor's lines are what it would have said;
+  that is the point, but it is not yet "you".
+- **Voices are capped by the plan.** The account has 10 voice slots and the owner uses one, so at most
+  nine visitors can have a voice at once until the sweep frees them.
+- **No warning if the microphone is quiet**, beyond a recording too short to use.
+- **The meeting can be at night.** The meeting's time is inside the five minutes, which is less than
+  a world day.
+
+**Status:** OPEN, all of it, written down rather than discovered.

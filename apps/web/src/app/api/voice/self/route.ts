@@ -2,16 +2,19 @@
  * Your own voice (DECISIONS C62): `GET /api/voice/self` says whether the caller has one here, and
  * `POST /api/voice/self` speaks their own words in it.
  *
- * Only the owner's: `voices.ts` `ownVoice` binds it to the subjects in `ECHO_OWNER_SUBJECTS` and the
- * voice in `ELEVENLABS_OWNER_VOICE_ID`, and the subject comes from the caller's signed identity. The
+ * Only their own: the owner's, bound by `ECHO_OWNER_SUBJECTS` and `ELEVENLABS_OWNER_VOICE_ID`; anyone's
+ * bound in `ECHO_VOICES` (C71); or a demo visitor's, for its day (C72) — `lib/demo.ts` `personVoice`. The
+ * subject comes from the caller's signed identity. The
  * words are theirs to choose, so no token is asked for, unlike a villager's line; but nobody else
  * gets a word of it, and it is rate-limited with the rest of speech (bucket `voice`).
  */
 import { NextResponse } from "next/server";
 
+import { personVoice } from "@/lib/demo";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
-import { ownVoice, speakLine } from "@/lib/voices";
+import { villageStore } from "@/lib/villageStore";
+import { speakLine } from "@/lib/voices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +24,7 @@ const bad = (error: string, status = 400) => NextResponse.json({ error }, { stat
 export async function GET(req: Request) {
   const caller = subjectOf(req);
   if (!caller.ok) return NextResponse.json({ mine: false });
-  return NextResponse.json({ mine: ownVoice(caller.subject) !== null && !!process.env.ELEVENLABS_API_KEY });
+  return NextResponse.json({ mine: (await personVoice(villageStore(), caller.subject)) !== null && !!process.env.ELEVENLABS_API_KEY });
 }
 
 export async function POST(req: Request) {
@@ -30,7 +33,7 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
-  const voice = ownVoice(caller.subject);
+  const voice = await personVoice(villageStore(), caller.subject);
   if (!voice) return bad("not_your_voice", 403);
   let body: { text?: unknown };
   try {

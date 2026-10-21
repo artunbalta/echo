@@ -21,7 +21,8 @@ import { agentFeedback } from "@/lib/ml";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { villageStore } from "@/lib/villageStore";
-import { speakLine, voiceOf } from "@/lib/voices";
+import { personVoice } from "@/lib/demo";
+import { speakLine } from "@/lib/voices";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
   if (voiceOp) {
     // The other person's held-back words are theirs: not shown, so not spoken either.
     if (l.who !== side && !l.said) return bad("held_back", 403);
-    const voice = voiceOf(l.who === "a" ? m.a : m.b);
+    const voice = await personVoice(store, l.who === "a" ? m.a : m.b, now);
     if (!voice || !process.env.ELEVENLABS_API_KEY) return new Response(null, { status: 204 });
     const audio = await speakLine(l.text, voice);
     if (!audio) return new Response(null, { status: 204 });

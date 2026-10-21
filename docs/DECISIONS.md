@@ -4759,3 +4759,100 @@ back.
   RLS. A pair is unique either way round. A claim returns the meeting once, and a fill is taken once.
 
 **Not done.** See ⚑60.
+
+## C72 — five minutes to you
+
+What the owner asked for next: the most wow, absurd, investor-pleasing thing. The answer was the
+investor as the protagonist. They walk the world for five minutes, read three sentences aloud, and
+their echo meets the owner's on the green, in their own voice. Then everything is erased with one
+button.
+
+**Off unless switched on.** The demo needs three settings: `ECHO_DEMO=1`, `ECHO_DEMO_HOST` (the
+owner's subject, as the mirror shows it under "Your id here") and `ECHO_DEMO_HOST_NAME`.
+`ECHO_DEMO_CELL` is optional and defaults to Senstrand. Without all three there is no `/you` page and
+every `/api/demo` call answers 404, so no ordinary visitor reaches it. It runs on the owner's laptop
+or on any deployment with the settings, and nowhere else.
+
+**A visit** (`/you`, `components/demo`, `lib/demo.ts`, `/api/demo`).
+
+- **The first screen** asks, in plain words:
+  - whether the world may learn from how they move for these five minutes (that is the visit);
+  - separately and unticked, whether their voice may be copied from three sentences, to speak only
+    their own echo's lines, here, for a day.
+- **A fresh person.** Every visitor gets a new identity; nobody's is carried over from the last
+  visitor on that machine.
+- **The world.** Then comes the world itself, at Senstrand, with:
+  - a clock;
+  - the director at a demo's pace, for this visitor only: one encounter every 40 s instead of every
+    20 minutes, up to six (`mayStage` takes the gap);
+  - their voice after the first minute, if they said yes;
+  - after two minutes, "Let my echo meet Artun's", which happens by itself at five.
+- **The meeting is C71's own,** with no absence to wait for. The host said yes by being set as host.
+  - It is made on the spot and handed to the meeting component, which puts the two on the green and
+    offers "Take me there".
+  - A five-minute echo has earned nothing, so its lines are what it would have said, and the visitor
+    hears them in their own voice.
+  - The owner's echo, trained, speaks aloud.
+- **The end.** "That was you, five minutes in", and one button to erase everything now.
+
+**Their voice: only with a yes, and for a day.**
+
+- **The clone.** The recording is sent to ElevenLabs (instant voice cloning) only with
+  `x-voice-consent: yes`, from a real recording of at least 8 KB.
+- **Where it speaks.** It speaks only that person's echo's lines, for them and the host. It is found
+  by `personVoice` (the C62/C71 bindings first, then a visit's voice in its day). Every caller that
+  spoke the owner's voice now asks `personVoice`.
+- **A second reading** deletes the first voice before the new one exists.
+- **Lifetime.** It is deleted at ElevenLabs within a day by a sweep that runs on every demo request
+  and on the daily cron. On erase it is deleted at once, and the erasure fails if it would not go.
+
+**And the rest of the visit, within a day too.**
+
+- **One erasure path.** Erasure goes through `/api/account/delete`, called as the visitor with a
+  token the server signs. The migrations README asks for one erasure path, and this is that path.
+- **The visit row is the mark that an erasure is still owed.** It is removed last, and only when
+  everything else is gone. Otherwise it stays, and the sweep comes back for it.
+- **The page's erase** is the demo's own (the voice, at once) followed by the account erasure. If not
+  everything could be erased, it says so and offers to try again.
+- **Local erasure is real.** The in-process store gained `forgetSubject`, so erasing on a laptop with
+  `VILLAGE_STORE=memory` erases there too. The account route calls it as well.
+
+**Found on the way.**
+
+- **The first erase design took the mark with it.** A half-finished erasure (the engine down, say)
+  would have been forgotten, and "erased within a day" would have been false. The visit is now the
+  last thing deleted, and a test proves the sweep finishes a half-done erasure a day later.
+- **A click before hydration did nothing.** The intro is server-rendered. It now says when it is
+  live, and Begin waits for it.
+- **The recorder stopped at 15 s.** It now takes a limit, and the voice step uses 30 s.
+
+**Measured.**
+
+- `demo.test.mts`, 11 tests:
+  - off without the switch or a host;
+  - a visit, its pair, the host refused as a visitor, a fresh name cleaned;
+  - the meeting: too soon, then made once, the host speaking and the visitor's lines held;
+  - the voice: no yes means nothing sent; bad types and clicks refused; replaced cleanly;
+    `voice/self` says it is theirs;
+  - the sweep: due voices deleted once;
+  - erasure: a voice that would not go keeps the mark; the full erase takes it all, from both sides;
+    a half-done erasure is finished by the sweep; the demo erase takes only the voice;
+  - visits erased after a day;
+  - the director's demo pace for visitors only.
+- 29 injected defects: 28 caught, and one equivalent (a shortcut the claim already covers).
+- Web 479/479. Planet 313, plus the known flaky timing test.
+- **A real run**, in a browser with a microphone fed a recording (macOS `say`), against the local
+  engine with its key and a host trained the way a person trains one:
+  - the world at 7–9 s;
+  - the voice card at 64 s;
+  - a real ElevenLabs clone at 78 s;
+  - the meeting at 105 s, with the host speaking ("Hey Deniz! What're you doing out here in
+    Senstrand?") and the visitor's would-be lines played in the cloned voice;
+  - then erase.
+  - Afterwards ElevenLabs listed one cloned voice, the owner's, as before.
+  - The account erasure honestly said not everything was erased: the owner's Supabase lacks 0033 and
+    0034, so those six table deletes returned 404.
+- **Postgres 16:** 0034 by the runner and by the one-file SQL gave identical schemas. Every table has
+  RLS. The sweep's query returns exactly the voices past their day.
+
+**Not done.** See ⚑61.

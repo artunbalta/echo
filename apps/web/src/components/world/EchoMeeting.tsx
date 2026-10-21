@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { EchoMeetingLayer } from "@/game/world/echoMeetingLayer";
 import type { ConsentState } from "@/game/world/measure";
+import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { PlanetWorld } from "@/game/world/PlanetWorld";
 import type { ShownMeeting } from "@/lib/echoMeeting";
 import { t, useLang } from "@/lib/i18n";
@@ -63,7 +64,11 @@ function hushAll() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
-export default function EchoMeeting({ world, cell, consent }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState }) {
+/**
+ * `guide`: a demo visitor's five minutes (C72), where the meeting is handed in directly (`echo:meeting`)
+ * and there is a way to be taken to the green, since nobody in a pitch should have to find it.
+ */
+export default function EchoMeeting({ world, cell, consent, guide = false }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; guide?: boolean }) {
   const lang = useLang();
   const worldRef = useRef(world);
   worldRef.current = world;
@@ -97,8 +102,37 @@ export default function EchoMeeting({ world, cell, consent }: { world: () => Pla
     };
     if (document.documentElement.dataset.echoBack === "1") ask();
     window.addEventListener("echo:back", ask);
-    return () => window.removeEventListener("echo:back", ask);
+    // A meeting made on the spot (the demo, C72), handed in whole.
+    const given = (e: Event) => {
+      const m = (e as CustomEvent<ShownMeeting>).detail;
+      if (m) {
+        setOpen(false);
+        setMeeting(m);
+      }
+    };
+    window.addEventListener("echo:meeting", given);
+    return () => {
+      window.removeEventListener("echo:back", ask);
+      window.removeEventListener("echo:meeting", given);
+    };
   }, [consent, post]);
+
+  /** Three metres in front of the two of them, along the way the camera looks: close enough to start it. */
+  const goTo = useCallback(() => {
+    const w = worldRef.current();
+    const scene = layer()?.scene();
+    if (!w || !scene) return;
+    const ctx = w.context();
+    const player = ctx.layer<PlayerLayer>("player");
+    if (!player) return;
+    const mid = { x: (scene.me.x + scene.friend.x) / 2, y: (scene.me.y + scene.friend.y) / 2 };
+    const [mx, my] = ctx.frame.fromLocalM(mid.x, mid.y);
+    const dir = ctx.camera.getWorldDirection(ctx.camera.position.clone());
+    const len = Math.hypot(dir.x, dir.z) || 1;
+    const back = 3 / ctx.frame.tileM;
+    const h = player.handOff();
+    player.adopt({ ...h, mover: { ...h.mover, x: mx - (dir.x / len) * back, y: my - (dir.z / len) * back, vx: 0, vy: 0 } });
+  }, [layer]);
 
   /** Say it again, line by line, over the two of them if they are here. */
   const play = useCallback(async () => {
@@ -143,6 +177,7 @@ export default function EchoMeeting({ world, cell, consent }: { world: () => Pla
     if (meeting) void post({ op: "read", id: meeting.id }).catch(() => {});
     layer()?.set(null);
     setMeeting(null);
+    window.dispatchEvent(new Event("echo:meeting-done"));
   }, [meeting, post, layer]);
 
   const answer = useCallback(
@@ -174,6 +209,11 @@ export default function EchoMeeting({ world, cell, consent }: { world: () => Pla
         className="hud-pop hud-in pointer-events-auto absolute left-1/2 top-16 z-30 flex w-max max-w-[min(30rem,60vw)] -translate-x-1/2 items-center gap-3 py-2 pl-4 pr-2 text-[13px] text-parchment max-sm:left-3 max-sm:right-3 max-sm:top-[7.5rem] max-sm:w-auto max-sm:max-w-none max-sm:translate-x-0"
       >
         <p className="text-parchment/85">{here ? t(lang, "meet.toastHere", { name: meeting.friend }) : t(lang, "meet.toast", { name: meeting.friend })}</p>
+        {guide && here ? (
+          <button type="button" data-echo-meeting-go onClick={goTo} className="shrink-0 rounded-full bg-echo px-3 py-1 text-xs font-medium text-ink">
+            {t(lang, "meet.takeMe")}
+          </button>
+        ) : null}
         <button type="button" data-echo-meeting-open onClick={() => setOpen(true)} className="shrink-0 rounded-full bg-parchment px-3 py-1 text-xs font-medium text-ink">
           {t(lang, "meet.watch")}
         </button>

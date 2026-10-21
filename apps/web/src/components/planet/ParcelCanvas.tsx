@@ -65,6 +65,7 @@ import Inspector, { useMeasureChain, type ReactionReading } from "@/components/w
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
+import DemoOverlay, { type DemoSettings } from "@/components/demo/DemoOverlay";
 import EchoAway from "@/components/world/EchoAway";
 import EchoMeeting from "@/components/world/EchoMeeting";
 import EchoPairs from "@/components/world/EchoPairs";
@@ -103,9 +104,11 @@ export interface ParcelCanvasProps {
    * parcel and is the only answer any cell but the demo cell can get, whatever the URL asked for.
    */
   stations?: StationSet | null;
+  /** A demo visitor's five minutes (C72): the director at a demo's pace, the clock, their voice, the meeting. */
+  demo?: DemoSettings | null;
 }
 
-export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCanvasProps) {
+export default function ParcelCanvas({ stations = null, demo = null, ...manifest }: ParcelCanvasProps) {
   // One chain for the life of the page. It arms itself if this browser has already consented.
   //
   // It is deliberately never disposed. Disposal is the right thing on a real unmount, and it is
@@ -380,11 +383,12 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} />
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
-      <Director world={() => world.current} cell={here} consent={consent} chain={chain} />
+      <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={demo ? "demo" : "world"} />
       {/* What your echo did while you were away, and where it waits (C64). */}
       <EchoAway world={() => world.current} cell={here} consent={consent} />
       {/* Your echo and a friend's, met while you were both away (C71); and whom yours may meet. */}
-      <EchoMeeting world={() => world.current} cell={here} consent={consent} />
+      <EchoMeeting world={() => world.current} cell={here} consent={consent} guide={!!demo} />
+      {demo ? <DemoOverlay demo={demo} /> : null}
       <EchoPairs consent={consent} />
       <ReportPanel cell={here} />
       {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}

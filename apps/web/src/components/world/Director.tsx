@@ -27,8 +27,11 @@ import { ensureIdentity, identityHeaders } from "@/lib/identity";
 export const FIRST_MS = 40_000;
 /** Then this often. The route keeps its own, longer, gaps; this is only how often it is asked. */
 export const EVERY_MS = 120_000;
+/** A demo visitor's five minutes (C72): the server lets one be set out every forty seconds, so ask often. */
+export const DEMO_FIRST_MS = 12_000;
+export const DEMO_EVERY_MS = 25_000;
 
-export default function Director({ world, cell, consent, chain }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; chain: MeasureChain }) {
+export default function Director({ world, cell, consent, chain, pace = "world" }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; chain: MeasureChain; pace?: "world" | "demo" }) {
   const worldRef = useRef(world);
   worldRef.current = world;
 
@@ -90,15 +93,15 @@ export default function Director({ world, cell, consent, chain }: { world: () =>
     };
 
     void ask("look");
-    const first = setTimeout(() => void ask("ask"), FIRST_MS);
-    const every = setInterval(() => void ask("ask"), EVERY_MS);
+    const first = setTimeout(() => void ask("ask"), pace === "demo" ? DEMO_FIRST_MS : FIRST_MS);
+    const every = setInterval(() => void ask("ask"), pace === "demo" ? DEMO_EVERY_MS : EVERY_MS);
     return () => {
       live = false;
       clearTimeout(first);
       clearInterval(every);
       layer()?.onPassed(null);
     };
-  }, [cell, consent, chain]);
+  }, [cell, consent, chain, pace]);
 
   return null;
 }

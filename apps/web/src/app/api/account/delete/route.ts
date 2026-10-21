@@ -28,6 +28,8 @@ import { subjectOf, subjectRejection } from "@/lib/subject";
 import { deleteUser } from "@/lib/ml";
 import { deleteIslandState } from "@/lib/island-state";
 import { forgetLedger } from "@/lib/ledger";
+import { forgetDemoVoice } from "@/lib/demo";
+import { villageStore } from "@/lib/villageStore";
 import { erasureVerdict, type MlDeleteResult } from "@/lib/erasureResult";
 
 export const runtime = "nodejs";
@@ -79,6 +81,8 @@ const USER_KEYED: [string, string][] = [
   ["echo_pairs", "b"],
   ["echo_meetings", "a"],
   ["echo_meetings", "b"],
+  // C72. A demo visit. Its cloned voice is deleted at ElevenLabs first (below), or the erasure fails.
+  ["demo_visits", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
@@ -92,7 +96,21 @@ const USER_NAMED: [string, string][] = [
   ["moderation_actions", "subject"],
 ];
 
-async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: string[] }> {
+/** One table's rows for one person, deleted by REST: true, or why not. */
+async function supabaseDeleteRow(table: string, col: string, uid: string): Promise<true | string> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return "(no service key in this runtime)";
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(uid)}`, {
+      method: "DELETE",
+      headers: { apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}`, prefer: "return=minimal" },
+    });
+    return res.ok ? true : String(res.status);
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+async function supabaseDelete(uid: string, later: ReadonlySet<string> = new Set()): Promise<{ wiped: string[]; failed: string[] }> {
   // NO KEY IS A FAILURE, NOT A CLEAN SLATE. This returned `{wiped: [], failed: []}`, which made
   // `ok` true and the status 200: a deployment without the service key told a person their data was
   // gone WITHOUT EVER LOOKING. That was nearly harmless while these tables were empty. SOC-2.D has
@@ -105,6 +123,8 @@ async function supabaseDelete(uid: string): Promise<{ wiped: string[]; failed: s
   const wiped: string[] = [];
   const failed: string[] = [];
   for (const [table, col] of USER_KEYED) {
+    // Left for the caller to delete last (see `POST`), so it is neither wiped nor failed here.
+    if (later.has(table)) continue;
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(uid)}`, {
         method: "DELETE",
@@ -158,9 +178,19 @@ export async function POST(req: Request) {
   // `deleteIslandState`'s result was silently discarded and could never reach `ok`.
   // The mirror's record where it is held in this process (dev, or a write that failed): gone first.
   forgetLedger(uid);
+  // A demo visitor (C72). Their own voice, at ElevenLabs, goes first. Their visit goes LAST, and only
+  // when everything else has gone: the visit is the mark that an erasure is still owed, and the sweep
+  // that erases visits nobody erased (`lib/demo.ts`) comes back for any visit still marked. A partial
+  // erasure that took the mark with it would never be finished.
+  const store = villageStore();
+  const voiceGone = store ? await forgetDemoVoice(store, uid) : true;
+  const visit = store ? await store.demoVisitOf(uid) : null;
+  // What the in-process store holds of them, when there is one: against Supabase this does nothing, and
+  // the tables below are wiped by REST.
+  if (store) await store.forgetSubject(uid);
   const [ml, supabase, island] = await Promise.all([
     deleteUser(uid),
-    supabaseDelete(uid),
+    supabaseDelete(uid, new Set(["demo_visits"])),
     deleteIslandState(uid).then(() => null).catch((e: Error) => e.message),
   ]);
 
@@ -169,12 +199,18 @@ export async function POST(req: Request) {
   // the failure signal: `STORE.delete` reports whether the user was in MEMORY, and after a restart
   // that is false for everyone while the durable rows are removed regardless. What means failure is
   // `mocked`, which `lib/ml.ts` sets on the fallback whenever the call did not reach the service.
-  const verdict = erasureVerdict({
+  let verdict = erasureVerdict({
     wiped: supabase.wiped,
-    supabaseFailed: supabase.failed,
+    supabaseFailed: [...supabase.failed, ...(voiceGone ? [] : ["elevenlabs voice (the cloned voice was not deleted; it will be tried again)"])],
     ml: ml as MlDeleteResult,
     islandError: island,
   });
+  // The visit, last: gone when everything else is, kept (and put back, in the in-process store) when not.
+  if (verdict.ok) {
+    const gone = await supabaseDeleteRow("demo_visits", "subject", uid);
+    if (gone !== true) verdict = erasureVerdict({ wiped: supabase.wiped, supabaseFailed: [`demo_visits ${gone}`], ml: ml as MlDeleteResult, islandError: island });
+    else supabase.wiped.push("demo_visits");
+  } else if (visit && store) await store.saveDemoVisit(visit);
 
   // `ok` is the erasure's own claim about itself, so it has to mean it: false the moment ANY half
   // refused or was never attempted, with the list, rather than a cheerful 200 over rows that are
