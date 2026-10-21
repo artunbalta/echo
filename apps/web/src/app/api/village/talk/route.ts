@@ -244,11 +244,11 @@ export async function POST(req: Request) {
     { role: "user", content: message },
   ];
   // What they know of the stranger's doings, landings and house (shared with the echo's outings, C64).
-  const { deeds, doings, came, homeLine } = await strangerNotes(store, caller.subject, cell, village, me, day, names);
+  const { deeds, doings, came, homeLine, seenTalking } = await strangerNotes(store, caller.subject, cell, village, me, day, names);
   // What they would ask for this week (C50), which a stranger may already have met.
   const effects = store ? ((await store.effectsFor(cell, day)) ?? []) : [];
   const wanting = needLine(s, village.plan, me, day, changes, effects, deeds);
-  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, came, homeLine, wanting, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
+  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(memory, day), doings, came, homeLine, seenTalking, wanting, decisionsLine(offers, meetings)].filter(Boolean).join("\n\n");
   // Constructed per request, with fetch looked up at call time, so a test's recorder sees the call.
   const client = new Anthropic({ apiKey: KEY, timeout: 25_000, maxRetries: 1, fetch: (url, init) => globalThis.fetch(url, init) });
 

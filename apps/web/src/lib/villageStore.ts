@@ -16,7 +16,7 @@ import "server-only";
 import { WRONGS, type Deed, type Home, type Landing, type LifeChange, type Look, type Pack, type Staging, type WorldEffect } from "@echo/planet";
 
 import { adminClient } from "@/lib/supabaseAdmin";
-import type { Outing } from "@/lib/echoTypes";
+import type { EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
 import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
 
 export interface VillagerMemory {
@@ -89,6 +89,29 @@ export interface VillageStore {
   lift(subject: string): Promise<boolean>;
   logModeration(e: Omit<ModerationEntry, "id">): Promise<boolean>;
   moderationLog(limit: number): Promise<ModerationEntry[] | null>;
+  // ── two echoes meeting (C71) ──
+  addInvite(i: EchoInvite): Promise<boolean>;
+  /** An invite by its code: null for none, undefined when unreadable. */
+  inviteOf(code: string): Promise<EchoInvite | null | undefined>;
+  dropInvite(code: string): Promise<boolean>;
+  /** "exists" when these two are already paired, whichever of them asked. */
+  addPair(p: EchoPair): Promise<"added" | "exists" | "failed">;
+  pairsOf(subject: string): Promise<EchoPair[] | null>;
+  dropPair(id: string): Promise<boolean>;
+  /** Write a meeting only if none has its id yet: the first to plan it wins. */
+  claimMeeting(m: EchoMeeting): Promise<boolean>;
+  /**
+   * Take a meeting to fill: `planned` (or `making` begun before `staleBefore`, a fill that died) becomes
+   * `making`, for exactly one caller. False when someone else has it, or it is done.
+   */
+  takeMeeting(id: string, staleBefore: string, at: string): Promise<boolean>;
+  saveMeeting(m: EchoMeeting): Promise<boolean>;
+  /** A person's meetings, either side, newest first. Null: unreadable. */
+  meetingsOf(subject: string, limit: number): Promise<EchoMeeting[] | null>;
+  /** One person's answers, and only theirs: their own column, never the other's. */
+  answerMeeting(id: string, side: "a" | "b", feedback: Record<string, boolean>): Promise<boolean>;
+  /** Told to one person: their own column. */
+  readMeeting(id: string, side: "a" | "b", at: string): Promise<boolean>;
 }
 
 /** The subject the moderators write their own changes under: never a stranger's, never undone. */
@@ -261,6 +284,91 @@ function fromRow(r: ChangeRow): LifeChange {
     ...(r.by ? { by: r.by } : {}),
   };
 }
+
+interface MeetingRow {
+  id: string;
+  pair: string;
+  a: string;
+  b: string;
+  a_name: string;
+  b_name: string;
+  status: EchoMeeting["status"];
+  away_from: string;
+  away_to: string;
+  cell: string | null;
+  village: string | null;
+  day: number | null;
+  hour: number | null;
+  x: number | null;
+  y: number | null;
+  topic: string | null;
+  lines: EchoMeeting["lines"] | null;
+  witnesses: string[] | null;
+  made_at: string;
+  making_at: string | null;
+  read_a: string | null;
+  read_b: string | null;
+  feedback_a: Record<string, boolean> | null;
+  feedback_b: Record<string, boolean> | null;
+  reason: string | null;
+}
+const iso = (t: string | null) => (t ? new Date(t).toISOString() : null);
+const meetingFromRow = (r: MeetingRow): EchoMeeting => ({
+  id: r.id,
+  pair: r.pair,
+  a: r.a,
+  b: r.b,
+  aName: r.a_name,
+  bName: r.b_name,
+  status: r.status,
+  from: new Date(r.away_from).toISOString(),
+  to: new Date(r.away_to).toISOString(),
+  cell: r.cell,
+  village: r.village,
+  day: r.day,
+  hour: r.hour,
+  x: r.x,
+  y: r.y,
+  topic: r.topic,
+  lines: r.lines ?? [],
+  witnesses: r.witnesses ?? [],
+  madeAt: new Date(r.made_at).toISOString(),
+  makingAt: iso(r.making_at),
+  readA: iso(r.read_a),
+  readB: iso(r.read_b),
+  feedbackA: r.feedback_a ?? {},
+  feedbackB: r.feedback_b ?? {},
+  reason: r.reason,
+});
+const meetingRow = (m: EchoMeeting): MeetingRow => ({
+  id: m.id,
+  pair: m.pair,
+  a: m.a,
+  b: m.b,
+  a_name: m.aName,
+  b_name: m.bName,
+  status: m.status,
+  away_from: m.from,
+  away_to: m.to,
+  cell: m.cell,
+  village: m.village,
+  day: m.day,
+  hour: m.hour,
+  x: m.x,
+  y: m.y,
+  topic: m.topic,
+  lines: m.lines,
+  witnesses: m.witnesses,
+  made_at: m.madeAt,
+  making_at: m.makingAt,
+  read_a: m.readA,
+  read_b: m.readB,
+  feedback_a: m.feedbackA,
+  feedback_b: m.feedbackB,
+  reason: m.reason,
+});
+const MEETING_COLUMNS = "id, pair, a, b, a_name, b_name, status, away_from, away_to, cell, village, day, hour, x, y, topic, lines, witnesses, made_at, making_at, read_a, read_b, feedback_a, feedback_b, reason";
+const pairFromRow = (r: { id: string; a: string; b: string; a_name: string; b_name: string; created_at: string }): EchoPair => ({ id: r.id, a: r.a, b: r.b, aName: r.a_name, bName: r.b_name, createdAt: new Date(r.created_at).toISOString() });
 
 function supabaseStore(): VillageStore | null {
   const admin = adminClient();
@@ -604,6 +712,73 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("saveStaging", error.message), false;
       return true;
     },
+    async addInvite(i) {
+      const { error } = await admin.from("echo_invites").insert({ code: i.code, subject: i.subject, name: i.name, created_at: i.createdAt, expires_at: i.expiresAt });
+      if (error) return warn("addInvite", error.message), false;
+      return true;
+    },
+    async inviteOf(code) {
+      const { data, error } = await admin.from("echo_invites").select("code, subject, name, created_at, expires_at").eq("code", code).maybeSingle();
+      if (error) return warn("inviteOf", error.message), undefined;
+      if (!data) return null;
+      const r = data as { code: string; subject: string; name: string; created_at: string; expires_at: string };
+      return { code: r.code, subject: r.subject, name: r.name, createdAt: new Date(r.created_at).toISOString(), expiresAt: new Date(r.expires_at).toISOString() };
+    },
+    async dropInvite(code) {
+      const { error } = await admin.from("echo_invites").delete().eq("code", code);
+      if (error) return warn("dropInvite", error.message), false;
+      return true;
+    },
+    async addPair(p) {
+      const { error } = await admin.from("echo_pairs").insert({ id: p.id, a: p.a, b: p.b, a_name: p.aName, b_name: p.bName, created_at: p.createdAt });
+      if (error) return error.code === "23505" ? "exists" : (warn("addPair", error.message), "failed");
+      return "added";
+    },
+    async pairsOf(subject) {
+      const { data, error } = await admin.from("echo_pairs").select("id, a, b, a_name, b_name, created_at").or(`a.eq."${subject}",b.eq."${subject}"`).order("created_at", { ascending: true }).limit(50);
+      if (error) return warn("pairsOf", error.message), null;
+      return (data as Parameters<typeof pairFromRow>[0][]).map(pairFromRow);
+    },
+    async dropPair(id) {
+      const { error } = await admin.from("echo_pairs").delete().eq("id", id);
+      if (error) return warn("dropPair", error.message), false;
+      return true;
+    },
+    async claimMeeting(m) {
+      const { data, error } = await admin.from("echo_meetings").upsert(meetingRow(m), { onConflict: "id", ignoreDuplicates: true }).select("id");
+      if (error) return warn("claimMeeting", error.message), false;
+      return (data ?? []).length === 1;
+    },
+    async takeMeeting(id, staleBefore, at) {
+      const { data, error } = await admin
+        .from("echo_meetings")
+        .update({ status: "making", making_at: at })
+        .eq("id", id)
+        .or(`status.eq.planned,and(status.eq.making,making_at.lt."${staleBefore}")`)
+        .select("id");
+      if (error) return warn("takeMeeting", error.message), false;
+      return (data ?? []).length === 1;
+    },
+    async saveMeeting(m) {
+      const { error } = await admin.from("echo_meetings").upsert(meetingRow(m), { onConflict: "id" });
+      if (error) return warn("saveMeeting", error.message), false;
+      return true;
+    },
+    async answerMeeting(id, side, feedback) {
+      const { error } = await admin.from("echo_meetings").update(side === "a" ? { feedback_a: feedback } : { feedback_b: feedback }).eq("id", id);
+      if (error) return warn("answerMeeting", error.message), false;
+      return true;
+    },
+    async readMeeting(id, side, at) {
+      const { error } = await admin.from("echo_meetings").update(side === "a" ? { read_a: at } : { read_b: at }).eq("id", id);
+      if (error) return warn("readMeeting", error.message), false;
+      return true;
+    },
+    async meetingsOf(subject, limit) {
+      const { data, error } = await admin.from("echo_meetings").select(MEETING_COLUMNS).or(`a.eq."${subject}",b.eq."${subject}"`).order("made_at", { ascending: false }).limit(limit);
+      if (error) return warn("meetingsOf", error.message), null;
+      return (data as MeetingRow[]).map(meetingFromRow);
+    },
     async addLanding(subject, cell, l) {
       const { data, error } = await admin
         .from("player_landings")
@@ -643,6 +818,9 @@ interface MemoryState {
   reports?: Report[];
   bars?: Map<string, Bar>;
   log?: ModerationEntry[];
+  invites?: Map<string, EchoInvite>;
+  pairs?: Map<string, EchoPair>;
+  meetings?: Map<string, EchoMeeting>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -841,6 +1019,68 @@ function memoryStore(): VillageStore {
       memory.looks.set(subject, { ...look });
       return true;
     },
+    async addInvite(i) {
+      (memory.invites ??= new Map()).set(i.code, { ...i });
+      return true;
+    },
+    async inviteOf(code) {
+      const i = memory.invites?.get(code);
+      return i ? { ...i } : null;
+    },
+    async dropInvite(code) {
+      memory.invites?.delete(code);
+      return true;
+    },
+    async addPair(p) {
+      memory.pairs ??= new Map();
+      for (const q of memory.pairs.values()) if ((q.a === p.a && q.b === p.b) || (q.a === p.b && q.b === p.a)) return "exists";
+      memory.pairs.set(p.id, { ...p });
+      return "added";
+    },
+    async pairsOf(subject) {
+      return [...(memory.pairs?.values() ?? [])].filter((p) => p.a === subject || p.b === subject).map((p) => ({ ...p }));
+    },
+    async dropPair(id) {
+      memory.pairs?.delete(id);
+      return true;
+    },
+    async claimMeeting(m) {
+      memory.meetings ??= new Map();
+      if (memory.meetings.has(m.id)) return false;
+      memory.meetings.set(m.id, structuredClone(m));
+      return true;
+    },
+    async takeMeeting(id, staleBefore, at) {
+      const m = memory.meetings?.get(id);
+      if (!m) return false;
+      const stale = m.status === "making" && m.makingAt !== null && m.makingAt < staleBefore;
+      if (m.status !== "planned" && !stale) return false;
+      memory.meetings!.set(id, { ...m, status: "making", makingAt: at });
+      return true;
+    },
+    async saveMeeting(m) {
+      (memory.meetings ??= new Map()).set(m.id, structuredClone(m));
+      return true;
+    },
+    async answerMeeting(id, side, feedback) {
+      const m = memory.meetings?.get(id);
+      if (!m) return false;
+      memory.meetings!.set(id, side === "a" ? { ...m, feedbackA: { ...feedback } } : { ...m, feedbackB: { ...feedback } });
+      return true;
+    },
+    async readMeeting(id, side, at) {
+      const m = memory.meetings?.get(id);
+      if (!m) return false;
+      memory.meetings!.set(id, side === "a" ? { ...m, readA: at } : { ...m, readB: at });
+      return true;
+    },
+    async meetingsOf(subject, limit) {
+      return [...(memory.meetings?.values() ?? [])]
+        .filter((m) => m.a === subject || m.b === subject)
+        .sort((x, y) => y.madeAt.localeCompare(x.madeAt))
+        .slice(0, limit)
+        .map((m) => structuredClone(m));
+    },
     async addLanding(subject, cell, l) {
       const landing: Landing = { ...l, id: `l${memory.next++}` };
       memory.landings ??= new Map();
@@ -881,5 +1121,8 @@ export function resetMemoryStore(): void {
   memory.bars?.clear();
   memory.log = [];
   memory.looks?.clear();
+  memory.invites?.clear();
+  memory.pairs?.clear();
+  memory.meetings?.clear();
   memory.next = 1;
 }

@@ -293,7 +293,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         label.dataset.villagerLabel = "";
         label.style.cssText =
           "position:absolute;left:0;top:0;pointer-events:none;z-index:15;display:none;transform:translate(-50%,-100%);" +
-          "max-width:260px;padding:6px 10px;border-radius:10px;background:rgba(22,36,31,.86);color:#f4e9d0;" +
+          "max-width:260px;padding:6px 10px;border-radius:10px;background:rgba(18,12,25,.86);color:#f4e9d0;" +
           "font:12px/1.35 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35)";
         host.appendChild(label);
         for (let k = 0; k < 3; k++) {

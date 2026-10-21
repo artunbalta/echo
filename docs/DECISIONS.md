@@ -4637,3 +4637,125 @@ is replaced by name, and the index is built under its own name; 0019's index sta
   writes (change kinds, effect kinds, deed readings).
 
 **Not done.** See ⚑59.
+
+## C71 — two echoes meeting while their people are away
+
+What the owner asked for, after asking what would be the most "wow" and most absurd thing an
+investor could see: your echo and a friend's echo meet in a village while you are both away. They
+talk in your own voices, the village sees them, and each of you is shown the scene when you come
+back.
+
+**Who.** Only two people who have both said yes (`/api/echo/pair`). One makes a code: single use, a
+day long, with the name the other knows them by. The other types it in with theirs. Either can stop
+it. Nobody's echo meets a stranger's.
+
+**When.** There is still no worker, as with the outings (C64). An absence is found when someone comes
+back.
+
+- **Planned on return.** When someone comes back (`/api/echo/away`, `back`), a meeting is planned for
+  each pair whose two absences overlap by an absence's length (30 minutes).
+  - It is planned before the return is recorded, so two people coming back in the same moment still
+    find each other away.
+  - Its id is the pair plus the overlap's start, which both compute alike, and it is written only if
+    nobody has written it.
+  - Planning calls no model.
+- **Filled afterwards.** The page then asks `/api/echo/meet`, and the meeting is filled.
+  - A fill is taken by exactly one caller, and one that died is taken over after two minutes.
+  - One meeting per pair per outing gap (three hours).
+- **Where.** On the green of a village one of them was last in, at a daytime hour inside the overlap.
+
+**What is said.** Up to six lines, taking turns, each its own echo's.
+
+- **The engine writes them.** Each line comes from `/agent/turn`, from that person's posterior and
+  past, and goes through that person's gate.
+- **The same buckets as the outings** (a first greeting, then small talk), so trust earned with
+  villagers holds here, and an answer here trains what the echo may say there.
+- **What each echo is told:**
+  - where and when;
+  - whom it has run into;
+  - what the village is talking about that day;
+  - what has been said so far.
+- **What each echo is never told:** any villager memory, deed or conversation of either person. A
+  test seeds both and checks every context sent to the engine.
+- **Nothing it says** changes anything or is measured.
+
+**The gate is kept, and that decides what a meeting is.**
+
+- **Said aloud.** A line its gate lets through is said in the village. The villagers nearby see the
+  two talk, and may mention it later to either person, with what was said aloud
+  (`strangerNotes` → `seenTalking`).
+- **Held back.** A line the gate holds back is only what that echo would have said. Its own person
+  sees it, marked. **The friend never sees it.** The gate holds a line back so that nobody is
+  misrepresented by it, and the person it would mislead most is the friend it was meant for. So the
+  friend sees "held something back", not the words. The other echo still answers the draft, so the
+  conversation runs on.
+- **Untrained echoes rehearse.** Two echoes nobody has trained hold back every line. Their first
+  meeting is a rehearsal, seen by no villager, and each person sees their own half of it. Each person's
+  answers are what lets the next meeting be said.
+
+**Answers and voices** (`/api/echo/meet`).
+
+- **Answers.** Each person answers only their own echo's lines, once. The answer reaches the engine
+  with the confidence the gate had then, and trains that person's own bucket. Each side's answers and
+  read mark have their own column, so two people answering at once lose nothing.
+- **Voices.** A line can be heard in its speaker's own voice. That is the owner's (C62), or anyone's
+  bound in `ECHO_VOICES` (`subject=voiceId,…`). Only the two people in the meeting can hear it; only
+  their own lines or lines said aloud; and only the stored words, so nobody can make another person's
+  voice say anything. Every bound voice is kept out of the villagers' pool. With no voice, the page
+  speaks in two different browser voices.
+
+**On the page.**
+
+- **The menu** gains "Let a friend's echo meet yours".
+- **On return**, a line says the echo met the friend's.
+- **In the world.** If the meeting was here, the two bodies stand faint on the green, yours cool and
+  your friend's warm, turned to each other (`echoMeetingLayer`). Walk up and they say it again, a
+  bubble over whoever speaks, while the voices play. Then the account opens with "That's me / Not me"
+  under your own lines.
+- **In Turkish** as well (C69). Turkish strings use "ile" rather than inflecting a name the page
+  cannot predict.
+
+**Kept** (migration 0033): `echo_invites`, `echo_pairs` (one per two people, whichever asked) and
+`echo_meetings`, all RLS-on with no policies.
+
+- An erasure takes the person's codes and pairs, and every meeting their echo was in, on either side.
+- Meetings and codes are raw, swept at 90 days.
+
+**Found on the way.**
+
+- **The friend's held-back words** would have been shown to them, defeating the gate. Found in
+  design, before any code shipped.
+- **Two returns in the same moment** each recorded themselves before planning, so each saw the other
+  back and neither planned. Fixed by planning first, with an id from the overlap.
+- **Answers raced** when written as one row. They now have a column per person.
+- **An import cycle** (outings → villagers' notes → meetings → outings) would have read a constant
+  half-initialised. The pure parts moved to `meetingWords.ts`.
+- **Mutation testing found a redundant check:** "the other is away" is implied by the overlap. It
+  also found an untested case: an absence that ended earlier. The check is gone; the case is tested.
+- **The bubbles sat 1.6× too high** (`tileM` instead of `tileM / 1.6`), seen in the browser check.
+- **The villagers' name plate** kept C68's last green (an inline style). It is ink now.
+
+**Measured.**
+
+- `echoMeeting.test.mts`, 16 tests:
+  - pairing and its refusals;
+  - planning, including no pair, the other here, a pause, the gap, an ended absence, two returns at
+    once through the planner and through the route;
+  - filling: turns, gates, buckets, answered drafts, witnesses equal to `witnessesOf`, a rehearsal
+    seen by nobody, the privacy of the contexts, take-once, stale takeover, no engine;
+  - showing, answers, voices, witnesses' words, erasure.
+- 32 injected defects, all caught.
+- Web 468/468. Typecheck clean.
+- **Real engine** (`services/ml` local with its Anthropic key, two test identities):
+  - Artun was given a sociable past and a trained gate; Deniz a quiet past and a fresh gate.
+  - Artun's echo spoke aloud ("been too busy running around the market making friends with
+    everyone"). Deniz's held back every line ("Been sitting by the water mostly, watching things").
+  - Twelve villagers saw it. The fill took 21 s.
+- **Browser**, as both people:
+  - the two bodies on the green with bubbles as they spoke;
+  - Artun's account showing "Deniz's echo held something back" three times;
+  - Deniz's account showing their own three drafts with "I'd have said that" under each.
+- **Postgres 16:** 0033 by the runner and by the one-file SQL gave identical schemas. Every table has
+  RLS. A pair is unique either way round. A claim returns the meeting once, and a fill is taken once.
+
+**Not done.** See ⚑60.

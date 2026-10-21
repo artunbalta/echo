@@ -28,7 +28,7 @@ import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabaseAdmin";
 
 /** One short name per protected surface. Kept here so the set is enumerable from one file. */
-export type RateBucket = "waitlist" | "vision" | "portrait" | "villager" | "world" | "voice" | "mirror" | "report" | "moderation";
+export type RateBucket = "waitlist" | "vision" | "portrait" | "villager" | "world" | "voice" | "mirror" | "report" | "moderation" | "pair" | "meet";
 
 export interface RateLimitOptions {
   bucket: RateBucket;

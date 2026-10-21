@@ -4,7 +4,8 @@
  * - `{ op: "seen", cell }`: the page is open, here. Sent every couple of minutes and on leaving, so
  *   an absence is measured from when the stranger actually went.
  * - `{ op: "back", cell }`: the page has opened. If the stranger was away long enough, and the echo
- *   has not been out lately, the absence is filled now (`echoOuting.ts` `makeOuting`). Either way the
+ *   has not been out lately, the absence is filled now (`echoOuting.ts` `makeOuting`); and any meeting
+ *   with a paired echo whose person is away too is planned (C71, `echoMeeting.ts`). Either way the
  *   newest outing not yet told comes back, with the echo's own account of it, and a voice token for
  *   each villager's line (C60) so the page may play them in their voices.
  * - `{ op: "answer", id, encounter, turn, agreed }`: the stranger's word on one line the echo said or
@@ -19,6 +20,7 @@
 import { NextResponse } from "next/server";
 
 import type { Outing } from "@/lib/echoTypes";
+import { planMeetings } from "@/lib/echoMeeting";
 import { OUTING, absenceOf, makeOuting, mayGoOut, narration, untold } from "@/lib/echoOuting";
 import { agentFeedback } from "@/lib/ml";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
@@ -73,6 +75,13 @@ export async function POST(req: Request) {
     const cell = typeof body.cell === "string" && CELL.test(body.cell) ? body.cell : null;
     if (!cell) return bad("bad_cell");
     const seen = body.op === "back" ? await store.seenOf(caller.subject) : null;
+    // Two echoes meeting (C71): planned BEFORE this return is recorded, so that two people coming back
+    // in the same moment still find each other away; whichever plans first claims it, once (the id is
+    // the overlap's own). Planning calls no model, so coming back answers as fast as it did.
+    if (seen) {
+      const gone = absenceOf(seen, now);
+      if (gone) await planMeetings(store, caller.subject, gone, now);
+    }
     if (!(await store.markSeen(caller.subject, cell, new Date(now).toISOString()))) return bad("not_recorded", 503);
     if (body.op === "seen") return NextResponse.json({ ok: true });
     const outings = (await store.outingsOf(caller.subject)) ?? null;

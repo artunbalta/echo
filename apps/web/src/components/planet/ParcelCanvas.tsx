@@ -66,6 +66,8 @@ import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
 import EchoAway from "@/components/world/EchoAway";
+import EchoMeeting from "@/components/world/EchoMeeting";
+import EchoPairs from "@/components/world/EchoPairs";
 import ReportPanel from "@/components/world/ReportPanel";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
@@ -381,6 +383,9 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
       <Director world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* What your echo did while you were away, and where it waits (C64). */}
       <EchoAway world={() => world.current} cell={here} consent={consent} />
+      {/* Your echo and a friend's, met while you were both away (C71); and whom yours may meet. */}
+      <EchoMeeting world={() => world.current} cell={here} consent={consent} />
+      <EchoPairs consent={consent} />
       <ReportPanel cell={here} />
       {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
       <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />

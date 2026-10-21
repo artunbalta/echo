@@ -72,6 +72,13 @@ const USER_KEYED: [string, string][] = [
   // C67. Reports they filed, and a bar on them (their identity goes with this erasure anyway).
   ["moderation_reports", "reporter"],
   ["barred_subjects", "subject"],
+  // C71. Codes they made, whom their echo may meet, and every meeting their echo was in: on either side,
+  // since a meeting is the other echo's words to theirs as much as theirs to it.
+  ["echo_invites", "subject"],
+  ["echo_pairs", "a"],
+  ["echo_pairs", "b"],
+  ["echo_meetings", "a"],
+  ["echo_meetings", "b"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
