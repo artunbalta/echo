@@ -137,12 +137,12 @@ export default function Flow1Client() {
   }, [postEvents]);
 
   return (
-    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-[#f4e9d0]">
+    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-parchment">
       <div ref={mountRef} className="absolute inset-0" />
 
       {/* a single quiet line; never a goal, never a score */}
       {whisper && (
-        <div className="pointer-events-none absolute left-1/2 top-10 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-[#f4e9d0]/80">
+        <div className="pointer-events-none absolute left-1/2 top-10 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-parchment/80">
           {whisper}
         </div>
       )}
@@ -150,31 +150,31 @@ export default function Flow1Client() {
       {/* the driftwood counter — how many a raft needs; over-gathering past `needed` is a real cue */}
       {counter && (phase === "gather" || phase === "ready") && (
         <div className="pointer-events-none absolute left-8 top-1/2 -translate-y-1/2 rounded-xl border border-white/10 bg-black/45 px-4 py-3 text-center backdrop-blur">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-[#f4e9d0]/50">driftwood</div>
-          <div className="mt-1 text-lg tabular-nums text-[#f4e9d0]/90">
-            {counter.gathered} <span className="text-[#f4e9d0]/40">/ {counter.needed}</span>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-parchment/50">driftwood</div>
+          <div className="mt-1 text-lg tabular-nums text-parchment/90">
+            {counter.gathered} <span className="text-parchment/40">/ {counter.needed}</span>
           </div>
           {counter.gathered >= counter.needed && (
-            <div className="mt-1 text-[10px] italic text-[#a06cd5]/80">enough — or more</div>
+            <div className="mt-1 text-[10px] italic text-echo/80">enough — or more</div>
           )}
         </div>
       )}
 
       {/* the single contextual prompt (raft "pick", or a beat: plant/eat/enter/study/dig) */}
       {prompt && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-[#a06cd5]/30 bg-black/50 px-4 py-1.5 text-xs text-[#f4e9d0]/85 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-echo/30 bg-black/50 px-4 py-1.5 text-xs text-parchment/85 backdrop-blur">
           {prompt}
         </div>
       )}
       {!prompt && (phase === "gather" || phase === "ready") && (
-        <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-[#f4e9d0]/55 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-parchment/55 backdrop-blur">
           walk with WASD / arrows — the island is yours to work
         </div>
       )}
 
       {/* the mirror stirs — a faint pulse when an act actually moved the posterior (evidence, not a score) */}
       {stirred > 0 && (
-        <div key={stirred} className="pointer-events-none absolute right-8 top-8 h-2 w-2 rounded-full bg-[#a06cd5] shadow-[0_0_12px_4px_rgba(160,108,213,0.6)] animate-ping" />
+        <div key={stirred} className="pointer-events-none absolute right-8 top-8 h-2 w-2 rounded-full bg-echo shadow-[0_0_12px_4px_rgba(160,108,213,0.6)] animate-ping" />
       )}
     </div>
   );

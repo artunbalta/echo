@@ -74,7 +74,7 @@ export default function Moderation() {
 
   return (
     <main className="min-h-screen bg-ink p-6 font-mono text-sm text-parchment" data-moderation="ready">
-      <h1 className="font-serif text-2xl text-[#e4edcd]">Moderation</h1>
+      <h1 className="font-serif text-2xl text-parchment">Moderation</h1>
       <p className="mt-1 text-xs text-parchment/50">Reports from strangers, what was there, and what you can undo. Everything you do here is logged.</p>
       {said ? <p className="mt-3 rounded bg-white/5 px-3 py-2 text-xs" data-moderation-said>{said}</p> : null}
 
@@ -86,7 +86,7 @@ export default function Moderation() {
             {reports.map((r) => (
               <li key={r.id} className={`rounded-lg border px-3 py-2 ${r.resolvedAt ? "border-white/5 opacity-60" : "border-white/15"}`} data-moderation-report={r.id}>
                 <p>
-                  <span className="text-[#e8c98a]">{REASON[r.reason]}</span> · {r.cell} · day {r.day} · {when(r.madeAt)}
+                  <span className="text-ember">{REASON[r.reason]}</span> · {r.cell} · day {r.day} · {when(r.madeAt)}
                   {r.resolvedAt ? <span className="text-parchment/50"> · closed: {r.outcome}</span> : null}
                 </p>
                 {r.note ? <p className="mt-1 italic text-parchment/70">“{r.note}”</p> : null}
@@ -132,7 +132,7 @@ export default function Moderation() {
             <div className="mt-3 space-y-2 text-xs" data-moderation-subject={look.subject}>
               <p className="text-parchment/80">
                 {look.subject}
-                {look.bar ? <span className="text-[#f0a48a]"> · barred until {when(look.bar.until)} ({look.bar.reason})</span> : null}
+                {look.bar ? <span className="text-danger"> · barred until {when(look.bar.until)} ({look.bar.reason})</span> : null}
               </p>
               <p>
                 Life changes: {kinds(look.traces.changes.map((c) => c.change))} · marks {look.traces.marks.length} ({look.traces.marks.filter((m) => m.mark.untilDay > look.today).length} still showing) · deeds in {look.traces.deeds.length} villages · house {look.traces.home ? look.traces.home.cell : "none"}
@@ -145,7 +145,7 @@ export default function Moderation() {
                 <input type="checkbox" checked={removeHome} onChange={(e) => setRemoveHome(e.target.checked)} /> and take down their house
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="rounded bg-[#f0a48a] px-3 py-1 font-medium text-[#2a1712]" data-moderation-undo onClick={() => void act({ op: "undo", subject: look.subject, removeHome, report: reports.find((r) => !r.resolvedAt && r.snapshot.some((t) => t.subject === look.subject))?.id }, "Undone")}>
+                <button type="button" className="rounded bg-danger px-3 py-1 font-medium text-ink-deep" data-moderation-undo onClick={() => void act({ op: "undo", subject: look.subject, removeHome, report: reports.find((r) => !r.resolvedAt && r.snapshot.some((t) => t.subject === look.subject))?.id }, "Undone")}>
                   Undo their traces
                 </button>
                 {look.bar ? (
@@ -153,7 +153,7 @@ export default function Moderation() {
                     Lift the bar
                   </button>
                 ) : (
-                  <button type="button" className="rounded border border-[#f0a48a]/50 px-3 py-1" data-moderation-bar onClick={() => void act({ op: "bar", subject: look.subject, days: 7, reason: "reported", report: reports.find((r) => !r.resolvedAt && r.snapshot.some((t) => t.subject === look.subject))?.id }, "Barred")}>
+                  <button type="button" className="rounded border border-danger/50 px-3 py-1" data-moderation-bar onClick={() => void act({ op: "bar", subject: look.subject, days: 7, reason: "reported", report: reports.find((r) => !r.resolvedAt && r.snapshot.some((t) => t.subject === look.subject))?.id }, "Barred")}>
                     Bar for a week
                   </button>
                 )}

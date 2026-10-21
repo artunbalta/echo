@@ -10,8 +10,14 @@ const config: Config = {
         grassdark: "#5aa64f",
         bark: "#7a4a2b",
         ink: "#1c1326",
+        // The world's chrome (C68): one family. Ink to sit on, parchment to read, the echo's violet as
+        // the one accent, ember for the people of the world, danger for what cannot be undone.
+        "ink-deep": "#120c19",
         parchment: "#f4e9d0",
         echo: "#a06cd5",
+        "echo-soft": "#c9b0ea",
+        ember: "#e8c98a",
+        danger: "#f0a48a",
       },
       fontFamily: {
         pixel: ["var(--font-pixel)", "ui-monospace", "monospace"],

@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * Sound on or off (DECISIONS C56): one small button, top right beside the way back, and `M`. The
- * choice is the person's and is kept in this browser; the sound itself is the sound layer's
- * (`game/world/soundLayer.ts`), which starts on the first key or click because a browser will not
- * play before one.
+ * Sound on or off (DECISIONS C56), and `M`. The choice is the person's and is kept in this browser;
+ * the sound itself is the sound layer's (`game/world/soundLayer.ts`), which starts on the first key or
+ * click because a browser will not play before one.
+ *
+ * It was a button of its own at the top right; it is a line of the HUD's menu now (C68), so this is
+ * the state and the key, and the HUD draws it.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PlanetWorld } from "@/game/world/PlanetWorld";
 import type { SoundLayer } from "@/game/world/soundLayer";
@@ -16,22 +18,27 @@ const typing = () => {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el instanceof HTMLElement && el.isContentEditable);
 };
 
-export default function SoundToggle({ world }: { world: () => PlanetWorld | null }) {
+export function useSound(world: () => PlanetWorld | null): { muted: boolean; toggle: () => void } {
   const [muted, setMuted] = useState(false);
+  const was = useRef(false);
   useEffect(() => {
     try {
-      setMuted(localStorage.getItem("echo.sound") === "off");
+      was.current = localStorage.getItem("echo.sound") === "off";
+      setMuted(was.current);
     } catch {
       // nothing kept: sound on
     }
   }, []);
 
-  const toggle = () => {
+  // The layer is asked first, because it is what is actually playing; the side effect stays out of a
+  // state updater, which StrictMode runs twice.
+  const toggle = useCallback(() => {
     const layer = world()?.context().layer<SoundLayer>("sound");
-    const next = !(layer ? layer.muted() : muted);
+    const next = !(layer ? layer.muted() : was.current);
     layer?.setMuted(next);
+    was.current = next;
     setMuted(next);
-  };
+  }, [world]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,20 +47,7 @@ export default function SoundToggle({ world }: { world: () => PlanetWorld | null
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [toggle]);
 
-  return (
-    <button
-      type="button"
-      data-sound-toggle={muted ? "off" : "on"}
-      aria-pressed={!muted}
-      aria-label={muted ? "Sound off — turn it on (M)" : "Sound on — turn it off (M)"}
-      onClick={toggle}
-      className="pointer-events-auto absolute right-[11.25rem] top-[1.9rem] z-30 rounded-full border border-white/15 bg-[#16241f]/75 px-3 py-1.5 font-pixel text-[10px] text-[#f4e9d0]/75 backdrop-blur-md transition hover:text-[#f4e9d0] max-sm:right-[6.25rem] max-sm:top-[0.9rem]"
-    >
-      {/* Beside the way off the page (the parcel page's link, top right), not under it. A phone has no `M`. */}
-      <span className="max-sm:hidden">{muted ? "Sound off · M" : "Sound on · M"}</span>
-      <span className="hidden max-sm:inline">{muted ? "♪ off" : "♪ on"}</span>
-    </button>
-  );
+  return { muted, toggle };
 }

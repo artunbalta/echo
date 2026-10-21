@@ -16,6 +16,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { t, useLang } from "@/lib/i18n";
+
 import type { EchoBodyLayer } from "@/game/world/echoBodyLayer";
 import type { ConsentState } from "@/game/world/measure";
 import type { PlanetWorld } from "@/game/world/PlanetWorld";
@@ -41,6 +43,7 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
   worldRef.current = world;
   const cellRef = useRef(cell);
   cellRef.current = cell;
+  const lang = useLang();
   const [outing, setOuting] = useState<Shown | null>(null);
   const [open, setOpen] = useState(false);
   const [said, setSaid] = useState<Record<string, string>>({});
@@ -140,16 +143,18 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
 
   if (!open) {
     return (
-      <div data-echo-away="waiting" className="pointer-events-auto absolute bottom-28 left-6 z-30 max-w-[22rem] rounded-xl border border-white/15 bg-[#16241f]/90 px-4 py-3 text-sm text-[#f4e9d0] shadow-xl backdrop-blur max-sm:bottom-[13rem]">
-        <p className="text-white/85">
+      // Top centre, a single line and a button (C68): a thing that happened while you were gone, said
+      // where the eye is, and out of the way of the thumbs.
+      <div data-echo-away="waiting" className="hud-pop hud-in pointer-events-auto absolute left-1/2 top-3 z-30 flex w-max max-w-[min(30rem,60vw)] -translate-x-1/2 items-center gap-3 py-2 pl-4 pr-2 text-[13px] text-parchment max-sm:left-3 max-sm:right-3 max-sm:top-[4.25rem] max-sm:w-auto max-sm:max-w-none max-sm:translate-x-0">
+        <p className="text-parchment/85">
           {outing.village
             ? waitingHere
-              ? `Your echo went out while you were away. It is waiting for you in ${outing.village}.`
-              : `While you were away, your echo went to ${outing.village}.`
-            : "Your echo went out while you were away."}
+              ? t(lang, "echo.awayWaiting", { village: outing.village })
+              : t(lang, "echo.awayWent", { village: outing.village })
+            : t(lang, "echo.away")}
         </p>
-        <button type="button" data-echo-hear onClick={() => setOpen(true)} className="mt-2 rounded-full bg-[#e2edc8] px-3 py-1 text-xs font-medium text-[#213522]">
-          {waitingHere ? "Hear it now" : "Hear what it did"}
+        <button type="button" data-echo-hear onClick={() => setOpen(true)} className="shrink-0 rounded-full bg-parchment px-3 py-1 text-xs font-medium text-ink">
+          {waitingHere ? t(lang, "echo.hearNow") : t(lang, "echo.hear")}
         </button>
       </div>
     );
@@ -159,11 +164,11 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
     <section
       data-echo-away="open"
       aria-label="While you were away"
-      className="absolute inset-x-0 top-14 z-40 mx-auto max-h-[84vh] w-[min(760px,94vw)] overflow-y-auto rounded-2xl border border-white/15 bg-[#16241f]/95 text-[#f4e9d0] shadow-2xl backdrop-blur-xl"
+      className="absolute inset-x-0 top-14 z-40 mx-auto max-h-[84vh] w-[min(760px,94vw)] overflow-y-auto hud-pop hud-in text-parchment"
     >
       <header className="flex items-baseline justify-between gap-3 px-6 pt-5">
         <div>
-          <h2 className="font-serif text-xl text-[#e4edcd]">While you were away</h2>
+          <h2 className="font-serif text-xl text-parchment">While you were away</h2>
           <p className="text-xs text-white/50">
             You were away {howLong(Date.parse(outing.awayTo) - Date.parse(outing.awayFrom))}. Your echo went out in your place.
           </p>
@@ -180,7 +185,7 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
         </div>
       </header>
       <div className="px-6 pb-5 pt-3 text-sm">
-        <p className="italic leading-relaxed text-[#e8c98a]/90" data-echo-told>
+        <p className="italic leading-relaxed text-ember/90" data-echo-told>
           {outing.told}
         </p>
         <ul className="mt-4 space-y-4">
@@ -191,8 +196,8 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
               </p>
               <div className="mt-2 space-y-1.5">
                 {e.lines.map((l, j) => (
-                  <p key={j} className={l.who === "echo" ? "text-white/85" : "text-[#f4e9d0]"}>
-                    <span className={l.who === "echo" ? "mr-1.5 text-[#b9c4ea]" : "mr-1.5 text-[#e8c98a]"}>{l.who === "echo" ? "Your echo:" : `${e.given}:`}</span>
+                  <p key={j} className={l.who === "echo" ? "text-white/85" : "text-parchment"}>
+                    <span className={l.who === "echo" ? "mr-1.5 text-echo-soft" : "mr-1.5 text-ember"}>{l.who === "echo" ? "Your echo:" : `${e.given}:`}</span>
                     {l.text}
                   </p>
                 ))}
@@ -207,7 +212,7 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
                       {!spoken ? <p className="mb-1 text-white/55">It held back. It would have said: “{t.line}”</p> : null}
                       {answered === null && !said[key] ? (
                         <div className="flex gap-2">
-                          <button type="button" data-echo-yes={key} onClick={() => void answer(i, j, true)} className="rounded-full bg-[#e2edc8] px-3 py-0.5 font-medium text-[#213522]">
+                          <button type="button" data-echo-yes={key} onClick={() => void answer(i, j, true)} className="rounded-full bg-parchment px-3 py-0.5 font-medium text-ink">
                             {spoken ? `That's me${e.turns.length > 1 ? ` (line ${j + 1})` : ""}` : "I'd have said that"}
                           </button>
                           <button type="button" data-echo-no={key} onClick={() => void answer(i, j, false)} className="rounded-full border border-white/20 px-3 py-0.5">

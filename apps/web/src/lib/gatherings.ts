@@ -87,8 +87,13 @@ export function attendanceLabel(e: AttendEvent): { action: string; cue: "I7" | "
 }
 
 /** How long until a world day and hour, in real minutes, in words: "in about 20 minutes". */
-export function realWhen(fromDay: number, fromHour: number, day: number, hour: number): string {
+export function realWhen(fromDay: number, fromHour: number, day: number, hour: number, lang: "en" | "tr" = "en"): string {
   const minutes = ((day - fromDay) + (hour - fromHour)) * (WORLD_DAY_S / 60);
+  if (lang === "tr") {
+    if (minutes <= 0.5) return "şimdi";
+    if (minutes < 1.5) return "yaklaşık bir dakika sonra";
+    return `yaklaşık ${Math.round(minutes)} dakika sonra`;
+  }
   if (minutes <= 0.5) return "now";
   if (minutes < 1.5) return "in about a minute";
   return `in about ${Math.round(minutes)} minutes`;

@@ -261,20 +261,20 @@ function DemoPrompt({ parcel, world, onDismiss }: {
   const canEnter = parcel.assignable || !!parcel.commonsName;
   const village = useVillage(parcel.cell);
   return (
-    <section aria-label="Selected parcel" className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-white/25 bg-[#16241f]/95 text-[#f7f5e9] shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
+    <section aria-label="Selected parcel" className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-white/25 bg-ink/95 text-parchment shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
       {canEnter ? (
         <div className="relative h-[230px] sm:h-[300px]" data-preview-cell={parcel.cell}>
           <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} commons={Object.keys(world.commons)} />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#16241f] via-transparent to-transparent" />
-          <span className="absolute left-5 top-4 rounded-full bg-[#16241f]/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">Live world · arrival view</span>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent" />
+          <span className="absolute left-5 top-4 rounded-full bg-ink/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">Live world · arrival view</span>
         </div>
       ) : null}
-      <button type="button" aria-label="Close parcel preview" onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-[#16241f]/80 text-xl hover:bg-[#324638]">×</button>
+      <button type="button" aria-label="Close parcel preview" onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-ink/80 text-xl hover:bg-[#324638]">×</button>
       <div className="relative px-6 pb-6 pt-4">
-        <p className="text-[10px] uppercase tracking-[.24em] text-[#bdd0ae]">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
+        <p className="text-[10px] uppercase tracking-[.24em] text-echo-soft">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
         <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? village?.name ?? (canEnter ? 'A place in the world.' : 'The open ocean.')}</h2>
         {village ? (
-          <p data-village={village.name} className="mt-1 text-sm text-[#e8c98a]">
+          <p data-village={village.name} className="mt-1 text-sm text-ember">
             {village.kind === 'abandoned village'
               ? `An abandoned village · ${village.graves} graves`
               : `A ${village.kind} · ${village.population} ${village.population === 1 ? 'person lives' : 'people live'} here · ${village.households} households`}
@@ -286,7 +286,7 @@ function DemoPrompt({ parcel, world, onDismiss }: {
             : canEnter ? 'Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.' : 'Choose a patch of land to begin exploring.'}
         </p>
         <div className="mt-5 flex items-center gap-4">
-          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="rounded-full bg-[#e2edc8] px-6 py-3 text-sm font-medium text-[#213522] hover:bg-white">Explore this place <span aria-hidden>↗</span></a> : null}
+          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="rounded-full bg-parchment px-6 py-3 text-sm font-medium text-ink hover:bg-white">Explore this place <span aria-hidden>↗</span></a> : null}
           <button type="button" onClick={onDismiss} className="py-3 text-sm text-white/65 hover:text-white">Keep exploring</button>
         </div>
       </div>

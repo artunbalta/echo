@@ -210,7 +210,9 @@ export class PlanetGlobe {
     host.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.display = "block";
 
-    this.scene.background = new THREE.Color("#101c19");
+    // The page's own ink (C68), so the hero and every section under it are one ground: it was a
+    // dark green here, and the landing turned from green to violet as it scrolled.
+    this.scene.background = new THREE.Color("#1c1326");
     this.scene.add(this.planet);
     this.camera.position.set(0, 0.22, this.idleDistance);
 
@@ -234,7 +236,7 @@ export class PlanetGlobe {
     // hemisphere costs 0.6 -> 1.6 and drags the whole planet to 73.48, back toward washed.
     //
     // The residual 0.22% is not lightable: at rim 2.6 it is still 0.15%, because those are the
-    // antialiased silhouette pixels blending into the page's own #120c19 ground.
+    // antialiased silhouette pixels blending into the page's own ink ground.
     this.scene.add(new THREE.HemisphereLight(0xcfc0e8, 0x241733, 0.6));
     const key = new THREE.DirectionalLight(0xfff4e0, 1.6);
     key.position.set(3, 2.4, 4);

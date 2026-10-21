@@ -37,6 +37,7 @@ import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
+import { t, useLang, verbLabel } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 import { tradeMeasurement, type TradeReply } from "@/lib/barter";
@@ -121,6 +122,7 @@ export default function Interact({
   chain: MeasureChain;
   coarse: boolean;
 }) {
+  const lang = useLang();
   const [near, setNear] = useState<NearThing | null>(null);
   const [talkable, setTalkable] = useState<NearVillager | null>(null);
   const [acting, setActing] = useState<Acting | null>(null);
@@ -807,39 +809,40 @@ export default function Interact({
     <>
       {acting ? (
         <div data-acting={acting.verb.id} className="pointer-events-none absolute bottom-32 left-1/2 z-30 w-56 -translate-x-1/2 text-center">
-          <p className="text-xs text-[#f4e9d0]/85 [text-shadow:0_1px_8px_rgba(0,0,0,.6)]">
-            {acting.verb.label}
-            {acting.verb.holdS === 0 ? " · move to get up" : ""}
+          <p className="hud-shadow text-xs text-parchment/85">
+            {verbLabel(lang, acting.verb.label)}
+            {acting.verb.holdS === 0 ? ` · ${t(lang, "prompt.moveToGetUp")}` : ""}
           </p>
           {acting.verb.holdS > 0 ? (
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-black/30">
-              <div className="h-full bg-[#e8c98a]" style={{ width: `${Math.round(progress * 100)}%` }} />
+              <div className="h-full bg-ember" style={{ width: `${Math.round(progress * 100)}%` }} />
             </div>
           ) : null}
         </div>
       ) : aboard ? (
         <div data-interact-prompt="aboard" className={`absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${coarse ? "" : "pointer-events-none"}`}>
-          <span className="rounded-full bg-[#16241f]/85 px-3 py-1 text-xs text-[#e4edcd]">In {aboard.thing.name}</span>
+          <span className="rounded-full bg-ink-deep/80 px-3 py-1 text-xs text-parchment backdrop-blur-md">{t(lang, "prompt.in", { name: aboard.thing.name })}</span>
           {verbs.map((v, i) =>
             coarse ? (
-              <button key={v.id} type="button" onClick={() => begin(v, near ?? { ...aboard.thing, distanceM: 0 })} className="rounded-full bg-[#e2edc8] px-3 py-1.5 text-xs font-medium text-[#213522] shadow">
-                {v.label}
+              <button key={v.id} type="button" onClick={() => begin(v, near ?? { ...aboard.thing, distanceM: 0 })} className="rounded-full bg-parchment px-3.5 py-1.5 text-xs font-medium text-ink shadow">
+                {verbLabel(lang, v.label)}
               </button>
             ) : (
-              <span key={v.id} className="rounded-full bg-[#16241f]/80 px-3 py-1 text-xs text-[#f4e9d0]/85">
-                <span className="mr-1.5 rounded bg-[#f4e9d0]/15 px-1.5 py-0.5 font-mono">{KEY_LABEL[i]}</span>
-                {v.label}
+              <span key={v.id} className="rounded-full bg-ink-deep/65 px-3 py-1 text-xs text-parchment/85 backdrop-blur-md">
+                <span className="mr-1.5 rounded border border-parchment/20 px-1 font-mono text-[10px] text-parchment/60">{KEY_LABEL[i]}</span>
+                {verbLabel(lang, v.label)}
               </span>
             ),
           )}
           {shore ? (
             coarse ? (
-              <button type="button" onClick={stepAshore} className="rounded-full bg-[#e2edc8] px-3 py-1.5 text-xs font-medium text-[#213522] shadow">
-                Step ashore
+              <button type="button" onClick={stepAshore} className="rounded-full bg-parchment px-3.5 py-1.5 text-xs font-medium text-ink shadow">
+                {t(lang, "prompt.ashore")}
               </button>
             ) : (
-              <span className="rounded-full bg-[#16241f]/80 px-3 py-1 text-xs text-[#f4e9d0]/85">
-                <span className="mr-1.5 rounded bg-[#f4e9d0]/15 px-1.5 py-0.5 font-mono">Q</span>Step ashore
+              <span className="rounded-full bg-ink-deep/65 px-3 py-1 text-xs text-parchment/85 backdrop-blur-md">
+                <span className="mr-1.5 rounded border border-parchment/20 px-1 font-mono text-[10px] text-parchment/60">Q</span>
+                {t(lang, "prompt.ashore")}
               </span>
             )
           ) : null}
@@ -847,54 +850,56 @@ export default function Interact({
       ) : near || talkHint ? (
         <div data-interact-prompt={near?.ref ?? ""} className={`absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${coarse ? "" : "pointer-events-none"}`}>
           {near ? (
-            <span className="rounded-full bg-[#16241f]/85 px-3 py-1 text-xs text-[#e4edcd]">{title(near)}</span>
+            <span className="rounded-full bg-ink-deep/80 px-3 py-1 text-xs text-parchment backdrop-blur-md">{title(near)}</span>
           ) : null}
           {verbs.map((v, i) =>
             coarse ? (
-              <button key={v.id} type="button" onClick={() => near && begin(v, near)} className="rounded-full bg-[#e2edc8] px-3 py-1.5 text-xs font-medium text-[#213522] shadow">
-                {v.label}
+              <button key={v.id} type="button" onClick={() => near && begin(v, near)} className="rounded-full bg-parchment px-3.5 py-1.5 text-xs font-medium text-ink shadow">
+                {verbLabel(lang, v.label)}
               </button>
             ) : (
-              <span key={v.id} className="rounded-full bg-[#16241f]/80 px-3 py-1 text-xs text-[#f4e9d0]/85">
-                <span className="mr-1.5 rounded bg-[#f4e9d0]/15 px-1.5 py-0.5 font-mono">{KEY_LABEL[i]}</span>
-                {v.label}
+              <span key={v.id} className="rounded-full bg-ink-deep/65 px-3 py-1 text-xs text-parchment/85 backdrop-blur-md">
+                <span className="mr-1.5 rounded border border-parchment/20 px-1 font-mono text-[10px] text-parchment/60">{KEY_LABEL[i]}</span>
+                {verbLabel(lang, v.label)}
               </span>
             ),
           )}
           {talkHint ? (
             coarse ? (
-              <button type="button" data-talk-prompt onClick={() => window.dispatchEvent(new CustomEvent("echo:talk"))} className="rounded-full bg-[#e2edc8] px-3 py-1.5 text-xs font-medium text-[#213522] shadow">
-                Talk to {talkHint}
+              <button type="button" data-talk-prompt onClick={() => window.dispatchEvent(new CustomEvent("echo:talk"))} className="rounded-full bg-parchment px-3.5 py-1.5 text-xs font-medium text-ink shadow">
+                {t(lang, "prompt.talk", { name: talkHint })}
               </button>
             ) : (
-              <span data-talk-prompt className="rounded-full bg-[#16241f]/80 px-3 py-1 text-xs text-[#f4e9d0]/85">
-                <span className="mr-1.5 rounded bg-[#f4e9d0]/15 px-1.5 py-0.5 font-mono">T</span>Talk to {talkHint}
+              <span data-talk-prompt className="rounded-full bg-ink-deep/65 px-3 py-1 text-xs text-parchment/85 backdrop-blur-md">
+                <span className="mr-1.5 rounded border border-parchment/20 px-1 font-mono text-[10px] text-parchment/60">T</span>
+                {t(lang, "prompt.talk", { name: talkHint })}
               </span>
             )
           ) : null}
           {short ? (
-            <span data-home-short className="rounded-full bg-[#16241f]/60 px-3 py-1 text-xs text-[#f4e9d0]/60">
+            <span data-home-short className="rounded-full bg-ink-deep/55 px-3 py-1 text-xs text-parchment/60 backdrop-blur-md">
               {short}
             </span>
           ) : null}
         </div>
       ) : null}
       {carrying || packCount(pack) > 0 ? (
-        <p data-carrying className="pointer-events-none absolute bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#16241f]/70 px-3 py-1 text-[11px] text-[#f4e9d0]/70">
-          {carrying ? `In your hand: ${ITEMS[carrying]?.name ?? carrying}${coarse ? "" : " · G to put it away"} · ` : ""}
-          {packCount(pack)}/{PACK_SIZE} in your pack{coarse ? "" : " · I to open it"}
-          {canLaunch ? (coarse ? "" : " · R to launch your raft") : ""}
+        <p data-carrying className="hud-shadow pointer-events-none absolute bottom-6 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap text-[11px] text-parchment/60">
+          {carrying ? `${t(lang, "pack.hand", { item: ITEMS[carrying]?.name ?? carrying })}${coarse ? "" : ` · ${t(lang, "pack.putAway")}`} · ` : ""}
+          {t(lang, "pack.count", { n: packCount(pack), of: PACK_SIZE })}
+          {coarse ? "" : ` · ${t(lang, "pack.open")}`}
+          {canLaunch ? (coarse ? "" : ` · ${t(lang, "pack.launch")}`) : ""}
         </p>
       ) : null}
       {packOpen ? (
-        <section data-pack className="absolute bottom-28 left-1/2 z-40 w-[min(460px,92vw)] -translate-x-1/2 rounded-2xl border border-white/15 bg-[#16241f]/90 p-4 text-[#f4e9d0] shadow-2xl backdrop-blur-xl">
+        <section data-pack className="hud-pop hud-in absolute bottom-28 left-1/2 z-40 w-[min(420px,92vw)] -translate-x-1/2 p-4 text-parchment">
           <header className="mb-2 flex items-baseline justify-between">
-            <p className="font-serif text-lg text-[#e4edcd]">Your pack</p>
-            <button type="button" onClick={() => setPackOpen(false)} className="text-xs text-white/50 hover:text-white">
-              I · close
+            <p className="font-serif text-lg text-parchment">{t(lang, "pack.title")}</p>
+            <button type="button" onClick={() => setPackOpen(false)} className="text-xs text-parchment/50 hover:text-parchment">
+              {coarse ? t(lang, "pack.close") : `I · ${t(lang, "pack.close")}`}
             </button>
           </header>
-          {packCount(pack) === 0 ? <p className="text-sm italic text-white/45">Nothing yet. Pick things up as you go.</p> : null}
+          {packCount(pack) === 0 ? <p className="text-sm italic text-parchment/45">{t(lang, "pack.empty")}</p> : null}
           <ul className="space-y-1">
             {Object.entries(pack).map(([id, n]) => (
               <li key={id} className="flex items-center justify-between text-sm">
@@ -935,7 +940,7 @@ export default function Interact({
                       setPackOpen(false);
                       beginMaking(r);
                     }}
-                    className="rounded-full bg-[#e2edc8] px-2.5 py-0.5 text-xs font-medium text-[#213522] disabled:opacity-30"
+                    className="rounded-full bg-parchment px-2.5 py-0.5 text-xs font-medium text-ink disabled:opacity-30"
                   >
                     Make
                   </button>
@@ -946,7 +951,7 @@ export default function Interact({
         </section>
       ) : null}
       {line ? (
-        <p data-act-line className="pointer-events-none absolute bottom-44 left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-[#f4e9d0] [text-shadow:0_1px_10px_rgba(0,0,0,.75)]">
+        <p data-act-line className="hud-shadow hud-in pointer-events-none absolute bottom-44 left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-parchment">
           {line}
         </p>
       ) : null}
