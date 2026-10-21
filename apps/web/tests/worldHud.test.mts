@@ -66,7 +66,7 @@ test("land with no village is named by what it is, and your own land by whose it
 
 test("every thing the old cards and buttons offered is still a line of the menu", () => {
   const src = readFileSync(new URL("../src/components/world/WorldHud.tsx", import.meta.url), "utf8");
-  for (const hook of ["data-sound-toggle", "data-hud-mirror", "data-touch-inspector", "data-hud-controls", "data-report-open", "data-lang", "data-here"]) {
+  for (const hook of ["data-sound-toggle", "data-hud-mirror", "data-touch-inspector", "data-hud-meet", "data-hud-controls", "data-report-open", "data-lang", "data-here"]) {
     assert.ok(src.includes(hook), `the menu lost ${hook}`);
   }
 });

@@ -69,6 +69,7 @@ import { marketLayer } from "./marketLayer";
 import { homeLayer } from "./homeLayer";
 import { directorLayer } from "./directorLayer";
 import { echoBodyLayer } from "./echoBodyLayer";
+import { echoMeetingLayer } from "./echoMeetingLayer";
 import { animalsLayer } from "./animalsLayer";
 import { weatherLayer } from "./weatherLayer";
 import type { TouchControlHandle } from "./touchInput";
@@ -185,6 +186,8 @@ export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock =
   layers.push(directorLayer());
   // Your echo, waiting where it last met someone while you were away (C64).
   layers.push(echoBodyLayer());
+  // Two echoes on the green, where they met while their people were away (C71).
+  layers.push(echoMeetingLayer());
   // The sound of the place (C56): last, so it hears the frame every layer above has settled; only
   // where someone is playing — a landing preview is silent.
   layers.push(soundLayer({ clock }));

@@ -68,7 +68,12 @@ export default function EchoAway({ world, cell, consent }: { world: () => Planet
           const o = (data.outing as Shown | null) ?? null;
           if (o) setOuting(o);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          // The return has been looked at, and any meeting with a friend's echo planned (C71): EchoMeeting asks now.
+          document.documentElement.dataset.echoBack = "1";
+          window.dispatchEvent(new Event("echo:back"));
+        });
       void ownVoiceHere(identityHeaders()).then(setMine).catch(() => {});
     }
     // A "seen" sent before the return question is answered would erase the very absence it asks about.

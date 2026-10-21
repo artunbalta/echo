@@ -1,7 +1,8 @@
 /**
- * What a villager knows of one stranger beyond what they remember being told (C45, C57, C59): what
- * the stranger has done in the village, seen or heard of; how they came ashore; and a house of their
- * own on this land. Said to the villager's model as part of the hour's note.
+ * What a villager knows of one stranger beyond what they remember being told (C45, C57, C59, C71): what
+ * the stranger has done in the village, seen or heard of; how they came ashore; a house of their own on
+ * this land; and having seen them on the green talking with another stranger they seemed to know (their
+ * echoes, meeting, C71), with what was said aloud. Said to the villager's model as part of the hour's note.
  *
  * Shared by the talk route and the echo's outings (C64), so a villager meeting the stranger's echo
  * knows exactly what they would know meeting the stranger. Server-only.
@@ -10,6 +11,7 @@ import "server-only";
 
 import { deedWords, knownDeeds, knownLandings, landingWords, type Deed, type Person, type SettledParcel } from "@echo/planet";
 
+import { seenTalkingLine } from "@/lib/meetingWords";
 import type { VillageStore } from "@/lib/villageStore";
 
 export async function strangerNotes(
@@ -21,7 +23,7 @@ export async function strangerNotes(
   day: number,
   /** Names the villager may say; the places the stranger came from are added to it. */
   names: Set<string>,
-): Promise<{ deeds: Deed[]; doings: string; came: string; homeLine: string }> {
+): Promise<{ deeds: Deed[]; doings: string; came: string; homeLine: string; seenTalking: string }> {
   const s = village.settlement;
   // What this villager knows of what the stranger has DONE here (C45): seen, found, or heard from family.
   const deeds = store ? ((await store.deedsFor(subject, cell)) ?? []) : [];
@@ -48,5 +50,8 @@ export async function strangerNotes(
       ? `This stranger ${what} of their own on this land, ${where}: the land is theirs, by the registry's say.`
       : `A stranger ${what} of their own on this land, ${where} — not the one in front of you.`;
   }
-  return { deeds, doings, came, homeLine };
+  // Seen on the green with another stranger (C71): only by those who were there, only what was said aloud.
+  const meetings = store ? ((await store.meetingsOf(subject, 20)) ?? []) : [];
+  const seenTalking = seenTalkingLine(meetings, subject, cell, me.id, day);
+  return { deeds, doings, came, homeLine, seenTalking };
 }

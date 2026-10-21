@@ -61,7 +61,7 @@ test('landing and play build the same environment; a preview creates no telemetr
   const environment=parcelEnvironmentLayers({inputEnabled:false}).map(l=>l.name);
   const playable=parcelLayers({chain:{} as MeasureChain}).map(l=>l.name);
   // A preview has neither the walk (telemetry), the interact layer (acts, C45), the way into a house (C54) nor sound (C56): only a playable parcel does.
-  assert.deepEqual(playable.filter(n=>n!=='walk'&&n!=='interact'&&n!=='interior'&&n!=='home'&&n!=='director'&&n!=='echo-body'&&n!=='sound'),environment);assert.ok(!environment.includes('director'),'a landing preview sets things out');assert.ok(!environment.includes('walk'));assert.ok(!environment.includes('interact'));assert.ok(!environment.includes('interior'));assert.ok(!environment.includes('sound'),'a landing preview makes a sound');
+  assert.deepEqual(playable.filter(n=>n!=='walk'&&n!=='interact'&&n!=='interior'&&n!=='home'&&n!=='director'&&n!=='echo-body'&&n!=='echo-meeting'&&n!=='sound'),environment);assert.ok(!environment.includes('echo-meeting'),'a landing preview shows two echoes');assert.ok(!environment.includes('director'),'a landing preview sets things out');assert.ok(!environment.includes('walk'));assert.ok(!environment.includes('interact'));assert.ok(!environment.includes('interior'));assert.ok(!environment.includes('sound'),'a landing preview makes a sound');
   assert.equal(meadowSeed('seed','cell',1,2),meadowSeed('seed','cell',1,2));
   assert.notEqual(meadowSeed('seed','cell',1,2),meadowSeed('seed','other-cell',1,2));
 });

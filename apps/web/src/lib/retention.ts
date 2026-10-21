@@ -56,6 +56,10 @@ export const RAW_TABLES: readonly { table: string; column: string }[] = [
   { table: "messages", column: "ts" },
   // Generated narration about a session, which quotes it (0001).
   { table: "narrations", column: "ts" },
+  // What two echoes said to each other while their people were away (0033, C71): a record of what
+  // someone's echo did, so raw, as an outing is. Codes are single use and a day long; swept with them.
+  { table: "echo_meetings", column: "made_at" },
+  { table: "echo_invites", column: "created_at" },
 ];
 
 /**

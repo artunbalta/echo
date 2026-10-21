@@ -119,16 +119,35 @@ let catalogue: { at: number; voices: Voice[] } | null = null;
 const ownerVoiceId = () => (process.env.ELEVENLABS_OWNER_VOICE_ID ?? "").trim();
 
 /**
- * The caller's own voice, when they are the owner it belongs to (C62); null for everyone else, and
- * for everyone while either setting is missing. Steadier than a villager's: it is a person's voice,
- * and it should sound like them.
+ * People's own voices beyond the owner's (C71): `ECHO_VOICES`, as `subject=voiceId` pairs separated by
+ * commas. Each is a voice that person cloned of themselves, bound to their identity here and to nobody
+ * else's, exactly as the owner's is by `ELEVENLABS_OWNER_VOICE_ID` and `ECHO_OWNER_SUBJECTS` (C62).
  */
-export function ownVoice(subject: string): VoiceChoice | null {
+function boundVoices(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const pair of (process.env.ECHO_VOICES ?? "").split(",")) {
+    const [subject, voice] = pair.split("=").map((x) => x.trim());
+    if (subject && voice) out.set(subject, voice);
+  }
   const id = ownerVoiceId();
-  const owners = (process.env.ECHO_OWNER_SUBJECTS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-  if (!id || !owners.includes(subject)) return null;
+  if (id) for (const s of (process.env.ECHO_OWNER_SUBJECTS ?? "").split(",").map((x) => x.trim()).filter(Boolean)) out.set(s, id);
+  return out;
+}
+
+/**
+ * A person's own voice (C62, C71), or null: the one bound to their identity, and only theirs. Steadier
+ * than a villager's: it is a person's voice, and it should sound like them. Who may HEAR it is the
+ * caller's to decide: the person themselves (`/api/voice/self`), or the one they paired their echo with,
+ * for what their echo said to that person's (`/api/echo/meet`).
+ */
+export function voiceOf(subject: string): VoiceChoice | null {
+  const id = boundVoices().get(subject);
+  if (!id) return null;
   return { voiceId: id, settings: { stability: 0.55, similarity_boost: 0.85, style: 0, use_speaker_boost: true, speed: 1 } };
 }
+
+/** The caller's own voice (C62): `voiceOf` asked by the person it belongs to. */
+export const ownVoice = voiceOf;
 
 /** The account's voices, kept for an hour; null without a key or when the list cannot be read. */
 export async function voiceList(): Promise<Voice[] | null> {
@@ -138,8 +157,9 @@ export async function voiceList(): Promise<Voice[] | null> {
     const res = await fetch(`${API}/v2/voices?page_size=100&include_total_count=false`, { headers: { "xi-api-key": KEY() }, signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
     const data = (await res.json()) as { voices?: { voice_id: string; name?: string; category?: string; labels?: Record<string, string> }[] };
-    const own = ownerVoiceId();
-    const voices = (data.voices ?? []).map(readVoice).filter((v) => !v.cloned && v.id !== own);
+    // No villager is ever given a person's own voice, cloned or not: the owner's, or any bound in ECHO_VOICES.
+    const people = new Set(boundVoices().values());
+    const voices = (data.voices ?? []).map(readVoice).filter((v) => !v.cloned && !people.has(v.id));
     if (voices.length === 0) return null;
     catalogue = { at: Date.now(), voices };
     return voices;

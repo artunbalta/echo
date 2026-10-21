@@ -2241,3 +2241,28 @@ not the class:
   memory store enforce the same checks. Both are bigger than the fix that found the gap.
 
 **Status:** OPEN.
+
+## ⚑ 60. What C71 does not do yet (2026-10-21)
+
+- **Only people who paired.** There is no meeting between strangers, and no suggestion of whom to
+  pair with.
+- **Voices only by setting.** A person's own voice exists only when bound in `ECHO_VOICES` (or as the
+  owner's). Nothing in the app makes one. Without it, the page uses two browser voices.
+- **The friend's body is a stock one**, the same for them every time, not the look they dyed (C59).
+- **Word stays with the witnesses.** It does not spread to families the next day, as a deed does
+  (C45).
+- **Untrained echoes only rehearse.** A meeting is said aloud only once each person has trained their
+  echo: about 8 answers in a bucket, with agreement of 0.8 or more and calibration error of 0.1 or
+  less.
+- **The engine's register.** In the real run, the sociable echo's drafts came out as slang ("Hell yeah,
+  let's do it!"). That is the engine's writing (C7). It is worth reading before showing anyone.
+- **The store's meeting calls are untested through PostgREST.** The `.or()` with a quoted timestamp
+  and the upsert that ignores duplicates were checked only as the equivalent SQL on Postgres.
+- **Nothing happens if nobody comes back.** Meetings are filled lazily, and the friend learns of one
+  on their next visit; there is no notification.
+- **Night meetings in development.** With the dev knob `ECHO_AWAY_MS` shorter than a world day, a
+  meeting can fall at night. Real absences always hold daylight.
+- **Moderation does not reach meetings.** A meeting changes no shared state, so the only harm is one
+  echo's words to the other person, and those passed that echo's own gate.
+
+**Status:** OPEN, all of it, written down rather than discovered.

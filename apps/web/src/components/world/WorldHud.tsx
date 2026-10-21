@@ -214,6 +214,19 @@ export default function WorldHud({ world, name, owned, shore, cell, coarse, cons
             <button
               type="button"
               role="menuitem"
+              data-hud-meet
+              onMouseDown={noFocus}
+              onClick={() => {
+                setMenuOpen(false);
+                window.dispatchEvent(new Event("echo:pairs"));
+              }}
+              className={item}
+            >
+              <span>{t(lang, "menu.meet")}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
               data-hud-controls
               onMouseDown={noFocus}
               onClick={() => {

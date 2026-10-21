@@ -217,7 +217,7 @@ async function villagerReply(args: {
   const notes = await strangerNotes(store, subject, cell, village, me, day, names);
   const effects = store ? ((await store.effectsFor(cell, day)) ?? []) : [];
   const wanting = needLine(s, village.plan, me, day, changes, effects, notes.deeds);
-  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(args.memory, day), notes.doings, notes.came, notes.homeLine, wanting, decisionsLine([], args.meetings)].filter(Boolean).join("\n\n");
+  const late = [nowLine(s, village.plan, me, day, hour, changes), strangerLine(args.memory, day), notes.doings, notes.came, notes.homeLine, notes.seenTalking, wanting, decisionsLine([], args.meetings)].filter(Boolean).join("\n\n");
   const model = MODEL();
   const client = new Anthropic({ apiKey: key, timeout: 25_000, maxRetries: 1, fetch: (url, init) => globalThis.fetch(url, init) });
   const conversation: Anthropic.Beta.BetaMessageParam[] = [
