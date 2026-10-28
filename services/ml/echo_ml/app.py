@@ -182,10 +182,12 @@ def observe(req: ObserveReq, authorization: str = Header(None)):
     with STORE.updating(req.userId) as st:
         ctx = str(req.context)
 
-        # 1) update persona posterior from text + telemetry (robust; capture the gating trace)
+        # 1) update persona posterior from telemetry (robust; capture the gating trace). `action` is our
+        # own sentence about what they did, never their words (web L3), so it is not read as their
+        # style (C73): it goes to the behavior index below, not into the persona.
         before = st.posterior.copy()
         update_trace: dict = {}
-        st.posterior = P.observe(st.posterior, req.action, req.telemetry, trace=update_trace)
+        st.posterior = P.observe(st.posterior, "", req.telemetry, trace=update_trace)
         if st.baseline_mu is None:
             st.baseline_mu = st.posterior.mu.copy()
 
@@ -236,7 +238,10 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
     with STORE.updating(obs["userId"]) as st:
         before = st.posterior.mu.copy()
         before_version = st.posterior.version
-        st.posterior = P.observe(st.posterior, obs["action"], obs["telemetry"])
+        # The cue's name ("approach_distant_lone") is ours, not the person's: read as text, its word
+        # length alone set their intellect (C73). The persona hears the telemetry; the name goes to the
+        # behavior index below.
+        st.posterior = P.observe(st.posterior, "", obs["telemetry"])
 
         # Record the cue in the behavior index too (retrieval + the observable `behaviors` count) so the
         # behavioral path is consistent with /observe — a social cue ("warm to the server", "waited in
@@ -251,7 +256,7 @@ def observe_behavioral(req: BehavioralEventReq, authorization: str = Header(None
 
         cond_before = st.cond.get(ck)
         cp = cond_before.copy() if cond_before is not None else P.prior()
-        cp = P.observe(cp, obs["action"], obs["telemetry"])
+        cp = P.observe(cp, "", obs["telemetry"])
         st.cond[ck] = cp
 
         return {

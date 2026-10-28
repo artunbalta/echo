@@ -158,6 +158,11 @@ def ignore_beat(actor):
             "ignore_all → formality(−); non-action is data")
 
 
+# The beats that measure nothing (C73). take_marked_path was "carried only by the action embedding":
+# the engine reading the cue's own name as the player's words. With the name no longer read, it moves
+# nothing until it is given a measured signal. Pinned both ways: these stay silent, every other moves.
+_SILENT = {"take_marked_path"}
+
 # Key fidelity expectations: cues whose implicit signal SHOULD load on the doc's intended axis
 # (the cues the committed W has a real telemetry path for). Asserted, not just printed.
 _FIDELITY = {
@@ -203,7 +208,7 @@ def walk():
         r = post(e)
         assert r.status_code == 200, (label, r.status_code, r.text)
         step = _record(report, label, e, r, prior)
-        deltas.append(step["delta_mu"])
+        deltas.append((label, step["delta_mu"]))
         report["steps"].append(step)
         if label in _FIDELITY and step["implicit_axis"] not in _FIDELITY[label]:
             fidelity_ok = False
@@ -224,7 +229,8 @@ def walk():
 
     # — checks —
     c = report["checks"]
-    c["every_use_cue_moves_posterior"] = all(d > 1e-4 for d in deltas)
+    c["every_use_cue_moves_posterior"] = all(d > 1e-4 for label, d in deltas if label not in _SILENT)
+    c["silent_cues_stay_silent"] = all(d <= 1e-4 for label, d in deltas if label in _SILENT)
     c["refusal_accepted_and_moves"] = (report["refusal"]["status"] == 200
                                        and report["refusal"]["polarity"] == "refuse"
                                        and report["refusal"]["delta_mu"] > 1e-4)

@@ -93,7 +93,12 @@ def walk():
     report["missing_context_status"] = post(ev(wanderer, "travel_far", 60, bad=True)).status_code
 
     c = report["checks"]
-    c["travel_cues_move_posterior"] = all(s["delta_mu"] > 1e-4 for s in report["steps"])
+    # ⚑23: travel_near sets only `consistency`, a dead column of the committed W. Until C73 it moved the
+    # posterior anyway, because the engine read the cue's name as the player's words. Pinned silent until
+    # the re-anchor gives consistency a direction (tests/test_zero_columns.py).
+    dark = {"travel_near"}
+    c["travel_cues_move_posterior"] = all(s["delta_mu"] > 1e-4 for s in report["steps"] if s["action"] not in dark)
+    c["dark_cues_stay_silent"] = all(s["delta_mu"] <= 1e-4 for s in report["steps"] if s["action"] in dark)
     c["wanderer_diverges_from_homebody"] = report["distance"] > 0.05
     c["mandatory_context_rejected_422"] = report["missing_context_status"] == 422
     report["passed"] = all(c.values())

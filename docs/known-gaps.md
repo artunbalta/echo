@@ -2080,10 +2080,10 @@ consecutive salts anywhere this matters has **not** been audited.
 - **The engine must be redeployed** with C61's report fields. Until then, nothing new is recorded and
   everything shows as "not in this record". Migration 0027 must be applied too; until then, rows
   live in each server's memory.
-- **Walking biases every echo towards fast and playful.** Every window does it, whatever it holds:
-  pace +0.14 to +0.29, intellect −0.06 to −0.15 on a fresh echo. Measured, not explained. A guess:
-  the empty action text's embedding, centred by the measurement model, loads on those axes. An
-  engine change, so the user's decision (C7).
+- **Walking biased every echo towards fast and playful.** Every window did it, whatever it held:
+  pace +0.14 to +0.29, intellect −0.06 to −0.15 on a fresh echo. Explained and fixed by C73. Each
+  window "measured" all 66 features, the 64 it never saw as average, the empty text's embedding among
+  them. What replaced it is ⚑62.
 - **No forgetting one act.** The posterior is a running filter, and an update cannot be taken out
   of it. Only "erase everything" exists.
 - **The mirror reads the latest 1000 rows.** Older moves are counted, not itemised.
@@ -2283,5 +2283,35 @@ not the class:
 - **No warning if the microphone is quiet**, beyond a recording too short to use.
 - **The meeting can be at night.** The meeting's time is inside the five minutes, which is less than
   a world day.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 62. What C73 does not do yet (2026-10-28)
+
+- **Walking now moves the mean too far.** C73 removed the false "average" that held every axis near 0.
+  Sixty walking windows from a fresh echo now give openness +0.88, energy +1.00 (clipped), warmth
+  −0.45 and formality +0.42. They leave honest uncertainty behind them: energy sd 0.73. Two causes,
+  both older than C73:
+  - The synthetic W loads the two walking features almost alike, with a small Ψ (0.018, 0.023), so
+    the model explains the small difference between them by inflating energy, an axis neither loads
+    much.
+  - Each window counts as an independent measurement, though a session's walking is one way of
+    walking, measured sixty times.
+
+  The proposal, NOT done (an engine change, so the owner's decision under C7): one session's walking
+  counts as one measurement, each window carrying 1/N of it. Measured on the same walk: openness
+  +0.29, energy +0.04, openness sd 0.82. Until then the echo after a walk is "open and energetic" by
+  default. The mirror does not name an axis on that, since its variance stays high, but the echo's
+  proposals read the mean.
+- **Cues that now move nothing.** These only ever moved the posterior through their own names:
+  - `take_marked_path`, "carried only by the action embedding" by design;
+  - `conform_custom` and `travel_near`, whose only feature is the dead `consistency` column (⚑23);
+  - the E1 `first_contact` social event, which carries no telemetry at all.
+
+  The walkthroughs pin them silent. Each needs a measured signal, or ⚑23's re-anchor.
+- **W is still the synthetic one.** C73 makes the update honest about what it measured; it does not
+  make the measurement right. That is the calibration study's job.
+- **The meter fills slowly now**, in `/you` too: about a fifth after ten minutes of walking, where it
+  said 98%. That is the honest number, and the five-minute demo shows it.
 
 **Status:** OPEN, all of it, written down rather than discovered.

@@ -4856,3 +4856,80 @@ or on any deployment with the settings, and nowhere else.
   RLS. The sweep's query returns exactly the voices past their day.
 
 **Not done.** See ⚑61.
+
+## C73 — the echo hears only what it measured
+
+**How it was found.** The owner tried the echo on themselves first, 2026-10-28. They used a fresh
+identity and played for ten minutes, with their own eight-axis rating sealed beforehand (SHA-256
+98ed3026…).
+- The echo saw 60 walking windows and 3 acts. It sat within ±0.16 of the prior on every axis but pace,
+  while the meter said 98%.
+- Its profile correlation with the owner's rating was −0.14. On the five axes that can tell knowing
+  from not knowing it did worse than the prior: mean error 0.53 against 0.47.
+- It was indistinguishable from an echo built from anyone's walk, at a mean difference of 0.06.
+
+Replaying the trial with the engine's own code found two defects.
+
+**1. What was not measured counted as average.**
+- `featurize_raw` fills all 66 features, and one nobody measured comes out as 0. The update
+  conditioned on all of them. A walking window, which measures two things, also "measured" the other
+  64 as average.
+- Sixty windows put every axis at sd 0.141: as sure of warmth as of pace. After that, an approach act
+  moved warmth by +0.07. This is the root of ⚑51's walking bias and of the meter's "97% after 12 s".
+- **The fix.** `persona.observed_mask(text, telemetry)` marks what was measured:
+  - the text block only when there is text;
+  - a telemetry feature only when its key arrived and is not None.
+
+  `observe` then conditions on the same model's marginal over those features: their rows of Wᵀ, their
+  block of Ψ.
+- **What follows from it:**
+  - `has_latency`, the old presence flag, is never a measurement on its own, since presence is the
+    mask now.
+  - A behavior that measured nothing is no update. It is still recorded in the behavior index, and
+    the version does not advance.
+  - Without text the embedding is not computed, which removes one embed call per walking window.
+
+**2. Our words were read as theirs.**
+- `/observe/behavioral` passed the cue's name (`approach_distant_lone`) as the text, and `/observe`
+  passed the web's sentence about a choice. Since L3, nothing the engine receives as text is the
+  person's own words.
+- W reads intellect almost entirely from mean word length (loading 0.99). Three identical approach
+  acts gave intellect −0.22 with no text and +0.85 with that name.
+- The trial's three acts made its context bucket "calm, formal, cerebral, reserved": r = −0.85 with
+  the owner's rating.
+- **The fix.** Both endpoints update the persona from the telemetry alone. The name and the sentence
+  still go to the behavior index, where retrieval reads them.
+
+**Approval.** C7 stands. The owner approved exactly these two changes on 2026-10-28.
+
+**Measured, the same 60 windows from the prior:**
+
+| | Before | After |
+|---|---|---|
+| sd after the walk | 0.14 on every axis | openness 0.58, energy 0.73, affect 0.81, warmth 0.95, the rest ≥ 0.98 |
+| Meter certainty | 98% | 21% |
+| Warmth after one approach act | +0.07 | +0.73 |
+
+**What it exposed: ⚑62.**
+- Walking now pushes the mean too far: openness +0.88, energy +1.00. The false average used to hide
+  this.
+- Some cues move nothing, because they only ever moved through their names:
+  - `take_marked_path`;
+  - `conform_custom` and `travel_near` (⚑23);
+  - E1 `first_contact`.
+
+  The flow-0, flow-3 and travel walkthroughs now pin them silent. The race test's event carries its
+  decision latency, since it counts updates.
+
+**Tests.** `services/ml/tests/test_observed_only.py` has 8 tests:
+- the mask is what arrived;
+- measuring nothing is no update;
+- an absent key is not average, while an explicit 0 is a measurement;
+- a walk sharpens only what it measures;
+- after a walk, an act still moves the echo;
+- the cue's name is not read, for the pooled posterior and the bucket;
+- our sentence about a choice is not their style;
+- an event that measures nothing is recorded but is no update.
+
+Undoing each part of the fix, eight mutations in all, fails at least one of them. The engine passes
+212/212; `brs_eval` and `individuation_eval` pass.
