@@ -7,6 +7,7 @@ they actually did. Everything here runs on the engine's own Python, without chan
 ```
 research/pilot/
   analyze.py          the analysis from the command line: an export, or --simulate
+  visits.py           what a third visit would buy in power
   power.py            how many friends the tests need (simulated groups at eight sizes)
   study.py            every panel of the simulated report, across many groups at one size
   echo_pilot/
@@ -34,6 +35,7 @@ services/ml/.venv/bin/python research/pilot/analyze.py export.json
 services/ml/.venv/bin/python research/pilot/power.py 200          # runs/power.json, ~45 min on 10 cores
 services/ml/.venv/bin/python research/pilot/study.py 200 16       # runs/study-16.json, ~8 min
 services/ml/.venv/bin/python research/pilot/sensitivity.py 60     # runs/sensitivity.json, ~11 min
+services/ml/.venv/bin/python research/pilot/visits.py 200         # runs/power-3visits.json: what a third visit buys
 services/ml/.venv/bin/python research/pilot/analyze.py --simulate # out/sim-16-<seed>-report.html
 
 # The guarantees.
@@ -57,7 +59,7 @@ Each choice is predicted by eight witnesses:
 
 The witnesses are asked in two settings:
 
-- **again**: the second visit predicted from the first.
+- **again**: the second visit predicted from the first. With more visits, each is predicted from all the visits before it.
 - **elsewhere**: each choice predicted without that paradigm ever being seen.
 
 Each is scored against:

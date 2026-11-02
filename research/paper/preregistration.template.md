@@ -57,8 +57,9 @@ set out one at a time in a counterbalanced order per person:
 
 1. **Before the first visit:** consent, a nickname, a self-rating on the eight axes (1–7), and stated
    choices for the six.
-2. **Two visits** of 25 minutes, at least 20 hours apart. Bread and the raft are topped up at the start
-   of each.
+2. **Two visits** of 25 minutes, at least 20 hours apart, or three if chosen before the first visit
+   (`ECHO_PILOT_VISITS=3`; state which here: ☐ two ☐ three). Each next visit opens a day after the last
+   began. Bread and the raft are topped up at the start of each.
 3. **After each visit:** each person rates each other person. They say how well they know them (0–3);
    if at least 1, they give the eight axes and their guess of the person's six choices, or "no idea".
 
@@ -83,7 +84,9 @@ set out one at a time in a counterbalanced order per person:
 the registered code:
 
 - At 16 people, H1 has power {{power:16:again:echo_2l>echo_axes}} and H2 has {{power:16:again:echo_2l>bar}}.
-- H1 reaches .8 at about {{need:again:echo_2l>echo_axes}} people.
+- H1 reaches .8 at about {{need:again:echo_2l>echo_axes}} people with two visits.
+- With three visits, H1 has {{power3:16:again:echo_2l>echo_axes}} at 16 people and
+  {{power3:20:again:echo_2l>echo_axes}} at 20.
 - The comparison of the echo with the friends is not powered at pilot size, so it is registered as
   estimation (H3).
 
@@ -115,7 +118,7 @@ the registered code:
 
 **Settings.**
 
-- **again:** visit 2 is predicted from visit 1.
+- **again:** visit 2 is predicted from visit 1, and with three visits visit 3 from visits 1 and 2.
 - **elsewhere:** each choice is predicted without that paradigm ever being seen.
 
 **Score.** Skill = 1 − MAE/MAE<sub>bar</sub>, where the bar is the median of everyone else's choices

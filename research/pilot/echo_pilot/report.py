@@ -801,7 +801,7 @@ def render(results: dict, power: Optional[dict] = None, study: Optional[dict] = 
   <section id="again">
     <h3>Result 1 · when the same situation comes round again</h3>
     <h2>{esc(head_again)}</h2>
-    <p>The second visit's choices, predicted from the first. The two-layer echo keeps each person's own way with bread, rafts and bets beside their traits, so it expects them to do roughly what they did. The one-layer echo can only read a choice as character, which explains little of it, so it barely moves from the bar.</p>
+    <p>The second visit's choices, predicted from the first. The two-layer echo keeps each person's own way with bread, rafts and bets beside their traits, so it expects them to do roughly what they did. The one-layer echo can only read a choice as character, which explains little of it, so it barely moves from the bar. Simply copying the first visit (the amber line) does about as well as the two-layer echo, a little better on choices of two: copying is what the second layer makes possible for a model of a person, and what one layer cannot do at all.</p>
     <div class="fig"><div class="scroll wide">{dot_chart(_witness_rows(again, ORDER), refs, note="Skill when the situation comes again")}</div><div class="narrow">{dot_chart_narrow(_witness_rows(again, ORDER), refs, note="Skill when the situation comes again")}</div>
       <p class="cap">{basis} Exact agreement with the choice made: {esc(acc_line)}, against {pct(acc.get('bar'))} for the bar{" (medians)" if study else ""}. Dashed lines: the person's own first-visit choice, copied{"; exact knowledge of their traits; exact knowledge of them" if has_oracle else ""}.</p></div>
   </section>

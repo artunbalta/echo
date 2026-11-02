@@ -31,7 +31,8 @@ In simulations grounded in published effect sizes (200 groups of 16):
 
 - **The second visit, predicted from one visit.** The two-layer echo reaches a skill of +0.29
   over the group's base rate. The one-layer echo reaches +0.04, friends +0.25,
-  and the person's own words +0.26.
+  and the person's own words +0.26. Copying the first visit, which the second layer makes
+  possible and one layer cannot, scores +0.34.
 - **Against perfect trait knowledge.** The two-layer echo beats what exact knowledge of the person's
   eight traits would give (+0.21).
 - **How fast.** It matches the friends after a median of 7 minutes of play.
@@ -343,6 +344,13 @@ A circle of friends is therefore a pilot in the proper sense. It estimates every
 central test a fair chance, while the confirmatory study needs about
 40 people.
 
+**A third visit is the cheaper lever.** Asked to come three times, with the third visit predicted from
+the first two, the same friends give the central test 64% at 16
+people and 82% at 20 (against 58%
+and 66% with two visits). The echo against the base rate rises to
+87% at 20. Twenty friends with three visits reach the conventional .8; the
+pilot village has the switch (web decision C78).
+
 **Two variants set aside, reported rather than dropped.**
 
 - **Scoring by probabilities.** Scored by the ranked probability score (Epstein, 1969; a proper score on
@@ -355,8 +363,8 @@ central test a fair chance, while the confirmatory study needs about
 
 ## 6. Pre-registered pilot
 
-- **Sample.** Friends and family of the first author, unpaid. Target 16–20. Recruitment stops at 20,
-  or after four weeks. This is a pilot. The confirmatory study (about 40
+- **Sample.** Friends and family of the first author, unpaid. Target 16–20, with three visits each if
+  they agree to it (power above). Recruitment stops at 20, or after four weeks. This is a pilot. The confirmatory study (about 40
   people) follows with an academic partner and an ethics review.
 - **Exclusions.** People with no second-visit choice are excluded from *again* only. Unmet encounters
   are missing, never zero.
@@ -382,6 +390,17 @@ If the pilot agrees with the simulation, three claims follow.
    friends know, for situations the world has seen.
 3. **Words generalise; watching remembers.** For situations it has not seen, the person and their
    friends still know best. That is an honest boundary for digital twins built from behaviour.
+
+**Copying is the special case.** Simply copying the person's first-visit choice scores
++0.34, a little more than the two-layer echo's +0.29. That is no defeat for the
+echo. Copying is the special case the second layer makes available to a model of a person; a
+one-layer model cannot copy at all. The echo pays a small price for estimating, on fifteen people,
+how far to trust what it saw, and binary choices give it little room to do better than copy.
+
+What the second layer adds beyond copying is twofold. When there is nothing to copy (an encounter
+missed on the first visit), it falls back to the person's traits. With more people, its probabilities
+become calibrated. Partial pooling of the stability estimate across kinds of choice is the obvious
+next step.
 
 **Limitations.**
 

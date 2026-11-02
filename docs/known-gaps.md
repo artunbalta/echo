@@ -2367,6 +2367,10 @@ not the class:
 - **The two-layer echo lives in `research/` only.** The engine's echo still has one layer and its
   synthetic W (C7). Moving the second layer into the engine is a C7 change and the owner's call: one
   person-specific number per feature in the state, and W re-fit on the pilot's own data.
+- **Copying the last choice still edges it out** in simulation (.34 against .29 at 16 people, .32
+  against .30 at 40). Copying is the special case the second layer allows. The estimate of how far to
+  trust a person's last choice is made on a dozen people, and partial pooling of that stability
+  across kinds of choice is the next step.
 - **Its probabilities are not calibrated at pilot size.** The choice it names is good. Scored by the
   ranked probability score, its advantage over one layer is weaker (power .35 against .57 at 16
   people), because its variance split is estimated on a dozen people.

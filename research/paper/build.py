@@ -30,6 +30,8 @@ def pct(x) -> str:
 def main() -> int:
     study = json.loads((PILOT / "runs" / "study-16.json").read_text())
     power = json.loads((PILOT / "runs" / "power.json").read_text())
+    power3_path = PILOT / "runs" / "power-3visits.json"
+    power3 = json.loads(power3_path.read_text()) if power3_path.exists() else None
     sizes = sorted(int(k) for k in power["sizes"])
 
     def need(test: str) -> str:
@@ -60,6 +62,10 @@ def main() -> int:
             return "–" if c["median"] is None else f"{c['median']:.0f}"
         if parts[0] == "power":
             return pct(power["sizes"][parts[1]]["power"][":".join(parts[2:])])
+        if parts[0] == "power3":
+            if power3 is None:
+                raise KeyError("power3: run research/pilot/visits.py first")
+            return pct(power3["sizes"][parts[1]]["power"][":".join(parts[2:])])
         if parts[0] == "need":
             return need(":".join(parts[1:]))
         if parts[0] == "gap":
