@@ -30,8 +30,14 @@ export const EVERY_MS = 120_000;
 /** A demo visitor's five minutes (C72): the server lets one be set out every forty seconds, so ask often. */
 export const DEMO_FIRST_MS = 12_000;
 export const DEMO_EVERY_MS = 25_000;
+/**
+ * A pilot visit (C75): the server sets the six out half a minute apart and takes one away after four
+ * unmet minutes, so ask often, and ask even while one stands: the answer may be that it is gone.
+ */
+export const PILOT_FIRST_MS = 6_000;
+export const PILOT_EVERY_MS = 8_000;
 
-export default function Director({ world, cell, consent, chain, pace = "world" }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; chain: MeasureChain; pace?: "world" | "demo" }) {
+export default function Director({ world, cell, consent, chain, pace = "world" }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; chain: MeasureChain; pace?: "world" | "demo" | "pilot" }) {
   const worldRef = useRef(world);
   worldRef.current = world;
 
@@ -58,7 +64,8 @@ export default function Director({ world, cell, consent, chain, pace = "world" }
             cue: sit.passed.cue as never,
             channel: sit.passed.channel as never,
             polarity: sit.passed.polarity,
-            raw: { distance: Number(distM.toFixed(1)) },
+            // No distance for a pass no route reads (C75's raft): the G branch would take it for an approach.
+            raw: sit.passed.route === "unrouted" ? {} : { distance: Number(distM.toFixed(1)) },
             target: { id: `staged:${s.id}`, kind: targetKindOf(sit.kind as ThingKind) },
             contextOverride: { stakes: "medium", audience_size: audience, public_or_private: audience > 0 ? "public" : "private", counterpart_status: "none" },
           });
@@ -73,7 +80,7 @@ export default function Director({ world, cell, consent, chain, pace = "world" }
       const l = layer();
       if (!l || !live) return;
       l.onPassed((s, d) => void passed(s, d));
-      if (op === "ask" && l.staging()) return;
+      if (op === "ask" && l.staging() && pace !== "pilot") return;
       try {
         await ensureIdentity();
         if (op === "look") {
@@ -86,15 +93,18 @@ export default function Director({ world, cell, consent, chain, pace = "world" }
         if (!at) return;
         const res = await fetch("/api/world/director", { method: "POST", headers: headers(), body: JSON.stringify({ op: "ask", cell, at }) });
         const data = (await res.json().catch(() => ({}))) as { staging?: ShownStaging | null };
-        if (live && data.staging) l.set(data.staging);
+        if (!live) return;
+        if (data.staging) l.set(data.staging);
+        // In a pilot visit an answer of nothing while one is shown means it is gone (left unmet).
+        else if (pace === "pilot" && res.ok && l.staging()) l.set(null);
       } catch {
         // asked again next time
       }
     };
 
     void ask("look");
-    const first = setTimeout(() => void ask("ask"), pace === "demo" ? DEMO_FIRST_MS : FIRST_MS);
-    const every = setInterval(() => void ask("ask"), pace === "demo" ? DEMO_EVERY_MS : EVERY_MS);
+    const first = setTimeout(() => void ask("ask"), pace === "pilot" ? PILOT_FIRST_MS : pace === "demo" ? DEMO_FIRST_MS : FIRST_MS);
+    const every = setInterval(() => void ask("ask"), pace === "pilot" ? PILOT_EVERY_MS : pace === "demo" ? DEMO_EVERY_MS : EVERY_MS);
     return () => {
       live = false;
       clearTimeout(first);

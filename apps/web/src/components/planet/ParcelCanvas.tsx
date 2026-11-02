@@ -66,6 +66,7 @@ import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
 import DemoOverlay, { type DemoSettings } from "@/components/demo/DemoOverlay";
+import PilotOverlay, { type PilotSettings } from "@/components/pilot/PilotOverlay";
 import EchoAway from "@/components/world/EchoAway";
 import EchoMeeting from "@/components/world/EchoMeeting";
 import EchoPairs from "@/components/world/EchoPairs";
@@ -106,9 +107,14 @@ export interface ParcelCanvasProps {
   stations?: StationSet | null;
   /** A demo visitor's five minutes (C72): the director at a demo's pace, the clock, their voice, the meeting. */
   demo?: DemoSettings | null;
+  /**
+   * A pilot visit (C75): the pilot's six at the pilot's pace, the clock, and nothing that shows how the
+   * echo reads you while you play (no meter, no mirror, no inspector, no meetings).
+   */
+  pilot?: PilotSettings | null;
 }
 
-export default function ParcelCanvas({ stations = null, demo = null, ...manifest }: ParcelCanvasProps) {
+export default function ParcelCanvas({ stations = null, demo = null, pilot = null, ...manifest }: ParcelCanvasProps) {
   // One chain for the life of the page. It arms itself if this browser has already consented.
   //
   // It is deliberately never disposed. Disposal is the right thing on a real unmount, and it is
@@ -357,10 +363,11 @@ export default function ParcelCanvas({ stations = null, demo = null, ...manifest
         consent={consent}
         inspecting={inspecting}
         onToggleInspector={() => setInspecting((v) => !v)}
+        study={!!pilot}
         meter={
           // Handed the same chain state the inspector gets, so the glance and the panel cannot
-          // disagree; what it may say about it is decided in recognitionReading.ts.
-          <RecognitionMeter posterior={posterior} log={log} consent={consent} onInspect={() => setInspecting((v) => !v)} />
+          // disagree; what it may say about it is decided in recognitionReading.ts. None in a pilot visit.
+          pilot ? null : <RecognitionMeter posterior={posterior} log={log} consent={consent} onInspect={() => setInspecting((v) => !v)} />
         }
       />
 
@@ -383,29 +390,37 @@ export default function ParcelCanvas({ stations = null, demo = null, ...manifest
       <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} />
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
-      <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={demo ? "demo" : "world"} />
-      {/* What your echo did while you were away, and where it waits (C64). */}
-      <EchoAway world={() => world.current} cell={here} consent={consent} />
-      {/* Your echo and a friend's, met while you were both away (C71); and whom yours may meet. */}
-      <EchoMeeting world={() => world.current} cell={here} consent={consent} guide={!!demo} />
-      {demo ? <DemoOverlay demo={demo} /> : null}
-      <EchoPairs consent={consent} />
+      <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={pilot ? "pilot" : demo ? "demo" : "world"} />
+      {pilot ? (
+        <PilotOverlay pilot={pilot} />
+      ) : (
+        <>
+          {/* What your echo did while you were away, and where it waits (C64). */}
+          <EchoAway world={() => world.current} cell={here} consent={consent} />
+          {/* Your echo and a friend's, met while you were both away (C71); and whom yours may meet. */}
+          <EchoMeeting world={() => world.current} cell={here} consent={consent} guide={!!demo} />
+          {demo ? <DemoOverlay demo={demo} /> : null}
+          <EchoPairs consent={consent} />
+          {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
+          <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
+        </>
+      )}
       <ReportPanel cell={here} />
-      {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
-      <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
 
       {/* Exactly one of these two is ever passed, and which one IS the mode: reactions where there
-          are stations to react, the walk tally where there are none. */}
-      <Inspector
-        posterior={posterior}
-        log={log}
-        consent={consent}
-        onRevoke={() => chain.revoke()}
-        reactions={stations ? reactions : undefined}
-        walk={stations ? undefined : walk}
-        open={inspecting}
-        onOpenChange={setInspecting}
-      />
+          are stations to react, the walk tally where there are none. Not in a pilot visit (C75). */}
+      {pilot ? null : (
+        <Inspector
+          posterior={posterior}
+          log={log}
+          consent={consent}
+          onRevoke={() => chain.revoke()}
+          reactions={stations ? reactions : undefined}
+          walk={stations ? undefined : walk}
+          open={inspecting}
+          onOpenChange={setInspecting}
+        />
+      )}
 
       {/* Last, so it paints over the HUD it shares a screen with, and only where there is a thumb to
           use it. The consent card is answered first: see the header. */}

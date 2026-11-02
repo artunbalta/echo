@@ -130,6 +130,7 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   egg_hollow: ["Went to look at a carved mark", "Walked past a carved mark"],
   eat_now: ["Ate it there and then", "Did not eat it"],
   enter_cave: ["Went into a cave", "Stayed out of a cave"],
+  enter_unmarked: ["Took the unmarked path", "Kept to the marked way"],
   enter_forced: ["Forced your way in"],
   enter_invited: ["Went in when asked"],
   explore_house: ["Looked around someone's house"],
@@ -139,7 +140,7 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   fish_from_dock: ["Fished from the dock"],
   force_door: ["Forced a door"],
   gather_driftwood: ["Gathered driftwood"],
-  give_gift: ["Gave a gift"],
+  give_gift: ["Gave a gift", "Gave nothing"],
   group_avoid: ["Kept away from a group"],
   group_initiate: ["Started a group talking"],
   group_join: ["Joined a group"],
@@ -150,7 +151,9 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   ignore_marginal: ["Left someone out"],
   ignores_pet: ["Ignored an animal"],
   include_marginal: ["Brought someone in"],
-  initiate: ["Spoke to a villager first"],
+  initiate: ["Went up to someone first", "Did not go up to them"],
+  keep_raft: ["Kept your raft"],
+  lend_raft: ["Lent your raft to a stranger"],
   interrupt: ["Interrupted"],
   join_exclusion: ["Joined in leaving someone out"],
   knock_door: ["Knocked at a door"],
@@ -212,6 +215,7 @@ const ACT_WORDS: Record<string, readonly [string, string?]> = {
   allocation: ["Shared out your time"],
   resource_bet: ["Took a gamble"],
   structure_progress: ["Built something"],
+  tide_wager: ["Took a bet on the tide", "Did not bet"],
 };
 
 /** A row's act in words. Unknown labels are said as they are, without the underscores. */

@@ -25,12 +25,40 @@
  * because the same choice watched and unwatched is a different datum (cue H2), and the private one is
  * what these probes are for.
  *
+ * THE PILOT'S SIX (web DECISIONS C75) are classic paradigms, set in the world for the pilot village
+ * only: bread for a hungry stranger (dictator), your raft lent (trust), a bet on the tide (risk, the
+ * mean held fixed), seed now or a crop tomorrow (delay), an overgrown path (exploration), a traveller
+ * alone by a fire (approach). `pilot.ts` sets them out, in an order fixed per person; the engine's pick
+ * never sees them (`WORLD_SITUATIONS`). Most are read by routes ingest.py already has; the raft is read
+ * by none yet, and says so (`route: "unrouted"`).
+ *
  * Pure.
  */
 import type { VillagePlan } from "./village.js";
 
-export type SituationId = "netted_gull" | "lost_pouch" | "carved_mark" | "dark_cleft";
-export type StagedKind = "netted-gull" | "lost-pouch" | "carved-mark" | "dark-cleft";
+export type SituationId =
+  | "netted_gull"
+  | "lost_pouch"
+  | "carved_mark"
+  | "dark_cleft"
+  // The pilot's six (web DECISIONS C75, `pilot.ts`): classic paradigms, set in the world.
+  | "hungry_stranger"
+  | "raft_borrower"
+  | "tide_fisher"
+  | "seed_offer"
+  | "overgrown_path"
+  | "lone_traveler";
+export type StagedKind =
+  | "netted-gull"
+  | "lost-pouch"
+  | "carved-mark"
+  | "dark-cleft"
+  | "hungry-stranger"
+  | "raft-borrower"
+  | "tide-fisher"
+  | "seed-offer"
+  | "overgrown-path"
+  | "lone-traveler";
 
 export interface Situation {
   id: SituationId;
@@ -48,9 +76,15 @@ export interface Situation {
   where: "shore" | "land";
   /** Set out of every villager's sight. */
   unseen: boolean;
-  /** Walking past it is measured: as this action, at this polarity. Null where passing says nothing. */
-  passed: { action: string; cue: string; channel: string; polarity: "take" | "refuse" } | null;
+  /**
+   * Walking past it is measured: as this action, at this polarity, by this route of ingest.py (as
+   * `affordances.ts` names routes). Null where passing says nothing. An `unrouted` pass is sent with no
+   * distance, so the G and A branches cannot read it as an approach (C75).
+   */
+  passed: { action: string; cue: string; channel: string; polarity: "take" | "refuse"; route: "named" | "generic" | "unrouted" } | null;
   sizeM: number;
+  /** A person, drawn as one (the pilot's people); the rest are things. */
+  person?: { pose: "sit" | "kneel" | "stand" | "carry"; child?: boolean };
 }
 
 export const SITUATIONS: Readonly<Record<SituationId, Situation>> = {
@@ -62,7 +96,7 @@ export const SITUATIONS: Readonly<Record<SituationId, Situation>> = {
     axes: [1, 0, 0, 0, 0, 0, 0, 0.3],
     where: "shore",
     unseen: true,
-    passed: { action: "pass_by", cue: "H9", channel: "H", polarity: "take" },
+    passed: { action: "pass_by", cue: "H9", channel: "H", polarity: "take", route: "named" },
     sizeM: 0.5,
   },
   lost_pouch: {
@@ -85,7 +119,7 @@ export const SITUATIONS: Readonly<Record<SituationId, Situation>> = {
     axes: [0, 0, 1, 0, 0, 0.3, 0, 0],
     where: "land",
     unseen: false,
-    passed: { action: "egg_hollow", cue: "I3", channel: "I", polarity: "refuse" },
+    passed: { action: "egg_hollow", cue: "I3", channel: "I", polarity: "refuse", route: "named" },
     sizeM: 0.6,
   },
   dark_cleft: {
@@ -99,9 +133,90 @@ export const SITUATIONS: Readonly<Record<SituationId, Situation>> = {
     passed: null,
     sizeM: 1.2,
   },
+  // ── the pilot's six (web DECISIONS C75): a classic paradigm each, as something that happens to you
+  // in the world, with a stake that is the world's own (your bread, your raft, a catch, a crop), never
+  // money. Set out only in the pilot village, one at a time, in an order fixed per person (`pilot.ts`).
+  hungry_stranger: {
+    id: "hungry_stranger",
+    kind: "hungry-stranger",
+    name: "a thin stranger by the path, looking at your bread",
+    asks: "how much of what you need yourself you give to someone who needs it more, when they can give nothing back (the dictator game)",
+    axes: [1, -0.3, 0.2, 0, 0, 0, 0, 0.2],
+    where: "land",
+    unseen: true,
+    passed: { action: "give_gift", cue: "F7", channel: "F", polarity: "refuse", route: "generic" },
+    sizeM: 0.6,
+    person: { pose: "sit" },
+  },
+  raft_borrower: {
+    id: "raft_borrower",
+    kind: "raft-borrower",
+    name: "someone at the water with nets in their arms and no boat",
+    asks: "whether you lend what you need to someone who could keep it (the trust game)",
+    axes: [0.6, -0.3, 0.3, 0, 0, 0, 0, 0],
+    where: "shore",
+    unseen: true,
+    passed: { action: "keep_raft", cue: "G16", channel: "G", polarity: "take", route: "unrouted" },
+    sizeM: 0.6,
+    person: { pose: "carry" },
+  },
+  tide_fisher: {
+    id: "tide_fisher",
+    kind: "tide-fisher",
+    name: "a fisher with a basket, offering a bet on the tide",
+    asks: "how much uncertainty you take for the same catch on average (a risk choice with the mean held fixed)",
+    axes: [0, 0.6, 0.4, 0.4, 0, 0, 0, 0],
+    where: "shore",
+    unseen: false,
+    passed: { action: "tide_wager", cue: "F3", channel: "F", polarity: "refuse", route: "generic" },
+    sizeM: 0.6,
+    person: { pose: "stand" },
+  },
+  seed_offer: {
+    id: "seed_offer",
+    kind: "seed-offer",
+    name: "a farmer's child holding out a pouch of seed",
+    asks: "whether you take a little now or wait a day for more (delay discounting)",
+    axes: [0, 0.2, 0, 0, 0.3, 0.5, -0.3, 0],
+    where: "land",
+    unseen: false,
+    // Walking past a child with seed says nothing about patience.
+    passed: null,
+    sizeM: 0.5,
+    person: { pose: "stand", child: true },
+  },
+  overgrown_path: {
+    id: "overgrown_path",
+    kind: "overgrown-path",
+    name: "an overgrown path leading off into the trees",
+    asks: "whether you take the way nobody marked (exploration)",
+    axes: [0, 0, 1, 0.3, 0, 0.2, 0, 0],
+    where: "land",
+    unseen: false,
+    passed: { action: "enter_unmarked", cue: "I3", channel: "I", polarity: "refuse", route: "named" },
+    sizeM: 1.6,
+  },
+  lone_traveler: {
+    id: "lone_traveler",
+    kind: "lone-traveler",
+    name: "a traveller sitting alone by a small fire",
+    asks: "whether you go up to someone you do not know (approaching a stranger)",
+    axes: [0.6, 0.5, 0.3, 0.5, 0, 0, 0, 0.3],
+    where: "land",
+    unseen: false,
+    passed: { action: "initiate", cue: "G1", channel: "G", polarity: "refuse", route: "generic" },
+    sizeM: 0.9,
+    person: { pose: "sit" },
+  },
 };
 
 export const SITUATION_IDS = Object.keys(SITUATIONS) as SituationId[];
+
+/** What the world's own director may set out for anyone (C63): the engine picks among these. */
+export const WORLD_SITUATIONS: readonly SituationId[] = ["netted_gull", "lost_pouch", "carved_mark", "dark_cleft"];
+
+/** The pilot's six (C75): set out only in the pilot village, by `pilot.ts`, never by the engine's pick. */
+export const PILOT_SITUATIONS: readonly SituationId[] = ["hungry_stranger", "raft_borrower", "tide_fisher", "seed_offer", "overgrown_path", "lone_traveler"];
 
 export const DIRECTOR = {
   /** At least this long between two stagings for one stranger. */
@@ -142,9 +257,9 @@ export interface Staging {
   resolvedAt: string | null;
 }
 
-/** Still standing at `now`: not answered, and not past its life. */
-export function standing(s: Staging, now: number): boolean {
-  return s.resolved === null && now - Date.parse(s.createdAt) < DIRECTOR.lifeMs;
+/** Still standing at `now`: not answered, and not past its life (the pilot's are shorter, C75). */
+export function standing(s: Staging, now: number, lifeMs: number = DIRECTOR.lifeMs): boolean {
+  return s.resolved === null && now - Date.parse(s.createdAt) < lifeMs;
 }
 
 /**
@@ -162,6 +277,11 @@ export function mayStage(stagings: readonly Staging[], cap: number, now: number,
   const today = new Date(now).toISOString().slice(0, 10);
   if (stagings.filter((s) => s.createdAt.slice(0, 10) === today).length >= cap) return "enough_today";
   return null;
+}
+
+/** A number in [0, 1) fixed by a string: placement, the pilot's order, and the tide's turn all use it. */
+export function seededUnit(s: string): number {
+  return unit(s);
 }
 
 function unit(s: string): number {
@@ -202,10 +322,13 @@ export interface Ground {
   plan: VillagePlan | null;
 }
 
+/** How far from the stranger a situation is set: the world's ring, or the pilot's nearer one (C75). */
+export type Ring = readonly [number, number];
+
 /** Whether a situation can be set out near this point at all (the gull needs a shore within reach). */
-export function available(sit: Situation, at: { x: number; y: number }, ground: Ground): boolean {
+export function available(sit: Situation, at: { x: number; y: number }, ground: Ground, ring: Ring = DIRECTOR.nearM): boolean {
   if (sit.where === "land") return true;
-  const far = DIRECTOR.nearM[1] + 10;
+  const far = ring[1] + 10;
   for (let k = 0; k < 24; k++) {
     const a = (k / 24) * Math.PI * 2;
     for (const r of [far * 0.4, far * 0.7, far]) if (ground.sea(at.x + Math.cos(a) * r, at.y + Math.sin(a) * r)) return true;
@@ -218,8 +341,8 @@ export function available(sit: Situation, at: { x: number; y: number }, ground: 
  * situation needs, out of sight where it must be, never inside the village's own things. Null when
  * nowhere near will do.
  */
-export function stagingSpot(sit: Situation, at: { x: number; y: number }, seed: string, ground: Ground): { x: number; y: number; facing: number } | null {
-  const [r0, r1] = DIRECTOR.nearM;
+export function stagingSpot(sit: Situation, at: { x: number; y: number }, seed: string, ground: Ground, ring: Ring = DIRECTOR.nearM): { x: number; y: number; facing: number } | null {
+  const [r0, r1] = ring;
   const fits = (x: number, y: number) => ground.standable(x, y) && !inVillage(ground.plan, x, y) && !(sit.unseen && ground.seen(x, y));
   if (sit.where === "shore") {
     // A shore is a thin line, which random points miss: sweep the ring (every 5° and 5 m, in an order

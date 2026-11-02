@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { DIRECTOR, SITUATIONS, SITUATION_IDS, available, inVillage, mayStage, passStep, stagingSpot, standing, type Ground, type Staging } from "../lib/director.js";
+import { DIRECTOR, SITUATIONS, WORLD_SITUATIONS, available, inVillage, mayStage, passStep, stagingSpot, standing, type Ground, type Staging } from "../lib/director.js";
 import { verbsOf } from "../lib/affordances.js";
 import type { VillagePlan } from "../lib/village.js";
 
@@ -31,8 +31,9 @@ const staging = (over: Partial<Staging> = {}): Staging => ({
   ...over,
 });
 
-test("C63: every situation is a thing with verbs, read under labels the engine already has, and walking past only where it means something", () => {
-  for (const id of SITUATION_IDS) {
+test("C63: every situation the world's director sets out is a thing with verbs, read under labels the engine already has, and walking past only where it means something", () => {
+  // The pilot's six (C75) have their own rules, in pilot.test.ts.
+  for (const id of WORLD_SITUATIONS) {
     const s = SITUATIONS[id];
     assert.equal(s.id, id);
     assert.equal(s.axes.length, 8);

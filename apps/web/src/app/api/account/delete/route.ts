@@ -83,6 +83,11 @@ const USER_KEYED: [string, string][] = [
   ["echo_meetings", "b"],
   // C72. A demo visit. Its cloned voice is deleted at ElevenLabs first (below), or the erasure fails.
   ["demo_visits", "subject"],
+  // C75. The pilot: who they are in it, what they said they would do, and every rating either way, since
+  // a friend's rating of them is about them as much as theirs is about the friend.
+  ["pilot_people", "subject"],
+  ["pilot_ratings", "rater"],
+  ["pilot_ratings", "ratee"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point

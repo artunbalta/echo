@@ -20,8 +20,8 @@
  *     `enter_cave` — the act is sent under that label (`named`). Where the catalogue's channel has a
  *     generic route (F1 save-vs-spend, F7 giving, G approach) it goes there (`generic`). Where neither
  *     fits — trespass, theft, respect at a grave, play — the act is sent under its own label and is
- *     `unrouted`: it still moves the posterior through the label's embedding and the privacy bucket,
- *     and it is never attached to the nearest plausible feature. `services/ml` is not touched, and no
+ *     `unrouted`: it is recorded, and since C73 it moves nothing (the engine no longer reads a label
+ *     as text), and it is never attached to the nearest plausible feature. `services/ml` is not touched, and no
  *     loading is written here: what an act weighs on an axis is W's to say.
  *   THE WORLD (`effect`) — the mark a shared act leaves (a trampled field, a forced door, a shell
  *     that is gone) and how many world days it lasts. Marks heal: the world is shared, and one
@@ -46,7 +46,11 @@ export type VillageThing = (typeof VILLAGE_THINGS)[number];
 /** Not drawn by the plan or the scatter, and still things a person can act on. */
 /** C55: the animals a stranger can act on — a dog (anyone's, or nobody's), a goat, a hen. */
 /** C59: your own land, the house on it, and what is set down inside. */
-export const OTHER_THINGS = ["villager", "water", "dog", "goat", "hen", "land", "home", "furnishing", "netted-gull", "lost-pouch", "carved-mark", "dark-cleft"] as const;
+export const OTHER_THINGS = [
+  "villager", "water", "dog", "goat", "hen", "land", "home", "furnishing", "netted-gull", "lost-pouch", "carved-mark", "dark-cleft",
+  // The pilot's six (C75, `director.ts`).
+  "hungry-stranger", "raft-borrower", "tide-fisher", "seed-offer", "overgrown-path", "lone-traveler",
+] as const;
 export type OtherThing = (typeof OTHER_THINGS)[number];
 
 /** Every kind of thing: the village's, the others, and every scatter class by its id. */
@@ -103,6 +107,8 @@ export interface Verb {
   gives?: string;
   /** For a verb that gives what is carried: the only things it can give (food, to an animal; C55). */
   takes?: readonly string[];
+  /** What it costs out of the pack (C75: the bread you give, the raft you lend). Offered only while you have it. */
+  spends?: { item: string; count: number };
   /** One line of what happens, for the player: the act's beat, which fires whether or not anything is measured. */
   beat: string;
   /** Raw signals this verb always carries (C63: how much of a found pouch was taken, `taken01`). */
@@ -281,6 +287,38 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
     v({ id: "go-in", label: "Go in", holdS: 4, pose: "push", reachM: 2.2, stakes: "high", measure: m("F3", "enter_cave", "named", "stay_safe"), effect: null, deed: null, owner: "none", beat: "It is colder in here, and quieter, and goes back further than you can see." }),
     v({ id: "stay-out", label: "Leave it be", holdS: 0.8, pose: "still", reachM: 2.6, stakes: "medium", measure: m("F3", "stay_safe", "named"), effect: null, deed: null, owner: "none", beat: "You leave it to the dark." }),
   ],
+  // The pilot's six (C75, `director.ts`): a classic paradigm each, with the world's own stakes. People are
+  // `household`-owned so the act is read with a stranger as its counterpart. What is given or risked
+  // comes out of the pack (`spends`), and what comes back is the director route's to say.
+  "hungry-stranger": [
+    // The dictator game: of three loaves, how many. Walking past is giving none (`passed`).
+    v({ id: "give-one", label: "Give them a loaf", holdS: 1.5, pose: "gather", reachM: 2.6, stakes: "medium", measure: m("F7", "give_gift", "generic"), effect: null, deed: null, owner: "household", spends: { item: "bread", count: 1 }, raw: { amount: 0.333 }, beat: "They take it in both hands, and say nothing for a moment." }),
+    v({ id: "give-two", label: "Give them two loaves", holdS: 1.8, pose: "gather", reachM: 2.6, stakes: "medium", measure: m("F7", "give_gift", "generic"), effect: null, deed: null, owner: "household", spends: { item: "bread", count: 2 }, raw: { amount: 0.667 }, beat: "Two. They look at you as if to ask whether you are sure." }),
+    v({ id: "give-all", label: "Give them all your bread", holdS: 2, pose: "gather", reachM: 2.6, stakes: "high", measure: m("F7", "give_gift", "generic"), effect: null, deed: null, owner: "household", spends: { item: "bread", count: 3 }, raw: { amount: 1 }, beat: "All of it. You will be hungry on the water." }),
+  ],
+  "raft-borrower": [
+    // The trust game: lend what you need to someone who could keep it. No route reads trust yet (C7):
+    // it is recorded, and moves nothing, until W has a direction for it (cue-catalog G16).
+    v({ id: "lend", label: "Lend them your raft", holdS: 2, pose: "gather", reachM: 2.8, stakes: "high", measure: m("G16", "lend_raft", "unrouted"), effect: null, deed: null, owner: "household", spends: { item: "raft", count: 1 }, beat: "They drag it down to the water, and wave once." }),
+    v({ id: "keep", label: "Say no", holdS: 0.8, pose: "still", reachM: 3, stakes: "medium", measure: m("G16", "keep_raft", "unrouted"), effect: null, deed: null, owner: "household", beat: "They nod, and go on looking along the shore." }),
+  ],
+  "tide-fisher": [
+    // A risk choice with the mean held fixed: two fish on average whichever you take (`pilot.ts`).
+    v({ id: "bet-safe", label: "Take two fish now", holdS: 1.2, pose: "gather", reachM: 2.8, stakes: "medium", measure: m("F3", "tide_wager", "generic"), effect: null, deed: null, owner: "household", raw: { variance: 0 }, beat: "" }),
+    v({ id: "bet-even", label: "Bet: three fish or one", holdS: 1.2, pose: "gather", reachM: 2.8, stakes: "medium", measure: m("F3", "tide_wager", "generic"), effect: null, deed: null, owner: "household", raw: { variance: 0.25 }, beat: "" }),
+    v({ id: "bet-long", label: "Bet big: four fish or none", holdS: 1.2, pose: "gather", reachM: 2.8, stakes: "high", measure: m("F3", "tide_wager", "generic"), effect: null, deed: null, owner: "household", raw: { variance: 1 }, beat: "" }),
+  ],
+  "seed-offer": [
+    // Delay discounting: a handful now, or three tomorrow.
+    v({ id: "now", label: "Take a handful of grain now", holdS: 1.5, pose: "gather", reachM: 2.4, stakes: "medium", measure: m("F1", "eat_now", "named"), effect: null, deed: null, owner: "household", needs: "empty-handed", gives: "a handful of grain", beat: "A handful now. It is good grain." }),
+    v({ id: "plant", label: "Plant the seed for later", holdS: 4, pose: "dig", reachM: 2.4, stakes: "medium", measure: m("F1", "plant_seed", "named"), effect: null, deed: null, owner: "household", beat: "You press it into the soil. It will be up by tomorrow." }),
+  ],
+  "overgrown-path": [
+    v({ id: "follow", label: "Follow the overgrown path", holdS: 3, pose: "push", reachM: 2.6, stakes: "medium", measure: m("I3", "enter_unmarked", "named"), effect: null, deed: null, owner: "none", beat: "Brambles, then a narrow way, then a clearing nobody seems to know, and the whole bay below it." }),
+  ],
+  "lone-traveler": [
+    v({ id: "greet", label: "Go and say hello", holdS: 2, pose: "still", reachM: 3.2, stakes: "low", measure: m("G1", "initiate", "generic"), effect: null, deed: null, owner: "household", beat: "They look up, surprised, and make room by the fire." }),
+  ],
   furnishing: [
     v({ id: "lift", label: "Pick it up", holdS: 1, pose: "gather", reachM: 1.6, stakes: "low", measure: m("J5", "lift_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),
     v({ id: "turn", label: "Turn it", holdS: 1, pose: "push", reachM: 1.6, stakes: "low", measure: m("J5", "turn_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),
@@ -315,6 +353,8 @@ export function thingName(kind: ThingKind): string {
     "canopy-palm": "palm", "vine-tangle": "tangle of vines", "grass-tuft": "tuft of grass", "dead-shrub": "dry shrub",
     "moss-patch": "moss", "lichen-rock": "lichen-covered rock", "snow-drift": "snow drift", "dune-ripple": "sand",
     "shore-rock": "rock", "scree": "loose stones",
+    "hungry-stranger": "stranger", "raft-borrower": "stranger with nets", "tide-fisher": "fisher", "seed-offer": "child",
+    "overgrown-path": "overgrown path", "lone-traveler": "traveller",
   };
   return NAMES[kind] ?? kind;
 }

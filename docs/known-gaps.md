@@ -2330,3 +2330,33 @@ not the class:
   walking. The real fix is re-fitting W on real people; this only sets the pace.
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 64. What C75 does not do yet (2026-11-02)
+
+- **Trust moves nothing.** `lend_raft` and `keep_raft` are recorded, but no ingest route reads them
+  and W has no trust direction. Reading them is an engine change (C7): a feature, and W re-fit on the
+  pilot's own data.
+- **Ingest reads cues by prefix.** `cue.startswith("F1")` takes F10–F13 for save-or-spend, and
+  `startswith("H1")` takes H10 onwards for the queue. Nothing shipped sends those cues today; the next
+  one that does is read as something it is not. Engine (C7).
+- **Drinking at the well is read as an approach.** The A branch sets `approach` for every A-channel
+  event, so the unrouted A5 `drink_water` moves warmth. Older than C75; left as it is.
+- **Raw records are swept after 90 days** (`behavioral_events`, `player_stagings`, `echo_ledger`).
+  Export the pilot before then. The pilot's own tables are kept.
+- **One browser per person.** A friend who comes back on another browser or device is a new person;
+  there is no way to carry them over.
+- **What the pack allows.** A friend who gave away or traded all their bread before meeting the
+  stranger, or lost the raft, does not meet that one this visit. The top-up is at a visit's start.
+- **The shore two wait for the shore.** Someone who never goes down to the sea does not meet the
+  fisher or the borrower.
+- **Friends do not see each other** (⚑54). They share the village's lasting state (needs met, marks,
+  word of what strangers did), not each other.
+- **The echo kept by the engine** is kept only with `ECHO_ML_PERSIST=1`; otherwise it is lost on a
+  restart. The raw events are kept regardless, so every echo can be rebuilt by replaying them.
+- **No analysis yet.** The export is raw JSON; the analysis script is still to write.
+- **On the first visit** the controls hint and the pack line overlap at the bottom of the screen for a
+  few seconds. Older than C75.
+- **No ethics approval.** This is a pilot among friends, with consent, nicknames and erasure. A
+  published study will need an ethics review.
+
+**Status:** OPEN, all of it, written down rather than discovered.

@@ -70,6 +70,8 @@ export * from "./trade.js";
 export * from "./homes.js";
 // What the director sets out for a stranger, and where (C63).
 export * from "./director.js";
+// The pilot village (C75): the six paradigms' order, the tide's turn, a lent raft.
+export * from "./pilot.js";
 // How people die from now on, and what a stranger can do about it (C66).
 export * from "./mortality.js";
 export * from "./fates.js";

@@ -18,6 +18,7 @@ import { WRONGS, type Deed, type Home, type Landing, type LifeChange, type Look,
 import { adminClient } from "@/lib/supabaseAdmin";
 import type { DemoVisit, EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
 import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
+import type { PilotPerson, PilotRating } from "@/lib/pilot";
 
 export interface VillagerMemory {
   /** In the villager's words. */
@@ -121,6 +122,17 @@ export interface VillageStore {
   demoVoicesDue(now: string): Promise<DemoVisit[] | null>;
   /** Visits begun before a moment, oldest first, a few at a time. Null: unreadable. */
   demoVisitsBefore(at: string, limit: number): Promise<DemoVisit[] | null>;
+  // ── the pilot village (C75) ──
+  /** A pilot person: null for none, undefined when unreadable. */
+  pilotPersonOf(subject: string): Promise<PilotPerson | null | undefined>;
+  /** Write one. False when it was not written, including a nickname someone else in the group has. */
+  savePilotPerson(p: PilotPerson): Promise<boolean>;
+  /** Everyone in the pilot, oldest first. Null: unreadable. */
+  pilotPeople(): Promise<PilotPerson[] | null>;
+  /** One friend's rating of another, written over any earlier one of theirs. */
+  savePilotRating(r: PilotRating): Promise<boolean>;
+  /** Every rating. Null: unreadable. */
+  pilotRatings(): Promise<PilotRating[] | null>;
   /**
    * Everything of one person this store holds, gone (§13): in the in-process store, every map, with the
    * world's history kept and made nameless (C44, C45). Against Supabase it does nothing, because
@@ -394,6 +406,34 @@ interface DemoRow {
   voice_deleted_at: string | null;
 }
 const DEMO_COLUMNS = "subject, host, name, started_at, voice_id, voice_until, voice_deleted_at";
+interface PilotRow {
+  subject: string;
+  nickname: string;
+  joined_at: string;
+  consent_at: string;
+  self_axes: number[];
+  stated: PilotPerson["stated"];
+  sessions: PilotPerson["sessions"];
+  settled: PilotPerson["settled"] | null;
+}
+const PILOT_COLUMNS = "subject, nickname, joined_at, consent_at, self_axes, stated, sessions, settled";
+const pilotFromRow = (r: PilotRow): PilotPerson => ({
+  subject: r.subject,
+  nickname: r.nickname,
+  joinedAt: new Date(r.joined_at).toISOString(),
+  consentAt: new Date(r.consent_at).toISOString(),
+  self: r.self_axes,
+  stated: r.stated,
+  sessions: r.sessions ?? [],
+  settled: r.settled ?? {},
+});
+const pilotRatingFromRow = (r: { rater: string; ratee: string; know: number; axes: number[] | null; created_at: string }): PilotRating => ({
+  rater: r.rater,
+  ratee: r.ratee,
+  know: r.know as PilotRating["know"],
+  axes: r.axes,
+  at: new Date(r.created_at).toISOString(),
+});
 const demoFromRow = (r: DemoRow): DemoVisit => ({ subject: r.subject, host: r.host, name: r.name, startedAt: new Date(r.started_at).toISOString(), voiceId: r.voice_id, voiceUntil: iso(r.voice_until), voiceDeletedAt: iso(r.voice_deleted_at) });
 
 function supabaseStore(): VillageStore | null {
@@ -818,6 +858,34 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("dropDemoVisit", error.message), false;
       return true;
     },
+    async pilotPersonOf(subject) {
+      const { data, error } = await admin.from("pilot_people").select(PILOT_COLUMNS).eq("subject", subject).maybeSingle();
+      if (error) return warn("pilotPersonOf", error.message), undefined;
+      return data ? pilotFromRow(data as PilotRow) : null;
+    },
+    async savePilotPerson(p) {
+      const { error } = await admin.from("pilot_people").upsert(
+        { subject: p.subject, nickname: p.nickname, joined_at: p.joinedAt, consent_at: p.consentAt, self_axes: p.self, stated: p.stated, sessions: p.sessions, settled: p.settled },
+        { onConflict: "subject" },
+      );
+      if (error) return warn("savePilotPerson", error.message), false;
+      return true;
+    },
+    async pilotPeople() {
+      const { data, error } = await admin.from("pilot_people").select(PILOT_COLUMNS).order("joined_at", { ascending: true }).limit(500);
+      if (error) return warn("pilotPeople", error.message), null;
+      return (data as PilotRow[]).map(pilotFromRow);
+    },
+    async savePilotRating(r) {
+      const { error } = await admin.from("pilot_ratings").upsert({ rater: r.rater, ratee: r.ratee, know: r.know, axes: r.axes, created_at: r.at }, { onConflict: "rater,ratee" });
+      if (error) return warn("savePilotRating", error.message), false;
+      return true;
+    },
+    async pilotRatings() {
+      const { data, error } = await admin.from("pilot_ratings").select("rater, ratee, know, axes, created_at").limit(5000);
+      if (error) return warn("pilotRatings", error.message), null;
+      return (data as Parameters<typeof pilotRatingFromRow>[0][]).map(pilotRatingFromRow);
+    },
     async forgetSubject() {
       return true;
     },
@@ -879,6 +947,9 @@ interface MemoryState {
   pairs?: Map<string, EchoPair>;
   meetings?: Map<string, EchoMeeting>;
   demos?: Map<string, DemoVisit>;
+  pilot?: Map<string, PilotPerson>;
+  /** By `${rater}|${ratee}`. */
+  pilotRatings?: Map<string, PilotRating>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -1144,11 +1215,33 @@ function memoryStore(): VillageStore {
       memory.demos?.delete(subject);
       return true;
     },
+    async pilotPersonOf(subject) {
+      const p = memory.pilot?.get(subject);
+      return p ? structuredClone(p) : null;
+    },
+    async savePilotPerson(p) {
+      // The table's unique index on lower(nickname), as the in-process store keeps it.
+      for (const q of memory.pilot?.values() ?? []) if (q.subject !== p.subject && q.nickname.toLowerCase() === p.nickname.toLowerCase()) return false;
+      (memory.pilot ??= new Map()).set(p.subject, structuredClone(p));
+      return true;
+    },
+    async pilotPeople() {
+      return [...(memory.pilot?.values() ?? [])].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt)).map((p) => structuredClone(p));
+    },
+    async savePilotRating(r) {
+      (memory.pilotRatings ??= new Map()).set(`${r.rater}|${r.ratee}`, structuredClone(r));
+      return true;
+    },
+    async pilotRatings() {
+      return [...(memory.pilotRatings?.values() ?? [])].map((r) => structuredClone(r));
+    },
     async forgetSubject(subject) {
       const mine = (k: string) => k.startsWith(`${subject}|`);
       for (const k of [...memory.memories.keys()]) if (mine(k)) memory.memories.delete(k);
       for (const map of [memory.deeds, memory.landings] as (Map<string, unknown> | undefined)[]) for (const k of [...(map?.keys() ?? [])]) if (mine(k)) map!.delete(k);
-      for (const map of [memory.packs, memory.homes, memory.looks, memory.presence, memory.bars, memory.demos] as (Map<string, unknown> | undefined)[]) map?.delete(subject);
+      for (const map of [memory.packs, memory.homes, memory.looks, memory.presence, memory.bars, memory.demos, memory.pilot] as (Map<string, unknown> | undefined)[]) map?.delete(subject);
+      // C75: what they said of their friends, and what their friends said of them.
+      for (const [k, r] of [...(memory.pilotRatings ?? new Map<string, PilotRating>())]) if (r.rater === subject || r.ratee === subject) memory.pilotRatings!.delete(k);
       memory.stagings?.delete(subject);
       memory.outings?.delete(subject);
       for (const [code, i] of [...(memory.invites ?? new Map<string, EchoInvite>())]) if (i.subject === subject) memory.invites!.delete(code);
@@ -1220,5 +1313,7 @@ export function resetMemoryStore(): void {
   memory.pairs?.clear();
   memory.meetings?.clear();
   memory.demos?.clear();
+  memory.pilot?.clear();
+  memory.pilotRatings?.clear();
   memory.next = 1;
 }

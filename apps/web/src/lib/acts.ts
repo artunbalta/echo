@@ -70,8 +70,10 @@ export function measurementFor(verb: Verb, thing: { ref: string; kind: ThingKind
   if (verb.raw && finished) Object.assign(raw, verb.raw);
   // Sitting is the one act whose whole content is its stillness (sit_still reads still_ms).
   if (verb.pose === "sit") raw.still_ms = Math.round(manner.heldMs);
-  // An approach is read by the G route only with a distance (ingest.py's G branch).
-  if (measure.channel === "G" || measure.channel === "A") raw.distance = Number(manner.distanceM.toFixed(2));
+  // An approach is read by the G route only with a distance (ingest.py's G branch), so only an act meant
+  // to be read by a route carries one: an unrouted act on G (the raft lent, C75) would otherwise be read
+  // as an approach it never was.
+  if ((measure.channel === "G" || measure.channel === "A") && measure.route !== "unrouted") raw.distance = Number(manner.distanceM.toFixed(2));
   // The pet cue's amount (C55): a stroke from someone it barely knows is a little; shooing it is nothing.
   if (measure.cue.startsWith("D11")) raw.amount = Number((measure.action === "shoo_pet" ? 0.05 : (manner.amount ?? 0.6)).toFixed(3));
   const context: Partial<EventContext> = {

@@ -22,6 +22,13 @@
  * past one whose passing is data (the gull, the mark), once the caller is well away from it.
  *
  * The page measures the answer (lib/acts.ts), consent permitting; this only keeps the world straight.
+ *
+ * THE PILOT VILLAGE (C75). For someone in a pilot visit, in the pilot's village, `ask` sets out the
+ * pilot's six instead (`pilotAsk`): one at a time, in their own fixed order, half a minute after the last
+ * was answered or gone, nearer than the world's, and with no engine asked. One left unmet four minutes is
+ * gone ("unmet"), and the next comes. The world's own director never sets the six out, and the six never
+ * hold it up. `act` takes what a verb spends out of the pack (the bread given, the raft lent) and
+ * gives what the tide gave.
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -29,8 +36,9 @@ import { NextResponse } from "next/server";
 import { DEMO, liveVisit } from "@/lib/demo";
 import {
   SITUATIONS,
-  SITUATION_IDS,
+  WORLD_SITUATIONS,
   DIRECTOR,
+  PILOT,
   add,
   available,
   ageYears,
@@ -39,23 +47,29 @@ import {
   dayPlans,
   mayStage,
   present,
+  pilotOrder,
   regionBound,
+  remove,
   stagingSpot,
   standing,
+  strangerName,
+  tideCatch,
   verbsOf,
   walkableAt,
   whereabouts,
   type Ground,
+  type Pack,
   type SituationId,
   type Staging,
 } from "@echo/planet";
 
 import { selectSituation } from "@/lib/ml";
+import { addUpTo, isPilotSituation, livePilot, type PilotSession } from "@/lib/pilot";
 import { planet } from "@/lib/planet";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { loadVillage } from "@/lib/villageTalk";
-import { villageStore } from "@/lib/villageStore";
+import { villageStore, type VillageStore } from "@/lib/villageStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,6 +80,20 @@ const finite = (n: unknown): n is number => typeof n === "number" && Number.isFi
 
 /** What the page is shown of a staging: where and what. Not why: that is told afterwards, in the mirror. */
 const shown = (s: Staging) => ({ id: s.id, cell: s.cell, situation: s.situation, x: s.x, y: s.y, facing: s.facing, ownerName: s.ownerName });
+
+/** How long one stands: the pilot's six four minutes, the world's two hours. */
+const lifeOf = (s: Staging) => (isPilotSituation(s.situation) ? PILOT.lifeMs : DIRECTOR.lifeMs);
+const stands = (s: Staging, now: number) => standing(s, now, lifeOf(s));
+
+/** What the tide gave, as the fisher's beat says it. */
+function tideBeat(verb: string, caught: number, kept: number): string {
+  if (kept < caught) return "Your pack is too full to carry them all.";
+  if (verb === "bet-safe") return "Two fish, still cold from the sea.";
+  if (caught === 0) return "The tide goes out and stays out. Nothing.";
+  if (caught === 1) return "Low water: one fish.";
+  if (caught === 3) return "The tide comes in high: three fish.";
+  return "The tide turns your way: four fish.";
+}
 
 function unit(s: string): number {
   let h = 2166136261;
@@ -108,7 +136,7 @@ export async function GET(req: Request) {
   if (!caller.ok) return NextResponse.json({ staging: null });
   const store = villageStore();
   const mine = store ? await store.stagingsOf(caller.subject) : null;
-  const here = mine?.find((s) => s.cell === cell && standing(s, Date.now())) ?? null;
+  const here = mine?.find((s) => s.cell === cell && stands(s, Date.now())) ?? null;
   return NextResponse.json({ staging: here ? shown(here) : null });
 }
 
@@ -141,20 +169,24 @@ export async function POST(req: Request) {
   if (body.op === "ask") {
     const cell = typeof body.cell === "string" && CELL.test(body.cell) ? body.cell : null;
     if (!cell) return bad("bad_cell");
-    const up = mine.find((s) => standing(s, now));
+    const pilot = await livePilot(store, caller.subject, cell, now);
+    if (pilot) return pilotAsk(store, caller.subject, cell, pos, mine, pilot.session, now);
+    // The world's director counts only its own: the pilot's six never hold it up (C75).
+    const world = mine.filter((s) => !isPilotSituation(s.situation));
+    const up = world.find((s) => stands(s, now));
     if (up) return NextResponse.json({ staging: up.cell === cell ? shown(up) : null, reason: "standing" });
     // A demo visitor in their five minutes is set things out at a demo's pace (C72); everyone else at the world's.
     const visit = await liveVisit(store, caller.subject, now);
     const gap = visit ? DEMO.directorGapMs : DIRECTOR.gapMs;
-    const early = mayStage(mine, Infinity, now, gap);
+    const early = mayStage(world, Infinity, now, gap);
     if (early) return NextResponse.json({ staging: null, reason: early });
 
     const { ground, owners } = await groundOf(cell, now);
-    const candidates = SITUATION_IDS.filter((id) => available(SITUATIONS[id], pos, ground));
+    const candidates = WORLD_SITUATIONS.filter((id) => available(SITUATIONS[id], pos, ground));
     if (!candidates.length) return NextResponse.json({ staging: null, reason: "nothing_fits" });
     const pick = await selectSituation({ userId: caller.subject, npcs: candidates.map((id) => ({ id, axes_vec: [...SITUATIONS[id].axes] })) });
     if (pick.mocked || !pick.selected) return NextResponse.json({ staging: null, reason: pick.mocked ? "no_engine" : "nothing_to_learn" });
-    const full = mayStage(mine, visit ? Math.max(pick.cap, DEMO.directorCap) : pick.cap, now, gap);
+    const full = mayStage(world, visit ? Math.max(pick.cap, DEMO.directorCap) : pick.cap, now, gap);
     if (full) return NextResponse.json({ staging: null, reason: full });
 
     const ranked = [pick.selected, ...(pick.ranking ?? []).map((r) => r.candidate)].filter(
@@ -187,7 +219,7 @@ export async function POST(req: Request) {
 
   const s = typeof body.id === "string" ? mine.find((x) => x.id === body.id) : undefined;
   if (!s) return bad("not_yours", 404);
-  if (!standing(s, now)) return bad("gone", 409);
+  if (!stands(s, now)) return bad("gone", 409);
   const sit = SITUATIONS[s.situation];
   const dist = Math.hypot(pos.x - s.x, pos.y - s.y);
 
@@ -195,17 +227,35 @@ export async function POST(req: Request) {
     const verb = verbsOf(sit.kind).find((v) => v.id === body.verb);
     if (!verb) return bad("bad_verb");
     if (dist > verb.reachM + sit.sizeM + 1) return bad("too_far", 403);
-    let pack = null;
-    if (verb.gives) {
+    const tide = s.situation === "tide_fisher" ? tideCatch(s.id, verb.id) : null;
+    let pack: Pack | null = null;
+    let beat: string | null = null;
+    if (verb.gives || verb.spends || tide !== null) {
       const held = await store.packOf(caller.subject);
       if (held === null) return bad("pack_unavailable", 503);
-      pack = add(held, verb.gives);
+      pack = held;
+    }
+    // What it costs comes out of the pack first (C75): the bread given, the raft lent.
+    if (verb.spends) {
+      for (let i = 0; i < verb.spends.count; i++) {
+        const next = remove(pack!, verb.spends.item);
+        if (!next) return bad("not_carrying", 409);
+        pack = next;
+      }
+    }
+    if (tide !== null) {
+      const got = addUpTo(pack!, "fish", tide);
+      pack = got.pack;
+      beat = tideBeat(verb.id, tide, got.added);
+    }
+    if (verb.gives) {
+      pack = add(pack!, verb.gives);
       if (!pack) return bad("pack_full", 409);
     }
     const answered: Staging = { ...s, resolved: verb.id, resolvedAt: new Date(now).toISOString() };
     if (!(await store.saveStaging(answered))) return bad("not_recorded", 503);
     if (pack) await store.setPack(caller.subject, pack);
-    return NextResponse.json({ staging: shown(answered), resolved: verb.id, ...(pack ? { pack } : {}) });
+    return NextResponse.json({ staging: shown(answered), resolved: verb.id, ...(pack ? { pack } : {}), ...(beat ? { beat } : {}) });
   }
 
   if (body.op === "pass") {
@@ -217,4 +267,60 @@ export async function POST(req: Request) {
   }
 
   return bad("bad_op");
+}
+
+/**
+ * The pilot's six, for someone in a pilot visit in the pilot's village (C75): what stands, or, half a
+ * minute after the last was answered or gone, the next in their own order that this place allows. The
+ * bread and the raft must be in the pack for the two that ask for them; the two at the shore wait until
+ * there is a shore near. No engine is asked: the order is the design, not a pick.
+ */
+async function pilotAsk(store: VillageStore, subject: string, cell: string, pos: { x: number; y: number }, mine: Staging[], session: PilotSession, now: number) {
+  const since = Date.parse(session.startedAt);
+  const visit = mine.filter((s) => s.cell === cell && isPilotSituation(s.situation) && Date.parse(s.createdAt) >= since);
+  // One left unmet past its four minutes is gone, and says so.
+  for (const s of visit) {
+    if (s.resolved === null && !stands(s, now)) {
+      s.resolved = "unmet";
+      s.resolvedAt = new Date(now).toISOString();
+      if (!(await store.saveStaging(s))) return bad("not_recorded", 503);
+    }
+  }
+  const up = visit.find((s) => stands(s, now));
+  if (up) return NextResponse.json({ staging: shown(up), reason: "standing" });
+  const last = Math.max(since + PILOT.firstMs - PILOT.gapMs, ...visit.map((s) => Date.parse(s.resolvedAt ?? s.createdAt)));
+  if (now - last < PILOT.gapMs) return NextResponse.json({ staging: null, reason: "too_soon" });
+  const met = new Set(visit.map((s) => s.situation));
+  const next = pilotOrder(subject, session.n).filter((id) => !met.has(id));
+  if (!next.length) return NextResponse.json({ staging: null, reason: "all_met" });
+
+  const pack = await store.packOf(subject);
+  if (pack === null) return bad("pack_unavailable", 503);
+  const { ground } = await groundOf(cell, now);
+  const id = `stg_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  for (const situation of next) {
+    const sit = SITUATIONS[situation];
+    if (situation === "hungry_stranger" && (pack.bread ?? 0) < 1) continue;
+    if (situation === "raft_borrower" && (pack.raft ?? 0) < 1) continue;
+    const ring = sit.where === "shore" ? PILOT.shoreRing : PILOT.landRing;
+    if (!available(sit, pos, ground, ring)) continue;
+    const spot = stagingSpot(sit, pos, `${subject}|${id}`, ground, ring);
+    if (!spot) continue;
+    const staging: Staging = {
+      id,
+      subject,
+      cell,
+      situation,
+      ...spot,
+      owner: null,
+      ownerName: sit.person ? strangerName(id) : null,
+      infoGain: null,
+      createdAt: new Date(now).toISOString(),
+      resolved: null,
+      resolvedAt: null,
+    };
+    if (!(await store.saveStaging(staging))) return bad("not_recorded", 503);
+    return NextResponse.json({ staging: shown(staging) });
+  }
+  return NextResponse.json({ staging: null, reason: "nowhere_near" });
 }

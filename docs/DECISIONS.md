@@ -4982,3 +4982,122 @@ passes 221/221; `brs_eval` and `individuation_eval` pass.
 - A session is a pause, not a visit.
 - A session's first ten minutes speak for it, and the 60 comes from one trial.
 - Sessions still add up, so the real fix stays re-fitting W on real people.
+
+## C75 — the pilot village
+
+What the owner asked for: integrate six classic paradigms into the world and build a pilot place to
+put all their friends into. They also said it should not be "only money": the stakes must be real, but
+the world's own. Their friends are the participants, unpaid, and there is no academic partner yet: the
+owner wants to arrive at one with something in hand.
+
+**Off unless switched on.**
+- The pilot needs `ECHO_PILOT=1` and `ECHO_PILOT_CODE`, the code the owner gives their friends, at
+  least four characters.
+- `ECHO_PILOT_CELL` picks the village; Senstrand by default, by the sea.
+- `ECHO_PILOT_ADMIN` (at least twelve characters) opens the export.
+- Without the first two there is no `/pilot` page, and `/api/pilot` answers 404.
+
+**The six.** A classic paradigm each, as something that happens to you (`director.ts`,
+`affordances.ts`, `pilot.ts` in `@echo/planet`):
+
+| Situation | Paradigm | What you can do | Read by the engine as |
+|---|---|---|---|
+| A thin stranger by the path, looking at your bread | Dictator game | Give 1, 2 or all 3 loaves; walking past gives none | F7 `give_gift`, `amount` a third, two thirds or all |
+| Someone at the water with nets and no boat | Trust game | Lend your raft, or say no | G16 `lend_raft` / `keep_raft`, **unrouted** |
+| A fisher with a basket and a bet on the tide | Risk, mean held at 2 fish | Two fish sure; three or one; four or none | F3 `tide_wager`, `variance` 0, 0.25, 1 |
+| A farmer's child holding out seed | Delay discounting | A handful of grain now, or plant it for three tomorrow | F1 `eat_now` / `plant_seed` |
+| An overgrown path into the trees | Exploration | Follow it, or keep to the way | I3 `enter_unmarked` |
+| A traveller alone by a small fire | Approaching a stranger | Go and say hello, or walk on | G1 `initiate`, approach |
+
+- **No money.** Every stake is the world's:
+  - bread you will want on the water;
+  - a raft you will not have while it is lent, and that one time in four does not come back;
+  - fish that land in the pack;
+  - a crop that is there a day later;
+  - and a village your friends share.
+- **The engine reads five of the six** by routes ingest.py already has, so there is no engine change
+  (C7). Trust has no route and no W direction. It is recorded, moves nothing, and says so: cue-catalog
+  gains G16. G16 rather than an F1x or H1x line because ingest reads cues by prefix: F10–F13 would
+  be read as F1 (save), and H10 onwards as H1 (queue) (⚑64).
+- **An unrouted act carries no distance.** `acts.ts` and the director's pass emission add one only
+  for a route that reads it, so the G branch cannot take a lent raft for an approach.
+
+**A visit.**
+- **Joining comes first** (`components/pilot/PilotFlow.tsx`). Before anything, the friend gives:
+  - a research consent of its own;
+  - the group's code;
+  - a nickname the group knows;
+  - where they place themselves on the eight axes (1–7);
+  - what they say they would do in each of the six, before they meet any. These are the words to
+    set against the actions.
+- **A fresh identity.** A first join starts a new person in that browser; a returning friend is
+  recognised by the same browser.
+- **Two visits of 25 minutes**, the second at least 20 hours after the first began. That is the retest,
+  and it is when the seed is up. Each visit starts with the pack topped up to three loaves and a raft.
+- **In the world** (`ParcelCanvas` `pilot`):
+  - the director runs at the pilot's pace;
+  - a clock and "End visit" sit at the top centre;
+  - one line says to walk the village and the shore, and that what you do is up to you;
+  - nothing shows how the echo reads you while you play: no meter, mirror, inspector or meetings.
+- **The director in a visit** (`pilotAsk`):
+  - the six come one at a time, in an order fixed per person and visit (`pilotOrder`, counterbalanced
+    across a group);
+  - the first comes 20 s after arriving, and each next 30 s after the last was answered or gone;
+  - they are set 10–22 m away on land and 14–40 m at the shore;
+  - one left unmet for 4 minutes is gone, marked `unmet`;
+  - bread and a raft must be in the pack for the two that ask for them, and the shore two wait for a
+    shore;
+  - no engine is asked;
+  - the world's own director never sets the six out, and the six never hold it up.
+- **The people are people.** They use the world's own body, sit on a log or a stone, and carry a
+  basket, nets or a fire. One standing turns to you as you come near; one sitting turns their head.
+- **Afterwards** the world says, in your language, if a lent raft came back. A planted seed is
+  settled when you next look, a day on.
+- **After a visit**, each friend places the others they know: how well they know them (0–3), then the
+  eight axes. Rating someone they do not know at all is refused.
+
+**The record.**
+- The six as set out and answered are in `player_stagings`, the events in `behavioral_events`, and
+  the people and ratings in the new `pilot_people` and `pilot_ratings` (migration 0035, which also
+  adds the six to the stagings check).
+- `GET /api/pilot?op=export` with `x-pilot-admin` returns everything for the analysis, including each
+  echo as the engine holds it then.
+- The one erasure takes the person and every rating either way. The pilot tables are not swept by
+  retention.
+
+**Tests.**
+- `packages/planet/tests/pilot.test.ts` (7):
+  - the catalogue;
+  - the routes;
+  - the dictator's thirds;
+  - the tide's held mean;
+  - the raft's three in four;
+  - the counterbalanced order;
+  - the nearer rings.
+- `apps/web/tests/pilot.test.mts` (13):
+  - off unless on;
+  - joining;
+  - two visits and the top-up;
+  - the order, pace, unmet and no engine;
+  - the world's director never sets out the six;
+  - spending from the pack;
+  - the tide's payout and a full pack;
+  - the raft and the crop settled once;
+  - no distance on an unrouted act;
+  - ratings;
+  - the export;
+  - the erasure;
+  - the Turkish.
+
+Breaking the code in 15 places, each fails a test.
+
+**Checks.** Web 492/492, planet 321 passing with none failing, engine 221/221. All migrations
+0001–0035 were applied on a local Postgres 16; the one-file `apply_0035.sql` applies on a 0034
+database and records the runner's checksum.
+
+**In a browser** (headless, Turkish, desktop and phone):
+- the flow from the first screen to the world;
+- the child with the seed, 20 m away;
+- walked up to it;
+- ending the visit;
+- the friends page.

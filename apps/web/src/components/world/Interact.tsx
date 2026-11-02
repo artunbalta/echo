@@ -37,7 +37,7 @@ import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
-import { t, useLang, verbLabel } from "@/lib/i18n";
+import { beatText, t, useLang, verbLabel } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 import { tradeMeasurement, type TradeReply } from "@/lib/barter";
@@ -103,8 +103,14 @@ function fateVerbs(near: NearThing, ctx: LayerContext | null): readonly Verb[] {
   return near.verbs.filter((v) => !FATE_VERBS.has(v.id) || (village && fateTurn(v.id, near.ref, village.settlement, village.plan, worldDayIndex(clock, now), timeOfDay(clock, now)) !== null));
 }
 
-/** What the director sets out (C63): acted on through its own route. */
-const STAGED = new Set<string>(["netted-gull", "lost-pouch", "carved-mark", "dark-cleft"]);
+/** What the director sets out (C63, and the pilot's six, C75): acted on through its own route. */
+const STAGED = new Set<string>([
+  "netted-gull", "lost-pouch", "carved-mark", "dark-cleft",
+  "hungry-stranger", "raft-borrower", "tide-fisher", "seed-offer", "overgrown-path", "lone-traveler",
+]);
+
+/** A verb that costs something out of the pack (C75) is offered only while the pack holds it. */
+const affordable = (verbs: readonly Verb[], pack: Pack): Verb[] => verbs.filter((v) => !v.spends || (pack[v.spends.item] ?? 0) >= v.spends.count);
 
 const title = (t: NearThing) =>
   t.kind === "villager" || t.kind === "home" || t.kind === "land" || t.kind === "furnishing" || STAGED.has(t.kind) || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind);
@@ -129,6 +135,8 @@ export default function Interact({
   const [progress, setProgress] = useState(0);
   // The pack is the server's (C47); the hand is which thing in it is held out, for a gift.
   const [pack, setPack] = useState<Pack>({});
+  const packRef = useRef(pack);
+  packRef.current = pack;
   const [carrying, setCarrying] = useState<string | null>(null);
   const [packOpen, setPackOpen] = useState(false);
   const [line, setLine] = useState<string | null>(null);
@@ -421,12 +429,13 @@ export default function Interact({
           headers: identityHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({ op: "act", id: thing.ref.slice("staged:".length), verb: verb.id, at }),
         });
-        const data = (await res.json().catch(() => ({}))) as { pack?: Pack; error?: string };
+        const data = (await res.json().catch(() => ({}))) as { pack?: Pack; error?: string; beat?: string };
         if (!res.ok) {
           say(data.error === "pack_full" ? `Your pack is full: ${PACK_SIZE} things. Put something down first (I).` : "It will not come away.");
           return;
         }
-        say(verb.beat);
+        // The route may say what happened (C75: what the tide gave); otherwise the verb's own beat.
+        say(beatText(lang, data.beat ?? verb.beat));
         ctx?.layer<DirectorLayer>("director")?.set(null);
         if (data.pack) {
           setPack(data.pack);
@@ -439,7 +448,7 @@ export default function Interact({
         say("It will not come away.");
       }
     },
-    [layers, say],
+    [layers, say, lang],
   );
 
   const finish = useCallback(
@@ -461,6 +470,8 @@ export default function Interact({
       if (STAGED.has(a.thing.kind)) {
         const at = interact?.bodyAt() ?? { x: a.thing.x, y: a.thing.y };
         const m = measurementFor(a.verb, a.thing, { heldMs, decisionMs: a.decisionMs, abandoned, distanceM: a.thing.distanceM }, interact?.audience(at.x, at.y) ?? 0);
+        // What they had when they chose (C75): three loaves of three is not three of five.
+        if (a.verb.spends) m.opts.raw = { ...m.opts.raw, held: packRef.current[a.verb.spends.item] ?? 0 };
         if (chain.armed()) void chain.emitAction(m.action, m.opts);
         if (done) void stageIt(a.verb, a.thing);
         return;
@@ -608,6 +619,16 @@ export default function Interact({
     return () => window.removeEventListener("echo:entered", onEntered);
   }, [chain, say]);
 
+  // The pack as something else changed it (C75: the pilot's three loaves and a raft, a raft brought back).
+  useEffect(() => {
+    const on = (e: Event) => {
+      const next = (e as CustomEvent<Pack>).detail;
+      if (next && typeof next === "object") setPack(next);
+    };
+    window.addEventListener("echo:pack", on);
+    return () => window.removeEventListener("echo:pack", on);
+  }, []);
+
   // The pack, once there is an id to read it under (the card answered, either way).
   useEffect(() => {
     if (consent === "unset") return;
@@ -694,7 +715,7 @@ export default function Interact({
   const verbs = aboard
     ? [...(near && !aboard.own ? verbsInHand(near.verbs, carrying, true) : []), ...(fishing ? [{ ...fishing, label: "Fish over the side" }] : [])].slice(0, 4)
     : near
-      ? homeVerbs(near, verbsInHand(fateVerbs(near, layers().ctx), carrying, false, packCount(pack) < PACK_SIZE), homeNow?.home() ?? null, homeNow?.inside() ?? false, pack).slice(0, 4)
+      ? homeVerbs(near, affordable(verbsInHand(fateVerbs(near, layers().ctx), carrying, false, packCount(pack) < PACK_SIZE), pack), homeNow?.home() ?? null, homeNow?.inside() ?? false, pack).slice(0, 4)
       : [];
   // What the next stage of your house takes, when it is to hand and you have not got it (C59).
   const shortFor = near?.kind === "home" && homeNow?.home() ? nextStage(homeNow.home()!) : null;

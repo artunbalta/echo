@@ -311,5 +311,6 @@ test("C72: the director sets things out at a demo's pace for a visitor in their 
   assert.equal(mayStage(last, 9, now, DEMO.directorGapMs), null);
   assert.equal(DIRECTOR.gapMs, 20 * MIN);
   const route = readFileSync(new URL("../src/app/api/world/director/route.ts", import.meta.url), "utf8");
-  assert.match(route, /mayStage\(mine, Infinity, now, gap\)/);
+  // The world's own stagings only, since the pilot's six (C75) never hold the director up.
+  assert.match(route, /mayStage\(world, Infinity, now, gap\)/);
 });

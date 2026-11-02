@@ -68,9 +68,14 @@ export interface WorldHudProps {
   meter: ReactNode;
   inspecting: boolean;
   onToggleInspector: () => void;
+  /**
+   * A pilot visit (C75): nothing that shows how the echo reads you while you play (the mirror, the
+   * inspector), and no meetings. What you see of yourself afterwards cannot shape what you did before.
+   */
+  study?: boolean;
 }
 
-export default function WorldHud({ world, name, owned, shore, cell, coarse, consent, meter, inspecting, onToggleInspector }: WorldHudProps) {
+export default function WorldHud({ world, name, owned, shore, cell, coarse, consent, meter, inspecting, onToggleInspector, study = false }: WorldHudProps) {
   const lang = useLang();
   const news = useVillageNews();
   const { muted, toggle: toggleSound } = useSound(world);
@@ -182,48 +187,52 @@ export default function WorldHud({ world, name, owned, shore, cell, coarse, cons
                 {coarse ? null : <span className={keycap}>M</span>}
               </span>
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              data-hud-mirror
-              onMouseDown={noFocus}
-              onClick={() => {
-                setMenuOpen(false);
-                window.dispatchEvent(new Event("echo:mirror"));
-              }}
-              className={item}
-            >
-              <span>{t(lang, "menu.mirror")}</span>
-              {coarse ? null : <span className={keycap}>Y</span>}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              data-touch-inspector
-              aria-pressed={inspecting}
-              onMouseDown={noFocus}
-              onClick={() => {
-                setMenuOpen(false);
-                onToggleInspector();
-              }}
-              className={item}
-            >
-              <span>{t(lang, "menu.inspector")}</span>
-              {coarse ? null : <span className={keycap}>`</span>}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              data-hud-meet
-              onMouseDown={noFocus}
-              onClick={() => {
-                setMenuOpen(false);
-                window.dispatchEvent(new Event("echo:pairs"));
-              }}
-              className={item}
-            >
-              <span>{t(lang, "menu.meet")}</span>
-            </button>
+            {study ? null : (
+              <>
+              <button
+                type="button"
+                role="menuitem"
+                data-hud-mirror
+                onMouseDown={noFocus}
+                onClick={() => {
+                  setMenuOpen(false);
+                  window.dispatchEvent(new Event("echo:mirror"));
+                }}
+                className={item}
+              >
+                <span>{t(lang, "menu.mirror")}</span>
+                {coarse ? null : <span className={keycap}>Y</span>}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-touch-inspector
+                aria-pressed={inspecting}
+                onMouseDown={noFocus}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onToggleInspector();
+                }}
+                className={item}
+              >
+                <span>{t(lang, "menu.inspector")}</span>
+                {coarse ? null : <span className={keycap}>`</span>}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                data-hud-meet
+                onMouseDown={noFocus}
+                onClick={() => {
+                  setMenuOpen(false);
+                  window.dispatchEvent(new Event("echo:pairs"));
+                }}
+                className={item}
+              >
+                <span>{t(lang, "menu.meet")}</span>
+              </button>
+              </>
+            )}
             <button
               type="button"
               role="menuitem"
