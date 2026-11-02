@@ -32,6 +32,8 @@ def main() -> int:
     power = json.loads((PILOT / "runs" / "power.json").read_text())
     power3_path = PILOT / "runs" / "power-3visits.json"
     power3 = json.loads(power3_path.read_text()) if power3_path.exists() else None
+    pooling_path = PILOT / "runs" / "pooling.json"
+    pooling = json.loads(pooling_path.read_text()) if pooling_path.exists() else None
     sizes = sorted(int(k) for k in power["sizes"])
 
     def need(test: str) -> str:
@@ -62,6 +64,11 @@ def main() -> int:
             return "–" if c["median"] is None else f"{c['median']:.0f}"
         if parts[0] == "power":
             return pct(power["sizes"][parts[1]]["power"][":".join(parts[2:])])
+        if parts[0] == "pooling":
+            if pooling is None:
+                raise KeyError("pooling: run research/pilot/experiments/pooling.py first")
+            row = pooling["results"][f"{'as assumed' if parts[1] == 'assumed' else 'unequal'} · pool {parts[2]}"]
+            return pct(row[parts[3]]) if parts[3] == "h1_power" else signed(row[parts[3]])
         if parts[0] == "power3":
             if power3 is None:
                 raise KeyError("power3: run research/pilot/visits.py first")

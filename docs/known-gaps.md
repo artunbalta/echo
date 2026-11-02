@@ -2367,10 +2367,11 @@ not the class:
 - **The two-layer echo lives in `research/` only.** The engine's echo still has one layer and its
   synthetic W (C7). Moving the second layer into the engine is a C7 change and the owner's call: one
   person-specific number per feature in the state, and W re-fit on the pilot's own data.
-- **Copying the last choice still edges it out** in simulation (.34 against .29 at 16 people, .32
-  against .30 at 40). Copying is the special case the second layer allows. The estimate of how far to
-  trust a person's last choice is made on a dozen people, and partial pooling of that stability
-  across kinds of choice is the next step.
+- **Copying the last choice is as good as the two-layer echo**, not worse, in simulation. Without
+  pooling it was ahead (median difference −.058 at 16 people); partial pooling of the six choices'
+  stability (C79) brought the echo level with it (.342 against .338 at 16 people). Binary choices leave
+  little room to beat copying; the echo's gain over it is its fallback to traits and, with more people,
+  calibrated probabilities.
 - **Its probabilities are not calibrated at pilot size.** The choice it names is good. Scored by the
   ranked probability score, its advantage over one layer is weaker (power .35 against .57 at 16
   people), because its variance split is estimated on a dozen people.
@@ -2383,8 +2384,9 @@ not the class:
 - **The simulation is assumptions, not data.** They are set to published ranges: trait–act
   correlations near .3, retest .5–.7, self-insight .8, friends' insight .45–.72, and a pull toward
   the admirable in what people say. The pilot replaces them.
-- **The pilot's power.** The central test (two layers > one) has about .58 at 16 people and reaches .8
-  near 40. Echo against friends is an estimate at any size a circle of friends can reach.
+- **The pilot's power.** The central test (two layers > one) has about 0.65 at 16 people with
+  two visits and reaches .8 near 40; with three visits (C78) it has 0.82 at 20. Echo against
+  friends is an estimate at any size a circle of friends can reach.
 - **The draft's references** were checked against bibliographic records on 2026-11-02. Park et al. is cited
   by its first title; its revision has another. Cite the version read.
 - **The exact path is slow**: about 9 s per person through the engine's endpoints (87 s for 10).

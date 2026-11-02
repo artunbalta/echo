@@ -5334,3 +5334,67 @@ value switching it on.
 - Web 494/494, tsc clean.
 - In a browser at phone width, in Turkish, with the switch on: the intro says "birer gün arayla iki kez
   daha" and the status reports three.
+
+## C79 — the echo pools the choices' stability
+
+What it answers: in C77's runs, copying a person's first-visit choice (+.34 at 16 people) beat the
+two-layer echo (+.29). Copying is the second layer's special case: the echo copies when it trusts
+what it saw. So the gap could only come from how far it trusted it. It learns that from the group:
+each choice's stability, τ²/(τ² + σ²), estimated from about a dozen pairs of visits each, which is
+noisy. Where a choice's τ² came out near zero, the echo stopped copying it.
+
+**The change** (`research/pilot/echo_pilot/layers.py`, `POOL_PAIRS = 10`):
+- Each choice's stability is shrunk toward the pairs-weighted mean of the six, by a prior worth ten
+  pairs of visits (about what each choice has at sixteen people).
+- Its residual variance τ² + σ² is kept; only the split moves.
+- Walking and decision time are not pooled.
+- `POOL_PAIRS = 0` gives C77's model back.
+
+**Chosen on simulation, before any real data, and not on the simulation's terms alone**
+(`experiments/pooling.py`, `runs/pooling.json`). Sixty groups of 16 were run with the stability equal
+for all six (the simulation as assumed), and again with it unequal, from .3 for the tide to .9 for
+bread:
+
+| Stability | Pooling | Two layers | Echo − copying (median) | H1 power |
+|---|---|---|---|---|
+| equal | none | +.313 | −.058 | .57 |
+| equal | 10 pairs | +.336 | −.015 | .60 |
+| unequal | none | +.313 | −.022 | .63 |
+| unequal | 10 pairs | +.338 | −.018 | .62 |
+
+Pooling helps where the six are alike and does no harm where they are not. Thirty pairs was no better
+with equal stability (+.334) and somewhat better with unequal (+.354). Ten is the moderate choice.
+
+**Everything rerun with it**: power, the many-group study, sensitivity and the third visit. The
+report, the draft and the pre-registration draw their numbers from the new runs.
+
+**The pooled runs.** The machine's idle sleep had been throttling the first attempt (see below), so they
+were rerun with 120 groups per size instead of 200.
+
+At 16 people:
+
+| Witness | again |
+|---|---|
+| two layers | +.342 [.20, .44] |
+| copying the first visit | +.338 |
+| self, friends and echo pooled | +.358 |
+| own words | +.260 |
+| friends | +.256 |
+| one layer | +.026 |
+| traits known exactly | +.221 |
+
+- The two-layer echo now matches copying. Copying still agrees exactly a little more often: 64%
+  against 62%, against 47% for the bar.
+- It reaches the friends after a median of 7 minutes, within the visit in 73% of groups.
+- Elsewhere is unchanged: own words +.257, friends +.235, the echo +.000.
+
+Power for the central test: .65 at 16 people (.58 without pooling), .675 at 20 and .86 at 40.
+Sensitivity (40 groups per assumption): two layers beat one under all six assumptions.
+
+**A third visit, pooled** (100 groups per size, `runs/power-3visits.json`): two layers > one goes 0.65 → 0.67 at 16, 0.675 → 0.82 at 20; the echo > the bar 0.65 → 0.82 at 16, 0.7 → 0.88 at 20. Twenty friends with three visits still reach .8.
+
+**A note on the runs, for whoever reruns them.** This Mac is set to idle-sleep after one minute
+(`pmset sleep 1`) and stays up only on other processes' assertions. Overnight it slept between them, and
+a power run that takes 42 minutes awake had done a fraction of its work after 80. Long runs now go under
+`caffeinate -i -s -w <pid>`, and with one matrix thread per worker (`VECLIB_MAXIMUM_THREADS=1`). The
+scripts take their worker count from `ECHO_RESEARCH_WORKERS`.

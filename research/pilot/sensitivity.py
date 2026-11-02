@@ -5,6 +5,7 @@ The same analysis, at the planned size (16), under each assumption moved one at 
 noisier days. Writes runs/sensitivity.json.
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -29,7 +30,7 @@ if __name__ == "__main__":
     t = time.time()
     out = {"reps": reps, "n": 16, "settings": {}}
     for name, overrides in SETTINGS.items():
-        res = power(sizes=(16,), reps=reps, workers=10, overrides=overrides or None, seed0=5000)
+        res = power(sizes=(16,), reps=reps, workers=int(os.environ.get("ECHO_RESEARCH_WORKERS", "10")), overrides=overrides or None, seed0=5000)
         row = res["sizes"][16]
         out["settings"][name] = {
             "overrides": {k: (v if k != "loadings" else "×1.6") for k, v in overrides.items()},

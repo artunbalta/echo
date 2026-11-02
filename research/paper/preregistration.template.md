@@ -134,6 +134,10 @@ services/ml/.venv/bin/python research/pilot/analyze.py export.json
 
 This uses the engine's endpoints (the exact path).
 
+**The two-layer echo's fit.** It uses variance components on everyone but the person predicted. Each
+choice's stability is partially pooled toward the six choices' mean with a prior worth ten pairs of
+visits, as in the registered code.
+
 **Inference.** All inference is over people:
 
 - per-person mean differences in absolute error;

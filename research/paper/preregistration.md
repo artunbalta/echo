@@ -83,9 +83,9 @@ set out one at a time in a counterbalanced order per person:
 **Power.** These figures come from simulated groups built to published ranges, 200 per size, analysed by
 the registered code:
 
-- At 16 people, H1 has power 58% and H2 has 63%.
+- At 16 people, H1 has power 65% and H2 has 65%.
 - H1 reaches .8 at about 40 people with two visits.
-- With three visits, H1 has 64% at 16 people and
+- With three visits, H1 has 67% at 16 people and
   82% at 20.
 - The comparison of the echo with the friends is not powered at pilot size, so it is registered as
   estimation (H3).
@@ -133,6 +133,10 @@ services/ml/.venv/bin/python research/pilot/analyze.py export.json
 ```
 
 This uses the engine's endpoints (the exact path).
+
+**The two-layer echo's fit.** It uses variance components on everyone but the person predicted. Each
+choice's stability is partially pooled toward the six choices' mean with a prior worth ten pairs of
+visits, as in the registered code.
 
 **Inference.** All inference is over people:
 

@@ -8,6 +8,7 @@ they actually did. Everything here runs on the engine's own Python, without chan
 research/pilot/
   analyze.py          the analysis from the command line: an export, or --simulate
   visits.py           what a third visit would buy in power
+  experiments/        tried and reported: pooling.py (why the echo pools the choices' stability)
   power.py            how many friends the tests need (simulated groups at eight sizes)
   study.py            every panel of the simulated report, across many groups at one size
   echo_pilot/
@@ -40,6 +41,14 @@ services/ml/.venv/bin/python research/pilot/analyze.py --simulate # out/sim-16-<
 
 # The guarantees.
 services/ml/.venv/bin/python -m pytest research/pilot/tests -q
+```
+
+The long runs need the machine awake and one matrix thread per worker. This Mac idle-sleeps after a
+minute, which overnight left a 42-minute run a fraction done after 80 (C79). So:
+
+```sh
+export VECLIB_MAXIMUM_THREADS=1 OMP_NUM_THREADS=1 ECHO_RESEARCH_WORKERS=8
+caffeinate -i -s services/ml/.venv/bin/python research/pilot/power.py 120
 ```
 
 ## What it asks

@@ -21,7 +21,8 @@ what goes to u_j waits for the same situation to come again, what goes to z carr
 The parameters are the group's, fitted on the OTHER people only (the person predicted is never in it),
 by variance components (`fit`): a visit's noise from how far people's two visits differ, their steady
 part from how far people differ beyond that, and of the steady part, the traits' share from what the
-anchors (self- and friends' ratings) predict of it out of sample. τ_j² is what the traits leave.
+anchors (self- and friends' ratings) predict of it out of sample. τ_j² is what the traits leave. The
+six choices' stability, each estimated from a dozen pairs of visits, is partially pooled (`_pool`).
 
 What it reads, per visit: the six choices on their own 0..1 codes (trust included: the engine reads no
 lending, C75, this reads the choice), the visit's mean walk (novel-tile share, log tortuosity) and its
@@ -191,6 +192,12 @@ def _loo_ridge(Z: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, float]:
     return best[1], best[0]
 
 
+#: Partial pooling of the six choices' stability (C79): the pooled estimate is worth this many pairs of
+#: visits against one choice's own (about what each choice has at sixteen people). Chosen on simulation
+#: before any real data, under equal and unequal stability alike (experiments/pooling.py); 0 turns it off.
+POOL_PAIRS: float = 10.0
+
+
 @quiet_fp
 def fit(obs: dict[str, list[Obs]], z: dict[str, np.ndarray], layers: int = 2) -> Fitted:
     """
@@ -236,8 +243,29 @@ def fit(obs: dict[str, list[Obs]], z: dict[str, np.ndarray], layers: int = 2) ->
             tau2[j], sigma2[j] = 0.0, max(within + own, floor)
         else:
             tau2[j], sigma2[j] = own, max(within, floor)
+    if layers == 2 and POOL_PAIRS > 0:
+        _pool(obs, z, tau2, sigma2)
     assert np.isfinite(mu).all() and np.isfinite(W).all() and np.isfinite(tau2).all() and np.isfinite(sigma2).all()
     return Fitted(mu=mu, W=W, tau2=tau2, sigma2=sigma2, layers=layers)
+
+
+def _pool(obs: dict[str, list[Obs]], z: dict[str, np.ndarray], tau2: np.ndarray, sigma2: np.ndarray) -> None:
+    """
+    Partial pooling of the six choices' stability, τ²/(τ² + σ²): each choice's own estimate, from its
+    pairs of visits, shrunk toward the pairs-weighted mean of all six by POOL_PAIRS pairs' worth.
+    The residual variance τ² + σ² of each choice is kept; only its split moves.
+    """
+    js = [FEATURES.index(p) for p in PARADIGMS]
+    pairs = {j: sum(1 for s in z if {1, 2} <= {v for (v, f, _) in obs.get(s, []) if f == FEATURES[j]}) for j in js}
+    resid = {j: tau2[j] + sigma2[j] for j in js}
+    ratio = {j: (tau2[j] / resid[j]) if resid[j] > 0 else 0.0 for j in js}
+    total = sum(pairs.values())
+    if total == 0:
+        return
+    pooled = sum(pairs[j] * ratio[j] for j in js) / total
+    for j in js:
+        r = (pairs[j] * ratio[j] + POOL_PAIRS * pooled) / (pairs[j] + POOL_PAIRS)
+        tau2[j], sigma2[j] = r * resid[j], max((1 - r) * resid[j], 1e-3 * resid[j])
 
 
 @quiet_fp

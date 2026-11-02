@@ -212,6 +212,10 @@ variance components:
 - **The loadings.** w_j is the ridge's direction, scaled so that w_jᵀw_j equals the traits' share.
   Without this, eight slopes fitted on a dozen people absorb the person-specific variance.
 - **The person's own.** τ_j² is the steady variance the traits leave.
+- **Pooling.** Each choice's stability, τ_j²/(τ_j² + σ_j²), rests on a dozen pairs of visits. It is
+  shrunk toward the mean of the six by a prior worth ten pairs (partial pooling); its total residual
+  variance is kept. This was chosen on simulation, before any real data, under equal and unequal
+  stability alike (§5.2).
 
 A predicted choice is the median of the predictive distribution, cut at the midpoints between the
 paradigm's levels.
@@ -352,6 +356,13 @@ and {{power:20:again:echo_2l>echo_axes}} with two visits). The echo against the 
 {{power3:20:again:echo_2l>bar}} at 20. Twenty friends with three visits reach the conventional .8; the
 pilot village has the switch (web decision C78).
 
+**Pooling the stability, chosen here.** Partial pooling (§3.1) was chosen on simulation before any
+real data. In 60 groups of 16 with the stability the same for all six choices, it raised the echo's
+skill from {{pooling:assumed:0:echo_2l}} to {{pooling:assumed:10:echo_2l}}. With the stability unequal
+(from .3 for the tide to .9 for bread), it raised it from {{pooling:unequal:0:echo_2l}} to
+{{pooling:unequal:10:echo_2l}}. So the simulation's equal stability does not decide it. The runs above
+use it.
+
 **Two variants set aside, reported rather than dropped.**
 
 - **Scoring by probabilities.** Scored by the ranked probability score (Epstein, 1969; a proper score on
@@ -393,15 +404,18 @@ If the pilot agrees with the simulation, three claims follow.
    friends still know best. That is an honest boundary for digital twins built from behaviour.
 
 **Copying is the special case.** Simply copying the person's first-visit choice scores
-{{again:retest}}, a little more than the two-layer echo's {{again:echo_2l}}. That is no defeat for the
-echo. Copying is the special case the second layer makes available to a model of a person; a
-one-layer model cannot copy at all. The echo pays a small price for estimating, on fifteen people,
-how far to trust what it saw, and binary choices give it little room to do better than copy.
+{{again:retest}}, against the two-layer echo's {{again:echo_2l}}. Copying is the special case the second
+layer makes available to a model of a person; a one-layer model cannot copy at all. What the echo has to
+learn is how far to trust what it saw, and it learns that from the group. Without pooling, fifteen
+people leave each choice's stability noisy, and the echo trailed copying by
+{{pooling:assumed:0:echo_2l_minus_copying}} (median over groups). Pooled, it trails by
+{{pooling:assumed:10:echo_2l_minus_copying}}. With unequal stability it trails by
+{{pooling:unequal:10:echo_2l_minus_copying}} rather than {{pooling:unequal:0:echo_2l_minus_copying}}.
+Binary choices give any model little room to do better than copy.
 
 What the second layer adds beyond copying is twofold. When there is nothing to copy (an encounter
 missed on the first visit), it falls back to the person's traits. With more people, its probabilities
-become calibrated. Partial pooling of the stability estimate across kinds of choice is the obvious
-next step.
+become calibrated.
 
 **Limitations.**
 

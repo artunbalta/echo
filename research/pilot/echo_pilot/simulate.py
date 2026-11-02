@@ -97,6 +97,8 @@ class SimParams:
     )
     #: A person's own stable tendency in a paradigm, beyond the traits; and a visit's noise.
     stable_sd: float = 0.6
+    #: Per paradigm, where the person's own steadiness differs from `stable_sd` (none by default).
+    stable_sd_by: dict[str, float] = field(default_factory=dict)
     visit_sd: float = 0.55
     #: How well people see their own traits (correlation), and their own stable tendencies.
     self_insight: float = 0.8
@@ -145,9 +147,14 @@ def _level(params: SimParams, p: str, eta_std: float) -> float:
     return LEVELS[p][int(np.searchsorted(cuts, eta_std))]
 
 
+def own_sd(params: SimParams, p: str) -> float:
+    """The spread of people's own steady tendency in a paradigm."""
+    return params.stable_sd_by.get(p, params.stable_sd)
+
+
 def _sd(params: SimParams, p: str, cov: np.ndarray) -> float:
     lam = np.array(params.loadings[p])
-    return math.sqrt(float(lam @ cov @ lam) + params.stable_sd**2 + params.visit_sd**2)
+    return math.sqrt(float(lam @ cov @ lam) + own_sd(params, p) ** 2 + params.visit_sd**2)
 
 
 def _iso(t: datetime) -> str:
@@ -165,7 +172,7 @@ def make_group(n: int, seed: int = 0, params: SimParams | None = None, start: da
     # By Cholesky, not multivariate_normal: the same draw, without numpy 2's spurious BLAS warnings on macOS.
     z = rng.normal(0, 1, size=(n, 8)) @ np.linalg.cholesky(cov).T
     assert np.isfinite(z).all()
-    u = {p: rng.normal(0, params.stable_sd, size=n) for p in PARADIGMS}
+    u = {p: rng.normal(0, own_sd(params, p), size=n) for p in PARADIGMS}
 
     def propensity(i: int, p: str, view: np.ndarray, tendency: float, shift: float, sd: float) -> float:
         lam = np.array(params.loadings[p])
@@ -284,7 +291,7 @@ def oracle(truth: dict, subject: str, paradigm: str, knows_own: bool) -> list[tu
     cov = _trait_cov()
     lam = np.array(params.loadings[paradigm])
     center = float(lam @ np.array(person["z"])) + (person["u"][paradigm] if knows_own else 0.0)
-    noise = params.visit_sd if knows_own else math.sqrt(params.stable_sd**2 + params.visit_sd**2)
+    noise = params.visit_sd if knows_own else math.sqrt(own_sd(params, paradigm) ** 2 + params.visit_sd**2)
     cuts = _cuts(params, paradigm) * _sd(params, paradigm, cov)
     cdf = [0.0] + [float(norm.cdf((c - center) / noise)) for c in cuts] + [1.0]
     return [(lv, cdf[k + 1] - cdf[k]) for k, lv in enumerate(LEVELS[paradigm])]
@@ -297,7 +304,7 @@ def shares(params: SimParams | None = None) -> dict[str, dict[str, float]]:
     out = {}
     for p in PARADIGMS:
         lam = np.array(params.loadings[p])
-        traits, own, visit = float(lam @ cov @ lam), params.stable_sd**2, params.visit_sd**2
+        traits, own, visit = float(lam @ cov @ lam), own_sd(params, p) ** 2, params.visit_sd**2
         total = traits + own + visit
         out[p] = {"traits": traits / total, "own": own / total, "visit": visit / total}
     return out

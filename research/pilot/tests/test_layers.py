@@ -80,3 +80,34 @@ def test_observations_respect_drop_until_and_visits(group8):
     lat = {v: x for v, f, x in every if f == "latency"}
     lat_drop = {v: x for v, f, x in no_give if f == "latency"}
     assert lat.keys() == lat_drop.keys() and any(lat[v] != lat_drop[v] for v in lat)
+
+
+def test_pooling_shrinks_each_choice_toward_the_others_and_keeps_its_variance():
+    rng = np.random.default_rng(5)
+    z = {f"p{i}": rng.normal(size=L.K) for i in range(14)}
+    obs = {}
+    for s in z:
+        rows = []
+        for j, f in enumerate(L.PARADIGMS):
+            own = rng.normal(0, 0.3 + 0.1 * j)
+            rows += [(v, f, float(0.5 + own + rng.normal(0, 0.4))) for v in (1, 2)]
+        obs[s] = rows
+    saved = L.POOL_PAIRS
+    try:
+        L.POOL_PAIRS = 0.0
+        raw = L.fit(obs, z, layers=2)
+        L.POOL_PAIRS = 10.0
+        pooled = L.fit(obs, z, layers=2)
+    finally:
+        L.POOL_PAIRS = saved
+    js = [L.FEATURES.index(p) for p in L.PARADIGMS]
+    ratio = lambda m, j: m.tau2[j] / (m.tau2[j] + m.sigma2[j])  # noqa: E731
+    mean = np.mean([ratio(raw, j) for j in js])
+    for j in js:
+        assert abs((pooled.tau2[j] + pooled.sigma2[j]) - (raw.tau2[j] + raw.sigma2[j])) < 1e-9
+        assert abs(ratio(pooled, j) - mean) <= abs(ratio(raw, j) - mean) + 1e-12
+    assert np.std([ratio(pooled, j) for j in js]) < np.std([ratio(raw, j) for j in js])
+    # Walking and decision time are not choices: pooling leaves them as they were.
+    for f in ("novel", "tortuosity", "latency"):
+        j = L.FEATURES.index(f)
+        assert pooled.tau2[j] == raw.tau2[j] and pooled.sigma2[j] == raw.sigma2[j]

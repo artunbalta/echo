@@ -27,20 +27,20 @@ choice but unexplained by traits looks to them like noise, so they under-react t
 repeated behaviour. We propose a **two-layer echo** that adds one
 person-specific layer per kind of choice to the same Kalman update.
 
-In simulations grounded in published effect sizes (200 groups of 16):
+In simulations grounded in published effect sizes (120 groups of 16):
 
-- **The second visit, predicted from one visit.** The two-layer echo reaches a skill of +0.29
-  over the group's base rate. The one-layer echo reaches +0.04, friends +0.25,
+- **The second visit, predicted from one visit.** The two-layer echo reaches a skill of +0.34
+  over the group's base rate. The one-layer echo reaches +0.03, friends +0.26,
   and the person's own words +0.26. Copying the first visit, which the second layer makes
   possible and one layer cannot, scores +0.34.
 - **Against perfect trait knowledge.** The two-layer echo beats what exact knowledge of the person's
-  eight traits would give (+0.21).
+  eight traits would give (+0.22).
 - **How fast.** It matches the friends after a median of 7 minutes of play.
 - **Situations the echo has never seen.** No model beats the person's own words and their friends'
-  guesses (+0.25 and +0.24, against +0.00).
+  guesses (+0.26 and +0.23, against +0.00).
 
 We pre-register these comparisons for a pilot among friends. The central test has power
-58% at 16 people, and reaches .8 at about 40.
+65% at 16 people, and reaches .8 at about 40.
 The world, the analysis and the tests that guarantee no witness sees what it predicts will be released
 with the paper.
 
@@ -212,6 +212,10 @@ variance components:
 - **The loadings.** w_j is the ridge's direction, scaled so that w_jᵀw_j equals the traits' share.
   Without this, eight slopes fitted on a dozen people absorb the person-specific variance.
 - **The person's own.** τ_j² is the steady variance the traits leave.
+- **Pooling.** Each choice's stability, τ_j²/(τ_j² + σ_j²), rests on a dozen pairs of visits. It is
+  shrunk toward the mean of the six by a prior worth ten pairs (partial pooling); its total residual
+  variance is kept. This was chosen on simulation, before any real data, under equal and unequal
+  stability alike (§5.2).
 
 A predicted choice is the median of the predictive distribution, cut at the midpoints between the
 paradigm's levels.
@@ -286,38 +290,38 @@ The simulation also includes:
 
 The simulated export has the same shape as the real one, and the analysis cannot tell them apart.
 
-### 5.2 Results (200 groups of 16; medians, [middle half of groups])
+### 5.2 Results (120 groups of 16; medians, [middle half of groups])
 
 **Again (second visit from first).**
 
 | Witness | Skill | Exact agreement |
 |---|---|---|
-| Two-layer echo | +0.29 [+0.17, +0.41] | 60% |
-| Pooled (self, friends, echo) | +0.33 [+0.23, +0.41] | 62% |
-| Own words | +0.26 [+0.13, +0.34] | 59% |
-| Friends | +0.25 [+0.14, +0.32] | 58% |
-| Group model | +0.08 [−0.08, +0.21] | 51% |
-| Questionnaire twin | +0.00 [−0.10, +0.11] | 48% |
-| One-layer echo | +0.04 [−0.04, +0.14] | 49% |
-| Engine echo, as built | −0.05 [−0.21, +0.07] | 46% |
+| Two-layer echo | +0.34 [+0.20, +0.44] | 62% |
+| Pooled (self, friends, echo) | +0.36 [+0.23, +0.42] | 62% |
+| Own words | +0.26 [+0.14, +0.37] | 59% |
+| Friends | +0.26 [+0.15, +0.33] | 58% |
+| Group model | +0.07 [−0.06, +0.21] | 51% |
+| Questionnaire twin | −0.01 [−0.10, +0.09] | 48% |
+| One-layer echo | +0.03 [−0.04, +0.13] | 48% |
+| Engine echo, as built | −0.03 [−0.18, +0.08] | 46% |
 | *Own other visit (copying)* | +0.34 | 64% |
-| *Traits known exactly* | +0.21 | 57% |
+| *Traits known exactly* | +0.22 | 58% |
 | *Person known exactly* | +0.57 | 74% |
-| *Base rate* | 0 | 48% |
+| *Base rate* | 0 | 47% |
 
 <!-- figure:again -->
 
 The two-layer echo's skill rises through the first visit as the six are met. It reaches the friends'
 level after a median of 7 minutes, which happens within the visit in
-68% of groups. It reaches the level of the person's own words after
+73% of groups. It reaches the level of the person's own words after
 7 minutes.
 
 <!-- figure:curve -->
 
-**Elsewhere (a paradigm never seen).** The person's own words score +0.25 and the friends
-+0.24. The two-layer echo scores +0.00, the one-layer echo
+**Elsewhere (a paradigm never seen).** The person's own words score +0.26 and the friends
++0.23. The two-layer echo scores +0.00, the one-layer echo
 +0.00, and the group model +0.00. Exact trait knowledge would score
-+0.23.
++0.24.
 
 What an echo learns of someone's traits from five other choices and their walking carries little to a
 sixth. People and their friends know the person's own ways directly.
@@ -326,18 +330,18 @@ sixth. People and their friends know the person's own ways directly.
 
 **Say and do.** The median group said 0.65 of its bread and gave 0.52. The
 friends' guesses ran +0.07 from what was given, the people's own words
-+0.13.
++0.14.
 
 **Power.** At 16 people:
 
 | Test | Power at 16 | n for .8 |
 |---|---|---|
-| H1: two layers > one | 58% | 40 |
-| H2: two-layer echo > base rate | 63% | 40 |
-| Own words > base rate | 54% | >40 |
-| Friends > base rate | 50% | 40 |
-| H3: echo > friends | 11% | >40 |
-| H4: say–do gap, giving | 27% | >40 |
+| H1: two layers > one | 65% | 40 |
+| H2: two-layer echo > base rate | 65% | 40 |
+| Own words > base rate | 57% | >40 |
+| Friends > base rate | 52% | 40 |
+| H3: echo > friends | 18% | >40 |
+| H4: say–do gap, giving | 32% | >40 |
 
 <!-- figure:power -->
 
@@ -346,11 +350,18 @@ central test a fair chance, while the confirmatory study needs about
 40 people.
 
 **A third visit is the cheaper lever.** Asked to come three times, with the third visit predicted from
-the first two, the same friends give the central test 64% at 16
-people and 82% at 20 (against 58%
-and 66% with two visits). The echo against the base rate rises to
-87% at 20. Twenty friends with three visits reach the conventional .8; the
+the first two, the same friends give the central test 67% at 16
+people and 82% at 20 (against 65%
+and 68% with two visits). The echo against the base rate rises to
+88% at 20. Twenty friends with three visits reach the conventional .8; the
 pilot village has the switch (web decision C78).
+
+**Pooling the stability, chosen here.** Partial pooling (§3.1) was chosen on simulation before any
+real data. In 60 groups of 16 with the stability the same for all six choices, it raised the echo's
+skill from +0.31 to +0.34. With the stability unequal
+(from .3 for the tide to .9 for bread), it raised it from +0.31 to
++0.34. So the simulation's equal stability does not decide it. The runs above
+use it.
 
 **Two variants set aside, reported rather than dropped.**
 
@@ -393,15 +404,18 @@ If the pilot agrees with the simulation, three claims follow.
    friends still know best. That is an honest boundary for digital twins built from behaviour.
 
 **Copying is the special case.** Simply copying the person's first-visit choice scores
-+0.34, a little more than the two-layer echo's +0.29. That is no defeat for the
-echo. Copying is the special case the second layer makes available to a model of a person; a
-one-layer model cannot copy at all. The echo pays a small price for estimating, on fifteen people,
-how far to trust what it saw, and binary choices give it little room to do better than copy.
++0.34, against the two-layer echo's +0.34. Copying is the special case the second
+layer makes available to a model of a person; a one-layer model cannot copy at all. What the echo has to
+learn is how far to trust what it saw, and it learns that from the group. Without pooling, fifteen
+people leave each choice's stability noisy, and the echo trailed copying by
+−0.06 (median over groups). Pooled, it trails by
+−0.01. With unequal stability it trails by
+−0.02 rather than −0.02.
+Binary choices give any model little room to do better than copy.
 
 What the second layer adds beyond copying is twofold. When there is nothing to copy (an encounter
 missed on the first visit), it falls back to the person's traits. With more people, its probabilities
-become calibrated. Partial pooling of the stability estimate across kinds of choice is the obvious
-next step.
+become calibrated.
 
 **Limitations.**
 
