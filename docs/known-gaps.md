@@ -2298,11 +2298,10 @@ not the class:
   - Each window counts as an independent measurement, though a session's walking is one way of
     walking, measured sixty times.
 
-  The proposal, NOT done (an engine change, so the owner's decision under C7): one session's walking
-  counts as one measurement, each window carrying 1/N of it. Measured on the same walk: openness
-  +0.29, energy +0.04, openness sd 0.82. Until then the echo after a walk is "open and energetic" by
-  default. The mirror does not name an axis on that, since its variance stays high, but the echo's
-  proposals read the mean.
+  **Fixed by C74**, with the owner's approval: one session's walking counts as one measurement, each
+  window carrying 1/60 of it. On the same walk through the engine, the result is the same whether a
+  session sends 60, 150 or 400 windows: openness +0.29, affect +0.15, energy +0.04, openness sd
+  0.82. ⚑63 has what that leaves.
 - **Cues that now move nothing.** These only ever moved the posterior through their own names:
   - `take_marked_path`, "carried only by the action embedding" by design;
   - `conform_custom` and `travel_near`, whose only feature is the dead `consistency` column (⚑23);
@@ -2311,7 +2310,23 @@ not the class:
   The walkthroughs pin them silent. Each needs a measured signal, or ⚑23's re-anchor.
 - **W is still the synthetic one.** C73 makes the update honest about what it measured; it does not
   make the measurement right. That is the calibration study's job.
-- **The meter fills slowly now**, in `/you` too: about a fifth after ten minutes of walking, where it
-  said 98%. That is the honest number, and the five-minute demo shows it.
+- **The meter fills slowly now**, in `/you` too. A walk alone takes it to about 7% since C74, where it
+  said 98%; acts and choices are what fill it. That is the honest number, and the five-minute demo
+  shows it.
+
+**Status:** the first item CLOSED by C74; the rest OPEN, written down rather than discovered.
+
+## ⚑ 63. What C74 does not do yet (2026-11-02)
+
+- **The session lives in the engine's memory**, like the walking record itself. A restart starts a new
+  session, which allows one more measurement's worth of walking.
+- **A session is a pause, not a visit.** It ends after 30 minutes without a walking window. The
+  client's `sessionId` is not used.
+- **The first ten minutes speak for the session.** Each window is 1/60 of a measurement, so a session's
+  first 60 windows carry its walk, and later ones are recorded but move nothing. A two-minute walk is
+  about a fifth of a measurement. The 60 comes from one self-trial, not from data.
+- **Sessions still add up.** Thirty sessions are thirty measurements, so the synthetic W's habit of
+  explaining the two walking features' difference through energy comes back slowly over weeks of
+  walking. The real fix is re-fitting W on real people; this only sets the pace.
 
 **Status:** OPEN, all of it, written down rather than discovered.

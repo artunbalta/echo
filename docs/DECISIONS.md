@@ -4933,3 +4933,52 @@ Replaying the trial with the engine's own code found two defects.
 
 Undoing each part of the fix, eight mutations in all, fails at least one of them. The engine passes
 212/212; `brs_eval` and `individuation_eval` pass.
+
+## C74 — a session's walk is one measurement
+
+**Why.** C73 stopped counting what a walk does not see as average, and that showed what the false
+average had hidden (⚑62).
+- **What happened.** Sixty walking windows from a fresh echo gave openness +0.88, energy +1.00 and
+  warmth −0.45.
+- **First cause: the synthetic W.** It loads the two walking features almost alike, with a small Ψ, so
+  the model explains their small difference by inflating energy, an axis neither loads much.
+- **Second cause: independent windows.** Each window counted as an independent measurement. A
+  session's walking is one way of walking, measured sixty times.
+
+**What changed** (owner's approval under C7, 2026-11-02):
+- **The weight.** `persona.observe(..., weight)` takes how much of one measurement a behavior is,
+  between 0 and 1, and its noise becomes Ψ / weight. N updates at weight 1/N carry what one update
+  carries, on the learned path and on the heuristic one. Any other weight raises an error.
+- **The session rule.** `/telemetry` gives a walking window `1/HYPER.walk_windows_per_measurement`
+  (60) of a measurement, and a session's walking stops at one (`app._walk_share`). The count lives in
+  `UserState.walk_session_at` and `walk_session_windows`, in memory like `locomotion`.
+- **Session boundaries.** A session ends after `HYPER.walk_session_gap_s` (30 minutes) without a
+  walking window. The 60 is what ten minutes of walking sent in the first self-trial.
+- **What still counts in full.** Acts, choices and every other telemetry signal keep weight 1. A
+  window that measured neither walking feature spends nothing.
+
+**Measured through the engine, the same walk:**
+- 60, 150 and 400 windows in one session all give openness +0.29, affect +0.15, warmth −0.11 and
+  energy +0.04.
+- Openness sd is 0.82 and the meter reads 7%.
+- An approach act after the walk still moves warmth by more than 0.3.
+
+**Tests.** `services/ml/tests/test_walk_session.py` has 9 tests:
+- N windows at 1/N carry what one carries;
+- a weight outside (0, 1] is refused;
+- a session's walk stops at one measurement, while every window is still recorded;
+- a pause starts a new session;
+- a whole day of walking makes nobody open and energetic;
+- an act after the walk still counts in full;
+- the weight holds without a learned model too;
+- other signals count in full;
+- a window that measured nothing spends nothing.
+
+Undoing each part of the change, eight mutations in all, fails at least one of them. The engine
+passes 221/221; `brs_eval` and `individuation_eval` pass.
+
+**What it leaves: ⚑63.**
+- The session lives in memory.
+- A session is a pause, not a visit.
+- A session's first ten minutes speak for it, and the 60 comes from one trial.
+- Sessions still add up, so the real fix stays re-fitting W on real people.

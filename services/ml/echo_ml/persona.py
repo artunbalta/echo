@@ -524,7 +524,8 @@ def observed_mask(text: str, telemetry: Optional[dict] = None) -> np.ndarray:
 
 @quiet_fp
 def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
-            model: Optional["object"] = None, trace: Optional[dict] = None) -> Posterior:
+            model: Optional["object"] = None, trace: Optional[dict] = None,
+            weight: float = 1.0) -> Posterior:
     """One online persona update from a single behavior (§9.8 `update persona posterior`).
 
     When a learned measurement model is available (committed artifact, WI-2) the update is
@@ -535,7 +536,11 @@ def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
     On a clean checkout with no artifact the model is *untrained* and we fall back to the
     legacy heuristic featurizer — preserving the zero-key / clean-checkout invariant.
     Pass `trace={}` to capture the gating diagnostics (Mahalanobis d², weight, surprising).
+    `weight` (0 < weight ≤ 1) is how much of one measurement this behavior is: its noise is Ψ / weight,
+    so N updates at weight 1/N carry what one carries (C74, a walking window).
     """
+    if not 0.0 < weight <= 1.0:
+        raise ValueError(f"weight must be in (0, 1], got {weight}")
     from .persona_model import get_persona_model
     model = model if model is not None else get_persona_model()
     # A trained artifact whose feature width no longer matches FEATURE_DIM (e.g. F grew in §0.D
@@ -558,14 +563,14 @@ def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
         # No text ⇒ the text block is unobserved, so it is not computed (no embedding call per walk).
         phi = featurize_raw(text, telemetry, embedding=None if has_text else np.zeros(SETTINGS.embed_dim))
         W_meas, Psi = model.apply(phi)
-        Psi = Psi * reliability_noise_scale(text, telemetry)   # heteroscedastic (WI-4)
+        Psi = Psi * reliability_noise_scale(text, telemetry) / weight   # heteroscedastic (WI-4)
         return robust_kalman_update(post, model.center(phi)[seen], W_meas[seen], Psi[np.ix_(seen, seen)], trace=trace)
 
     # heuristic fallback (no learned artifact)
     y, mask, r = featurize(text, telemetry)
     if mask.sum() == 0:
         return post
-    return kalman_update(post, y, mask, r)
+    return kalman_update(post, y, mask, r / weight)
 
 
 # ── decoding (for the cloning policy, §9.3) ──────────────────────────────────────

@@ -14,13 +14,14 @@ Endpoints (all except /health require Authorization: Bearer ML_SERVICE_TOKEN):
 from __future__ import annotations
 
 import hmac
+import time
 from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from .config import SETTINGS
+from .config import HYPER, SETTINGS
 from .store import STORE, BehaviorEntry
 from . import persistence as _persistence
 
@@ -165,6 +166,28 @@ def health():
     return {"ok": True, "service": "echo-ml", "users": len(STORE.all_user_ids())}
 
 
+_clock = time.time   # the server's clock, in seconds; a module global so tests can move it
+
+
+def _walk_share(st) -> float:
+    """How much of one measurement this walking window is (C74), counted against its session.
+
+    A session's walking is one way of walking, measured many times: counted as sixty independent
+    measurements, it made the synthetic W's two near-collinear walking features explain their small
+    difference by inflating energy (+1.00 in ten minutes, known-gaps ⚑62). Each window is
+    1/HYPER.walk_windows_per_measurement of one, and a session's walking stops at one; later windows
+    are still recorded (`locomotion`). A session ends after HYPER.walk_session_gap_s without a window.
+    """
+    now = _clock()
+    if now - st.walk_session_at > HYPER.walk_session_gap_s:
+        st.walk_session_windows = 0
+    st.walk_session_at = now
+    if st.walk_session_windows >= HYPER.walk_windows_per_measurement:
+        return 0.0
+    st.walk_session_windows += 1
+    return 1.0 / HYPER.walk_windows_per_measurement
+
+
 def _moved(before_mu, before_version: int, after: "P.Posterior") -> dict:
     """One update's own move, for the web's mirror (C61): μ after − μ before on every axis, the
     version it moved from and to. A report only — nothing reads it back, and nothing is stored."""
@@ -278,6 +301,7 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
     with STORE.updating(req.userId) as st:
         before = st.posterior.mu.copy()
         before_version = st.posterior.version
+        weight = 1.0   # a whole measurement, except a walking window (C74)
         ev = req.event or {}
         t = ev.get("type")
         payload = ev.get("payload", {})
@@ -340,8 +364,10 @@ def telemetry(req: TelemetryReq, authorization: str = Header(None)):
                     tele["novel_tile_ratio"] = scalars["novel_tile_ratio"]
                 if "path_tortuosity" in scalars:
                     tele["path_tortuosity"] = scalars["path_tortuosity"]
-        if tele:
-            st.posterior = P.observe(st.posterior, "", tele)
+                if tele:
+                    weight = _walk_share(st)
+        if tele and weight > 0.0:
+            st.posterior = P.observe(st.posterior, "", tele, weight=weight)
         # The mirror (web DECISIONS C61): what this window did, per axis — walking moves the
         # posterior too, and until now said nothing about it. Read-only report.
         return {"ok": True, "uncertainty": float(np.mean(st.posterior.var)), **_moved(before, before_version, st.posterior)}

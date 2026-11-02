@@ -30,6 +30,12 @@ class Hyper:
     # measurement noise, so a single message can never move the posterior far (§9.8).
     het_noise_short: float = 6.0       # noise added ∝ 1/(1+n_words)
     het_noise_edit: float = 0.5        # noise added ∝ edit count
+    # A session's walking is one way of walking, measured many times (C74). Each passive-locomotion
+    # window is 1/walk_windows_per_measurement of one measurement, and a session's walking stops at
+    # one. 60 is what ten minutes of walking sent in the first self-trial. A session ends after
+    # walk_session_gap_s without a walking window.
+    walk_windows_per_measurement: int = 60
+    walk_session_gap_s: float = 30 * 60
 
     # Behavioral-reproducibility latent refinement (WI-6) — the doppelgänger objective
     gamma_reconstruction: float = 0.5   # weight on KL(z ‖ posterior) regularizer in CEM

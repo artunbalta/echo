@@ -80,6 +80,10 @@ class UserState:
     # Deliberately NOT featurized yet - the committed W has no telemetry->openness path; these
     # start moving the posterior only after the one-time P5 re-anchor. Bounded ring buffer.
     locomotion: list[dict] = field(default_factory=list)
+    # C74: the current walking session, in memory like `locomotion` (a restart starts a new one): when
+    # its last window came (server clock, seconds) and how many of its windows have moved the posterior.
+    walk_session_at: float = 0.0
+    walk_session_windows: int = 0
 
     def bucket(self, name: str) -> Bucket:
         if name not in self.buckets:
