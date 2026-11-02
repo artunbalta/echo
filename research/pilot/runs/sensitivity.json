@@ -1,0 +1,311 @@
+{
+ "reps": 60,
+ "n": 16,
+ "settings": {
+  "as assumed": {
+   "overrides": {},
+   "power": {
+    "again:self>bar": 0.4666666666666667,
+    "again:friends>bar": 0.5333333333333333,
+    "again:echo_2l>bar": 0.5333333333333333,
+    "again:echo_2l>echo_axes": 0.5666666666666667,
+    "again:echo_2l>echo": 0.6333333333333333,
+    "again:echo_2l>friends": 0.11666666666666667,
+    "again:echo_2l>self": 0.08333333333333333,
+    "again:echo_2l>traits": 0.6,
+    "again:together>self": 0.3,
+    "again:together>friends": 0.25,
+    "elsewhere:self>bar": 0.5833333333333334,
+    "elsewhere:friends>bar": 0.6666666666666666,
+    "elsewhere:echo_2l>bar": 0.26666666666666666,
+    "gap_give": 0.31666666666666665,
+    "holier_give": 0.18333333333333332
+   },
+   "skill": {
+    "again:self": 0.25176064495204564,
+    "again:friends": 0.2702434177844014,
+    "again:echo": -0.052704278961262174,
+    "again:echo_axes": 0.062149596608778834,
+    "again:echo_2l": 0.2873260073260073,
+    "again:traits": 0.009387386134482922,
+    "again:twin": 0.09111721611721613,
+    "again:together": 0.34685621821544155,
+    "again:retest": 0.3353346349929494,
+    "again:oracle_axes": 0.23359086959584813,
+    "again:oracle_person": 0.5472723069810449,
+    "elsewhere:self": 0.24350347656124843,
+    "elsewhere:friends": 0.25165277603709735,
+    "elsewhere:echo": -0.15919710631749806,
+    "elsewhere:echo_axes": 0.02101139601139601,
+    "elsewhere:echo_2l": 0.02379978177850517,
+    "elsewhere:traits": 0.0070501644063235,
+    "elsewhere:twin": 0.002849002849002913,
+    "elsewhere:together": 0.23946766223583676,
+    "elsewhere:retest": 0.3398928758844073,
+    "elsewhere:oracle_axes": 0.24435321772902263,
+    "elsewhere:oracle_person": 0.5456022236401106
+   },
+   "crossing_friends": {
+    "median": 9.097222222222225,
+    "share": 0.6333333333333333
+   }
+  },
+  "less of their own (stable sd .35)": {
+   "overrides": {
+    "stable_sd": 0.35
+   },
+   "power": {
+    "again:self>bar": 0.38333333333333336,
+    "again:friends>bar": 0.5166666666666667,
+    "again:echo_2l>bar": 0.43333333333333335,
+    "again:echo_2l>echo_axes": 0.3,
+    "again:echo_2l>echo": 0.4666666666666667,
+    "again:echo_2l>friends": 0.03333333333333333,
+    "again:echo_2l>self": 0.05,
+    "again:echo_2l>traits": 0.31666666666666665,
+    "again:together>self": 0.21666666666666667,
+    "again:together>friends": 0.1,
+    "elsewhere:self>bar": 0.43333333333333335,
+    "elsewhere:friends>bar": 0.5833333333333334,
+    "elsewhere:echo_2l>bar": 0.3,
+    "gap_give": 0.36666666666666664,
+    "holier_give": 0.23333333333333334
+   },
+   "skill": {
+    "again:self": 0.1855118565644881,
+    "again:friends": 0.2329796780153076,
+    "again:echo": -0.05551282051282047,
+    "again:echo_axes": 0.0580647679263141,
+    "again:echo_2l": 0.1665074453282382,
+    "again:traits": 0.030090497737556565,
+    "again:twin": 0.0349143419377243,
+    "again:together": 0.23776376997235882,
+    "again:retest": 0.2620657568238213,
+    "again:oracle_axes": 0.3060058120762027,
+    "again:oracle_person": 0.4398006802183026,
+    "elsewhere:self": 0.1512573298030137,
+    "elsewhere:friends": 0.21968467223872346,
+    "elsewhere:echo": -0.10267143313993332,
+    "elsewhere:echo_axes": 0.026585252191232533,
+    "elsewhere:echo_2l": 0.023308682717670115,
+    "elsewhere:traits": 0.019057816504672087,
+    "elsewhere:twin": 0.0015242584788197622,
+    "elsewhere:together": 0.21543778801843327,
+    "elsewhere:retest": 0.19264682177207038,
+    "elsewhere:oracle_axes": 0.28522849685672785,
+    "elsewhere:oracle_person": 0.4422901966005414
+   },
+   "crossing_friends": {
+    "median": 4.184523809523811,
+    "share": 0.4
+   }
+  },
+  "more of their own (stable sd .8)": {
+   "overrides": {
+    "stable_sd": 0.8
+   },
+   "power": {
+    "again:self>bar": 0.6166666666666667,
+    "again:friends>bar": 0.55,
+    "again:echo_2l>bar": 0.7833333333333333,
+    "again:echo_2l>echo_axes": 0.7,
+    "again:echo_2l>echo": 0.7833333333333333,
+    "again:echo_2l>friends": 0.21666666666666667,
+    "again:echo_2l>self": 0.11666666666666667,
+    "again:echo_2l>traits": 0.6666666666666666,
+    "again:together>self": 0.13333333333333333,
+    "again:together>friends": 0.4,
+    "elsewhere:self>bar": 0.75,
+    "elsewhere:friends>bar": 0.6833333333333333,
+    "elsewhere:echo_2l>bar": 0.21666666666666667,
+    "gap_give": 0.26666666666666666,
+    "holier_give": 0.13333333333333333
+   },
+   "skill": {
+    "again:self": 0.3095796676441838,
+    "again:friends": 0.24240119291480905,
+    "again:echo": -0.029728132387706774,
+    "again:echo_axes": 0.072467736966419,
+    "again:echo_2l": 0.3422906880353688,
+    "again:traits": -0.014431295200525995,
+    "again:twin": 0.13244663905702458,
+    "again:together": 0.37641256464278866,
+    "again:retest": 0.4031071585419412,
+    "again:oracle_axes": 0.18359462486002243,
+    "again:oracle_person": 0.6288471053933696,
+    "elsewhere:self": 0.30923074262192074,
+    "elsewhere:friends": 0.23844257382586898,
+    "elsewhere:echo": -0.18851741865440497,
+    "elsewhere:echo_axes": 0.004988611606258686,
+    "elsewhere:echo_2l": 0.0013262599469495706,
+    "elsewhere:traits": -0.02223668095529696,
+    "elsewhere:twin": -0.040956157743996635,
+    "elsewhere:together": 0.24791358709041622,
+    "elsewhere:retest": 0.36813796162803586,
+    "elsewhere:oracle_axes": 0.17726874064902248,
+    "elsewhere:oracle_person": 0.598686624110353
+   },
+   "crossing_friends": {
+    "median": 7.866666666666667,
+    "share": 0.75
+   }
+  },
+  "stronger traits (loadings \u00d71.6)": {
+   "overrides": {
+    "loadings": "\u00d71.6"
+   },
+   "power": {
+    "again:self>bar": 0.6333333333333333,
+    "again:friends>bar": 0.6,
+    "again:echo_2l>bar": 0.7666666666666667,
+    "again:echo_2l>echo_axes": 0.5833333333333334,
+    "again:echo_2l>echo": 0.7333333333333333,
+    "again:echo_2l>friends": 0.05,
+    "again:echo_2l>self": 0.1,
+    "again:echo_2l>traits": 0.6166666666666667,
+    "again:together>self": 0.26666666666666666,
+    "again:together>friends": 0.26666666666666666,
+    "elsewhere:self>bar": 0.7666666666666667,
+    "elsewhere:friends>bar": 0.7833333333333333,
+    "elsewhere:echo_2l>bar": 0.26666666666666666,
+    "gap_give": 0.2,
+    "holier_give": 0.11666666666666667
+   },
+   "skill": {
+    "again:self": 0.3165485829959514,
+    "again:friends": 0.33000000000000007,
+    "again:echo": 0.01503499950704934,
+    "again:echo_axes": 0.08586789554531488,
+    "again:echo_2l": 0.3400151117827458,
+    "again:traits": 0.04173923560716014,
+    "again:twin": 0.05352948644702593,
+    "again:together": 0.40252257863593904,
+    "again:retest": 0.38585607940446665,
+    "again:oracle_axes": 0.3313725490196079,
+    "again:oracle_person": 0.6249127216869153,
+    "elsewhere:self": 0.2943982081542626,
+    "elsewhere:friends": 0.3090681555035365,
+    "elsewhere:echo": -0.12542765353805052,
+    "elsewhere:echo_axes": 0.03871090770404273,
+    "elsewhere:echo_2l": 0.042339130459643604,
+    "elsewhere:traits": 0.029922371206774878,
+    "elsewhere:twin": 0.0052730865971972185,
+    "elsewhere:together": 0.3214248997635448,
+    "elsewhere:retest": 0.36357346275721,
+    "elsewhere:oracle_axes": 0.3499666519776569,
+    "elsewhere:oracle_person": 0.6234458213316203
+   },
+   "crossing_friends": {
+    "median": 8.666666666666675,
+    "share": 0.6166666666666667
+   }
+  },
+  "keener friends (insight .6\u2013.85, half their ways)": {
+   "overrides": {
+    "friend_insight": [
+     0.0,
+     0.6,
+     0.75,
+     0.85
+    ],
+    "friend_tendency": 0.5
+   },
+   "power": {
+    "again:self>bar": 0.4666666666666667,
+    "again:friends>bar": 0.7166666666666667,
+    "again:echo_2l>bar": 0.5333333333333333,
+    "again:echo_2l>echo_axes": 0.5833333333333334,
+    "again:echo_2l>echo": 0.6,
+    "again:echo_2l>friends": 0.03333333333333333,
+    "again:echo_2l>self": 0.08333333333333333,
+    "again:echo_2l>traits": 0.6833333333333333,
+    "again:together>self": 0.35,
+    "again:together>friends": 0.15,
+    "elsewhere:self>bar": 0.5833333333333334,
+    "elsewhere:friends>bar": 0.8333333333333334,
+    "elsewhere:echo_2l>bar": 0.26666666666666666,
+    "gap_give": 0.31666666666666665,
+    "holier_give": 0.21666666666666667
+   },
+   "skill": {
+    "again:self": 0.25176064495204564,
+    "again:friends": 0.3273758012820513,
+    "again:echo": -0.052704278961262174,
+    "again:echo_axes": 0.02979153319205541,
+    "again:echo_2l": 0.2873260073260073,
+    "again:traits": -0.008461538461538298,
+    "again:twin": 0.09111721611721613,
+    "again:together": 0.3746288708767554,
+    "again:retest": 0.3353346349929494,
+    "again:oracle_axes": 0.23359086959584813,
+    "again:oracle_person": 0.5472723069810449,
+    "elsewhere:self": 0.24350347656124843,
+    "elsewhere:friends": 0.33295880149812734,
+    "elsewhere:echo": -0.15919710631749806,
+    "elsewhere:echo_axes": 0.010997412373559168,
+    "elsewhere:echo_2l": 0.019846715621363475,
+    "elsewhere:traits": -0.006083145937842427,
+    "elsewhere:twin": 0.002849002849002913,
+    "elsewhere:together": 0.2844492574257425,
+    "elsewhere:retest": 0.3398928758844073,
+    "elsewhere:oracle_axes": 0.24435321772902263,
+    "elsewhere:oracle_person": 0.5456022236401106
+   },
+   "crossing_friends": {
+    "median": 10.826190476190476,
+    "share": 0.43333333333333335
+   }
+  },
+  "noisier days (visit sd .8)": {
+   "overrides": {
+    "visit_sd": 0.8
+   },
+   "power": {
+    "again:self>bar": 0.55,
+    "again:friends>bar": 0.5666666666666667,
+    "again:echo_2l>bar": 0.35,
+    "again:echo_2l>echo_axes": 0.31666666666666665,
+    "again:echo_2l>echo": 0.48333333333333334,
+    "again:echo_2l>friends": 0.016666666666666666,
+    "again:echo_2l>self": 0.03333333333333333,
+    "again:echo_2l>traits": 0.3,
+    "again:together>self": 0.13333333333333333,
+    "again:together>friends": 0.18333333333333332,
+    "elsewhere:self>bar": 0.6166666666666667,
+    "elsewhere:friends>bar": 0.6333333333333333,
+    "elsewhere:echo_2l>bar": 0.2,
+    "gap_give": 0.18333333333333332,
+    "holier_give": 0.1
+   },
+   "skill": {
+    "again:self": 0.28699194909751985,
+    "again:friends": 0.22448542024013718,
+    "again:echo": -0.05370444533440133,
+    "again:echo_axes": 0.02723906185708408,
+    "again:echo_2l": 0.13988498402555904,
+    "again:traits": 0.007258064516128981,
+    "again:twin": 0.03659000415998098,
+    "again:together": 0.29725998300764656,
+    "again:retest": 0.19089816933638443,
+    "again:oracle_axes": 0.21562331838565024,
+    "again:oracle_person": 0.43380105115965095,
+    "elsewhere:self": 0.2621382565880815,
+    "elsewhere:friends": 0.20329574517554072,
+    "elsewhere:echo": -0.1347478991596639,
+    "elsewhere:echo_axes": 0.011012531328320752,
+    "elsewhere:echo_2l": 1.6653345369377348e-16,
+    "elsewhere:traits": -1.1102230246251565e-16,
+    "elsewhere:twin": -0.010539674931369758,
+    "elsewhere:together": 0.2224978239625775,
+    "elsewhere:retest": 0.18045583630670659,
+    "elsewhere:oracle_axes": 0.21865370393196104,
+    "elsewhere:oracle_person": 0.443391969040841
+   },
+   "crossing_friends": {
+    "median": 3.071428571428574,
+    "share": 0.35
+   }
+  }
+ },
+ "seconds": 688.2
+}

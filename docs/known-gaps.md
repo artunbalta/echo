@@ -2353,10 +2353,40 @@ not the class:
   word of what strangers did), not each other.
 - **The echo kept by the engine** is kept only with `ECHO_ML_PERSIST=1`; otherwise it is lost on a
   restart. The raw events are kept regardless, so every echo can be rebuilt by replaying them.
-- **No analysis yet.** The export is raw JSON; the analysis script is still to write.
+- **No analysis yet.** The export is raw JSON; the analysis script is still to write. *Closed by C77:
+  `research/pilot/analyze.py`.*
 - **On the first visit** the controls hint and the pack line overlap at the bottom of the screen for a
   few seconds. Older than C75.
 - **No ethics approval.** This is a pilot among friends, with consent, nicknames and erasure. A
   published study will need an ethics review.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 65. What C76–C77 do not do yet (2026-11-02)
+
+- **The two-layer echo lives in `research/` only.** The engine's echo still has one layer and its
+  synthetic W (C7). Moving the second layer into the engine is a C7 change and the owner's call: one
+  person-specific number per feature in the state, and W re-fit on the pilot's own data.
+- **Its probabilities are not calibrated at pilot size.** The choice it names is good. Scored by the
+  ranked probability score, its advantage over one layer is weaker (power .35 against .57 at 16
+  people), because its variance split is estimated on a dozen people.
+- **The engine weighs an act as a message of no words.** `observe` multiplies every behavioural act's
+  noise by `reliability_noise_scale("", …)` = 7, a heuristic for short chat messages. Removing it alone
+  barely changes the engine echo's predictions (skill −0.02 → +0.01 in simulation); the one layer and
+  the synthetic W are what hold it back. Engine (C7).
+- **Trust is still unrouted** (⚑64). The research echoes read the lending choice itself; the engine
+  cannot.
+- **The simulation is assumptions, not data.** They are set to published ranges: trait–act
+  correlations near .3, retest .5–.7, self-insight .8, friends' insight .45–.72, and a pull toward
+  the admirable in what people say. The pilot replaces them.
+- **The pilot's power.** The central test (two layers > one) has about .58 at 16 people and reaches .8
+  near 40. Echo against friends is an estimate at any size a circle of friends can reach.
+- **The draft's references are to verify** before submission, one by one.
+- **The exact path is slow**: about 9 s per person through the engine's endpoints (87 s for 10).
+  This is fine for a pilot; the library path, held to it bit for bit, is for simulation.
+- **Walking in the real client** is up to one window per 1.5 s, where the simulation uses 40–140 a
+  visit. The research echoes read a visit's mean and the engine caps a session at one measurement
+  (C74), so neither depends on the count.
+- **Ratings need migration 0036** on a Supabase store: without it, saving a rating fails (C76).
 
 **Status:** OPEN, all of it, written down rather than discovered.

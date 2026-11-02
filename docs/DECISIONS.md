@@ -5135,3 +5135,161 @@ person's ratings either way, guesses included.
 - a guess at someone not known is refused;
 - a malformed guess is refused;
 - a guess is stored and read back whole.
+
+## C77 — who knows you best: the pilot's analysis, and a second layer for the echo
+
+What the owner asked for: about eight hours of autonomous work while they slept. They wanted
+something creative and paper-worthy, a step closer to the paper, every part of it tested.
+
+The pilot (C75, C76) collects three witnesses to each choice: the person's own words, their friends'
+guesses, and the world. This decision is everything that turns those into a study:
+- the analysis;
+- what it found about echoes;
+- a simulation built to published ranges;
+- power;
+- a report;
+- a paper draft and a pre-registration.
+
+It is all research code. **services/ml is not touched (C7).** The engine is used as a library: its
+own endpoints in-process for real data, and the same library calls for simulation, held to each other
+bit for bit.
+
+**Where.**
+- `research/pilot/` (Python, run with the engine's virtualenv):
+  - `analyze.py`: an export, or `--simulate`;
+  - `power.py`, `study.py`, `sensitivity.py`;
+  - the package `echo_pilot/`;
+  - `tests/`.
+- `research/paper/`:
+  - `draft.template.md` and `preregistration.template.md`;
+  - `build.py`, which fills every number from the runs' JSON (so `draft.md` is never edited by hand);
+  - `page.py`, which typesets the draft.
+- The runs the draft rests on are kept: `runs/power.json`, `runs/study-16.json`, `runs/sensitivity.json`.
+
+**The question.** Each choice is predicted by eight witnesses:
+
+| Witness | What it is |
+|---|---|
+| self | the person's own words |
+| friends | the median of their friends' guesses |
+| echo | the engine as built |
+| echo_axes | one layer, fitted on the group |
+| echo_2l | two layers |
+| traits | a questionnaire twin: the rated axes through the fitted model |
+| twin | ridge regression on the person's other choices |
+| together | the median of self, friends and echo_2l |
+
+They are asked in two settings:
+- **again**: the second visit predicted from the first;
+- **elsewhere**: a paradigm never seen, on either visit.
+
+**Scoring.**
+- Skill is 1 − MAE/MAE_bar. The bar is everyone else's median choice. A silent witness is scored as
+  the bar.
+- The curve gives the echoes' skill after the first t minutes of the first visit.
+- In simulation, two oracles mark the ceilings: the person's traits known exactly, and the person
+  known exactly.
+
+**The finding: a second layer.** A persona model with one layer, traits plus noise, has nowhere to
+keep what is steady about a person's choices but unexplained by traits: personality psychology's
+nuances, a latent state–trait model's specific variance. So it under-reacts to what it sees. It
+catches up only by bending the person's traits to fit one kind of choice, which moves every other
+prediction too.
+
+The two-layer echo adds one person-specific number per feature to the state, [z; u], under the
+engine's own Kalman step (Joseph form). With τ = 0 it is exactly one layer, so the ablation is exact.
+
+It is fitted on everyone but the person predicted, by variance components:
+- the day's noise, from how far a person's two visits differ;
+- the steady part, from how far people differ beyond that;
+- the traits' share, from what self- and friends' ratings predict of people's means out of sample
+  (leave-one-out ridge, its direction scaled to that share).
+
+**Closed forms** (`theory.py`, held to a Monte Carlo of the model):
+
+| Predictor | Skill (1 − MSE/var) |
+|---|---|
+| Traits known exactly | h² |
+| Copying the last choice | 2ρ − 1 |
+| Two layers after n looks | nρ²/(nρ + ε) |
+| One layer after n looks | 2cρ − c²(ρ + ε/n), with c = h²/(h² + (ν + ε)/n) |
+
+Two consequences follow:
+- One look beats perfect trait knowledge whenever ρ² > h².
+- A person's retest agreement is a yardstick, not a ceiling. Simile's normalised accuracy can pass
+  100% in principle.
+
+**Simulation, 200 groups of 16** (medians [middle half]):
+
+| Witness | again | elsewhere |
+|---|---|---|
+| two layers | +.29 [.17, .41] | +.00 |
+| pooled | +.33 | |
+| own words | +.26 | +.25 |
+| friends | +.25 | +.24 |
+| one layer | +.04 | +.00 |
+| traits known exactly | +.21 | |
+| engine as built | −.05 | −.19 |
+| own other visit | +.34 | |
+| person known exactly | +.57 | |
+
+- In *again*, the two-layer echo reaches the friends after a median of 7 minutes of play, and does
+  so within the visit in 68% of groups.
+- In *elsewhere*, nobody beats the person's own words and their friends.
+
+**Power** (200 groups per size, one-sided sign-flip):
+- The central test, two layers > one, has .58 at 16 people, .66 at 20 and .81 at 40.
+- The echo against the bar has .63 at 16.
+- Echo against friends sits near .1 to .2 at every size: it is an estimate, not a test.
+- A circle of friends is a pilot in the proper sense. The confirmatory study needs about 40.
+
+Two variants were tried and set aside; both are reported:
+- RPS scoring gives the central test less power (.35 against .57), because at pilot size the two-layer
+  echo's probabilities are not yet calibrated.
+- Predicting each visit from the other gives little more (.57 to .60), because both directions rest
+  on the same pairs.
+
+**No witness sees what it predicts.** The tests change, to the last float:
+- a person's second visit;
+- an unseen paradigm;
+- the curve's later minutes;
+- the person's own ratings.
+
+They check that nothing predicted without these moves. Twelve leaks were planted, in the echoes, the
+bar, the twin, the fit and the anchors' scale. All twelve are caught. An earlier version that compared
+only the medians caught 2 of 8; floats are the test.
+
+**Also checked.**
+- The exact path through the engine's endpoints gives every prediction and every echo of the library
+  path, end to end, on a 10-person export (87 s against 5 s).
+- Each option's telemetry is what ingest really makes of it.
+- The research code reads verbs, passing and the export as the TypeScript sources write them.
+
+**Found in the engine, for the owner to decide (C7).**
+- Every act's noise is multiplied by 7: `reliability_noise_scale("")`, a heuristic for short chat
+  messages, applied to acts. Removing it alone barely moves the engine echo (−0.02 → +0.01); the one
+  layer and the synthetic W are what hold it back.
+- Trust is unrouted (⚑64).
+- The engine has one layer.
+- The proposal, none of it done: a person layer per feature in the engine's state; W re-fit on the
+  pilot's own data; a route for G16.
+
+**The report**, `report.py`:
+- One self-contained page with inline SVG, light and dark.
+- Every headline follows the numbers, so the same page will carry the pilot's data.
+- Simulated pages say so at the top.
+- It includes the theory as a live explorer (h² and ν sliders) and the assumptions moved one at a time.
+
+**Tests.**
+- `research/pilot/tests`: 37 passing, run with `-W error`. They cover contracts, the engine path,
+  the two-layer model, the theory, stats, the simulation, the analysis and its no-peeking guarantees,
+  the report and power.
+- Engine 221/221. Web 492/492. tsc clean.
+- Planet 321 passing, none failing. Its region-build budget test fails only while the power run holds
+  ten cores; it is unchanged since C75.
+
+**Published, private to the owner:**
+- the simulated report: https://claude.ai/artifact/SKG7wYWpE66toBLkf1DTWp;
+- the draft as a page: https://claude.ai/artifact/WEU3sbbnrTd3SdZqCAt7Gi.
+
+What it leaves is ⚑65.
