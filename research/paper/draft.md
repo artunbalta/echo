@@ -247,6 +247,8 @@ Three consequences follow.
 
 The tests in `research/pilot/tests/test_theory.py` hold these forms to a Monte Carlo of the model.
 
+<!-- figure:theory -->
+
 ## 5. Simulation study
 
 ### 5.1 Generative model
@@ -301,10 +303,14 @@ The simulated export has the same shape as the real one, and the analysis cannot
 | *Person known exactly* | +0.57 | 74% |
 | *Base rate* | 0 | 48% |
 
+<!-- figure:again -->
+
 The two-layer echo's skill rises through the first visit as the six are met. It reaches the friends'
 level after a median of 7 minutes, which happens within the visit in
 68% of groups. It reaches the level of the person's own words after
 7 minutes.
+
+<!-- figure:curve -->
 
 **Elsewhere (a paradigm never seen).** The person's own words score +0.25 and the friends
 +0.24. The two-layer echo scores +0.00, the one-layer echo
@@ -313,6 +319,8 @@ level after a median of 7 minutes, which happens within the visit in
 
 What an echo learns of someone's traits from five other choices and their walking carries little to a
 sixth. People and their friends know the person's own ways directly.
+
+<!-- figure:elsewhere -->
 
 **Say and do.** The median group said 0.65 of its bread and gave 0.52. The
 friends' guesses ran +0.07 from what was given, the people's own words
@@ -328,6 +336,8 @@ friends' guesses ran +0.07 from what was given, the people's own words
 | Friends > base rate | 50% | 40 |
 | H3: echo > friends | 11% | >40 |
 | H4: say–do gap, giving | 27% | >40 |
+
+<!-- figure:power -->
 
 A circle of friends is therefore a pilot in the proper sense. It estimates every effect and gives the
 central test a fair chance, while the confirmatory study needs about

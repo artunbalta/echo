@@ -4,12 +4,18 @@ Reads draft.md (made by build.py, never by hand) and writes draft.html: the same
 in the report's palette, light and dark.
 """
 import html
+import json
 import re
+import sys
 from pathlib import Path
 
 import markdown
 
 HERE = Path(__file__).resolve().parent
+RUNS = HERE.parent / "pilot" / "runs"
+sys.path.insert(0, str(HERE.parent / "pilot"))
+
+from echo_pilot import report as R  # noqa: E402  (pure Python: no engine, no numpy)
 
 CSS = """
 /* A preprint: one measure of serif text, tables and formulae set quietly, the draft's status kept in view. */
@@ -48,7 +54,83 @@ sub { font-size: 0.72em; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 32px 0; }
 .refs li { font-size: 15px; line-height: 1.5; }
 @media (max-width: 520px) { body { font-size: 16.5px; } }
+/* Figures: the report's charts, in the same colours. */
+:root { --sheet-fig: #fbfcfb; --rule-strong: #b9c4c1; --self: #b5532e; --friends: #6a5bb3; --engine: #8b9497; --axes: #4a7fbf; --traits: #9a4f86; --twin: #a88324; --together: #2e4148; --retest: #c97f1d; --oracle: #7a868a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sheet-fig: #141d20; --rule-strong: #3d4e53; --self: #e48a63; --friends: #a597ec; --engine: #8d999c; --axes: #7fb0ea; --traits: #d088bd; --twin: #d7b24f; --together: #c9d8dc; --retest: #f0a94a; --oracle: #95a3a7; } }
+:root[data-theme="dark"] { --sheet-fig: #141d20; --rule-strong: #3d4e53; --self: #e48a63; --friends: #a597ec; --engine: #8d999c; --axes: #7fb0ea; --traits: #d088bd; --twin: #d7b24f; --together: #c9d8dc; --retest: #f0a94a; --oracle: #95a3a7; }
+figure { margin: 22px 0 26px; padding: 12px 12px 8px; background: var(--sheet-fig); border: 1px solid var(--rule); border-radius: 8px; }
+figure .scroll { overflow-x: auto; }
+figcaption { font: 400 13.5px/1.5 var(--sans); color: var(--muted); margin-top: 6px; max-width: 80ch; }
+figcaption b { color: var(--ink); font-weight: 600; }
+.chart { width: 100%; min-width: 620px; height: auto; display: block; font-family: var(--sans); }
+.grid { stroke: var(--rule); stroke-width: 1; }
+.grid.zero { stroke: var(--rule-strong); stroke-width: 1.4; }
+.grid.target { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 6 5; }
+.tick { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.axisl { fill: var(--muted); font-size: 12.5px; }
+.rowl { fill: var(--ink); font-size: 14px; }
+.rowl.hero, .val.hero { font-weight: 700; fill: var(--accent); }
+.val { fill: var(--ink); font: 13px var(--mono); }
+.whisk { stroke-width: 2.4; stroke-linecap: round; opacity: .55; }
+.ref { stroke-width: 1.6; stroke-dasharray: 5 4; }
+.refl { fill: var(--muted); font-size: 11.5px; paint-order: stroke; stroke: var(--sheet-fig); stroke-width: 4px; stroke-linejoin: round; }
+.level { stroke-width: 1.4; stroke-dasharray: 6 5; opacity: .9; }
+.lvl { font-size: 12px; }
+.curve { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.curve.hero { stroke-width: 3.4; }
+.band { opacity: .14; }
+.serl { font-size: 12.5px; font-weight: 600; }
+.mark { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 3; }
+.markdot { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.markl { fill: var(--ink); font: 600 12.5px var(--sans); paint-order: stroke; stroke: var(--sheet-fig); stroke-width: 4px; stroke-linejoin: round; }
 """
+
+
+def figures() -> dict[str, tuple[str, str]]:
+    """Each figure the draft marks (`<!-- figure:id -->`): its SVG and its caption, from the kept runs."""
+    study = json.loads((RUNS / "study-16.json").read_text())
+    power = json.loads((RUNS / "power.json").read_text())
+    n_label = f"{study['reps']} simulated groups of {study['n']}"
+
+    def across(setting: str) -> dict:
+        out = {}
+        for key, v in study["skill"].items():
+            st, w = key.split(":")
+            if st == setting and v["median"] is not None:
+                lo, hi = v["iqr"] or (None, None)
+                out[w] = {"value": v["median"], "lo": lo, "hi": hi}
+        return out
+
+    def refs(panel: dict) -> list[dict]:
+        return [{"label": R.WHO[k][0], "value": panel[k]["value"], "color": R.WHO[k][1]} for k in ("retest", "oracle_axes", "oracle_person") if k in panel]
+
+    again, elsewhere = across("again"), across("elsewhere")
+    c = study["curve"]
+    series = [
+        {"label": R.WHO["echo_2l"][0], "color": "--accent", "values": c["echo_2l"]["median"], "band": c["echo_2l"]["iqr"], "hero": True},
+        {"label": "One-layer echo", "color": "--axes", "values": c["echo_axes"]["median"]},
+        {"label": "Engine's echo", "color": "--engine", "values": c["echo"]["median"]},
+    ]
+    lv = {k: v["median"] for k, v in study["lines"].items()}
+    lines = [{"label": lab, "value": lv[k], "color": col} for k, lab, col in (("friends", "Friends", "--friends"), ("self", "Own words", "--self"), ("retest", "Own other visit", "--retest"), ("oracle_axes", "Traits known exactly", "--oracle")) if lv.get(k) is not None]
+    fx = study["crossings"]["friends"]["median"]
+    marks = [{"t": fx, "value": lv["friends"], "label": f"≈ {fx:.0f} min: as good as the friends"}] if fx is not None else []
+    tests = [
+        ("again:echo_2l>echo_axes", "two layers > one", "--accent"),
+        ("again:echo_2l>bar", "echo > bar", "--axes"),
+        ("again:self>bar", "own words > bar", "--self"),
+        ("again:friends>bar", "friends > bar", "--friends"),
+        ("again:echo_2l>friends", "echo > friends", "--together"),
+        ("gap_give", "say–do gap, giving", "--retest"),
+    ]
+    return {
+        "theory": (R.theory_chart(0.18, 0.45), "Skill (1 − MSE/var) at predicting the next choice of a kind after n looks, at the split the simulation assumes for giving (h² = .18, ν = .45): the closed forms of §4. The amber dot is copying the last choice."),
+        "again": (R.dot_chart(R._witness_rows(again, R.ORDER), refs(again), note="Skill when the situation comes again"), f"When the situation comes again: each witness's skill over the bar, the second visit predicted from the first. Medians across {n_label}; whiskers span the middle half of groups. Dashed lines: copying the first visit, the traits known exactly, the person known exactly."),
+        "curve": (R.curve_chart(c["minutes"], series, lines, marks), f"The minutes it takes: the echoes' skill from the first t minutes of the first visit, against the levels of the friends, the person's own words, their other visit and exact trait knowledge. Medians across {n_label}; the band spans the middle half of groups."),
+        "elsewhere": (R.dot_chart(R._witness_rows(elsewhere, R.ORDER), refs(elsewhere), note="Skill in an unseen situation"), f"A situation never seen: each choice predicted with that paradigm hidden on both visits. Medians across {n_label}."),
+        "power": (R.power_chart(power, tests), f"Power of the planned tests by group size: the share of {power['reps']} simulated groups per size in which each comes out at p < .05 (one-sided sign-flip over people). The dashed line marks .8."),
+    }
+
 
 
 def main() -> int:
@@ -64,6 +146,15 @@ def main() -> int:
     sub = re.compile(r"(?<![A-Za-z0-9_/])([xzuwμεστσ])_([a-z]{1,3})(?![a-z])")
     body = "".join(part if part.startswith("<code>") else sub.sub(r"\1<sub>\2</sub>", part) for part in parts)
     body = re.sub(r'(<h2[^>]*>References[^<]*</h2>\s*)<ul>', r'\1<ul class="refs">', body)
+    # The figures, numbered in the order they appear.
+    figs, count = figures(), [0]
+
+    def figure(m: "re.Match") -> str:
+        svg, caption = figs[m.group(1)]
+        count[0] += 1
+        return f'<figure id="fig-{m.group(1)}"><div class="scroll">{svg}</div><figcaption><b>Figure {count[0]}.</b> {html.escape(caption)}</figcaption></figure>'
+
+    body = re.sub(r"<!-- figure:(\w+) -->", figure, body)
     page = f"""<title>{html.escape(title)}</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

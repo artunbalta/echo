@@ -188,6 +188,11 @@ def empirical(paradigm: str, values: list[float]) -> Optional[Dist]:
     return [(lv, snapped.count(lv) / len(snapped)) for lv in LEVELS[paradigm]]
 
 
+def watched_for(visit: int) -> tuple[int, ...]:
+    """The visits an echo watches to predict `visit`: every one before it, or the second for the first."""
+    return (2,) if visit == 1 else tuple(range(1, visit))
+
+
 def bar_of(acts: dict[str, dict[str, dict[int, float]]], subject: str, paradigm: str) -> Optional[float]:
     """The bar: the median of everyone else's choices in the paradigm, both visits."""
     return _median([v for q in acts if q != subject for v in acts[q][paradigm].values()])
@@ -198,10 +203,10 @@ def bar_of(acts: dict[str, dict[str, dict[int, float]]], subject: str, paradigm:
 
 def engine_echoes(export: dict, mode: str = "exact", minutes=CURVE_MINUTES) -> dict[str, dict]:
     """
-    The engine's echo of each person, rebuilt from their rows: from everything (`all`); from one visit
-    alone (`again`, by the visit watched); from everything but each paradigm (`elsewhere`); through the
-    first minutes of the visit watched (`curve`, by visit, then minute). The echo never sees the choice
-    it is asked about.
+    The engine's echo of each person, rebuilt from their rows: from everything (`all`); for each visit,
+    from the visits it is predicted from (`again`, by the visit predicted, `watched_for`); from everything
+    but each paradigm (`elsewhere`); through the first minutes of a single visit watched (`curve`, by the
+    visit predicted, then minute). The echo never sees the choice it is asked about.
     """
     exact = E.Exact() if mode == "exact" else None
     return {person["subject"]: _engine_echo(export, person["subject"], exact, minutes) for person in export["people"]}
@@ -215,30 +220,28 @@ def _engine_echo(export: dict, s: str, exact: Optional["E.Exact"], minutes) -> d
         p = PARADIGM_OF.get(st["situation"])
         if p:
             staged[p].add(f"staged:{st['id']}")
-    starts = {w: L.session_start(export, s, w) for w in (1, 2)}
+    sessions = next(p for p in export["people"] if p["subject"] == s)["sessions"]
+    starts = {int(x["n"]): L._secs(x["startedAt"]) for x in sessions}
 
     def replay(keep):
         return exact.replay(f"research|{s}", rows, keep) if exact else E.fast_replay(rows, s, keep)
 
-    def on(w: int):
-        """Rows of visit w: before the second visit began (less a minute), or from then on."""
-        if w == 1:
-            return lambda r: starts[2] is None or E.when(r) < starts[2] - 60
-        return lambda r: starts[2] is not None and E.when(r) >= starts[2] - 60
+    def on(ws: tuple[int, ...]):
+        """Rows of the visits `ws`."""
+        return lambda r: L.visit_at(E.when(r), sessions) in ws
 
     def until(w: int, t: float):
-        within = on(w)
-        return lambda r: within(r) and E.when(r) <= starts[w] + 60 * t
+        return lambda r: L.visit_at(E.when(r), sessions) == w and E.when(r) <= starts[w] + 60 * t
 
     def without(ids: set[str]):
         return lambda r: (r.get("target_json") or {}).get("id") not in ids
 
-    watched = [w for w in (1, 2) if starts[w] is not None]
+    targets = [v for v in sorted(starts) if all(w in starts for w in watched_for(v))]
     return {
         "all": replay(lambda r: True),
-        "again": {w: replay(on(w)) for w in watched},
+        "again": {v: replay(on(watched_for(v))) for v in targets},
         "elsewhere": {p: replay(without(staged[p])) for p in PARADIGMS},
-        "curve": {w: {t: replay(until(w, t)) for t in minutes} for w in watched},
+        "curve": {v: {t: replay(until(watched_for(v)[0], t)) for t in minutes} for v in targets if len(watched_for(v)) == 1},
     }
 
 
@@ -257,20 +260,23 @@ def layer_echoes(export: dict, minutes=CURVE_MINUTES) -> dict[str, Optional[dict
             continue
         z = L.anchors(export, others, also=[s])
         models = {"echo_axes": L.fit({q: obs[q] for q in others}, {q: z[q] for q in others}, layers=1), "echo_2l": L.fit({q: obs[q] for q in others}, {q: z[q] for q in others}, layers=2)}
-        starts = {w: L.session_start(export, s, w) for w in (1, 2)}
-        watched = [w for w in (1, 2) if starts[w] is not None]
-        seen_again = {w: L.observations(export, s, visits=[w]) for w in watched}
+        sessions = next(p for p in export["people"] if p["subject"] == s)["sessions"]
+        starts = {int(x["n"]): L._secs(x["startedAt"]) for x in sessions}
+        targets = [v for v in sorted(starts) if all(w in starts for w in watched_for(v))]
+        single = [v for v in targets if len(watched_for(v)) == 1]
+        seen_again = {v: L.observations(export, s, visits=watched_for(v)) for v in targets}
         seen_else = {p: L.observations(export, s, drop=[p]) for p in PARADIGMS}
-        seen_curve = {w: {t: L.observations(export, s, visits=[w], until=starts[w] + 60 * t) for t in minutes} for w in watched}
-        rec: dict = {"again": {w: {} for w in watched}, "elsewhere": {}, "curve": {w: {} for w in watched}, "traits": {p: L.from_traits(models["echo_2l"], z[s], p) for p in PARADIGMS}}
+        seen_curve = {v: {t: L.observations(export, s, visits=watched_for(v), until=starts[watched_for(v)[0]] + 60 * t) for t in minutes} for v in single}
+        rec: dict = {"again": {v: {} for v in targets}, "elsewhere": {}, "curve": {v: {} for v in single}, "traits": {p: L.from_traits(models["echo_2l"], z[s], p) for p in PARADIGMS}}
         for key, model in models.items():
-            for w in watched:
-                m, C = L.posterior(model, seen_again[w])
-                rec["again"][w][key] = {p: L.distribution(model, m, C, p) for p in PARADIGMS}
-                rec["curve"][w][key] = {}
+            for v in targets:
+                m, C = L.posterior(model, seen_again[v])
+                rec["again"][v][key] = {p: L.distribution(model, m, C, p) for p in PARADIGMS}
+            for v in single:
+                rec["curve"][v][key] = {}
                 for t in minutes:
-                    m, C = L.posterior(model, seen_curve[w][t])
-                    rec["curve"][w][key][t] = {p: L.distribution(model, m, C, p) for p in PARADIGMS}
+                    m, C = L.posterior(model, seen_curve[v][t])
+                    rec["curve"][v][key][t] = {p: L.distribution(model, m, C, p) for p in PARADIGMS}
             rec["elsewhere"][key] = {}
             for p in PARADIGMS:
                 m, C = L.posterior(model, seen_else[p])
@@ -310,8 +316,8 @@ def twin_elsewhere(acts_mean: dict[str, dict[str, Optional[float]]], subject: st
 
 
 def twin_again(acts: dict[str, dict[str, dict[int, float]]], subject: str, paradigm: str, visit: int = 2) -> Optional[float]:
-    """One visit's choice from the other visit's six, a ridge regression fitted on everyone else."""
-    w = 3 - visit
+    """One visit's choice from the six of the latest visit watched, a ridge regression fitted on everyone else."""
+    w = max(watched_for(visit))
     train = [q for q in acts if q != subject and acts[q][paradigm].get(visit) is not None and any(acts[q][k].get(w) is not None for k in PARADIGMS)]
     if len(train) < 4:
         return None
@@ -440,12 +446,13 @@ def crossing(curve: dict[int, Optional[float]], level: Optional[float]) -> Optio
 
 
 @S.quiet_fp
-def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci: bool = True, minutes=CURVE_MINUTES, directions: tuple[int, ...] = (2,)) -> dict:
+def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci: bool = True, minutes=CURVE_MINUTES, directions: Optional[tuple[int, ...]] = None) -> dict:
     """
     Everything the study reports, from an export (`GET /api/pilot?op=export`) or a simulated one.
     `ci=False` skips the intervals (the power runs). `directions` are the visits `again` predicts, each
-    from the other: the second from the first (registered). Both ways, (2, 1), adds little power in
-    simulation (.57 to .60 at 16 people): the two directions share the same pairs of choices.
+    from every visit before it (`watched_for`); None is every visit after the first (registered: with
+    two visits, the second from the first). (2, 1) also predicts the first from the second, which adds
+    little power in simulation (.57 to .60 at 16 people): both directions share the same pairs of choices.
     """
     people = export["people"]
     subjects = [p["subject"] for p in people]
@@ -509,32 +516,34 @@ def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci:
         return it
 
     items: dict[str, list[dict]] = {"again": [], "elsewhere": []}
-    two_visits = {s for s in subjects if all(engine[s]["again"].get(w) is not None for w in (1, 2))}
     for s in subjects:
         for p in PARADIGMS:
-            # Each visit predicted from the other: two-fold cross-validation over visits (`directions`).
-            for v in directions:
-                w = 3 - v
-                if s not in two_visits or acts[s][p].get(v) is None:
+            # Each visit predicted from the visits before it (or the first from the second, `directions`).
+            for v in (directions if directions is not None else range(2, 10)):
+                if v not in engine[s]["again"] or acts[s][p].get(v) is None:
                     continue
+                ws = watched_for(v)
+                last = max(ws)
                 it = common(s, p)
                 it.update(
                     visit=v,
-                    watched=w,
+                    watched=ws[0] if len(ws) == 1 else ws,
+                    in_curve=len(ws) == 1,
                     actual=acts[s][p][v],
-                    echo=engine_pick(engine[s]["again"][w], p),
-                    echo_axes=layer_pick(s, "again", "echo_axes", p, w),
-                    echo_2l=layer_pick(s, "again", "echo_2l", p, w),
+                    echo=engine_pick(engine[s]["again"][v], p),
+                    echo_axes=layer_pick(s, "again", "echo_axes", p, v),
+                    echo_2l=layer_pick(s, "again", "echo_2l", p, v),
                     twin=snap(p, twin_again(acts, s, p, v)),
-                    retest=acts[s][p].get(w),
+                    retest=acts[s][p].get(last),
                 )
-                it["dist"].update(echo=E.choice_distribution(engine[s]["again"][w], p), retest=point(p, acts[s][p].get(w)), **layer_dists(s, "again", p, w))
+                it["dist"].update(echo=E.choice_distribution(engine[s]["again"][v], p), retest=point(p, acts[s][p].get(last)), **layer_dists(s, "again", p, v))
                 it["together"] = _median([it[k] for k in POOLED if it[k] is not None])
-                for t in minutes:
-                    it[f"echo@{t}"] = engine_pick(engine[s]["curve"][w][t], p)
-                    rec = layer_rec(s, "curve", w)
-                    for key in ("echo_axes", "echo_2l"):
-                        it[f"{key}@{t}"] = None if rec is None else L.median(rec[key][t][p])
+                if it["in_curve"]:
+                    for t in minutes:
+                        it[f"echo@{t}"] = engine_pick(engine[s]["curve"][v][t], p)
+                        rec = layer_rec(s, "curve", v)
+                        for key in ("echo_axes", "echo_2l"):
+                            it[f"{key}@{t}"] = None if rec is None else L.median(rec[key][t][p])
                 items["again"].append(it)
             for v, actual in acts[s][p].items():
                 it = common(s, p)
@@ -575,19 +584,20 @@ def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci:
 
     # The curve: the echoes' skill through the first visit, against the witnesses that do not wait.
     curve: dict[str, dict[int, dict]] = {}
+    on_curve = [it for it in items["again"] if it.get("in_curve")]
     for w in CURVE_WITNESSES:
         curve[w] = {}
         for t in minutes:
-            sc = score(items["again"], f"{w}@{t}", ci and w == "echo_2l")
+            sc = score(on_curve, f"{w}@{t}", ci and w == "echo_2l")
             curve[w][t] = {"skill": sc["skill"], "lo": sc["lo"], "hi": sc["hi"], "accuracy": sc["accuracy"], "silent": sc["silent"]}
     flat = {w: {t: curve[w][t]["skill"] for t in minutes} for w in CURVE_WITNESSES}
-    again_w = settings["again"]["witnesses"]
-    lines = {"self": again_w["self"]["skill"], "friends": again_w["friends"]["skill"], "retest": again_w["retest"]["skill"]}
+    # The level lines are scored on the curve's own choices (the same as `again`'s with two visits).
+    lines = {k: score(on_curve, k, False)["skill"] for k in ("self", "friends", "retest")}
     for k in (1, 2, 3):
-        lines[f"friends_k{k}"] = settings["again"]["friends_by_know"][k]["skill"]
+        lines[f"friends_k{k}"] = score([it for it in on_curve if it.get(f"friends_k{k}") is not None], f"friends_k{k}", False)["skill"]
     if oracle:
-        lines["oracle_axes"] = again_w["oracle_axes"]["skill"]
-        lines["oracle_person"] = again_w["oracle_person"]["skill"]
+        lines["oracle_axes"] = score(on_curve, "oracle_axes", False)["skill"]
+        lines["oracle_person"] = score(on_curve, "oracle_person", False)["skill"]
     crossings = {w: {line: crossing(flat[w], level) for line, level in lines.items()} for w in CURVE_WITNESSES}
 
     # The say–do gap (said minus did), and the friends' guess minus the same: whose words run ahead of the deed.

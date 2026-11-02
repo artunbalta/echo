@@ -49,3 +49,16 @@ def test_a_real_export_is_not_called_simulated(results):
     real["simulated"] = False
     page = R.render(real)
     assert "SIMULATED" not in page and "pilot results" in page
+
+
+def test_power_and_a_third_visit_render(results):
+    from echo_pilot.power import TESTS
+
+    def run(scale: float) -> dict:
+        return {"reps": 10, "seconds": 60, "sizes": {str(n): {"power": {t: min(1.0, scale * n / 40) for t in TESTS}} for n in (8, 16, 40)}}
+
+    page = R.render(results, power=run(1.0), power3=run(1.5))
+    assert "What a third visit buys" in page and "runs/power-3visits.json" in page
+    assert "About 40 people for the central test" in page
+    words = _text(page)
+    assert not re.search(r"\bNone\b|\bnan\b", words)

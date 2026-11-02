@@ -34,6 +34,7 @@ def main() -> int:
     ap.add_argument("--power", default=str(HERE / "runs" / "power.json"), help="the power run, for the simulation's power panel")
     ap.add_argument("--study", default=str(HERE / "runs" / "study-16.json"), help="the many-group study (study.py), for the simulation's panels")
     ap.add_argument("--sensitivity", default=str(HERE / "runs" / "sensitivity.json"), help="the sensitivity run (sensitivity.py), for the simulation's assumptions panel")
+    ap.add_argument("--power3", default=str(HERE / "runs" / "power-3visits.json"), help="the third-visit power run (visits.py), for the power panel")
     ap.add_argument("--out", default=str(HERE / "out"), help="where results.json and report.html go")
     args = ap.parse_args()
     if not args.simulate and not args.export:
@@ -54,7 +55,8 @@ def main() -> int:
     (out / f"{stem}-results.json").write_text(report.to_json(results))
     power = json.loads(Path(args.power).read_text()) if (args.simulate and Path(args.power).exists()) else None
     sensitivity = json.loads(Path(args.sensitivity).read_text()) if (args.simulate and Path(args.sensitivity).exists()) else None
-    (out / f"{stem}-report.html").write_text(report.render(results, power, study, sensitivity), encoding="utf-8")
+    power3 = json.loads(Path(args.power3).read_text()) if (args.simulate and Path(args.power3).exists()) else None
+    (out / f"{stem}-report.html").write_text(report.render(results, power, study, sensitivity, power3), encoding="utf-8")
     again = results["settings"]["again"]["witnesses"]
     print(json.dumps({w: (None if v["skill"] is None else round(v["skill"], 3)) for w, v in again.items()}))
     print(f"{time.time() - t:.1f} s -> {out / (stem + '-report.html')}")

@@ -118,6 +118,8 @@ class SimParams:
     unmet_land: float = 0.07
     unmet_shore: float = 0.15
     dropout: float = 0.1
+    #: The design, not an assumption: how many visits (the pilot has two; a third is the power lever).
+    visits: int = 2
     #: Of those choosing nothing: walking past rather than saying so (give/path/greet only pass; the raft
     #: is refused aloud half the time, and the tide's bet declined a sixth of the time).
     lend_pass: float = 0.5
@@ -182,6 +184,11 @@ def make_group(n: int, seed: int = 0, params: SimParams | None = None, start: da
         self_axes = [int(np.clip(round(4 + 1.3 * view[k] + rng.normal(0, 0.5)), 1, 7)) for k in range(8)]
         t0 = start + timedelta(minutes=int(rng.integers(0, 240)))
         visits = [t0] + ([] if rng.random() < params.dropout else [t0 + timedelta(hours=22 + int(rng.integers(0, 6)))])
+        # Further visits draw only when asked for, so two visits are the same stream as ever.
+        for _ in range(params.visits - 2):
+            if len(visits) < 2 or rng.random() < params.dropout:
+                break
+            visits.append(visits[-1] + timedelta(hours=22 + int(rng.integers(0, 6))))
         sessions = [{"n": v + 1, "startedAt": _iso(t), "endedAt": _iso(t + timedelta(minutes=25))} for v, t in enumerate(visits)]
         people.append(
             {"subject": s, "nickname": f"Friend {i + 1}", "joinedAt": _iso(t0 - timedelta(minutes=8)), "consentAt": _iso(t0 - timedelta(minutes=8)), "self": self_axes, "stated": stated, "sessions": sessions, "settled": {}}

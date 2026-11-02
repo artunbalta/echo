@@ -87,11 +87,11 @@ def test_again_never_sees_the_second_visit(group8, analysed):
     flipped = _flip(export, s, visit=2)
     # What every witness of `again` rests on, exactly (floats, not the levels they round to).
     e0, e1 = A.engine_echoes(export, "fast", (0, 4, 25)), A.engine_echoes(flipped, "fast", (0, 4, 25))
-    assert _same_posterior(e0[s]["again"][1], e1[s]["again"][1])
-    assert all(_same_posterior(e0[s]["curve"][1][t], e1[s]["curve"][1][t]) for t in (0, 4, 25))
+    assert _same_posterior(e0[s]["again"][2], e1[s]["again"][2])
+    assert all(_same_posterior(e0[s]["curve"][2][t], e1[s]["curve"][2][t]) for t in (0, 4, 25))
     assert not _same_posterior(e0[s]["all"], e1[s]["all"])
     l0, l1 = A.layer_echoes(export, (0, 4, 25)), A.layer_echoes(flipped, (0, 4, 25))
-    assert l0[s]["again"][1] == l1[s]["again"][1] and l0[s]["curve"][1] == l1[s]["curve"][1] and l0[s]["traits"] == l1[s]["traits"]
+    assert l0[s]["again"][2] == l1[s]["again"][2] and l0[s]["curve"][2] == l1[s]["curve"][2] and l0[s]["traits"] == l1[s]["traits"]
     a0, a1 = A.acts_of(export), A.acts_of(flipped)
     assert a0[s] != a1[s]
     for p in A.PARADIGMS:
@@ -138,11 +138,11 @@ def test_the_curve_never_sees_ahead(group8):
         if t is not None and start + 4 * 60 < t < start + 3600:
             st["resolved"] = None
     e0, e1 = A.engine_echoes(export, "fast", (0, 4, 25)), A.engine_echoes(cut, "fast", (0, 4, 25))
-    assert _same_posterior(e0[s]["curve"][1][4], e1[s]["curve"][1][4]) and not _same_posterior(e0[s]["curve"][1][25], e1[s]["curve"][1][25])
+    assert _same_posterior(e0[s]["curve"][2][4], e1[s]["curve"][2][4]) and not _same_posterior(e0[s]["curve"][2][25], e1[s]["curve"][2][25])
     l0, l1 = A.layer_echoes(export, (0, 4, 25)), A.layer_echoes(cut, (0, 4, 25))
     for key in ("echo_axes", "echo_2l"):
-        assert l0[s]["curve"][1][key][4] == l1[s]["curve"][1][key][4]
-        assert l0[s]["curve"][1][key][25] != l1[s]["curve"][1][key][25]
+        assert l0[s]["curve"][2][key][4] == l1[s]["curve"][2][key][4]
+        assert l0[s]["curve"][2][key][25] != l1[s]["curve"][2][key][25]
 
 
 def test_the_bar_is_everyone_else():
@@ -157,10 +157,10 @@ def test_each_visit_from_the_other_never_sees_it(group8):
     s = next(p["subject"] for p in export["people"] if len(p["sessions"]) == 2)
     flipped = _flip(export, s, visit=1)
     e0, e1 = A.engine_echoes(export, "fast", (0, 25)), A.engine_echoes(flipped, "fast", (0, 25))
-    assert _same_posterior(e0[s]["again"][2], e1[s]["again"][2]) and not _same_posterior(e0[s]["again"][1], e1[s]["again"][1])
-    assert all(_same_posterior(e0[s]["curve"][2][t], e1[s]["curve"][2][t]) for t in (0, 25))
+    assert _same_posterior(e0[s]["again"][1], e1[s]["again"][1]) and not _same_posterior(e0[s]["again"][2], e1[s]["again"][2])
+    assert all(_same_posterior(e0[s]["curve"][1][t], e1[s]["curve"][1][t]) for t in (0, 25))
     l0, l1 = A.layer_echoes(export, (0, 25)), A.layer_echoes(flipped, (0, 25))
-    assert l0[s]["again"][2] == l1[s]["again"][2] and l0[s]["curve"][2] == l1[s]["curve"][2] and l0[s]["again"][1] != l1[s]["again"][1]
+    assert l0[s]["again"][1] == l1[s]["again"][1] and l0[s]["curve"][1] == l1[s]["curve"][1] and l0[s]["again"][2] != l1[s]["again"][2]
     a0, a1 = A.acts_of(export), A.acts_of(flipped)
     for p in A.PARADIGMS:
         assert A.twin_again(a0, s, p, visit=1) == A.twin_again(a1, s, p, visit=1)
@@ -183,3 +183,26 @@ def test_the_echoes_never_read_the_persons_ratings(group8):
     assert l0[s]["again"] == l1[s]["again"] and l0[s]["elsewhere"] == l1[s]["elsewhere"]
     # The questionnaire twin is the one witness made of those ratings.
     assert l0[s]["traits"] != l1[s]["traits"]
+
+
+def test_a_third_visit_is_predicted_from_both_before_it_and_never_seen():
+    from echo_pilot.simulate import SimParams, make_group
+
+    export, truth = make_group(8, seed=21, params=SimParams(visits=3))
+    s = next(p["subject"] for p in export["people"] if len(p["sessions"]) == 3)
+    flipped = _flip(export, s, visit=3)
+    e0, e1 = A.engine_echoes(export, "fast", (0,)), A.engine_echoes(flipped, "fast", (0,))
+    # Every visit has an echo to predict it (the first from the second, for the reverse direction);
+    # only one watched alone has a curve.
+    assert set(e0[s]["again"]) == {1, 2, 3} and set(e0[s]["curve"]) == {1, 2}
+    assert _same_posterior(e0[s]["again"][3], e1[s]["again"][3]) and _same_posterior(e0[s]["again"][2], e1[s]["again"][2])
+    l0, l1 = A.layer_echoes(export, (0,)), A.layer_echoes(flipped, (0,))
+    assert l0[s]["again"][3] == l1[s]["again"][3]
+    # The second visit is watched for the third: changing it moves the third's echo, never the second's.
+    second = _flip(export, s, visit=2)
+    e2 = A.engine_echoes(second, "fast", (0,))
+    assert not _same_posterior(e0[s]["again"][3], e2[s]["again"][3]) and _same_posterior(e0[s]["again"][2], e2[s]["again"][2])
+    res = A.analyze(export, mode="fast", truth=truth, ci=False, minutes=(0, 25))
+    third = [it for it in res["items"]["again"] if it["subject"] == s and it["visit"] == 3]
+    assert third and all(it["watched"] == (1, 2) and not it["in_curve"] for it in third)
+    assert all(it["retest"] == A.acts_of(export)[s][it["paradigm"]].get(2) for it in third)

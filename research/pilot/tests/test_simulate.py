@@ -55,3 +55,12 @@ def test_oracles_and_shares_are_distributions(group8):
             assert math.isclose(sum(q for _, q in dist), 1.0)
     for parts in M.shares().values():
         assert math.isclose(sum(parts.values()), 1.0)
+
+
+def test_more_visits_only_when_asked():
+    a, _ = M.make_group(6, seed=3)
+    b, _ = M.make_group(6, seed=3, params=M.SimParams(visits=2))
+    assert a == b
+    c, _ = M.make_group(12, seed=3, params=M.SimParams(visits=3))
+    counts = [len(p["sessions"]) for p in c["people"]]
+    assert max(counts) == 3 and all(1 <= k <= 3 for k in counts)

@@ -242,6 +242,39 @@ def curve_chart_narrow(minutes: list[float], series: list[dict], lines: list[dic
     return "".join(out)
 
 
+def theory_chart(h2: float, nu: float, looks: int = 20) -> str:
+    """The closed forms (`theory.py`) as a still figure: skill after n looks, one layer and two, with the ceilings."""
+    from .theory import copying, one_layer, two_layers
+
+    W, left, right, top, bottom, H = 780, 56, 210, 14, 44, 330
+    rho = h2 + nu
+    x = lambda n: left + (W - left - right) * n / looks  # noqa: E731
+    y = lambda v: top + (H - top - bottom) * (1 - max(0.0, min(1.0, v)))  # noqa: E731
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Skill after n looks, one layer and two" class="chart">']
+    for v in (0, 0.2, 0.4, 0.6, 0.8, 1.0):
+        out.append(f'<line x1="{left}" x2="{W - right}" y1="{y(v):.1f}" y2="{y(v):.1f}" class="grid"/>')
+        out.append(f'<text x="{left - 8}" y="{y(v) + 4:.1f}" class="tick" text-anchor="end">{num(v, 1)}</text>')
+    for n in (0, 1, 2, 5, 10, 15, 20):
+        out.append(f'<text x="{x(n):.1f}" y="{H - bottom + 18}" class="tick" text-anchor="middle">{n}</text>')
+    out.append(f'<text x="{(left + W - right) / 2:.1f}" y="{H - 6}" class="axisl" text-anchor="middle">times it has watched you in this situation</text>')
+    ends = []
+    for v, color, label in ((rho, "--oracle", f"knowing them exactly {num(rho)}"), (h2, "--axes", f"knowing their traits exactly {num(h2)}")):
+        out.append(f'<line x1="{left}" x2="{W - right}" y1="{y(v):.1f}" y2="{y(v):.1f}" class="level" style="stroke:var({color})"/>')
+        ends.append((y(v), label, color))
+    for fn, color, label, hero in ((one_layer, "--axes", "one-layer echo", False), (two_layers, "--accent", "two-layer echo", True)):
+        pts = " ".join(f"{x(n):.1f},{y(fn(h2, nu, n)):.1f}" for n in range(looks + 1))
+        out.append(f'<polyline points="{pts}" class="curve{" hero" if hero else ""}" style="stroke:var({color})"/>')
+        ends.append((y(fn(h2, nu, looks)), label, color))
+    c = copying(h2, nu)
+    out.append(f'<circle cx="{x(1):.1f}" cy="{y(c):.1f}" r="6" style="fill:var(--retest)"/>')
+    ends.append((y(c), f"copying last time {num(c)}", "--retest"))
+    ly = _spread([e[0] for e in ends], 15, top + 4, H - bottom)
+    for (_y, label, color), lyy in zip(ends, ly):
+        out.append(f'<text x="{W - right + 10}" y="{lyy + 4:.1f}" class="lvl" style="fill:var({color})">{esc(label)}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
 def shares_chart(shares: dict, truth: Optional[dict]) -> str:
     """Each paradigm's variance split into traits / the person's own / the visit, as fitted (and as simulated)."""
     W, left, right, top, row_h = 780, 190, 20, 34, 30
@@ -575,7 +608,7 @@ def panels(results: dict, study: Optional[dict] = None) -> dict:
     return out
 
 
-def render(results: dict, power: Optional[dict] = None, study: Optional[dict] = None, sensitivity: Optional[dict] = None, title: str = "Who Knows You Best", generated: Optional[str] = None) -> str:
+def render(results: dict, power: Optional[dict] = None, study: Optional[dict] = None, sensitivity: Optional[dict] = None, power3: Optional[dict] = None, title: str = "Who Knows You Best", generated: Optional[str] = None) -> str:
     """The page: from one analysis, or (simulated) from a study across many groups, the power run and the sensitivity run."""
     simulated = results.get("simulated", False)
     generated = generated or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -654,6 +687,20 @@ def render(results: dict, power: Optional[dict] = None, study: Optional[dict] = 
         ]
         sizes = sorted(int(k) for k in power["sizes"])
         row = lambda n: power["sizes"].get(str(n)) or power["sizes"].get(n)  # noqa: E731
+        third_html = ""
+        if power3:
+            row3 = lambda n: power3["sizes"].get(str(n)) or power3["sizes"].get(n)  # noqa: E731
+            sizes3 = [n for n in sorted(int(k) for k in power3["sizes"]) if row(n)]
+            tests3 = (("again:echo_2l>echo_axes", "two layers > one"), ("again:echo_2l>bar", "echo > bar"), ("again:self>bar", "own words > bar"), ("again:friends>bar", "friends > bar"))
+            head3 = "".join(f"<th>{n} friends</th>" for n in sizes3)
+            body3 = "".join(
+                f"<tr><td>{esc(label)}</td>" + "".join(f"<td class='mono'>{pct(row(n)['power'][key])} → <b>{pct(row3(n)['power'][key])}</b></td>" for n in sizes3) + "</tr>"
+                for key, label in tests3
+            )
+            third_html = f"""<h3>What a third visit buys</h3>
+    <p>The same groups asked to come three times: the second visit predicted from the first, the third from the first two. Two visits → three, by group size.</p>
+    <div class="scroll"><table><thead><tr><th>Test</th>{head3}</tr></thead><tbody>{body3}</tbody></table></div>
+    <p class="cap"><span class="src">runs/power-3visits.json · {power3['reps']} groups per size</span></p>"""
         need = next((n for n in sizes if row(n)["power"]["again:echo_2l>echo_axes"] >= 0.8), None)
         ref_n = study["n"] if study else 16
         at = row(ref_n)["power"] if row(ref_n) else {}
@@ -664,6 +711,7 @@ def render(results: dict, power: Optional[dict] = None, study: Optional[dict] = 
     <p>Each line is the share of simulated groups ({power['reps']} at each size) in which a planned test comes out at p &lt; .05, one-sided sign-flip over people. At {ref_n} friends the central test, two layers against one, has power {pct(at.get('again:echo_2l>echo_axes'))}, and the echo against the bar {pct(at.get('again:echo_2l>bar'))}. So a circle of friends is a pilot in the proper sense: it estimates the effects and gives the central test a fair chance, and the confirmatory study needs about {need or "40"} people. Telling the echo from the friends needs far more than that; it is an estimate to report, not a test to pass.</p>
     <div class="fig"><div class="scroll">{power_chart(power, tests)}</div>
       <p class="cap">The dashed line marks .8, the usual target. <span class="src">runs/power.json · {power['reps']} groups per size · {round(power.get('seconds', 0) / 60) if power.get('seconds') else '–'} min on 10 cores</span></p></div>
+    {third_html}
   </section>"""
 
     g, h = D["gap"]["give"], D["holier"]["give"]

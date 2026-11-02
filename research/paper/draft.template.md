@@ -247,6 +247,8 @@ Three consequences follow.
 
 The tests in `research/pilot/tests/test_theory.py` hold these forms to a Monte Carlo of the model.
 
+<!-- figure:theory -->
+
 ## 5. Simulation study
 
 ### 5.1 Generative model
@@ -301,10 +303,14 @@ The simulated export has the same shape as the real one, and the analysis cannot
 | *Person known exactly* | {{again:oracle_person}} | {{acc:again:oracle_person}} |
 | *Base rate* | 0 | {{acc:again:bar}} |
 
+<!-- figure:again -->
+
 The two-layer echo's skill rises through the first visit as the six are met. It reaches the friends'
 level after a median of {{cross:friends}} minutes, which happens within the visit in
 {{cross:friends:share}} of groups. It reaches the level of the person's own words after
 {{cross:self}} minutes.
+
+<!-- figure:curve -->
 
 **Elsewhere (a paradigm never seen).** The person's own words score {{elsewhere:self}} and the friends
 {{elsewhere:friends}}. The two-layer echo scores {{elsewhere:echo_2l}}, the one-layer echo
@@ -313,6 +319,8 @@ level after a median of {{cross:friends}} minutes, which happens within the visi
 
 What an echo learns of someone's traits from five other choices and their walking carries little to a
 sixth. People and their friends know the person's own ways directly.
+
+<!-- figure:elsewhere -->
 
 **Say and do.** The median group said {{gap:give:said}} of its bread and gave {{gap:give:did}}. The
 friends' guesses ran {{holier:give:friends_error}} from what was given, the people's own words
@@ -328,6 +336,8 @@ friends' guesses ran {{holier:give:friends_error}} from what was given, the peop
 | Friends > base rate | {{power:16:again:friends>bar}} | {{need:again:friends>bar}} |
 | H3: echo > friends | {{power:16:again:echo_2l>friends}} | {{need:again:echo_2l>friends}} |
 | H4: say–do gap, giving | {{power:16:gap_give}} | {{need:gap_give}} |
+
+<!-- figure:power -->
 
 A circle of friends is therefore a pilot in the proper sense. It estimates every effect and gives the
 central test a fair chance, while the confirmatory study needs about
