@@ -179,7 +179,7 @@ function Book({ scale, beat, page }: { scale: number; beat: (typeof BEATS)[numbe
   const cover = page < 0;
   return (
     <div
-      className="relative mx-auto flex w-full max-w-[560px] items-stretch justify-center rounded-sm border-2 border-[#2a2340] bg-[#120c19] p-2 shadow-[0_10px_0_#0d0812] sm:max-w-[720px] sm:p-3"
+      className="relative mx-auto flex w-full max-w-[560px] items-stretch justify-center rounded-sm border-2 border-[#2a2340] bg-ink-deep p-2 shadow-[0_10px_0_#0d0812] sm:max-w-[720px] sm:p-3"
       style={{
         // The turning leaf squashes horizontally. transition:none is load-bearing — the instant a
         // browser tweens this, the discrete frame sequence becomes a smooth animation.

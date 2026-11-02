@@ -32,6 +32,8 @@ import {
   occupationWeights,
   relation,
   settlementAt,
+  stream,
+  uidOf,
   type Person,
   type SettlementGeography,
 } from "../lib/society.js";
@@ -179,14 +181,99 @@ test("C26: nobody outlives the ceiling, and child deaths land inside childhood",
 });
 
 test("C26: the graves are already there, which is what SOC-6.H has to make visible", () => {
-  const s = anySettlement(VALLEY, 0);
-  const c = census(s, 0);
-  assert.ok(c.dead.length > c.alive.length, "a bounded history should leave more dead than living");
-  assert.ok(c.recentlyDead.length > 0, "nobody has died within living memory — there is nothing to talk about");
-  assert.equal(c.alive.length + c.dead.length, s.people.filter((p) => p.birthDay <= 0).length);
+  // An OLD village, not the first one found. Until C43 the first one found was always old, and this
+  // test leaned on that without saying so: the founding date and the "is anyone here" roll were two
+  // draws of the same broken stream, so settled cells came out founded 218 years ago on average
+  // against a uniform window whose mean is 180. A village founded 66 years ago, which the uniform
+  // window now produces as often as it should, still has its founders alive.
+  let checked = 0;
+  for (let i = 0; i < 200 && checked < 8; i++) {
+    const s = settlementAt(SEED, `cell-${i}`, VALLEY, 0);
+    if (s === null || -s.foundedDay < yearsToDays(150)) continue;
+    const c = census(s, 0);
+    assert.ok(c.dead.length > c.alive.length, `${s.cell}: a bounded history should leave more dead than living`);
+    assert.ok(c.recentlyDead.length > 0, `${s.cell}: nobody has died within living memory — there is nothing to talk about`);
+    assert.equal(c.alive.length + c.dead.length, s.people.filter((p) => p.birthDay <= 0).length);
+    checked++;
+  }
+  assert.equal(checked, 8);
+});
+
+test("C43: a settlement's founding date is uniform over its window, whatever decided it was settled", () => {
+  // The defect this pins: the draws of one stream were shifts of each other, so the roll that
+  // settles a cell (low numbers settle) fixed the roll that dates it. Measured before the fix: a mean
+  // of 218 years over 113 valleys, against 180 for the window. Uniform on [60, 300] over n of them
+  // has a standard error of 69 / sqrt(n).
+  const years: number[] = [];
+  for (let i = 0; i < 1500; i++) {
+    const s = settlementAt(SEED, `founding-${i}`, VALLEY, 0);
+    if (s !== null) years.push(-s.foundedDay / 365);
+  }
+  const mean = years.reduce((a, b) => a + b, 0) / years.length;
+  const expected = (FOUNDING.minYearsAgo + FOUNDING.maxYearsAgo) / 2;
+  const se = (FOUNDING.maxYearsAgo - FOUNDING.minYearsAgo) / Math.sqrt(12) / Math.sqrt(years.length);
+  assert.ok(years.length > 300, `only ${years.length} settlements`);
+  assert.ok(Math.abs(mean - expected) < 4 * se, `founded ${mean.toFixed(1)} years ago on average; the window's mean is ${expected}`);
 });
 
 // ── bounded history ─────────────────────────────────────────────────────────────
+
+test("C43: a stream's draws are independent of each other, and two siblings' streams of each other", () => {
+  // Before C43 every one of these failed by orders of magnitude: over 20,000 keys the gap between a
+  // stream's first two draws took 2 values, a sibling pair's first draws differed by 1 value in
+  // every family, and the three-uniform bell had sd 0.135.
+  const N = 5000;
+  const gaps = new Set<string>();
+  const siblings = new Set<string>();
+  let s1 = 0;
+  let s2 = 0;
+  for (let i = 0; i < N; i++) {
+    const r = stream(`c43/${i}`);
+    const a = r();
+    const b = r();
+    const c = r();
+    gaps.add((((b - a) % 1) + 1).toFixed(9));
+    const bell = (a + b + c) / 3;
+    s1 += bell;
+    s2 += bell * bell;
+    const first = stream(`c43/${i}/m+c43/${i}/f/kid/0`)();
+    const second = stream(`c43/${i}/m+c43/${i}/f/kid/1`)();
+    siblings.add((((second - first) % 1) + 1).toFixed(9));
+  }
+  assert.ok(gaps.size > N * 0.99, `the gap between a stream's first two draws took ${gaps.size} values over ${N} keys`);
+  assert.ok(siblings.size > N * 0.99, `siblings' first draws differed by ${siblings.size} distinct amounts over ${N} families`);
+  const sd = Math.sqrt(s2 / N - (s1 / N) ** 2);
+  assert.ok(Math.abs(sd - 1 / 6) < 0.006, `the bell's sd is ${sd.toFixed(4)}, not 1/6`);
+
+  // Serial correlation along one long stream.
+  const r = stream("c43/long");
+  let prev = r();
+  let sxy = 0;
+  let sx = 0;
+  let sxx = 0;
+  const M = 100_000;
+  for (let i = 0; i < M; i++) {
+    const x = r();
+    sxy += prev * x;
+    sx += x;
+    sxx += x * x;
+    prev = x;
+  }
+  const mean = sx / M;
+  const lag1 = (sxy / M - mean * mean) / (sxx / M - mean * mean);
+  assert.ok(Math.abs(lag1) < 0.015, `lag-1 correlation ${lag1.toFixed(4)}`);
+});
+
+test("C43: a person's id is their lineage, sixteen hex characters, unique in the village", () => {
+  const s = anySettlement(VALLEY, 0);
+  const ids = new Set(s.people.map((p) => p.id));
+  assert.equal(ids.size, s.people.length, "two people share an id");
+  for (const p of s.people) {
+    assert.match(p.id, /^[0-9a-f]{16}$/);
+    assert.equal(p.id, uidOf(p.seedKey), `${p.given}'s id is not their key's`);
+    assert.ok(p.seedKey.length < 80, `a key of ${p.seedKey.length} characters: the lineage is concatenating again (⚑33)`);
+  }
+});
 
 test("history is bounded: a settlement has a founding date, not an infinite past", () => {
   for (let i = 0; i < 120; i++) {

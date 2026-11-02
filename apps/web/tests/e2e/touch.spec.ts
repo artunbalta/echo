@@ -151,6 +151,10 @@ test("the parcel is playable with a thumb", async ({ page }) => {
   // C23 that sentence was false on a phone, because the panel answered only to a key.
   const panel = page.getByLabel("measurement inspector");
   await expect(panel).toHaveCount(0);
+  // It is a line of the HUD's menu now (C68), so the thumb opens the menu first.
+  const menu = page.locator("[data-hud-menu]");
+  const menuBox = (await menu.boundingBox())!;
+  await page.touchscreen.tap(menuBox.x + menuBox.width / 2, menuBox.y + menuBox.height / 2);
   const opener = page.locator("[data-touch-inspector]");
   const openerBox = (await opener.boundingBox())!;
   await page.touchscreen.tap(openerBox.x + openerBox.width / 2, openerBox.y + openerBox.height / 2);

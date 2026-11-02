@@ -10,6 +10,9 @@
 import { NextResponse } from "next/server";
 import type { CharacterAttributes } from "@echo/shared";
 
+import { subjectOf, subjectRejection } from "@/lib/subject";
+import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
+
 export const runtime = "nodejs";
 
 const KEY = process.env.ANTHROPIC_API_KEY ?? "";
@@ -35,7 +38,38 @@ function parseJson(text: string): CharacterAttributes {
   }
 }
 
+/**
+ * The most a selfie may be, and why there is a number here at all.
+ *
+ * `onboard/page.tsx` draws the capture into a 384x384 canvas and calls `toDataURL("image/jpeg", 0.9)`
+ * — MEASURED at roughly 20-40 KB. This cap is an order of magnitude above the largest thing the
+ * product sends and still bounds what a caller can put on the bill: every byte here is an input
+ * token at Anthropic, and there was no limit at all. MEASURED before this: a 5 MB base64 string was
+ * forwarded verbatim, a 5,243,524-byte request body to api.anthropic.com.
+ *
+ * A cap, not a rate limit. The guard below says WHO is spending; this says HOW MUCH per call.
+ * Neither is a budget — see ⚑30.
+ */
+const MAX_SELFIE_CHARS = 512 * 1024;
+
 export async function POST(req: Request) {
+  // THE CALLER MUST BE SOMEBODY (SOC-2.E, C39, `⚑30`). This route spends real money at a paid
+  // provider and had no gate of any kind. The subject is not asserted anywhere in the body, so this
+  // is the tree's first `subjectOf` with no claimed id: a valid token answers with its own subject,
+  // and no token answers `no-identity`. `/onboard` mints before it gets here, which is why this can
+  // be closed now and could not be before (⚑28 left it as the named remainder).
+  //
+  // THIS IS NOT A COST CONTROL AND MUST NOT BE READ AS ONE. The minter hands an identity to anyone
+  // who asks, so a determined caller mints one and spends anyway. What it buys is that the spend is
+  // ATTRIBUTABLE and that a casual unauthenticated script is refused. The cap below and the limit
+  // ⚑30 records are the parts that bound the bill.
+  const caller = subjectOf(req);
+  if (!caller.ok) {
+    const { body: error, status } = subjectRejection(caller);
+    return NextResponse.json(error, { status });
+  }
+
+
   let selfie: string | undefined;
   try {
     ({ selfie } = await req.json());
@@ -45,9 +79,33 @@ export async function POST(req: Request) {
   if (!selfie || !selfie.startsWith("data:image/")) {
     return NextResponse.json({ error: "selfie data URL required" }, { status: 400 });
   }
+  if (selfie.length > MAX_SELFIE_CHARS) {
+    // 413 before any provider call, so an oversized body costs nothing.
+    return NextResponse.json({ error: "selfie too large" }, { status: 413 });
+  }
 
   if (!KEY) {
     return NextResponse.json({ attributes: mockAttributes(), source: "mock" });
+  }
+
+  // AND A LIMIT, FAIL-CLOSED — BUT ONLY ONCE THERE IS SOMETHING TO SPEND.
+  //
+  // The guard says WHO is spending and the cap says how much per call; neither bounds a loop,
+  // because `/api/identity/session` mints for anybody who asks. This is the part that does.
+  // `onUnavailable: "deny"` is the opposite of the waitlist's posture and is the point: for a
+  // signup, refusing a real person costs more than letting one through, and for a paid provider
+  // call "the counter is unavailable" and "there is no limit" are the same sentence.
+  //
+  // THE ORDER IS LOAD-BEARING and the first version of this had it wrong. Placed before the
+  // no-provider short circuit above, a deny-on-unavailable limiter closed the ZERO-KEY LOCAL RUN:
+  // with no Supabase there is no counter, so every call answered 503 — including the ones that
+  // would only ever have returned a mock. A deployment with nothing to spend has nothing to fail
+  // closed about. Reached only from here, this refuses to spend when it cannot count and leaves
+  // "works with no keys" exactly as it was. MEASURED: five tests caught the inversion.
+  const rate = await rateLimit(req, { bucket: "vision", windowMs: 60 * 60 * 1000, max: 10, onUnavailable: "deny" });
+  if (!rate.ok) {
+    const { body: error, status } = rateLimitRejection(rate);
+    return NextResponse.json(error, { status });
   }
 
   // Parse the data URL into media type + base64 payload (kept only in memory).

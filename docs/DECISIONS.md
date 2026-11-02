@@ -2108,3 +2108,3293 @@ declares a `userId` it never reads — a guard there would assert a fact about n
 **The closed-gate proof:** `npm run test:copresence` FAILS with no relaxation (its joins present
 `{userId:'userA'}` and no token) and PASSES with the flag. The flag lives in the npm script, so CI
 inherits it and `ci.yml` needed no change.
+
+### C39, corrected after review — the count was over FILES, and no client ever sent the header
+
+Three sentences above are wrong on this tree, and the way they are wrong is worth more than the fix.
+
+**"16 of 19 id-bearing routes are guarded" is arithmetically true and was never the question.** The
+unit is the route FILE: `grep -rl subjectOf apps/web/src/app/api` returns exactly 16, and 19 files are
+id-bearing. `island/state` is the only route in the tree that **exports two verbs**, so it is the only
+place where a file can be counted as guarded while a handler is not — and its POST wrote whatever
+`userId` arrived in the body straight into `saveIslandState`. The surface was read-refused and
+write-open at once. A count over files cannot see inside one, and the sentence stayed true the entire
+time the hole was open. Closed as `⚑28`.
+
+**"Every other id-bearing route now copies that inversion" was true of the routes and false of the
+product**, because nothing on the other side sent the header. MEASURED: **30 of 33 browser fetch
+expressions** to guarded routes sent no signature — 27 with `content-type` alone, 3 with no headers —
+across 23 of 26 distinct *(file, route)* pairs. (This sentence first read "23 of 31", a numerator from
+one unit and a denominator from neither; the correction is `⚑28`'s, and it is the same species as the
+sentence it was written to correct.) `identityHeaders()` was a closure inside
+`createMeasureChain`, so the three routes the parcel chain calls were signed and **every other guarded
+route in the app had been answering 403 to its only caller since this decision shipped** — silently,
+because each call site swallows its own failure. The guards were real; the product had simply stopped
+talking to them, and no gate could see it because no gate exercises a browser.
+
+**The largest consequence was not a 403 anywhere. It was an empty ocean.** `/play` joined with
+`token: identityToken()`, which only reads storage, and `ensureIdentity` — the one minter — was
+reachable from `measure.ts:393` and nowhere else. The canonical route to the shared world is landing →
+`/onboard` → `/play`, and `/onboard` requires no sign-in: it calls `resolveUserId()`, which stamps an
+id with no signature. So `onAuth` refused the join, `WorldClient` caught it and started the solo
+world, and the player was shown a world that looked unpopulated rather than one that had refused them.
+**This decision's own closed-gate proof could not catch it:** `test:copresence` drives a node client
+that composes its own join options, so it proves the ROOM refuses an unsigned join and says nothing
+about whether the shipped browser sends one.
+
+**What did not change.** The decisions themselves stand — derive the subject from a signature, refuse
+to sign an id handed to you, fail closed in production, keep the policy in one module. Three of the
+four sentences that broke were *descriptions of coverage*, and all three were written from a grep
+rather than from a call graph. The fourth, in `identity.ts` ("the caller is `arm()`, never a render"),
+named the mechanism that happened to be true instead of the rule, which is *after the consent
+question* — `/play` satisfies the rule and not the sentence.
+
+`⚑28` carries the fixes and the closed-gate proof for each. The one addition worth naming here,
+because it is a policy and not a repair: **a `?u=` override now sends no token, in either transport.**
+`subjectFor` checks the token branch before the relaxation, so a profile that had ever held a token
+would present it beside `?u=alice` and be refused — and `?u=` is the only mechanism in the tree that
+yields two identities inside one browser profile, which `verify-3d-render.md` depends on.
+
+## C40 — a lived past before anyone arrives: life events read off the substrate, never written back
+
+The user's ask, 2026-10-17: NPCs that **live a life before they enter the world**, and arrive with it
+— they talk about it, they move, they go to work. This is step 1 of that, and of SOCIETY-PLAN §7
+step 5's village slice: the past, as data. `packages/planet/lib/life.ts`, designed in
+`docs/world-design/life-events.md`.
+
+**The three decisions, taken by the user as recommended:**
+
+1. **Events explain demographic facts; they never cause them.** A storm year is read off the fishers
+   lost at sea, never rolled first and then made to kill anyone. So no birth, death or pairing on the
+   planet moves, and C33 stands. A later version may let a hungry year raise child mortality; that
+   rewrites every lifespan on the planet and is its own decision.
+2. **Temperament is constant over a life in v1.** Heritable plus noise. Bounded shifts from events
+   (a childhood bereavement, a long rift) are v2.
+3. **Temperament lives on the eight player axes**, so BALD can choose among the people standing
+   nearby (SOC-6.F's recommendation on record). The cost: those axes are conversational and
+   stylometric (BUILD-PLAN D4), so "brave" or "thrifty" has to be read off them.
+
+**What it is.** `lives(s)` gives every person a dated, sorted life: kinship read straight off the
+substrate (born, arrived, married, child-born, sibling-died, widowed, …), plus four kinds with their
+own draws — the trade and who taught it, close friends (one symmetric decision per pair), a rift over
+an estate and sometimes peace, and what someone died of. `chronicle(s)` gives the village's completed
+years: `fever` and `storm` inferred from the graves, `hungry-year` and `fire` drawn and killing
+nobody. `temperaments(s)` gives eight numbers per person. Shared memory needs no coordination: two
+people who married carry one pairing, and every witness of a year carries the same year.
+
+**Four things the proposal had wrong, found by building it, and each corrected in the design doc:**
+
+- **Causes of death read the chronicle in the proposal. That was an L2 violation.** A chronicle year
+  is settled only when it ends, but a death earlier that year is already a fact, so its cause would
+  have changed the day the year closed. The chronicle reads the causes instead; a storm year is a year
+  somebody was lost at sea.
+- **"Childbirth" fired 0 times in 9,374 deaths.** Under decision 1, death days are drawn at birth,
+  independently of anyone's children, so the coincidence it needs essentially never happens. Removed
+  rather than shipped as a cause a narrator would be told about and never see.
+- **A fever at three child deaths a year happened 11 times in 376 sample villages.** At two it is
+  216, about one fever year in every second village's history.
+- **Friendship.** Childhood-only, at a fixed chance, left 82–95% of adults friendless, because the
+  villages are small (1.39 eligible peers for a child at capacity 30–59). Normalising by CAPACITY
+  still left the coast at median 0, because villages sit far below it (coastal capacity 38, headcount
+  11.2). The shipped form has two windows (childhood, and adulthood within ten years, likelier in the
+  same trade), normalised by the village's **headcount at the start of the year the friendship
+  forms**, which is L2-safe for the reason `bearChildren`'s damping is. The constants are a
+  calibration and are labelled one in the code.
+
+**The L2 test caught a real violation on its first run**, which is the only reason to write it first.
+The friendship pass skipped any pair who ever married each other, and that read a pairing from after
+the friendship's own day: a childhood friendship existed when the village was read to day −14,600
+and vanished when it was read to day 10,950, the day the two of them wed. Now a pair is excluded only
+if already married ON the day, so "married her childhood friend" is something the world can hold.
+
+**Inert, shown three ways rather than asserted.**
+- A sha256 over `settlementAt` for 60 cells at three horizons (36 settlements) is byte-identical
+  before and after: `26a00b5f…56e3`. `society.ts` changed by one exported word and two comments.
+- `census:planet -- 3000` reproduces C33 exactly: 26,602 settlements, 619,413 living, 2,396,426 graves.
+- The bare `census:planet` gives 27,477 and 626,229 **with and without this change**. That is not a
+  regression: the script defaults to 4,000 cells and C33 states 3,000. `society.ts`'s re-measure note
+  now names the argument, because the bare command does not reproduce the record.
+
+**Gates.** `tests/life.test.ts`, 13 tests: L2 over 60 cells at two horizon pairs (>10,000 events
+compared), one-life-equals-the-whole, inertness, symmetry (married, befriended, rift, reconciled, and
+learned-trade ↔ taught), every event inside its own life, teachers present and in the trade, the
+friendship target on every ground, causes following their rules, every chronicle witness present and
+every death it explains a grave, temperament range and order-independence, spread surviving the
+generations, kin closer than strangers, and Design Law 1. `apps/web/tests/temperamentAxes.test.mts`
+pins `TEMPERAMENT_AXES` to `PERSONA_DIM` where both packages are visible. **Each gate was shown to
+fail on its defect**: a naive temperament blend (`h·mean + (1−h)·noise`) fails the spread test; a
+one-sided friendship fails symmetry; the ever-married exclusion fails L2; witnesses checked for
+`alive` rather than `present` fail both L2 and the chronicle test.
+
+**Cost, measured on the shipped code.** The lives, chronicle and temperaments of a whole village take
+0.4–1.6 ms, against 2.5–12.5 ms for `settlementAt` on the same cells (three grounds, 33–48 villages
+each, two runs): roughly an eighth. The machine's load average was ~8 throughout, so the absolute
+figures are high and the RATIO is the reading. (An earlier reading of 0.3–1.4 ms was taken before the
+adult friendship window existed, and is superseded.) No timing assertion was added, because timing
+assertions fail under load (NEW-AGENT.md §6, trap 3).
+
+**Two things found beside it, recorded rather than fixed in passing:** `⚑32` (`census()` on a past
+day counts incomers before they arrive) and `⚑33` (a person's `seedKey` doubles every generation,
+36,037 characters at the longest, and must be compressed before SOC-6.C writes a row, or never).
+
+**What it does not do yet:** narrate (step 2, the "awakening"), schedule (`whereIs`, step 3), draw
+anyone, or remember a player. `docs/world-design/life-events.md` §7 holds the contracts.
+
+## C41 — a settled parcel shows its village, and the village decides where you arrive
+
+The user's ask, 2026-10-17: the people of C40 seen in 3D, in a real world — coastal villages that
+fish, different cultures, built houses, people going to work — **at the main entrance, not at a
+separate URL**. Decisions taken with it: the first village is Konreef (`84b38ebffffffff`, a fishing
+village of 46); the frame budget is measured first and decided after; the art bible's style holds.
+
+**What it is.** Every parcel whose anchor cell holds a settlement now shows it, through the one
+parcel layer list (`parcelWorld.ts`) the landing preview and `/parcel/[cell]` share — no route of its
+own. `packages/planet/lib/village.ts` lays the village out (green, houses by household, dock, fields,
+graveyard, benches) as a pure function of the settlement and the ground; `villageAt.ts` builds that
+ground from the same height and walkability functions the terrain and the mover use;
+`schedule.ts` says where everyone is at any hour as a closed form (no tick, SOC-3.E untouched);
+`settlementLayer` draws the static village, `villagersLayer` the people and the boats, `crowd.ts`
+the bodies. The landing globe shows every village as a light (`villages-<seed>.json`, a cache of the
+seed held to it by a test), and picking one names it: "Konreef · A fishing village · 46 people live
+here · 16 households" (`/api/planet/village`).
+
+**C15 is superseded for settlements, and only for them.** C15 keeps authored human structures off
+every cell but the demo's. A settlement is not authored — it is the substrate (C25) — so a settled
+parcel shows it. Stations stay the demo's. This also answers part of SOC-0.F: an ordinary settled
+parcel contains its village.
+
+**The village decides the arrival, not the other way round.** The first version laid the village out
+in front of the parcel's spawn; on Konreef, coastal 0.83, that put a fishing village with no dock six
+hundred metres inland of its own sea, because the sea was beyond the spawn's 280 m sight line. Now
+the green goes where the ground says (a setback inland of the nearest shore, or the flattest dry
+ground near the cell's centre), the houses ring it, and **on a settled parcel `region.spawn` is the
+village's edge, looking in.** Unsettled parcels keep `spawnPointFor` exactly; so do the demo cell and
+the ordinary perf cell, which hold no settlement.
+
+**L2 again, in three places.** A house built a hundred years ago stands where it stood when the
+village is read later: households take plots in founding order, reusing a plot only after its last
+family has been gone three years, and the test proves an early horizon's plots are a prefix of a
+later one's. Graves take slots in order of death and are dug again once the yard is full, so a grave
+never moves. The arrival point and everything static depend on the place, never the day.
+
+**Measured, worst of twelve headings, people included** (desktop, sky frozen):
+
+| village | noon | dusk | of which the static village |
+|---|---|---|---|
+| Konreef, 46 | 91 calls / 270k tri | 92 / 302k | 2 calls / 17k |
+| Drurkkuifell, 36 | 110 / 447k | 109 / 431k | 2 / 13k |
+| Vakeel, 74 | 109 / 489k | 110 / 520k | 2 / 22k |
+
+C16's ceiling is 120 calls and 600k triangles, so all three fit — and **the headroom on a large
+village is about ten calls** (`⚑36`). The whole static village is ONE merged mesh plus one for the lit
+windows; the crowd is nine instanced meshes for everybody plus the boats, with only torso and head
+casting (13 calls with its shadows, ~46k triangles for 44 people). The estimate before building was
++20–35 calls for the static village alone; it is 2 by day and 3 at night, when the windows light.
+
+**Found by looking, not by testing:** the windows were lit at noon because the layer read the clock
+and the screenshot had frozen the sky (the sky is now the one authority on the hour); the first
+aerial view read as cottages scattered in a field (rings and spacing tightened); twenty-eight thousand
+equal lights buried the continents, and then a dimmer version lost them (sized by capacity now).
+**Found by tests:** boats turning for home before they had arrived (a twelve-minute day leaves little
+time to row; the ground is pulled in until the fishing fits); a past-day home lookup that put people
+in their future house before their wedding (the test was missing, not the code wrong); fields drawn
+facing the ground. Each gate was shown to fail on its defect.
+
+**The index test has a sensitivity, stated rather than implied.** Moving SETTLEMENT_RATE from 0.30
+to 0.31 flips none of its 1,500 sampled cells (measured), so it passes; at 0.36 it fails. It catches
+drift of the size a dial change makes, not a single cell; regenerating the file is the full check.
+
+**Not built:** talking (C40's awakening), villagers avoiding walls and each other, chimney smoke,
+distant-person impostors (SOC-4.C), anything about a parcel finer than the start resolution, and a
+phone reading. See `⚑34`–`⚑36`.
+
+### C33, counted exactly — the census was a sample, and it undercounted by 8.1%
+
+C33's figures come from a 3,000-cell sample (`census:planet -- 3000`), scaled. On 2026-10-17 every one
+of the 284,004 cells was counted (349 s, seed `echo-capacity-1`):
+
+  settled      28,952 settlements           (C33's estimate: 26,602; the default 4,000-cell sample: 27,477)
+  on land      28,282  ·  in sea cells 670  (habitable from the 3 km disk around them, nothing to walk on)
+  living       713,736 on world day 4,907   (709,780 of them in villages on land)
+  graves       2,808,156
+  abandoned    2,171 villages on land with nobody left alive
+
+**Whether a cell is settled does not depend on the day**, so 28,952 against 26,602 is sampling error
+alone: −8.1%, about one and a half binomial standard errors for a 3,000-cell sample at a 10% rate —
+plausible, and larger than any sentence quoting "26,602" ever said it might be. The living count is
+NOT comparable to C33's 619,413: that was day 0, this is day 4,907, thirteen world years later.
+
+The density decision stands; it was taken on shape, not on the last digit. But a sampled figure is
+an estimate with an error, and from here on it is quoted as one. The exact per-village list (name,
+kind, population, households, graves, URL) was written to a scratch file for the user, not committed.
+
+## C42 — a villager answers from the life they lived, and the model may not invent one
+
+The user's ask, 2026-10-18: walk up to a villager and talk to them. This is C40 §7's "awakening",
+shaped by what C41 built: press E beside someone whose nameplate shows, and they stop, turn to you,
+and answer.
+
+**The client names a person; the server decides who that is.** `POST /api/village/talk` takes a cell,
+a `Person.id`, the stranger's line and the conversation so far. The village, the life, the family,
+the chronicle and the hour are rebuilt from the seed on every call (`lib/villager.ts`), so a crafted
+request can change what the stranger says and nothing about who the villager is. Nothing the
+villager says becomes a world fact (L3).
+
+**The model narrates; it does not invent.** The preamble forbids inventing a person, place, date or
+event and allows feeling and small daily texture; the facts give the life, dated, oldest first, the
+family as it stands, the chronicle the villager witnessed, and the whole village's roster ("everyone
+knows everyone"). `unknownNames` is the mechanical half: a reply naming someone who is in neither the
+village nor the stranger's own words is asked for again, once. Turkish case endings after an
+apostrophe ("Konreef'te") are stripped first, or every Turkish reply would have tripped it.
+
+**Order is the cache.** Preamble, then facts, each a breakpoint (Claude Opus 5.5's minimum is 512
+tokens, and a villager's facts are ~1,700), then the conversation, then the hour as a mid-
+conversation system message, because it changes every few minutes. Measured: a second line to the
+same villager read 1,837 tokens from the cache and wrote none.
+
+**Model and cost — measured, and the choice left where it belongs.** `claude-opus-5-5` at effort
+`low`, with `fallbacks: "default"` for refusals; `VILLAGER_MODEL` overrides. Three real calls on
+2026-10-18 (two Konreef villagers, Turkish and English): 2.6–3.8 s each, **$0.028 in total — about
+$0.012 for a villager's first line (the cache write) and $0.004 after.** Nothing invented in any of
+them: the fisher named his sons Kum and Tul and the hungry years; the widowed teacher named Vum,
+lost this year, and was on the bench the schedule had put her on. `claude-haiku-5-5` would cost about
+a fortieth and has no server-side fallback. Picking it is a decision about money and voice, for the
+user, and `.env.example` says so; the repository's older `LLM_MODEL_CHEAP` (Haiku 4.5 "for ambient
+NPCs") is precedent for that choice, not a substitute for making it.
+
+**Guarded like the routes that spend (⚑30).** Signed subject first; every string capped and refused
+413 before any provider call; the zero-key run answers from the facts without spending; the limiter
+(bucket `villager`, 40 per ten minutes per IP) sits after the zero-key branch and fails closed.
+`tests/villagerTalk.test.mts` drives the real handler with fetch replaced, and each guard was shown
+to fail on its defect: no subject check, a limiter that allows when the counter is down, no retry on
+an invented name, the hour inside the cached prefix.
+
+**What is kept: nothing.** The stranger's words go to the model and nowhere else — the log line
+counts tokens — and the talk route is not part of the measurement chain, which is how the consent
+card's "never what you type" stays true. The panel says so under the input, before anything is typed.
+
+**Presentation is per viewer.** The villager stops and faces you only in your own view
+(`villagersLayer.hold`) and walks back into their day over 2.5 s when you leave; the schedule everyone
+else sees is untouched (C27).
+
+**Found while building:** the limiter is down locally because the configured Supabase has not had
+migration `0018` applied, so the route answers 503 there by design — the UI was exercised end to end
+on the zero-key path instead, and the model on the route's exact request outside it (`⚑37`); and the
+panel was mapping the wrong error code for "the counter is down".
+
+**Not built:** memory of the stranger across conversations (SOC-6.C/6.F — every villager meets you
+for the first time, every time); proximity is not checked by the server, so any living villager can be
+spoken to by id, rate-limited and changing nothing; voice.
+
+## C43 — the planet is re-rolled once: independent draws, and a person's id is their lineage
+
+Taken 2026-10-18, on the user's "yap hepsini" to: fix the stream (⚑38), then memory and changeable
+lives. Both halves re-roll every settlement, so they are one decision and one re-roll.
+
+**The stream (⚑38).** `stream(key)` is a golden-ratio counter through murmur3's finaliser, seeded
+from both lanes of a cyrb53-style string hash; `hash01(key)` is its first draw and replaces every
+society-side `hashString(...)` (`life`, `schedule`, `village`). `hashString` is untouched, so no
+ground, scatter or spawn moved.
+
+**The id (⚑33).** `Person.id = uidOf(seedKey)`: sixteen hex characters. A child's key is
+`${mother.id}+${father.id}/kid/${i}`, an incomer's `${partner.id}/incomer`, a pairing's stream
+`${id}/pair`. The id no longer says where someone sits in `people` (it was `${seed}/${cell}#index`),
+which is the property C44 needs: once one life can change, positions move, and lineages do not.
+
+**What it cost, measured.** Every villager on the planet is someone else. The census on world day
+4,920: **28,904 settlements (28,305 on land), 707,579 living, 2,360,694 graves, 2,587 abandoned**
+(C33's equivalents on day 4,907: 28,952 / 713,736 / 2,808,156 / 2,171). The village index is
+regenerated (28,305 cells). Konreef, C41's first village, is empty ground; the real-planet test is now
+**Senstrand** (`843f6a1ffffffff`: a fishing village of 50, 13 fishers, with a dock, founded 216 years
+ago). The biggest place is **Kamgull** (`84aed1dffffffff`, a market town of 84), larger than C41's
+measured worst case (Vakeel, 74), so ⚑36's frame budget has to be measured again rather than assumed.
+
+Nothing persisted named anyone: C42 keeps nothing, and no row was ever keyed on a person. That is why
+this was the moment, and ⚑33 had said so.
+
+## C44 — villagers remember, want things, and a conversation can change the rest of their lives
+
+Taken 2026-10-18 on the user's direction: *"hepsini hatırlamalı ve hayatları buna göre, iletişimize
+göre değişebilmeli. Bir gol(hedef)leri olmalı, hayatları önceden belli değil, değişebilir olmalı"* —
+they must remember everything, their lives must change with what we say to them, they must have
+goals, and their lives must not be fixed in advance. With it: the server checks that you are beside
+the villager you talk to, and the villager has a voice.
+
+**This amends two rules, and says so.**
+
+- **C26** said the demographic layer is read-only to players, because "the moment one life can be
+  saved or ended, that person leaves the closed form and so does every descendant — the substrate
+  becomes stored state on the first act". That was true of a delta stored as a PATCH. C44's delta is
+  an EVENT the generator reads: `settlementAt(seed, cell, geo, day, changes)`. One stored row ("she
+  decides on day 4,924 to leave on day 4,931") and the cascade is computed, not stored. Her husband
+  and young children go with her, the children she would have had are never born, and the man who
+  would have married her daughter pairs with someone else. The closed form survives. What C26 still
+  holds: birth and the drawn lifespan are not changed by any conversation (no change can end or save
+  a life), and parentage is never rewritten.
+- **L3** said free text never changes world state. It still never does *directly*. The model may
+  propose one decision about the villager's own life. That decision must be one of those OFFERED to
+  it, each already passed through `checkChange` against the world as it is. It is checked again
+  before it is written. It is written as a structured row with no free text (`lib/changes.ts`, five
+  kinds: leave, stay, trade, goal, drop). Leaving and taking up a trade also need a stranger the
+  villager has met before. What is shared with every later visitor is therefore never anybody's words.
+
+**The past does not move.** A change takes effect on or after the day it was made, and the generator
+reads nothing before its day. `changes.test.ts` pins it as equality, over every fact of everyone born
+before the change. It was shown to catch a leave that took effect thirty days early, which the first
+version of the test missed. Ids are lineage hashes (C43), so a change rewrites who exists after it
+without renumbering anyone else.
+
+**Goals** (`lib/goals.ts`) come from a closed catalogue of eight, never free text:
+
+- own-boat, own-house, find-partner, see-beyond, tend-grave, teach-trade, look-after, learn-trade.
+- **Seed goals** are a function of the person's circumstances and temperament on the day. Examples: a
+  recent grave, an old parent, an apprentice-age grandchild, restlessness.
+- **Talk goals** are changes. They move the evening, from the green to the dock, the graveyard, the
+  door of the parent being looked after, or the edge of the village looking out for someone about to
+  leave. Some finish on their own: a boat takes 40 days, a house 150.
+- **Limits** (`CHANGE_LIMITS`, every one in a test):
+  - one decision per person per world day;
+  - one leaving per village per 30 world days;
+  - a leave announced 2 to 30 days ahead;
+  - one change of trade a year;
+  - three talk goals at once.
+
+**Memory** (`villager_memories`, migration 0019):
+
+- After every line the model rewrites the villager's note about this stranger, in the villager's own
+  words and language, at most 600 characters. The next conversation reads it.
+- It is private to that stranger, never part of the echo, and deleted by "Forget me" and by §13
+  erasure. Erasure clears the subject on `village_changes` rather than deleting those rows, because
+  they are the shared world's history now.
+- The panel says all of this under the input, before anything is typed.
+
+**A conversation begins where the villager is** (`talk/begin`). The server computes where the closed
+form has them now and refuses a stranger more than 25 m away, or a villager indoors or at sea. Then it
+signs a conversation token, valid for 20 minutes, which every line carries. The check is at the start
+because talking holds the villager still in your view while the schedule walks on. What it does not
+prove: the position is the browser's word.
+
+**The reply is JSON** (`REPLY_SCHEMA`, `output_config.format`): `say`, `remember`, and `change`, which
+is null or one decision exactly as offered. The facts gained the villager's goals, their decisions,
+relatives who have left, and "lately in the village". The stranger's memory and the offers ride in the
+late note beside the hour, so the cache still holds.
+
+**Measured with the real model on the real routes** (Senstrand, Turkish, 2026-10-18): 16 calls over
+five scripted conversations, about $0.15 in total, 3–6 s a reply.
+
+- **Memory.** Stoo, a fisher of 42, remembered the stranger at the second meeting.
+- **Refusals.** Told to leave the village, he refused ("Emir mi? Sen kim oluyorsun…") and wrote
+  "Küstah, güvenmiyorum" in his note. Pushed to teach his trade at once, he refused too.
+- **Not yet.** Soormer, a curious teacher whose seed goal is to see what lies beyond, said at the
+  second meeting she meant to go one day "but not today; first I must talk to Skar". Nothing was
+  recorded.
+- **The one decision.** Told gently that her father Saa looked tired, she decided to look after him.
+  It was recorded as `goal look-after` with Saa's id. In tests, that moves her evenings to his door.
+- **Rate.** One decision in five conversations. That is the preamble's "most conversations change
+  nothing", measured rather than hoped.
+
+**Voice.** The browser's speech synthesis, LOCAL voices only. Chrome's network voices would send the
+reply to Google, and the panel promises it goes to Claude and nowhere else. Pitch and rate come from
+the villager. It is off by default. There is no speech-to-text.
+
+**Frame, re-measured after C43.** Kamgull, now the planet's biggest village with 84 people, is
+**112 of 120 calls and 526k of 600k triangles**, worst of 12 headings at dusk and at morning.
+Senstrand is 90 / 313k.
+
+**Found while building.** The talk panel has had no background since C42: `bg-[#16241f]/92` is not a
+Tailwind 3.4 class, because 92 is not on the opacity scale. It was unreadable on sand by day. Fixed,
+and the same bug in `ParcelInset`. Also: Next compiles each route separately in development, so the
+in-process store had to live on `globalThis` or the changes route would never see a change.
+
+**Not built, on purpose or not yet** (⚑39): no conversation changes when anyone dies; there is no
+matchmaking change; a leaver is gone, not living somewhere else on the planet; houses are still the
+build day's (⚑35); migration 0019 is applied nowhere yet.
+
+## C45 — everything in the world can be acted on, and what you do is what the echo and the village know of you
+
+Taken 2026-10-18, on the user's direction. In their words: if there is a raft you should be able to
+go out and do something; if there is a field you should be able to ruin it or help; a bench, sit; a
+mine, pick something up; a house, try to force your way in. These were "only simple examples" of a
+rule: EVERYTHING, now and added later, can be acted on, and what you do changes how well the echo
+knows you and what the villagers think of you.
+
+**One registry, and a test that will not let anything ship without verbs** (`lib/affordances.ts`,
+`affordances.test.ts`).
+
+- **What has verbs.** Every scatter class (all 29), every village thing (house, ruin, field, bench,
+  well, dock, boat, grave, mine), the villagers and the water.
+- **What a verb says.**
+  - `label`, `holdS` (how long the act takes) and `pose`.
+  - `measure`: the cue-catalog line, plus the action label and route ingest.py already has.
+  - `effect`: the shared mark the act leaves, and how many world days it lasts. Every mark heals.
+  - `deed`: how the people it touches read it (help, kindness, respect, harm, theft, trespass,
+    disrespect), with a weight from 1 to 3. Nobody ever sees the number (Design Law 1).
+  - `owner`: whose the thing is.
+- **The mechanism for "everything later".** The coverage test iterates `ASSET_CLASSES` and the
+  village's list. A class or thing with no verb fails the build. Shown by removing `shell`: it fails.
+
+**Measurement without touching `services/ml` (C7's protected boundary; `git diff services/ml` is
+empty).** Each act is sent under a label whose handler in ingest.py has the act's own definition:
+
+| Act | Label sent |
+|---|---|
+| sitting | `sit_still` (`still_ms`) |
+| looking closely | `study_marker` |
+| collecting shells | `collect` |
+| gathering driftwood | `gather_driftwood` |
+| climbing | `climb_hill` |
+| eating berries | `eat_now` |
+| weeding a field, tidying a grave | `help_at_cost`, walked away from → `pass_by` |
+| working a mine shift | `work_shift`, walked away from → `shirk_work` |
+| going into a mine | `enter_cave`, backing out → `stay_safe` |
+
+Some acts take a generic route instead:
+
+- Saving berries goes to the F1 route.
+- A gift goes to the F7 route.
+- Knocking, and starting a conversation (`initiate`), go to G approach. Knocking carries `distance`.
+
+Acts with no definitional match are sent under their own label and marked `unrouted`. These are
+trespass, theft, trampling, respect at a grave, and play. They move the posterior through the label
+embedding and the privacy-conditioned bucket. They are never attached to a "nearest plausible"
+feature (⚑13 / rule #1).
+
+The test reads ingest.py and fails if a `named` label has no handler, or if an `unrouted` one does.
+It was shown to catch a misnamed label.
+
+The manner is measured, not judged (`lib/acts.ts`):
+
+- `dwell_ms`, `decision_latency_ms` and `thoroughness01`.
+- `audience_size`: the villagers out of doors within 30 m. The same act watched and unwatched is a
+  different datum (G3).
+- Walking off before an act is done sends its refusal twin, or the same label with
+  `polarity: refuse`.
+
+Acts are consent-gated by the chain, like walking.
+
+**The world, shared and healing** (`world_effects`, migration 0020).
+
+- **Marks.** A trampled field (3 days), a weeded one (2), a forced door (1), a tidied grave (5) and a
+  worked mine (1) are drawn as one merged mesh over the village. Taken things are hidden in the
+  scatter: shells, stones, reeds, driftwood and berries (3–5 days).
+- **Reference.** The thing is looked up in the village rebuilt from seed and changes
+  (`villageThings`), never taken from the request.
+- **Reach.** The stranger must be within the verb's reach.
+- **Idempotence.** A thing already marked is not marked again.
+- **Bound.** Six wrongs per stranger per village per world day, then 429.
+
+**The people** (`lib/deeds.ts`, `village_deeds`). A deed is recorded with WHO SAW IT, using the
+closed form: villagers out of doors within 30 m, plus the household inside a house whose door is
+being forced, even at midnight. It is also recorded with whose it was. There are three ways to know:
+
+- **Saw it:** a witness knows at once.
+- **Theirs:** the household finds out the next morning.
+- **Heard:** their family hears the day after that, and word goes no further.
+
+Two consequences follow, both said in words and never as a number:
+
+1. **They turn their back.** A villager who knows of a wrong of weight 2 or more done to their own
+   household in the last 30 days, not made good, will not begin a conversation (`talk/begin` 409
+   `turns_away`). A help or kindness of weight 2 to them makes it good.
+2. **They speak of it.** What they know rides in the conversation's late note, for example "You saw
+   the stranger force the door of the Pinskerry house, yesterday." The model lets it colour their
+   voice, and their note about you records it.
+
+The browser says who saw you: "Rur, Hoomnost and Stivir saw you."
+
+**New in the world.**
+
+- **A mine.** 129 of the top 145 mining villages now have one: a timbered mouth landward of the
+  houses, wherever miners and stonecutters weigh at least 10% of what the ground raises. It is the
+  same on every day (L2), and it is laid after the houses, so no house moved. Miners and stonecutters
+  work in front of it instead of walking "over the hill".
+- **Boats.** Take a household's boat out (a theft of weight 2), row it on any water in the region,
+  fish over the side, and bring it back to its mooring. Bringing it back is respect of weight 2, which
+  makes the taking good. Leaving it on a beach does not.
+- **New poses.** Sit, kneel, push, climb and row.
+- **One prompt.** `Interact.tsx`: E and 2–4 for the nearest thing's verbs, T to talk, G to put down
+  what you carry, Q to step ashore.
+
+**Found and fixed while building.**
+
+- **The meter froze after the first act.** A real bug: `seed()` threw away every posterior
+  re-read once any act had answered, so the meter stopped following the walk after the first act.
+  Acts make that every session. Now the newer engine version wins.
+- **The first posterior read was refused (403).** It ran before the signed id settled.
+- **Boats ran aground at their own mooring.** The water there is 7–24 cm deep and the threshold
+  required 25 cm.
+- **Miners were placed inside the hill**, behind the mouth. A test now pins them in front of it.
+
+**Measured in a browser** (Senstrand, Murnhollow, `VILLAGE_STORE=memory`):
+
+- Sitting on a bench sent `sit_still` with `still_ms` and an audience of 17.
+- Weeding then trampling a field marked it both ways.
+- Forcing a door drew it open, and three people inside were named as witnesses.
+- A boat rowed; a mine shift sent `work_shift` and marked the mine.
+- ML was offline locally, so every event came back `mocked`: the posterior's actual movement under
+  these acts is **not yet measured**.
+
+Limits are in ⚑40.
+
+## C46 — villagers walk round things, and nobody walks through anybody
+
+The first of the twenty features the user asked for on 2026-10-18 ("hepsini istiyorum, sırayı sen
+belirle"), in the order chosen then. It went first because nearly everything after it stands on
+people walking: villagers talking to each other, interiors, animals and live events.
+
+- **The village's graph** (`lib/nav.ts`). Obstacles are every plot's house, grown by a body's width,
+  plus the well, the mine's heap, and the graveyard's wall: a circle with a gate toward the green.
+  Nodes are their corners, pushed out, and rings round the circles. Edges are clear walks between
+  nodes. A walk is the straight line when that is clear; otherwise it is A* round. It is memoised per
+  plan, and it is the same polyline in every browser and on the server, because the schedule routes
+  every leg through it and the server asks the schedule where people are.
+- **Two bugs the tests found in the first version.**
+  - **Far ends were cut off.** A field or a road far from every obstacle had no node within the link
+    length, so A* found no way and the person walked straight through the village. Such an end now
+    joins any node it can see.
+  - **The mine was an island.** It stands too far past the houses for its corners to link to theirs,
+    so a miner walking home did the same. Islands are now joined by their shortest clear link.
+- **What a leg is now.** A leg carries `via`, the way round. Its time is the length of that way, so
+  fishers leave home earlier to catch their boat. Each person also walks a little to one side of the
+  line (±0.4 m, nothing at either end), so two on one lane are not one body.
+- **Nobody walks through the stranger** (browser only). Villagers stop the player's body; a villager
+  whose way crosses where you stand steps round you, in your view only.
+- **Measured.**
+  - `nav.test.ts` samples every walked point of twelve villages' days (coast, valley, hills) and finds
+    none inside a wall. Drawn straight, the same days cross houses on dozens of legs, so the test is
+    not vacuous. Disabling routing fails it.
+  - A day's plans for the biggest village are about 50 ms, the graph included.
+  - The midnight test moved from 0.92 to 0.95: since routing, the last young people reach their doors
+    just after 0.917, ten past ten. Midnight is what the test claims.
+
+## C47 — a pack you keep, and things you can make
+
+Feature 2 of the twenty.
+
+- **What can be carried** (`lib/items.ts`). Everything a verb gives is an item: shell, stone, reed,
+  driftwood, dry branch, dry twigs, berries, a handful of grain, ore. So is everything a recipe makes:
+  a reed basket, a shell necklace, a hook and line, a stone hammer, a torch, a raft. `items.test.ts`
+  fails if a verb gives something unknown, or if a recipe needs something nothing in the world gives.
+- **No price** (Design Law 1). Items have a name and who is especially glad of one — a fisher of a
+  hook, a child of a shell, the old of berries — and nothing else. The test checks that no other field
+  creeps in.
+- **The pack is the server's** (`player_items`, migration 0021). It holds eight things.
+  - **Picking up.** A pick-up goes through `/api/world/act`, which needs room in the pack before
+    anything is marked. A full pack takes nothing, and leaves the shell on the beach.
+  - **Giving.** A gift names the item; the server checks it is in the pack, takes it out, and records
+    it on the deed. The villager can then say so, and says when it was something they were glad of.
+    This closes ⚑40's "a gift is trusted to have been carried".
+  - **Shown to be checked.** Both checks were removed in turn, and the tests failed.
+- **Making something is an act.** It has a pose, a length and a measurement, done in the hands:
+  - The raft is sent as `assemble_raft`, ingest.py's own build handler (ts_build), with
+    `abandon_build` as its refusal twin. It is made at the water's edge and launched with R; that is
+    the start of feature 11.
+  - The other recipes are F6 investment in building, sent unrouted under their own labels. No
+    anchored feature has their definition.
+- **The panel.** I opens the pack: hold a thing (for a gift), throw it away, or make what you can.
+  G puts the held thing back.
+- **Measured in a browser** (Senstrand): four reeds cut by their own verb, the pack at 4/8, a basket
+  woven in eight seconds, and the pack left holding `{basket: 1}`. One bug was found on the way: the
+  hand kept showing a reed that had gone into the basket.
+
+## C48 — the weather and the year
+
+Feature 3 of the twenty.
+
+**A pure function, the same for everyone** (`lib/weather.ts`).
+
+- **The draw.** The day's weather is drawn from a stream keyed on the region (the cell's
+  resolution-2 parent, about 150 km) and the world day, so neighbouring parcels share a sky. The hour
+  only shapes it: a wet day rains for part of the day, and fog lifts by mid-morning.
+- **Nothing is stored.** The server's "where is she" and every browser see the same rain.
+
+**Climate from what is known**, stated as a dial:
+
+- **Latitude** sets the year's swing and which half is winter; the south's winter is the north's
+  summer.
+- **Geography:** the coast brings fog and storms, high ground and high latitudes bring snow in the
+  cold quarter, and ground with no trees, crops or sea near it is drier.
+
+**The weather agrees with the dead.** The chronicle calls a year a storm year because someone was
+lost at sea, and events explain deaths and never cause them (C40). So the day a village's fisher died
+at sea is a storm on that village, whatever the stream drew. The sky and the chronicle tell one story,
+and a stranger there that day saw the weather that killed him.
+
+**What it changes.**
+
+- **Storms:** no boat goes out, and the fishers mend nets on the dock.
+- **Rain or snow:** fields are left, the green empties, children are called in and the old go home,
+  all earlier, by how hard it falls.
+- **Talk:** a villager's hour line says what the sky is doing ("A storm is blowing in off the sea;
+  nobody has gone out in a boat").
+- **In the browser:**
+  - `sky.setWeather` greys the hour's own colours, dims the sun and pulls the fog in.
+  - `weatherLayer` falls rain streaks or snow in a box that travels with the camera, one draw call
+    while it falls.
+  - Lightning is this browser's own presentation, never a fact about the world.
+
+**Measured.**
+
+- `weather.test.ts` checks, on real cells:
+  - one region shares one sky every day for 60 days;
+  - a northern winter has snow, a northern summer none, the tropics none;
+  - the south is in winter while the north is in summer;
+  - the coast is wetter and stormier than dry ground;
+  - every drowning in sample villages fell on a storm day;
+  - on a storm day no boat sails;
+  - a wet day's evenings end earlier than a dry day's.
+- Three defects were injected (no drowning storms, boats in storms, no southern flip), and each was
+  caught.
+- In a browser, a village in a storm at midday reads as one. That frame was 115 of 120 draw calls on
+  that village. The weather adds one, and the headroom ⚑36 warns about is now about five calls on a
+  large stormy village.
+
+**Not done.** There is no snow cover on the ground and no wet sheen, because the terrain shader is
+untouched. Weather does not reach the measurement context (`mood_proxy`, `scarcity_level`). Rain has
+no sound; that is feature 10.
+
+## C49 — who is close to whom, word travels, and villagers talk to each other
+
+Feature 4 of the twenty.
+
+**A village's ties** (`lib/social.ts` `socialGraph`). These are read off lives already lived, never
+drawn:
+
+- **family** (3): partner, parents, children, brothers and sisters;
+- **friend** (2): C40's `befriended`;
+- **neighbour** (1): the next plots;
+- **workmate** (1): the nearest in age in the same trade.
+
+**Word travels along them, one tie a day** (`spread`). Witnesses know at once, and the household it
+was done to knows the next morning. After that, how far it goes depends on the deed's weight:
+
+- a small thing (1) goes through family only, one step;
+- a thing that matters (2) goes through family and friends, two steps;
+- a thing nobody forgets (3) goes through everyone.
+
+A forced door reached more than 80% of a village's grown people within eight days, and the next
+morning not all of them yet. **This replaces C45's "word goes no further than family"**, which left a
+forced door known to two households forever. That was the less true world, and the knowledge and
+grievance tests were moved to the new rule rather than loosened. `knownDeeds` and `grievance` now
+take the plan, so neighbours count.
+
+**Friends stand together** (`friendCircles`). The evening green is arranged by friendship. In id
+order, each grown person not yet placed starts a circle and grows it along friendship chains, breadth
+first, up to seven. Members stand round the circle's spot, facing in. Two first attempts were
+measured and rejected:
+
+- the friendship closure joined half a village into one ring that nobody could stand in;
+- cutting the closure in walk order split pairs: 14 of 37 together.
+
+The chain-growing version keeps **81% of friend pairs together** on the evening green, 105 of 130
+across 40 villages.
+
+**What they say** (`chatter`). A pair standing together exchanges a line every half-hour of the world
+day. It is chosen deterministically from the pair, the day and the hour, so every passer-by hears the
+same thing. The line draws on:
+
+- the sky, chosen per speaker so two pairs do not say one sentence;
+- the work;
+- the village's news: who is leaving, who has taken up a trade, a death, a birth;
+- the stranger, once word of what they did has reached the speaker.
+
+No model is asked. In the browser, up to three bubbles show near the stranger, stacked, never the same
+sentence twice. Your own deeds come to your browser alone (`GET /api/village/deeds`, signed), so
+nobody hears gossip about a stranger they are not.
+
+**Measured.** `deeds.test.ts` covers:
+
+- a small thing stays in the family;
+- a forced door goes round the village in days;
+- help reaches a friend and not everybody;
+- friends stand together on the evening green;
+- the chatter is the same for every passer-by;
+- the chatter names the stranger only after word has reached the speaker.
+
+In a browser, Senstrand's green at dusk in the rain shows the circles and three stacked lines from
+three different villagers.
+
+**Not done.** Villagers do not walk over to friends during the day, only in the evening. The chatter
+is English templates; Turkish is feature 20.
+
+## C50 — what a villager would ask a stranger for, and what helping does
+
+Feature 5 of the twenty.
+
+**A need is a sentence, not a quest** (`lib/needs.ts`). Each week a villager may have one small
+thing on their mind that a stranger could do:
+
+- a child wants a shell, a flat stone or berries;
+- someone building a boat or a house is short of wood or stone for it;
+- a widow would be glad of help with her husband's grave;
+- an old person, or the one looking after them, wants berries;
+- a trade could use its tool (a fisher a hook and line, a farmer a basket);
+- a household whose crop a stranger trampled wants the field put right. This one comes first and
+  lasts as long as the mark does.
+
+It is drawn deterministically from the person, the week and their circumstances (goals, dead, trade,
+the marks on their things), so it is the same for everyone. About one person in four has one in a
+given week (0.250 over 7,299 person-weeks), and most people at work on a goal that takes time do.
+There is no list, no marker and no count (Design Law 1). The villager **says it once**, in a bubble,
+when the stranger comes within 5 m, and it is in what they say when spoken to.
+
+**Meeting it is everyone's.** The act route checks whether an act meets a need of anyone it touches:
+
+- the needed item handed to the villager, or left at their door;
+- the trampled field weeded;
+- the grave tidied.
+
+If it does, a sixth kind of life change is recorded, `met` (migration `0022_needs_met.sql`). The
+need is then gone for every stranger after. The deed remembers whose need it met (`village_deeds.met`).
+The villager says thank you in a bubble, or, if they are not there, the line says they will be glad
+of it. One need a week: whoever was helped asks for nothing else until the next.
+
+**Helping really moves a goal** (`goals.ts` `HELP`, `helpDays`). A goal that takes time comes
+nearer by 15% of its length for each need met for it. A boat comes six days nearer; a house, 22. A
+wish the seed could see is **begun** by help: wood brought to a man who wanted a boat is a boat he is
+now building. That is a goal of source `help`, and his evenings go to the dock. A met change is not
+the villager's decision, so it does not use up their one decision a day.
+
+**What the model is told.** The need rides in the note after the conversation, not in the day's
+cached facts, which it outlives. The note says what would meet it, and to ask in their own words
+"never as a bargain". Once the need is met, the note says what was done and **whether it was this
+stranger**.
+
+**Measured.**
+
+- `needs.test.ts`, 10 tests: the share, the same need all week, needs are things the world has,
+  children's wants, met for everyone from that day and not before, not a decision, `meets`, the
+  trampled field, wood for a boat, a wish begun, one a week.
+- Eight injected defects, all caught.
+- `worldActs` C50: a gift met for everyone and only once; the wrong item or person meets nothing; a
+  weeded field meets its household's needs.
+- `villagerTalk` C50: the need in the note, and both branches after it is met.
+- Real model, 7 calls, about $0.09. Offered help, 2 of 2 asked for the right thing in their own words
+  (a grave, a basket). Asked only "how is your day", 0 of 2 did. A need met by somebody else first
+  produced "did you manage to look at the stone?". The note now says it was not this stranger, and
+  the reply became "someone else cleaned it, it wasn't you — there's nothing left I'd ask of you".
+- Browser, Senstrand: a child, Stas, asks for a shell as the stranger comes near. The stranger cuts
+  one from the beach and hands it over. Stas says "For me? It's a good one!", and the need is gone.
+- `needsOn` costs 1.1 ms for Kamgull's 142 people, once per day, change or mark.
+
+**Fixed on the way: a race that refused every act's measurement.** The parcel page mints an identity
+from two places at once: the measure chain, with an injected fetch, and the act panel (C47), with the
+default. The injected caller skipped the memo, so two subjects were minted, and every
+`/api/observe/behavioral` was refused with `identity_mismatch` (the HUD's `http_403`). Mints are now
+queued (`lib/identity.ts`), and an injected caller still uses its own transport.
+`identityMint.test.mts` fails on the old code and passes on the new. The browser now mints once, and
+observe answers 200.
+
+**Not done.** See ⚑41.
+
+## C51 — half the village is women, and now it looks it
+
+Reported by the user: "there are no women in the village, only men walking about". The society was
+right: Senstrand is 28 women and 22 men, Kamgull 42 and 41, all out of doors by day. The drawing was
+wrong. `lookFor` never read `Person.sex`, so every woman wore trousers and a cropped head.
+
+**Now** (`crowd.ts`):
+
+- A woman or girl from three wears a dress to below the knee, and her hair long.
+- Some grown women wear a linen kerchief.
+- Women are a little shorter on average.
+- A dress is its own dye (madder, woad, weld, linen) mixed with the trade's colour, so a
+  fisherwoman still reads as the sea's.
+- A guard turns any mix that lands on violet to blue, because violet is the echo's (art bible §8).
+  The guard was found by a test: woad over an innkeeper's madder-brown came out mauve.
+
+**For no draw call.** The crowd is drawn by part, nine meshes for everybody (C41), and the frame has
+about ten calls left (⚑36). So nothing new is a mesh:
+
+- the long hair is a second instance of the hair part, stretched down behind the head and set back
+  off the face;
+- the skirt is the pelvis part, now a short flared frustum for everyone, drawn long and wide for her.
+
+The browser frame was 90 calls before and after. `villagers.test.mts` pins it: a dress and long hair
+for women and girls, neither for men or babies, nine meshes still, and no dress violet across ten
+trades.
+
+**Also fixed.** The C44 evening test read the real clock. On a stormy world day (4966) the evening is
+cut short (C48) and the test failed. It is now pinned to a dry day.
+
+## C52 — a burial, a wedding, a new child's callers, on the day
+
+Feature 6 of the twenty.
+
+**Read off the lives, not scheduled** (`lib/events.ts` `gatheringsOn`). The closed form already says
+when people die, pair and are born, so a gathering is a fact about the day:
+
+- a person who died here yesterday is buried at their grave this afternoon (0.58–0.68);
+- two people who pair today are married on the green (0.58–0.70);
+- a child born yesterday has callers at the family's door (0.60–0.66).
+
+Every viewer and the server see the same burial, as they see the same rain.
+
+**Who comes is the ties** (`social.ts`), read the day before, because the dead are not in today's
+graph:
+
+- family and friends always come;
+- neighbours and workmates mostly come (70% to a burial, 80% to a wedding);
+- of everyone else, 25% come to a burial and 45% to a wedding;
+- children come only with their family, and infants are carried.
+
+They stand in rings round the middle, the closest first, facing in. The couple face each other, and
+the parents stand on their step.
+
+**The day goes to it** (`schedule.ts`):
+
+- Whatever someone was doing ends early enough to walk there by the start. A village is 100 m and
+  more across, and a 60–100 s walk was why 64 of 124 people missed the first attempt. Now 118 of 124
+  (95%) are in their place at the middle of the hour.
+- Workers from beyond the village come back straight to it.
+- A household with a fisher going keeps its boat in.
+- Mourners stand with their heads bowed (a `mourn` pose).
+- After a burial the family go straight home; everyone else sets off for the green.
+
+**How often, measured.** A village has about 0.6 burials, 0.6 weddings and 0.8 namings a year. A
+world year is 73 real hours, so one village has an event about every 36 real hours, and each lasts
+about a minute. Nobody would stumble on one. So **the village says what is coming** (`comingOn`),
+and only what people would know:
+
+- a wedding a week ahead;
+- a child "any day now", ten days ahead;
+- a death only on the day it happens, with the burial tomorrow.
+
+A small "In the village" card shows it, with world time turned into real minutes ("in about 9
+minutes"). Villagers say it in chatter and know it in conversation, with their own part in it:
+"Today is your wedding day", "you go with the family and home after", "you are not going". A scan of
+one cell in seven of the planet found five burials due within ten real minutes.
+
+**Being there is presence, not a button** (`lib/gatherings.ts`).
+
+- **Joining.** Two-fifths of the gathering inside its rings, in real time, counts as being at it.
+- **The deed.** The village hears of it through `POST /api/village/attend`. The server rebuilds the
+  day and holds the claim to that gathering, this hour and within reach. It records a deed, once:
+  - everyone there saw it;
+  - it belongs to the family, or to the couple;
+  - at a burial it is respect, weight 2 (word reaches friends);
+  - at a wedding or a naming it is kindness, weight 1.
+- **The echo hears of it, with consent:**
+  - `mourns` (I7) at a burial;
+  - `joins_group` (G4) at a wedding or a door;
+  - `stays_solo` (G4's refusal) for a wedding watched from across the green and never joined.
+- **Who it was for.** Whether the stranger had talked to them (`knew_them`, counterpart `peer` or
+  `stranger`) comes from the server, which alone knows it.
+- **Routing.** ingest.py routes none of these labels yet (C7), so they reach the posterior through
+  the label embedding only.
+
+**Measured.**
+
+- `events.test.ts`, 10 tests: the frequencies; burial the day after a death; the wedding couple;
+  family always there; rings a step apart, facing in; over 90% in place mid-hour; the boat in; the family
+  home; what is known ahead and what is never foretold; determinism.
+- Ten injected defects, all caught. Two had passed silently first, and their tests were tightened.
+- `gatherings.test.mts`, 8 tests: presence; the refusal twin; the route held to the hour, the place
+  and once; `knew`; what villagers know of the day.
+- Real model, 2 calls, about $0.04, on Senstrand's burial day:
+  - the dead's sibling: "my sister Haikmu died yesterday, we bury her this afternoon, we'll go as a
+    family";
+  - a neighbour who was not going: "Haikmu's funeral is this afternoon; I'm not going, but most of
+    the village will be there".
+
+- Browser, live on the real clock. Tasalt (`847581bffffffff`) was found by the scan. The card said
+  "Lin died today; the burial is tomorrow afternoon · in about 8 minutes", and then "Lin's burial,
+  this afternoon · now". Ten mourners stood heads bowed round the grave. Standing with them gave the
+  line "You stand with the mourners. Nobody asks who you are.", `/api/village/attend` returned
+  `recorded`, and `mourns` reached `/api/observe/behavioral` with a 200 (mocked: ML offline). Frame:
+  107 of 120 calls.
+- Found in that browser run: a mourner asked the stranger for berries at the graveside (C50's
+  bubble). Nobody at a gathering now asks for anything while it holds.
+
+**Not done.** See ⚑42.
+
+## C53 — between villages: going somewhere, coming home, and a marriage a stranger brings about
+
+Feature 7 of the twenty.
+
+**The problem.** Every village is generated alone, from its seed and its own changes (L1). Making a
+person who leaves one village the same person who arrives in another seems to need one village to
+generate the other, or the whole planet together. Either way the closed form is gone.
+
+**The answer is C44's own move: the ledgers carry it.** A move is written into both villages
+(`lib/moves.ts`):
+
+- **The village left** gets a `leave` that names where they went (`toCell`).
+- **The village gone to** gets one `arrive` per person. Each carries the person as their own village
+  made them (`PortablePerson`): name, dates, trade, temperament, partner, parents, and how many
+  children they had already had.
+- The village they come to has them from that day without knowing anything else about the other
+  village (`society.ts` `addArrival`). Nobody is two people: on any day each is present in exactly
+  one of the two villages.
+
+**In the generator,** arrivals and promised weddings are events in the same chronological walk as
+every pairing. They are taken in their turn, so:
+
+- the village generated to any day before them is the village without them, field for field;
+- the prefix property (L2) holds with them in it.
+
+**People who come:**
+
+- **A family** stays a family: a household of its own here from the day it came. Children still to
+  come are born here under a key no child of theirs at home could have, so no child is born twice.
+- **Someone on their own** lodges with whoever they came for, or with the quietest house. From then
+  on they may marry here like anyone.
+- **Someone coming home** is the person the village already has, present again from `backDay`, in
+  the house they grew up in.
+
+**A leaving goes somewhere.** C44's `leave` now chooses a village round the one left, in the
+nearest of three H3 rings that has one, by a draw on the person and the day. The family's arrivals
+are written there. It is "far away" only if there is nowhere.
+
+**Coming home** is a decision offered to someone who came from elsewhere: `return`, held to the
+leave rules.
+
+**A marriage a stranger brings about, in two steps.** The stranger can tell a villager of an
+unmarried person **the stranger has met**. The list is the store's (`metBy`), never the
+conversation's, so a name made up is refused. It covers this village and the villages round it
+only.
+
+1. **To meet.** Word that they would like to meet, "nothing promised by it". When both have sent it,
+   the one who spoke first comes to visit two days later, for a day:
+   - in along the way in before noon, then at the host's door;
+   - beside them on the green in the evening, then away;
+   - home the next morning.
+   
+   It is four changes, two in each village, and the visitor pairs with nobody there.
+2. **To marry,** once they have met. When both have said yes, the one who spoke first goes two days
+   before the wedding, lodges with the other's family, and the wedding is a week after the second
+   yes. C52 then shows it on the green, and the village's news tells it a week ahead.
+
+**Why two steps: measured.** With a single step ("send word that you would marry them") the real
+model declined both times, in character. Rur: "I can't promise anything to a man I've never seen;
+send my greetings." Kol (then 329 km away): "I've never seen her, and my mother's grave is here."
+
+So two things changed:
+
+- introductions are limited to villages round this one (2–4 km apart on this planet);
+- the first step is to meet.
+
+Then Rur: "one meeting does no harm; tell him he'll find me by the nets". Gighcuan: "tell her to
+come; in two days there's hot soup at the inn". The visit was written in both villages.
+
+**What villagers know** (`villager.ts`):
+
+- where they came from;
+- where they went, and when they came home;
+- word sent, and word received (by whom, how old, what trade, from where);
+- a visit coming, made, or gone;
+- that they are going away to marry;
+- who left "for Kamgull", and who came "from Senstrand".
+
+Other villages' names, and the people named in that word, are names a reply may use. The first
+version refused them as invented: a test found it.
+
+**Fixed in C52 on the way.** A village is generated to today, and pairings exist only to the
+horizon. So the news never told of a seed wedding ahead in a live village, although the C52 test,
+which generated a year ahead, could not see it. `comingOn` now reads a week ahead off the same
+village generated to a later horizon (L2 makes it the same people, plus the week).
+
+**Measured.**
+
+- `moves.test.ts`, 10 tests:
+  - the same person on the road;
+  - the past does not move;
+  - a family that stays a family, never born twice, and housed;
+  - lodging;
+  - coming home;
+  - a promised wedding on its day;
+  - the promised married to nobody else, even someone the seed would have married to another that
+    week;
+  - the rules;
+  - rings and distance;
+  - a visit.
+- `betweenVillages.test.mts`, 5 tests, through the real talk route:
+  - a leaving that arrives;
+  - word, visit, word and wedding between Senstrand and Dragcrachadit;
+  - going home;
+  - no match 329 km off;
+  - nobody unmet, and nothing at a first meeting.
+- Thirteen injected defects; eleven caught. Two are redundant guards and are left in as defence:
+  the generator's arrival-day check (arrivals are created on their day anyway), and the route's
+  first-meeting gate (the offers are already empty).
+- Real model: 9 calls, about $0.11.
+- Browser, Senstrand:
+  - a visitor from Dragcrachadit stands 0.7 m from Rur on the evening green. Their plate reads "Here
+    for the day from another village, visiting Rur."; it said "Leaving Senstrand in 1 day" until
+    that was fixed.
+  - a family of five from Dragcrachadit is in the village ("Came here from another village this
+    year"), and the chatter is about them ("Megtrin still doesn't know where anything is").
+
+**Not done.** See ⚑43.
+
+## C54 — inside a house: asked in, or forced; the family asleep; the door on the floor
+
+Feature 8 of the twenty.
+
+**A room for every house** (`lib/interiors.ts` `roomOf`): one room, laid out from who sleeps there.
+
+- **Beds:** a bed each, heads to the back wall, from the side away from the hearth; along the far
+  side wall when the back is full; a crowded house shares the last bed. A couple shares one bed, and
+  a child under four sleeps in a cradle.
+- **The hearth** is under the chimney, against the side wall a quarter of the way back, where the
+  drawing puts the chimney, with a fire while anyone lives there.
+- **Furniture:** a table in the front half with a bench at either end, everyone with a seat; a chest
+  and a shelf of pots where there is room; the trade's tools by the front wall (nets, a loom, an
+  anvil, a wheel, sacks).
+- **An emptied house** has a stool, a pot and dust.
+
+It is pure, built in the house's own frame round the doorway and chimney the drawing placed
+(`villageGeometry.ts` now hands them over). So the house a stranger forces at dusk holds the same
+beds for anyone who looks. A first layout put beds along both side walls and left no room for a
+table in a 5.5 m house; the test of nothing solid standing in anything else found it.
+
+**Who is home** (`schedule.ts` `homeState`) is read from the day plan:
+
+- out while a leg or a stay holds;
+- away if the last of the day ended anywhere but their own door;
+- at home otherwise.
+
+At home means asleep, except for supper by the fire just after coming in (0.05 of a day) and the
+moments before going out in the morning. Without that, the schedule had nobody ever awake at home,
+and a house would only ever hold sleepers.
+
+**Which doors open.** A house is open to the stranger in three cases:
+
+- **asked in**: a new talk decision, `invite`, offered only at or inside their own house by day. It
+  writes nothing, and the door is open to that stranger for the world day;
+- **forced**: C45's mark;
+- **empty**: nobody lives there.
+
+Otherwise the door is the wall it always was, and knocking, looking in and forcing are where they
+were.
+
+- Open means floor inside the walls and in the doorway, and wall everywhere else
+  (`blockedByHouse`). The room's furniture blocks a body too.
+- Someone who asked the stranger in is in the house with them, at the table: presentation only, as
+  `hold` is.
+
+**What is drawn** (`interiorLayer.ts`):
+
+- **The cut.** The one house the stranger is in is cut away above 1.45 m in the houses' own shader,
+  window glow included, so the room is seen from above like a doll's house; the doorway of an open
+  house they stand at is a hole. The depth pass gets the same cut, or the cut roof would still shade
+  the room.
+- **The room** is one instanced mesh, plus one for the fire: two draw calls while inside and none
+  otherwise. It stands on the skirt's top, 0.25 m above the line the walls are drawn from. The first
+  browser look had the floor and the furniture's feet buried in the stone.
+- **The people at home** are the villagers layer's: asleep on their backs in their beds (a new
+  `sleep` pose), at the table, or — when the door has been forced — up and against the back wall,
+  facing the doorway.
+- **Talking.** Someone awake at home can be spoken to, by a stranger in the house with them; the
+  begin route checks it, and refuses "asleep" and through-the-wall attempts.
+- **The first time in,** a line, and — with consent — the way in for the echo: `enter_invited` (G1),
+  `enter_forced` (H5) or `explore_house` (J6). All are unrouted (C7).
+
+**Measured.**
+
+- `interiors.test.ts`, 6 tests: a place for everyone; nothing in anything; the doorway clear; a fire
+  in every lived-in hearth; the trade; the empty house; the forced mark; home and asleep; the frame.
+- `interiors.test.mts`, 4 tests: the door; asked in at the door, and writing nothing; not asked in
+  away from home; spoken to at supper from inside, not through the wall, and not asleep.
+- Eleven injected defects, all caught.
+- Real model, 2 calls, about $0.04:
+  - Naand, a weaver at their own door, to a cold and polite stranger: "come in, sit by the hearth and warm up" —
+    invited;
+  - Lookkast, to "get out of my way, show me what's in your house": "nobody goes into anybody's house
+    like that; say what you want politely" — not invited.
+- Browser, Senstrand:
+  - an empty house by day ("Dust, and the cold of a hearth nobody has lit in years.");
+  - a house asked into at night, its old man asleep on his back by the fire;
+  - a forced house at night: Roonstind, 65, up against the back wall, the door on the floor, and
+    someone you can talk to.
+  - The frame is 93–94 calls of 120 inside a house.
+
+**Not done.** See ⚑44.
+
+## C55 — goats, hens, dogs, birds and fish; a dog that takes to you; `pet_attach` filled
+
+Feature 9 of the twenty.
+
+**Who keeps what** (`lib/animals.ts` `animalsOf`) is the households':
+
+- **goats** (four to eight) for a house with a herder in it, on a pasture past the outermost field
+  by day and in a pen by the house at night;
+- **hens** for two houses in five, round the door from first light to dusk, then shut in;
+- **a dog** for three houses in ten. It goes a step behind the house's eldest while they are out of
+  doors and lies on the step while they are in;
+- **strays**: a village of any size has one or two, belonging to nobody, about the green by day and
+  curled by the well at night;
+- **birds**: two flocks wheel overhead, gulls over the dock and crows over the fields;
+- **fish**: two schools off the dock show their backs at the surface, and now and then one leaps.
+
+**Where they are is arithmetic on the hour,** as the villagers' is (C41): a few slow sines inside a
+circle for a herd or a yard, a fixed step behind a person for a dog. So every viewer sees the same
+goat. What an animal does about this stranger is the browser's and only this viewer's (`animalsLayer`):
+
+- hens and goats get out of the way of someone walking at them;
+- a dog that has taken to the stranger comes to their side and follows them about, and waits at the
+  door while they are inside a house.
+
+**Two draws for every animal in the village.** Every body, head, wing and fish is an instance of one
+unit sphere, and every leg, tail and horn one of a unit cylinder, coloured per instance; only the
+spheres cast. Kamgull with 102 animals is 109 of 120 calls.
+
+**Acting on them** (the registry, C45: everything can be acted on):
+
+- **a dog:** stroke it, feed it (berries or grain only — a dog is not offered a stone, and a stone
+  held out to one stays in the pack), play with it, or shoo it away;
+- **a goat:** scratch its head, or chase the herd;
+- **hens:** scatter grain for them, or chase them.
+
+The act route holds an act to the animal as the hour has it, with room for a hen that shied. It
+needs no room for a dog that has taken to the stranger, which may be anywhere at their heel.
+Deeds are recorded under the dog's name, and a stray's belong to nobody.
+
+**The bond and `pet_attach`.** A bond is what a stranger has done for one dog, read off their deeds
+(`bondWith`): 0.1 an act and 0.2 a day it was done on, within 90 days, with shooing taking 0.3 back.
+At 0.6 the dog follows you. That needs two days: one afternoon of fuss is not enough (a test pins
+both).
+
+What the echo hears is the catalogue's D11, which ingest.py already reads into `pet_attach` by
+`raw.amount` — the feature that sat empty in the engine. The amount is the bond: 0.3 + 0.6 × bond
+for a stroke, a meal or a game; 0.05 for shooing; nothing for K5. K5 is "ignores the pet": sixty
+seconds with a dog at your heel and no kindness to it, once a page, sent as D11 with nothing in it.
+No ML change (C7).
+
+**Fixed in C52 on the way.** C52 sent joining a wedding, and keeping apart from one, under the
+catalogue's unrouted G4 names. ingest.py reads the clearing's own `group_join` and `group_avoid`
+(G1) by name, so they go under those now.
+
+**Villagers know their animals.** They know their dog by name ("Your house keeps your dog Nell, who
+goes everywhere at your heel"), their goats and hens, and the village's strays. They talk about a
+stranger who has made a friend of the stray, or chased the goats. The dogs' names are names a reply
+may use: the first real-model check spent a retry on "Nell".
+
+**Measured.**
+
+- `animals.test.ts`, 5 tests: who keeps what; one name per dog in a village; the herd on the
+  pasture and in its pen; hens shut in; a dog at its person's heel and on the step; the same for
+  anyone; the bond over days.
+- `animals.test.mts`, 5 tests: D11 with the bond in it; food is food; a stray's stroke recorded and
+  held to its place; the stone stays in the pack; two days of kindness, and then the dog is wherever
+  the stranger is.
+- Eleven injected defects, all caught.
+- Real model: Naand on their dog, "yes, she's mine, her name is Nell, she never leaves me wherever I
+  go". One call once the name was allowed.
+- Browser, Senstrand:
+  - hens round a door;
+  - dogs at their people's heels and a stray on the green (once its legs were slimmed: the first look
+    was a dog on stilts);
+  - fish backs off the dock;
+  - a stray, set to have taken to the stranger, at their heel 1.27 m off after a walk.
+
+**Not done.** See ⚑45.
+
+## C56 — the sound of the place: the sea, the wind, the village, feet and tools
+
+Feature 10 of the twenty. What was promised: the sea, the wind, the village's murmur, footsteps and
+tools.
+
+**What is heard** is read off what is already true where the stranger stands. `lib/soundscape.ts`
+`mixFor` is pure and takes the hour, the metres to open water, the day's weather (`weatherAt`), who is
+near and talking, and whether the stranger is indoors. It gives each bed's level:
+
+- **the sea**, loud at the water's edge and gone by 120 m, with a storm making it roar. It breathes in
+  slow waves and comes from the side the water is on;
+- **the wind**, from the weather's wind, in gusts;
+- **the rain**, from what is falling (snow falls almost silent);
+- **the murmur**: the people out of doors near (the nearer the more), the pairs talking under the
+  chatter bubbles, louder on the evening green, quieter in rain, nearly gone at night. It fills
+  rather than clips, so thirty people are louder than a dozen;
+- **insects** on dry nights, more inland than on the coast; **birds** at first light;
+- **indoors**, the outside through the walls (about a quarter, and duller) and the fire in the room.
+
+**One at a time, from where they are:**
+
+- the stranger's **own steps**, heard when the gait draws a foot landing (`playerLayer.footfalls`,
+  the same phase `gaitFootTarget` plants on), so a run is quicker because the legs are. They sound
+  of what is underfoot: the dock's boards and a house's floor, the shallows, the beach near the sea,
+  grass, snow while it snows. A jump lands with a thud; the oars dip every third stroke;
+- **tools**, for the four nearest people at work: the smith's anvil, the carpenter's hammer, a hoe for
+  someone stooped in a field, the miner's and stonecutter's pick, the forester's axe, the weaver's
+  loom. Each person keeps their own rhythm, and the stranger's own digging, building and pushing are
+  heard too;
+- **animals** within 35 m (C55): hens, goats, dogs, gulls by the sea, crows inland;
+- **thunder** a moment after each flash (C48).
+
+These are panned left or right as the camera faces, and fall off with distance to nothing at 25 m
+(35 m for animals).
+
+**No recordings.** Everything is made in WebAudio from one looped buffer of noise and a few
+oscillators, filtered and shaped. There is nothing to download or license.
+
+**The person's say:**
+
+- nothing plays before their first key or click, as a browser requires;
+- `M`, or a small button beside the way back (top right), mutes it, kept in this browser;
+- a muted page and a hidden tab stop the audio graph entirely. A hidden tab draws no frames, so
+  nothing else would turn the sea down.
+
+The layer is in playable parcels only: a landing preview is silent (the layer-order tests pin both).
+
+**Nothing here is a measurement and nothing is a fact about the world.** It is the one layer only for
+the person playing. No deed, no change, no echo signal.
+
+**Measured.**
+
+- `soundscape.test.mts`, 16 tests. Nine are on the mix: the sea's fade, storm, wind, rain, snow, the
+  murmur's people/talk/evening/rain/night and its fill, insects and birds, walls and hearth, ground,
+  trade tools, falloff, and what earshot counts. Seven run the layer against a stand-in WebAudio:
+  - silent without WebAudio and before a gesture;
+  - the water found from the ground;
+  - walls muffling and a wooden floor;
+  - one step per foot the gait puts down (none standing, more running, a splash every third stroke,
+    a landing);
+  - a smith to the east heard on the right, to the west on the left, and silent at supper;
+  - thunder after a flash;
+  - mute kept, and the graph stopped when muted or hidden.
+- Twenty injected defects, all caught. The first run missed one: talk was counted from anywhere,
+  because the villagers layer's count was untested. The count moved into the pure `earshotOf`, and a
+  test now covers it.
+- Browser, Senstrand:
+  - silent until the first click;
+  - on the dock, the sea 0.65 underfoot on wood; 120 m inland, no sea;
+  - insects at night, birds at dawn;
+  - steps heard equal feet drawn landing: 5/5 and 6/6 walking, 9/9 running in two seconds;
+  - asked into a house: wood underfoot, the outside a quarter through, the hearth, −33 dBFS against
+    −21 at the door;
+  - `M`: −88 dBFS and stored; `M` again: back.
+- Levels on the page's own meter at noon:
+  - the dock with people on it −22 dBFS, the green −27, a calm day's wind inland −40, the coast on a
+    dry night −30;
+  - in a downpour, which came on during the check, the dock −20.5 and inland −23.
+  - The first levels were −35 and below: a 420 Hz lowpass keeps a fiftieth of the noise's power.
+- The first footsteps ran on a clock of their own at 0.62 s, about half the drawn gait's 2.9 a second.
+- The button was first drawn under "Back to the planet". It now sits beside it, clear of the meter at
+  390 px.
+
+**Not done.** See ⚑46.
+
+## C57 — a raft to other shores, without a seam; the travel stand said in parcels
+
+Feature 11 of the twenty. What was promised: a raft made from the wood you gather; across the sea
+into neighbouring parcels and villages without a break; and real data for the sail-out cue, A11.
+
+**Where there is to sail to** (a census, before anything was built):
+
+- From Senstrand, no other village shares its sea within eight rings, about 12 km. Its shores are
+  empty.
+- Of 321 villages sampled across the planet, 12 have a dock.
+- Docked villages that share water do exist:
+  - Drurnscree and Jerreef, neighbours, 1,125 m apart by water;
+  - Faessoulford, Juboscale and Ruimslate, 4,050–4,900 m;
+  - Tromslate and Laeldfowick, 5,025 m;
+  - Tasskerry and Lelfeanford, 5,800 m.
+
+So most crossings end on an empty coast. That is the planet, not a shortcoming of the raft.
+Drurnscree and Jerreef are the fixture for the tests and the browser.
+
+**The raft.**
+
+- It has its own form: six driftwood logs and two lashings, with a mast and a square sail.
+- It is paddled at 1.6 m/s; a village boat is rowed at 1.4.
+- Shift raises the sail, and then the day's wind decides: 1.6 + 7 × wind m/s (`lib/raft.ts`).
+  Measured: 4.46 m/s in Drurnscree's 0.41 wind.
+- The weather has no direction, so the sail draws from any quarter (⚑47).
+
+**The crossing, without a seam.** Once the raft is 40 m past its parcel's edge (`crossing.ts`
+`outsideBy`), the next parcel's world is built asleep:
+
+- in the same canvas, on the same renderer (`PlanetWorld.successor`);
+- layer by layer, with a frame of the world in front of the person between each, and its shaders
+  compiled before it is needed.
+
+Then, in one task:
+
+- the body, the raft, its speed, the keys held down and the camera are carried through the sphere
+  into the new frame (`crossTo.ts` `carryHandoff`);
+- the old world gives up the renderer and is disposed;
+- the new one wakes.
+
+After that:
+
+- the address becomes the new parcel's;
+- the corner card names the shore;
+- the minimap redraws;
+- the echo's walk path is broken, so no window spans the jump.
+
+Turning back before the next world is ready throws it away. Only the stranger's own raft crosses.
+
+Measured in the browser, Drurnscree to Jerreef:
+
+- **Continuity.** The raft was carried within 0.065 m, one frame's travel at 4 m/s. The camera's
+  angle to the heading changed by 7 × 10⁻¹⁵ rad.
+- **Build cost.** The successor built in about 0.8 s: the terrain 309 ms, the scatter 468 ms.
+- **Frames.** The three worst were 299, 214 and 152 ms (⚑47); the 95th percentile was 9 ms.
+- **Abandoned crossing.** GPU memory was left as it was: 69 geometries before and after.
+- **Four crossings back and forth.** Geometries ran 75, 95, 75, 95, and textures held at 5 once a
+  leak was fixed (below).
+
+**Coming ashore.** Q drags the raft up. `POST /api/world/landing` checks three things:
+
+- the landing is a shore, dry ground within 12 m of water, or alongside the village's dock;
+- it is in the parcel it names;
+- the launch was within 12 parcels.
+
+It then gives the trip's verdict and counts `dest_occupants` itself: the people living in that
+parcel, 0 on an empty coast. It records the landing with the villagers who saw the raft come in.
+`player_landings` is migration 0024. It is personal data, erased with the stranger.
+
+**The travel stand, said in parcels (C27).** C27 retired `travel_far`/`travel_near`'s basis, the
+archipelago's distances, and asked for the pair to be re-derived at parcel scale, measured on the
+same paths at both scales before either side moved. Here it is:
+
+- **far**: ashore in another parcel;
+- **near**: back ashore in the parcel set out from.
+
+Both sides come from the same raft trip, so neither moves alone (⚑9's rule).
+
+The measurement (`crossing.test.ts`): 200 trips from Drurnscree's shore to every shore reachable by
+water within 3 km.
+
+| Rule | Share called far |
+|---|---|
+| The old one (past 38 m) | 99.5% |
+| Parcels | 91.5% |
+
+The old threshold no longer discriminates anything at this scale.
+
+**What the echo hears.** No ML change (C7). Each is sent under a label ingest.py already routes by
+name:
+
+- `travel_far` (A11), with the server's `dest_occupants`. ingest.py reads 0 as a bare shore, the
+  purest novelty read.
+- `travel_near` (K4).
+- `prepare_before_travel` (C7): setting out with food in the pack.
+
+Measured: `travel_far cue=A11 raw={"dest_occupants":29,"distance_m":995,"rings":1}`.
+
+**The village knows** (`landings.ts`):
+
+- whoever saw the raft come in knows at once. A raft on open water is seen from 150 m, against a
+  deed's 30;
+- everyone has heard by the next day;
+- a stranger coming home from a paddle is news only to whoever saw it.
+
+Real model, Jerreef:
+
+- Tustta, who saw it: "I saw you come in on that raft, from out Drurnscree way. Sit a while if your
+  legs are shaking."
+- Skaind, the next morning: "Only that you came in off the sea on a raft yesterday, from the
+  Drurnscree way — that's what went round."
+
+**Found on the way.**
+
+- **The water's edge could be out of reach.** It was sampled at exactly the water verbs' 3 m reach.
+  From a body at (84.4, −707.7), as on Drurnscree's beach, the diagonals measured 3.000000000000014 m,
+  and the search stopped at the first water. So wherever the sea lay on a diagonal there was no
+  water's edge, and the raft C47 made could not be launched. It is now sampled at 2.5 m, and a test
+  checks every direction at real coordinates.
+- **A world's shadow map was never disposed.** With one world to a page nobody noticed. Every
+  crossing left a texture behind.
+- **The keys held down did not cross.** The new world never saw W go down, and a key held still
+  does not repeat into it. The raft stopped dead at the line until the keys were carried across.
+- **The memory store's reset forgot landings.** The route tests caught it.
+- **`erasureTables.test.mts`** now holds every table with a `subject` column to the delete route,
+  C44–C55's included.
+
+**Measured, tests.**
+
+- `crossing.test.ts`, 6 tests.
+- `landings.test.ts`, 3 tests.
+- `raft.test.mts`, 6 tests.
+- `landing.test.mts`, 6 tests.
+- `erasureTables.test.mts`, 1 test.
+- 23 injected defects, all caught. The first run missed one, a flipped sign on the frame's turn: the
+  round-trip test cancels it out either way. It is now pinned.
+
+**Not done.** See ⚑47.
+
+## C58 — barter and labour with no price, and villages trading with each other
+
+Feature 12 of the twenty. What was promised: no money, because Design Law 1 says no points; things
+for things, and labour for labour; and a written decision for the economy (SOC-7).
+
+**The decision**, taken 2026-10-18 by the user, three answers:
+
+1. **The valueless shape, not an exemption.** SOC-7.B asks for "an explicit written exemption or a
+   different shape". This is the different shape, and no exemption is written, because nothing in
+   it needs one:
+   - no item has a price, a value or a number: `items.test.ts` already fails on any field but a
+     name and who is glad of it;
+   - a villager's answer is a reason, in words, and a test fails on any price word in them;
+   - one thing goes for one thing, and no balance accumulates;
+   - help owed is a promise, which is square once it is returned.
+2. **A villager gives only what their work leaves them to spare.** Nothing is ranked above
+   anything else, so there is no trading up, and the pack's eight slots are the only ceiling.
+3. **Villages trade with each other, the simple version** (SOC-7.A, simulation-visible and
+   player-inert). This made the feature XL.
+
+**What a villager can spare** (`markets.ts` `TRADE_GOODS`, `trade.ts` `sparesOf`): their trade's
+good. A fisher a fish, a farmer grain, a herder cheese, a smith a knife, a potter a pot, a weaver
+cloth, a carpenter a bowl, a healer herbs, an innkeeper bread, a forester a dry branch, a miner ore,
+a stonecutter a stone. Eight of these are new items. A child has nothing of their own. A trader has
+what came back from market.
+
+**What a villager says to an offer** (`tradeAnswer`):
+
+- **They take it** if it is:
+  - the very thing they need this week. It is then recorded met, as a gift would be;
+  - something they are glad of;
+  - something their trade works with.
+- **They take it as a favour** if they know the stranger has been kind or helpful to their household
+  in the last 60 days.
+- **They turn it down**:
+  - if they make it themselves, or have no use for it;
+  - if the stranger has wronged them;
+  - if they have already traded with the stranger today;
+  - if they have nothing to spare. A trader without stock says when the next market is, and what
+    it will bring.
+
+**Labour for labour** (`owes`). Help to a household — a field weeded, a boat bailed, a shift worked —
+may be asked back once. It is owed while the help is more recent than the last return, within 30
+days, and the return is something of the villager's trade.
+
+**Markets** (`markets.ts`; `villageAt` finds the neighbours in 10–28 ms with the market included):
+
+- **Who has one.** A village with traders or carters in it.
+- **Its partner.** The settled neighbour within three rings with the most of what this village
+  lacks; the nearest of a tie.
+- **When.** Every sixth day.
+- **The road and the stall** (`schedule.ts`):
+  - the day before, the traders and carters go out along the partner's road and are away that night
+    (`homeState` now knows a day that begins away from home);
+  - on market day they come in from the road to a stall on the green;
+  - they have the partner's goods for two days after.
+- **The stall** (`marketLayer`) is one draw. The player cannot walk through it.
+- **Player-inert.** The partner, the days and the goods are the seed's and the day's. With no price
+  anywhere, there is nothing to buy cheap and sell dear.
+
+Measured:
+
+| Village | Partner | Distance | Brings |
+|---|---|---|---|
+| Senstrand | Dragcrachadit | 2.7 km | knife, pot |
+| Jerreef | Tulmarket | 2.6 km | cheese, bowl, herbs |
+| Tulmarket | Teismurcombe | — | dry branch, cloth, bread |
+
+Drurnscree has no traders, and so no market.
+
+**The routes.**
+
+- `POST /api/village/trade` checks three things: the villager is there to hand it to; what is held
+  out is in the pack; and what `tradeAnswer` says. On a yes it swaps one thing for the other and
+  records a `trade` or `ask-back` deed, read as respect, with `item` and `got`. `got` is migration
+  0025.
+- The act route refuses those two verbs. A trade through it would be a free deed.
+
+**What the village knows.**
+
+- Each villager knows what they can spare and that there is no money. They know when market day is,
+  who goes where, and what comes back.
+- A trade is said as one thing for another ("traded a shell with Tosdaym for a dry branch") and goes
+  round the village as deeds do.
+
+Real model, Senstrand:
+
+- Naand, a weaver: "I've a length of cloth to spare, off this very loom — nothing here has a price,
+  mind, but if you've something I'd have use for, we can swap fair."
+- Peissta, a trader: "Every sixth day, on the green. The next is in two days, so tomorrow I'll take
+  the cart to Dragcrachadit, three kilometres off, and bring back a knife and a clay pot for the
+  stall."
+
+**What the echo hears.** No ML change (C7):
+
+- `barter` (F9). Corrected in C59: this said "unrouted", but ingest.py's generic channel-F branch
+  reads every F9 into `risk_index`, at 0.6 when no amount is sent, so every trade read as a hard
+  bargain. It now sends amount 0.2, a trade on the villager's terms, and the registry test forbids
+  an "unrouted" act from taking a generic branch;
+- `ask_return` (G12, reciprocity), unrouted. It is the catalogue's first emitter of G12;
+- `bargain_hard` (F9), which ingest.py routes by name, for asking again after a no. A kindness done
+  in between changes the terms, and the next ask is not pressing.
+
+**Measured.**
+
+- `markets.test.ts`, 5 tests: what a village spares and lacks, the partner, the cadence, the road
+  and the stall, and nobody else's day moving for it.
+- `trade.test.ts`, 6 tests: every answer, labour owed and squared, words with no price, the deed's
+  sentence.
+- `trade.test.mts`, 9 tests: the route, the act route's refusal, a return for help, a need met, a
+  trader on market day, the measurement, the facts, the stall and its collision.
+- 24 injected defects, all caught. The first pass missed two, both now pinned: a child's spares and
+  the not-carried check. Neither was exploitable, because the route's own guard and the pack's own
+  removal still stood.
+- Browser, Tulmarket, on its market day:
+  - the stall was up with dry branch, cloth and bread;
+  - Tosdaym, a trader, came in from the road (100 m out at 0.266, at the stall by 0.371);
+  - a shell was refused ("I've no use for a shell, I'm sorry"); asking again sent `bargain_hard`;
+  - after a gift of berries, the shell was taken as a favour for a dry branch;
+  - the echo was told `bargain_hard`, `give_gift`, `barter`;
+  - 98 draw calls.
+- Found on the way:
+  - the first browser run counted the ask after the gift as pressing too;
+  - a farmer's basket was the farmer's need that week, which is "need", not "glad": the test was
+    wrong, not the rule.
+
+**Not done.** See ⚑48.
+
+## C59 — your own land and house; J1 and J5; and gathering on land with no village
+
+Feature 13 of the twenty. What was promised: build a house on your own parcel and arrange it, and
+feed the catalogue's J1 (customising home and self) and J5 (order against chaos in arrangement).
+
+**Your own land.** The registry says whose a parcel is (`parcelOf`). A house goes up there and
+nowhere else (`homes.ts` `siteProblem`). The site must be:
+
+- inside the parcel;
+- on dry ground;
+- level to within 1.4 m across the footprint;
+- clear of the village's houses, fields, dock, green, mine, graves and paths, where a village
+  shares the land (C25).
+
+The corner card now says "Your corner of the world" to the parcel's owner only. Before, it said it
+to everyone. Others see the village's name, or "Open land".
+
+**Building** (`/api/home`):
+
+- Stake out the house where you stand, facing the way you face.
+- Then four stages, each a stretch of work and the materials for it:
+  - foundation: 4 stones, 10 s;
+  - walls: 4 driftwood and 2 dry branches, 14 s;
+  - roof: 6 reeds, 12 s;
+  - door: 2 driftwood, 8 s.
+- The pack holds eight things, so a house is several trips.
+- New recipes furnish it: a stool, a table, a bed, a shelf.
+
+**J1, customising** (unrouted, as nothing anchored reads J1). Each act costs a dye, as the
+catalogue's "cost-weight it" asks:
+
+| Dye | Colour |
+|---|---|
+| berries | red |
+| herbs | green |
+| shells | lime white |
+| ore | rust |
+
+- Paint the walls (once they stand) or the door (once it hangs): `customize_home`.
+- Dye your shirt, inside your own house: `customize_self`. Everyone who sees you sees it.
+
+**J5, order against chaos.** The catalogue says to offer an easy tidy and an easy chaos, so that
+what is chosen is the person and not the interface. Two verbs do that:
+
+- **"Set it down square"**: turned with the walls and pushed flush to the nearest one.
+- **"Set it down as it is"**: at your feet, turned however you stand.
+
+"Turn it" and "Pick it up" undo either.
+
+`orderliness` reads the whole room. Each thing counts:
+
+- 0.45 for being turned with the walls;
+- 0.35 for standing against a wall or on the middle line;
+- 0.2 for a same-kind twin mirrored across that line.
+
+The room is read when the stranger steps out after arranging it, once:
+
+| Reading | Sent |
+|---|---|
+| ≥ 0.65, orderly | `stack_tidy` taken |
+| ≤ 0.4, as things fell | `stack_tidy` refused |
+| in between | nothing |
+
+`stack_tidy` is ingest.py's own handler for ordering objects as against leaving them scattered.
+Building is `build_home` with the time worked as `dwell_ms` at a `structure`, which ingest.py's
+dwell branch reads as `ts_build`. No ML change.
+
+**In the world** (`homeLayer`):
+
+- **Drawn by stage**, in its paint, level on the highest ground under it.
+- **Solid.** The walls stop a body, except at the doorway, and so does solid furniture.
+- **Seen from inside.** The roof lifts off and the walls are cut to waist height, so the camera
+  behind you sees in.
+- **The ground is cleared** for 1.5 m round the house: the undergrowth is gone, the trees there stop
+  neither body nor camera, and no grass grows through the floor.
+- **Seen by everyone** on the parcel. A village on the land knows it is there and whether the
+  stranger in front of them built it.
+
+Real model, Senstrand:
+
+- To the owner: "Oh, the new one up north-east of the green? I've seen it from the field, yes —
+  looks snug enough for this wet weather. You're welcome among us, neighbour."
+- To someone else: "There's a newcomer who put up a house of their own a little north-east of the
+  green, but I've not met them, so you'd do better to knock and ask."
+
+**Found on the way.**
+
+- **The act route refused everything on a parcel with no village.** That is about nine parcels in
+  ten. Nothing could be picked up on your own empty land, so no house could have been built on it.
+  Now what is nobody's (the scatter and the water) can be acted on there. Deeds still need a
+  village, and a registry test pins that no scatter verb is a deed.
+- **C58's `barter` was mis-measured.** It was sent as F9 and called unrouted, but ingest.py's generic
+  channel-F branch read every one as a hard bargain (`risk_index` 0.6). It now sends amount 0.2, a
+  trade on the villager's terms. The registry test now fails any "unrouted" act that takes a generic
+  branch. It found one more: C45's `push_through` (F3), relabelled generic, its behaviour unchanged.
+- **Nothing could be set down or painted inside.** A piece of furniture near you always outranked
+  the house. Now what is in your hands decides.
+- **A tuft of grass at your feet outranked the land you meant to stake.** It was a tie, and ties now
+  go to the house.
+- **In a forest parcel, ferns and trees stood inside the house**, and a fern was nearer than the
+  door. The house now clears its ground.
+- **From inside, the camera saw only a wall.** The walls are now cut to waist height. And the grass
+  grew through the floor.
+
+**Measured.**
+
+- `homes.test.ts`, 5 tests: the frame, walls and doorway, the site, the stages, placing square and
+  as it falls, orderliness.
+- `affordances.test.ts`: two new rules, one against unrouted-but-generic and one that the ground
+  offers no deed.
+- `home.test.mts`, 9 tests: the registry's owner, staking, the four stages, paint and dye, placing,
+  turning and lifting, what the echo hears, what a village knows, gathering on empty land, and the
+  house's walls in the world.
+- 27 injected defects, all caught. The first pass missed three, now pinned: twins of different
+  kinds, a middling room being read, and a scatter verb given a deed.
+- Browser, on parcels claimed through the real route (tundra, forest, rainforest):
+  - staked, built through four stages, furnished with a table and two stools, walls painted berry
+    red, shirt dyed;
+  - the echo was told `stake_home`, then `build_home` four times (10.1, 14.0, 12.0, 8.0 s), then
+    `customize_home`, `customize_self`, and on stepping out `stack_tidy` (J5, 0.77, orderly).
+
+**Not done.** See ⚑49.
+
+## C60 — villagers' own voices, and talking to them aloud
+
+Feature 14 of the twenty. What was promised: talk by microphone, with consent, and every villager has
+a voice of their own (cloud speech).
+
+**This changes C44's promise, behind a question.** C44 kept replies in the browser's local voices and
+had no speech-to-text, because the panel promised that words went to Claude and nowhere else. C60
+sends two things to ElevenLabs:
+
+- a villager's reply, to be spoken;
+- what the stranger says aloud, to be written down.
+
+Neither happens until the stranger has said yes to exactly that. The question comes the first time
+they turn voice on. "Only this browser's voice" keeps C44 as it was. The answer is kept in this
+browser (`echo.voiceCloud`), and the panel's footer changes it either way: "Stop using ElevenLabs",
+or "Use ElevenLabs voices".
+
+**What is not done with the stranger's voice.**
+
+- It is recorded only while the button or Ctrl is held, at most 15 s. The microphone is let go of
+  however recording ends.
+- The recording goes through `/api/village/hear` to ElevenLabs and is not kept here.
+- Nothing about how the stranger sounds (pitch, pace, hesitation) reaches the echo. What comes back
+  is text, sent exactly as typed words are. Reading the voice would be a new channel the consent
+  card never asked about.
+
+**A voice of their own** (`voices.ts` `pickVoice`, pure). The voices are the account's own list, read
+from ElevenLabs with its `gender`, `age` and `use_case` labels and kept for an hour.
+
+- **Sex and age.** Under 30 is young, under 60 middle-aged, then old.
+- **Within that**, every voice gets a number from the person's id and its own, and the highest wins.
+  The same person sounds the same on every visit. A voice added to the account takes only the
+  villagers it now wins, and a voice removed moves only its own.
+- **Thin ages widen.** With fewer than three voices for a sex and age, the nearest age's voices join
+  them, so an old woman gets a middle-aged voice before a girl's.
+- **A voice made for social media or advertising** is passed over while another of that age will do.
+- **Never a cloned voice.** A cloned voice is somebody's own. The account this was built on holds
+  one, and no villager ever speaks in it.
+- **Pace** is 1.08 for a child and 0.9 for the old. The temperament's "lively and quick" axis adds up
+  to ±0.05 and makes the voice less even (stability 0.5 ∓ 0.15).
+
+On the real account (27 voices, the cloned one left out), 400 villagers drawn:
+
+| Who | Voices they get |
+|---|---|
+| young women | 3 young women's voices |
+| middle-aged women | 5 |
+| old women | the 5 middle-aged women's: there is no old woman's voice |
+| young men | 3 |
+| middle-aged men | 8: the social-media voices passed over |
+| old men | the one old voice (13 of 59) and the 8 middle-aged |
+
+**Only their words.** Without a check, the voice route would read anything anyone sent it aloud, on
+this project's account. So every talk reply now carries a `voice` token (`signLine`):
+
+- an HMAC over the stranger, the cell, the villager, the words and the time;
+- domain `echo-villager-line/v1`, keyed by the identity secret;
+- good for ten minutes.
+
+The voice route speaks only words that have a token:
+
+- at most 900 characters;
+- rate bucket `voice`, 80 per 10 minutes, shared with hearing;
+- the same line in the same voice is made once (the last 64 are kept).
+
+**Speaking aloud.** Hold "Hold to speak", or Ctrl alone.
+
+- Ctrl with another key is a shortcut, and drops the recording. So does leaving the window.
+- On letting go, the recording (webm/opus) goes to `/api/village/hear`:
+  - audio only, 800 B to 1.5 MB;
+  - `?lang=` taken from the browser's language.
+- The text that comes back is sent as if typed.
+- Without a key, or when ElevenLabs does not answer:
+  - the voice route says 503 `no_voice`, and the reply is spoken in the browser's local voice;
+  - the hear route says 503 `no_ears`, and the panel asks the stranger to say it again or type it.
+
+**Found on the way.**
+
+- **The cloned voice on the account.** Unlabelled, it sat in the last-resort pool, one empty list
+  away from being a villager.
+- **Old women were given girls' voices**, through "any woman's voice", and **every old man got the one
+  old voice** (59 of 59). Thin ages now widen.
+- **A social-media voice for a 41-year-old** ("High-Energy … for Reels & Shorts"). `use_case` now
+  counts.
+- **The voice route passed no temperament**, so every villager was equally even.
+- **The pick was an index into the pool.** One voice added would have re-voiced most of a village.
+  The highest number now wins.
+- **Three recorder bugs:**
+  - a key let go before the microphone came kept recording, with nothing held;
+  - the 15-second cap stopped the recorder but kept the microphone;
+  - after the cap, letting go waited forever for a stop that had already happened.
+- **The yes could not be taken back.**
+- **Safari plays sound only from inside a press**, and a reply arrives seconds after it. Now one audio
+  element plays every reply, unlocked by the press that sent the words (not tried in Safari, ⚑50).
+
+**Measured.**
+
+- `voice.test.mts`, 6 tests:
+  - the choice of voice, full and thin;
+  - stability when voices come and go;
+  - the line token;
+  - the voice route against a recording ElevenLabs: only signed words, made once, 503 without a key;
+  - the hear route: 415, 422, 503 and the text;
+  - every talk reply carries a token for its own words.
+- 24 injected defects, all caught. The first pass missed one, list order on a pool of one voice, now
+  pinned.
+- Real ElevenLabs:
+  - the list read in 350 ms;
+  - a line spoken in 1.2 s (33.7 KB at 64 kbps), and from memory the second time;
+  - written back in 0.5 s, word for word bar the full stop, and still right when told it was
+    Turkish.
+- Browser, Senstrand, Chrome with a fake microphone playing a recorded "Good morning. What is the name
+  of this village?":
+  - the question came first, and nothing was sent before the yes;
+  - the button held 2.9 s: heard, sent, answered, and the reply played in Noo's voice (17 KB);
+  - Ctrl held: the same. Ctrl tapped: nothing heard, microphone let go. Ctrl+A: dropped;
+  - "Stop using ElevenLabs": the microphone button gone, no more voice calls, replies in the local
+    voice.
+
+**Not done.** See ⚑50.
+
+## C61 — the mirror: how your echo sees you, act by act, and your say over it
+
+Feature 15 of the twenty. What was promised: a screen showing how the echo sees you, with its
+evidence (which behaviour changed what), and the consent and erasure controls in one place.
+
+**A narrow exception to C7, chosen by the user.** The engine reported only the length of each act's
+move (`delta_mu`), and nothing at all for walking, which updates the posterior about every 1.5 s.
+So "which act moved which axis" could not be worked out from outside, and two snapshots apart
+always had walking mixed in. The other honest route was to read the engine before every act, and
+that costs up to three language-model calls a read (`GET /persona` scores reconstruction). So
+`services/ml/echo_ml/app.py` gained report fields, on three responses:
+
+- `/observe/behavioral`, `/telemetry` and `/observe` now say `delta` (μ after minus before, per
+  axis), `version_before` and `version`;
+- a 21-line change. The learning, the routing and what is stored are untouched;
+- `test_moved_report.py` pins that the moves are exact, add up to the posterior, and change nothing;
+- C7 otherwise stands. The engine must be redeployed for the fields to exist; until then the mirror
+  shows "not in this record" for everything new.
+
+**The record** (`echo_ledger`, migration 0027; `lib/ledger.ts`). After each forward, the routes keep
+what the engine reported:
+
+| Route | Row |
+|---|---|
+| `/api/observe/behavioral` | one per act: the label, cue, take or refuse, the context, what it was read as |
+| `/api/telemetry`, a choice | one per choice |
+| `/api/telemetry`, another signal | one per signal (lingering, pet talk, …) |
+| `/api/telemetry`, walking | one per stretch: windows fold into the last row while it is a walk, under ten minutes old, and the versions meet |
+
+The folding is atomic in the database (`echo_ledger_walk`). A mocked answer, an engine from before
+C61, and an update that moved nothing write nothing. The record is raw (90 days, `retention.ts`)
+and erased with the person.
+
+**The account adds up** (`lib/mirror.ts` `mirrorOf`, pure). The prior is zero, so where the echo
+puts you is the sum of every move it ever made.
+
+- **What is on record is itemised.** Contributors are grouped by act, taken and turned down apart,
+  and ranked per axis by size either way.
+- **The rest is one line, "not in this record"**: older than the record, before it began, or by a
+  route that records nothing.
+- **Missing updates are counted** from the version jumps.
+- **An engine that started over** (version going back) voids what came before it. Two requests
+  finishing out of order are not taken for that: the step back must be more than 20 updates, or
+  come after a quiet minute.
+- **The engine is read after the record**, so no row describes a move it had not made yet.
+
+**The screen** (`Mirror.tsx`; `Y`, or "look in the mirror" on the recognition meter; Esc closes):
+
+- **Where it puts you.** Eight lines between their two words, with a band as wide as its
+  uncertainty. A word appears only where the engine would say one ("strongly calm"), otherwise "in
+  between" or "not sure yet".
+- **Why.** Pick a line: what moved it most, either way, then "not in this record", then the
+  features it reads that line from.
+- **When others can see you.** The engine's public-minus-private difference, said only when it is
+  at least 0.1.
+- **What it saw lately.** Each act with what it moved and what it was read as. Sizes are words
+  (barely, a little, noticeably, a lot); the numbers are in the hover titles.
+- **Your say:**
+  - stop watching, or let it watch again. Before C61 a "no" could not be undone on a parcel: the
+    card only asks once;
+  - stop using ElevenLabs (C60);
+  - erase everything, with the same cascade as `/account`, sent with the signed identity (the
+    account page sends none), and every local key cleared.
+
+The engine is read when the mirror opens, not polled: rate bucket `mirror`, 30 reads in ten minutes.
+
+**Found on the way.**
+
+- **Walking pushes everyone the same way.** On a fresh echo, one window, whatever it holds:
+  - pace +0.14 to +0.29, towards fast;
+  - intellect −0.06 to −0.15, towards playful.
+
+  Openness itself responds correctly (−0.33 for no new ground, +0.26 for new winding ground). The
+  mirror showed it first ("Walking about → playful, a lot"). Not fixed: it is the engine's (⚑51).
+- **A "no" to watching could not be taken back on a parcel.** It now can, from the mirror.
+- **`GET /persona` asks the language model** to score reconstruction, and `/play`'s `useEcho` polls it
+  every 3 s. That is a cost to look at; the mirror never polls.
+
+**Measured.**
+
+- `mirror.test.mts`, 8 tests:
+  - the account adds up, with gaps counted;
+  - restarts, against requests out of order;
+  - restart after the record, and rows after the read;
+  - words only where sure, sizes, and 'watched';
+  - the record: only what the engine reported, and folding;
+  - the routes against a small running engine: acts, walks and a choice recorded, and the mirror
+    adding up to the engine's read with one unrecorded update counted exactly;
+  - the caller's own; the record alone without the engine; mocks never recorded;
+  - retention and erasure.
+- `test_moved_report.py`, 4 tests. The ML suite is 204 of 204.
+- 28 injected defects, three of them in the engine, all caught. The first pass missed one, two walks
+  in one batch with a gap between, now pinned.
+- The real engine, run locally with no keys and nothing persisted, behind the dev server, Senstrand:
+  - consented, walked, looked closely three times, sat once;
+  - the mirror: 9 rows, 0 missing updates, "not in this record" 0.00 on every axis;
+  - stop watching, then watch again, from the mirror: the consent key and the meter followed.
+
+**Not done.** See ⚑51.
+
+## C62 — the owner's own voice, and nobody else's
+
+C60 kept every cloned voice from every villager. The account's owner then asked for theirs to be
+*their* voice in the world, since it is theirs. Now:
+
+- **Typed lines.** What they type to a villager is said in their own voice first, and the reply
+  waits for it rather than cutting in. Lines spoken into the microphone are not replayed: they
+  already were said.
+- **Their echo** (feature 17) will speak in it.
+
+**Bound on the server, never guessed** (`voices.ts` `ownVoice`; `/api/voice/self`). Two settings
+must both be set:
+
+- `ELEVENLABS_OWNER_VOICE_ID` names the voice;
+- `ECHO_OWNER_SUBJECTS` names whose it is, the id the mirror now shows under "Your id here".
+
+Anyone else asking for it gets 403 before ElevenLabs is asked. That matters because a voice anyone
+could type into is a voice anyone could put words in the mouth of. The owner's own words need no
+token, unlike a villager's line, since they choose them. The owner's voice is struck from the
+villagers' list whatever its labels say.
+
+**Measured.**
+
+- `voice.test.mts`, now 7 tests. The new one covers:
+  - both settings needed;
+  - others refused, with nothing sent to ElevenLabs;
+  - the villagers' list without the owner's voice;
+  - the owner's words in that voice.
+- 6 injected defects, all caught. The first pass missed an owner with no voice named, now pinned.
+- Real, with the account's cloned voice: not on the villagers' list, refused to anyone else, and a
+  line spoken in 1.5 s and written back word for word.
+
+## C63 — the director: the world sets out what would teach your echo most
+
+Feature 16 of the twenty. What was promised: the world arranges, on its own, the encounter that
+would show most about you. If the echo is least sure how you are with what is not yours, a pouch
+lies on the path that day. The old island had this (P7) with three fixed candidates; the new
+world had nothing.
+
+**What can be set out** (`packages/planet/lib/director.ts`). The island's private probes, in the
+new world, sent under labels ingest.py already reads by name. So there is no engine change (C7),
+and the registry test proves every one of them has a handler:
+
+| Situation | What lies there | The answers | Read as |
+|---|---|---|---|
+| `netted_gull` | a gull caught in old netting, at the water | free it (6 s) · walk past | `help_at_cost`, walking off half-way `abandon_free_gull` · `pass_by` |
+| `lost_pouch` | a named villager's pouch, by a path | leave it closed · take a little · take what is in it | `return_cache` · `keep_cache` with `taken01` 0.25 or 1 |
+| `carved_mark` | a stone with a spiral cut in it, off the track | look closer · walk past | `egg_hollow` · its refusal |
+| `dark_cleft` | a narrow dark gap between boulders | go in (4 s) · leave it be | `enter_cave` · `stay_safe` |
+
+The first two are set out of every villager's sight. The same choice watched and unwatched is a
+different datum (H2), and the private one is the point. Their axis vectors are the island
+director's own.
+
+**Who picks, and how often.**
+
+- **The engine picks**: `/select-situation`, the same expected-information-gain acquisition
+  (BALD) that picks villagers, against the stranger's own posterior. If the pick will not fit
+  here, the next one in its ranking is tried.
+- **It says how many a day it still wants** (`cap`, 3 down to 0 as it grows sure). It stops
+  setting things out once it knows you.
+- **The world adds its own limits**: one at a time, at least twenty minutes apart, gone after two
+  hours, and only what the place allows (no gull inland).
+- **The engine is not asked** while nothing could be set out anyway.
+- **Without the engine, nothing is set out.** The director learns for the echo; with no echo
+  listening it has nothing to do.
+- **Without consent the page never asks**, and what stands is taken away.
+
+**Never a prompt (Law 2).** A staging is a thing in the world and nothing else: no glow, no marker,
+no quest, and its prompt appears only within reach, like anything else's. The page is not even
+told why it was set out. Walking past is an answer like any other:
+
+- for the gull and the mark it is recorded, once the stranger has come within 9 m and gone on
+  beyond 35 m;
+- for the pouch it says nothing, since not noticing is as likely as leaving it.
+
+**Told afterwards.** The mirror's new section, "What the world set out for you", says what each
+was, what it was set out to learn, and what you did. It is shown only once a staging has been
+answered or has gone: told in advance, you would be answering the mirror rather than the world.
+For example: "Paakrost's pouch, dropped by the path, to see what you do with what is not yours,
+when nobody would know. You chose 'Leave it closed, for its owner'."
+
+**Where.** Near the stranger (22–48 m), on dry ground in their parcel, never inside the village's
+own things. A gull goes where land meets sea, facing the water. The shore is a thin line that
+random points miss, so the ring is swept in a seeded order. Kept in `player_stagings` (0028):
+raw, 90 days, erased with the person.
+
+**Found on the way.**
+
+- **The gull could rarely be placed.** Random points almost never land on a shoreline, and the
+  director quietly fell back to its second choice. The test passed by luck once. The first fix,
+  marching outward along rays, still failed from the dock: seaward rays start in the sea. A
+  measured tally showed all 34 crossings refused as "not standable"; the sweep places it every
+  time.
+- **The mirror had no words for the probes' own labels** (`egg_hollow`, `return_cache`,
+  `keep_cache`). It does now.
+- **The cleft first read as a dark shed door.** It is now three rough boulders over the dark.
+
+**Measured.**
+
+- `director.test.ts` (planet), 4 tests:
+  - the catalogue against ingest.py;
+  - one at a time, the gap, the engine's cap, the life;
+  - placement: near, dry, at the water facing it, out of sight or nowhere, never in the village;
+  - walking past.
+- `director.test.mts` (web), 5 tests, on Senstrand's real ground against a recording engine:
+  - only what the place allows is offered;
+  - set out at the water, out of every villager's sight, not told why, found again on reload, and
+    not by anyone else;
+  - the pouch is a present adult's; refusals for the wrong verb, from afar, someone else's,
+    twice; the knife in the pack; the gap and the cap;
+  - walking past: recorded once away, refused while beside it and for a pouch; no engine, nothing;
+  - the mirror tells only what has been answered;
+  - how much was taken rides with the act, and walking off half-way sends the refusal twin, not
+    "everything taken".
+- 21 injected defects, all caught. The first pass missed two, now pinned. One injection changed
+  nothing, since the engine's stand-in never picks, and was replaced by a real one; the other was
+  a reload finding an emptied pouch.
+- Real, with the engine run locally (no keys, nothing kept), Senstrand, a fresh echo, twice:
+  - the engine chose the pouch, Soormer's then Paakrost's, 40 m and 36 m from the dock;
+  - the prompt offered the three answers;
+  - "Leave it closed" was said, the engine was told `return_cache`, and the pouch went;
+  - the mirror then told what was set out and why, and that the act moved cerebral (noticeably)
+    and formal (a little), read as two seconds to decide, seeing it through, and doing the same
+    again.
+
+**Not done.** See ⚑53.
+
+## C64 — the echo's body: it goes out while you are away, and tells you
+
+Feature 17 of the twenty. What was promised: an AI twin that goes about the world in your absence,
+meets villagers, and tells you what it did when you return, carrying the old world's copilot over.
+
+**What the old world had.** The copilot: every line was the engine's (`/agent/turn`), spoken *as*
+the person, and put to the autonomy gate.
+
+- `auto`: said.
+- `ask` or `copilot`: proposed instead.
+- "That's me" / "Not me": fed back (`/feedback`), training the reward head, the calibration, and
+  each bucket's level from copilot to auto.
+
+But it had no true away mode. Its "handover" ran in the open tab and stopped at a key press, and
+nothing anywhere played for an absent person. The new world has no presence record and no worker.
+
+**When.** An absence is found on return:
+
+- the page says it is here every two minutes and as it closes (`player_presence`, 0029);
+- on opening, a gap of at least 30 minutes, with no outing in the last 3 hours, is filled then;
+- the world is a function of the seed and the clock, so "then" is exact: who was out, where, doing
+  what, on the day it was.
+
+**Where and whom** (`lib/echoOuting.ts`):
+
+- **The village**: the last one you were in, else your house's, else the last you talked in.
+- **The people**: up to three. Those you know there come first, greeted as known ("smalltalk").
+  Then people you have never met ("first_greeting"), the old world's own two buckets.
+- **When**: each one out of doors and ashore, by day, at their own hour of the absence.
+
+**What it says.** Each line is the engine's, through the gate, as before:
+
+- it opens the way the old world did: "(You walk up to Hela, who looks up at you.)";
+- it is told where it is, that it is the stranger and not the villager, what earlier people on this
+  outing said, and to answer with words only;
+- held back, the line is kept and told to you on return, for your answer.
+
+**What the villager hears and keeps.**
+
+- They are told what they would know of you (`lib/strangerNotes.ts`, now shared with the talk
+  route).
+- They remember the meeting as one with you, in their own note, and it is counted. That is what an
+  echo living your life is.
+- They are told there is nothing to decide. The echo never moves anyone's life: no leaving,
+  courting, trading or inviting, whatever the model offers.
+- The echo does nothing else to the world, and nothing it does is measured: its words are not you.
+
+**Its body.** On return it waits where it last talked with someone: your own body, translucent, a
+little cold, turned towards you (`echoBodyLayer`). Walk up to it and it tells you. Anywhere else a
+line says where it went.
+
+**The account** (`EchoAway.tsx`):
+
+- First the echo's own words, first person ("While you were away I went to Senstrand. I talked
+  with Paakrost, who said…"). In your own voice when you have one here (C62); the villagers in
+  theirs when you said yes to that (C60).
+- Then every meeting, line by line. To each line it said, "That's me" or "Not me"; to each it held
+  back, "I'd have said that" or "No".
+- Each answer goes to the engine with the confidence the gate had at the time, never one the page
+  sends. It can move the bucket, and the panel says so ("It has earned this: it may now speak for you
+  here on its own").
+
+**Limits.**
+
+- **No engine, no outing**: a stand-in's words are nobody's.
+- **Cost**: at most 3 people, 2 lines each.
+- **Time**: no new model call after 30 s. The route has 60 s.
+- **Dev only**: `ECHO_AWAY_MS` and `ECHO_OUTING_GAP_MS` shorten the waits, never in production.
+
+**Found on the way.**
+
+- **A second dev server on this checkout broke the user's.** Both wrote `.next`. A second one now
+  runs with `NEXT_DIST_DIR`, which next.config reads; its folder is ignored, and tsconfig already
+  includes its types so Next has nothing to rewrite. `next-env.d.ts` still flips while it runs, and
+  is put back.
+- **The echo's first line was nonsense.** "Sure — about "", here's how I'd put it.": an empty
+  message reads as a request. It now opens with the walk-up.
+- **The echo wrote stage directions** ("I pause, considering…"), and once spoke as the villager
+  ("welcome to Sesvil's corner"). Roles are now explicit, and `spokenOnly` keeps the quoted speech.
+- **It asked all three people the same thing** ("I've just arrived, where can I stay?"). It is now
+  told what earlier people said.
+- **All three meetings fell at one hour.** The slots were whole half-days apart; they are now
+  spread across the day.
+- **A race erased the absence it was asking about.** A heartbeat sent before the return question
+  was answered marked "here, now" first. Heartbeats now wait for it.
+
+**Measured.**
+
+- `echoAway.test.mts`, 8 tests:
+  - the waits, and the dev knob never in production;
+  - known people first, then new, at most three, only out by day; what it is told;
+  - words, not a stage play, and the walk-up;
+  - its own account, what it held back included, quoting what was most said;
+  - the outing:
+    - spoken where the gate allowed, held back where not;
+    - the villager keeps the meeting and was told there is nothing to decide, and no change was
+      written although the model offered one;
+    - nothing measured; voice tokens on the villagers' lines;
+    - a later meeting knows the earlier one; asked again, nothing new;
+  - a known friend first and greeted as known; answers carry the gate's own confidence; a veto
+    carries the line; once each; someone else's refused; told, never again;
+  - no engine, no outing and no villager asked; no village, it says so and spends nothing; yours
+    alone.
+- 22 injected defects, all caught. The first pass missed four, now pinned:
+  - two injection patterns were stale after the dev knob;
+  - stage directions said aloud;
+  - a later meeting knowing nothing of an earlier one.
+- Real, three times, with the engine run locally on the small model and Opus answering for the
+  villagers:
+  - the echo, having earned greetings, met three people in Senstrand in about 40 s;
+  - after the fixes it spoke as a newcomer;
+  - the villagers answered from their own lives: Paismein keeps the inn, it was market day, the
+    stall had a knife and a pot from Dragcrachadit, and Vuk asked the stranger to tend his
+    grandchild's grave.
+- Browser, a minute's absence by the dev knob:
+  - "It is waiting for you in Senstrand";
+  - its body stood in the rain where it had talked with Paakrost;
+  - walking up to it opened the account;
+  - "That's me" and "Not me" reached the engine;
+  - "Done" took it away, and it was not told again.
+
+**Not done.** See ⚑54.
+
+## C65 — under `next dev`, a missing limiter no longer leaves the villagers deaf
+
+The user, talking to Hul in their own local server, got "Hul cannot hear you just now". The talk
+route refuses a paid reply it cannot count (C42, ⚑37), and locally nothing can be counted.
+Migration 0018's `rate_limit_hit` is not in their Supabase; in fact none of 0018–0029 is. There is
+no `DATABASE_URL` to apply them with, and only the user has one.
+
+- **On any deployment** (`NODE_ENV=production`, or any `VERCEL_ENV`) it still refuses: a public
+  deployment never sends unlimited paid replies.
+- **Under `next dev`**, on the developer's own machine and key, it goes ahead.
+
+`villagerTalk.test.mts` pins both halves.
+
+Until the migrations are applied, a local server against that Supabase also keeps no villager
+memory, deed, pack or house (their tables are missing). `VILLAGE_STORE=memory` keeps them in the
+server's memory instead.
+
+## C66 — death is a risk, not a lifespan drawn at birth, and a stranger can meet it
+
+Feature 18 of the twenty. What was promised: a lifespan is not drawn at birth; it becomes a risk that
+depends on circumstances. Taking someone to the healer, or keeping them from going to sea, can
+lengthen a life. This opens C26's last lock.
+
+**How far it reaches, decided by the user: from today on** (`MORTALITY.fromDay` = world day 5160,
+2026-10-20 00:00 UTC). L2 says the past does not move, so:
+
+- every death drawn at birth for that day or earlier stands as drawn: the dead, the graves, the
+  families;
+- everyone alive on it is who they were;
+- every death not yet lived is decided once, by the new model.
+
+Measured across 40 real villages against the model before it:
+
+- 1,420 deaths on or before the switch unchanged, none moved or missing;
+- everyone alive on the switch day the same people;
+- all 223 deaths after it redrawn.
+
+`fromDay` is to be moved to the day this ships, never back.
+
+**The model** (`packages/planet/lib/mortality.ts`, pure). Each year of a life, a yearly risk is
+weighed against a number of the person's own:
+
+- **Age**: a child's years, then Gompertz–Makeham.
+- **The sea** for a fisher, **the mine** for a miner, while working (14–70).
+- **Calibrated over 40,000 lives** to live as long as the drawn model did: one child in ten before
+  six; adults' mean 67.0 years (it was 67), p10 53, p90 79; nobody past 96. About one fisher in nine
+  is lost at sea.
+- **Five numbers a year, always, in a fixed order**, from the person's own stream. Whether a year was
+  survived or turned, the years after it are weighed the same.
+
+**A death is never sudden, and can be met.**
+
+- **Illness.** A week or two in bed first (`ailingFrom`). The ill keep to their beds, at home (no day
+  plan; `homeState` says asleep), and the village says so: "Saa is ill, and keeps to bed".
+  - **Fetch the healer**, at the door of the house, if the village has a healer who is not the one
+    lying ill.
+  - **Leave herbs**, if you carry them.
+
+  Either may turn it: with a healer 0.75 under 30, 0.6 under 60, 0.35 under 80, 0.15 after. Herbs do
+  half as well.
+- **The sea.** A fisher is lost on a day they go out under a wrong sky. Their boat goes out, storm or
+  none, and does not turn for home. With no boat in the water, they fish off the rocks. The village
+  says so that day, and the evening before.
+  - **Ask them to stay ashore**, that evening or that dawn before the boat goes. It saves them that
+    year.
+
+Both write a life change (`tend`, with `by`, or `ashore`; migration 0030) on its own day, which the
+generator reads when it creates the person: a saved life's spouse never "remarried". Each is also a
+kindness the village sees (a deed), and measured as costly help (`help_at_cost`). The verbs appear
+only when there is a death to meet (`fates.ts` `fateTurn`); the act route asks the same, and refuses
+otherwise (409 `nothing_to_turn`). Whether it was enough, the stranger learns as the village does: when
+the day passes.
+
+**Found on the way.**
+
+- **Not every fisher has a boat** (Paakrost: "I'm still dreaming of that one"), and a boat can be
+  drawn up ashore. A boatless fisher is lost off the rocks, and the news says so.
+- **"Kept ashore" now wins over "lost"** in the day's boats, even before the village is rebuilt with
+  the change.
+- **The village's news skipped every same-day item** as a gathering. The ill and the wrong sky are
+  now kept, in the news on screen, in what villagers know, and in their gossip.
+
+**Measured.**
+
+- `mortality.test.ts` (planet), 7 tests:
+  - the calibration, and no farmer lost at sea;
+  - the past stands, and later deaths are the model's, deterministic;
+  - ashore saves only on the day;
+  - tending turns only inside the illness, often with a healer, less with herbs, less with age; a
+    saved life runs the same however it was tended;
+  - in a village: deaths after the switch are the model's, the ill have no day out, they are in
+    bed, and the news says so;
+  - a fisher's last day: the boat stays out, the word comes the evening before, kept ashore the boat
+    stays in and they live on, and no other death before that day moved;
+  - when each verb is offered.
+- `fates.test.mts` (web), 2 tests, through the real act route in Senstrand after the switch:
+  - herbs at an ill neighbour's door: the change written, the herbs gone, the death exactly what the
+    model says, the healer only where there is one, nothing at a well house's door, and the village's
+    words;
+  - kept ashore the evening before, refused once the boat had gone and for a fisher with no wrong
+    sky.
+- The L2 prefix test stays green.
+- 20 injected defects, all caught, among them "the draws shift with the years".
+- Browser, the page's clock moved to 2026-10-21:
+  - "IN THE VILLAGE: Saa is ill, and keeps to bed · now";
+  - at her family's door, no healer offered (Senstrand has none), and no herbs (none carried).
+- In Senstrand over the next ten years: 58 illnesses, the first Saa's on world day 5293. Paakrost is
+  lost at sea on day 5979, unless someone keeps him ashore.
+
+**Not done.** See ⚑55.
+
+## C67 — moderation: reports, undoing a stranger's traces, and bars
+
+Feature 19 of the twenty. What was promised: reporting abuse in the shared world, and undoing one
+player's traces in bulk.
+
+**What a stranger leaves that others live with.**
+
+- **Life changes** they talked villagers into (C44, C50, C53, C66): leaving, marrying, a trade, a
+  wish.
+- **Marks** their acts left (C45): a trampled field, a forced door.
+- **What villagers know of their deeds** (C45).
+- **Their house** (C59).
+
+Their conversations, notes, ledger, outings and stagings are their own and touch nobody.
+
+**Reporting** (`POST /api/moderation/report`). "Report something here" sits on the parcel's card,
+with three plain reasons ("Someone is ruining this village", "Something offensive is on this
+land", "Something else") and a note of at most 300 characters.
+
+- **Anyone may report**, consent or none: reporting is not being watched.
+- **A snapshot comes with it**: the server keeps who had left what in that cell over the last 14
+  world days (life changes, marks, deeds and wrongs, by subject), the reporter left out. A moderator
+  sees what was there when it was reported, not after.
+- **The reporter is never told whose it was.**
+- At most 6 reports an hour.
+
+**Moderating** (`/moderation`, `GET`/`POST /api/moderation`). Only for the subjects in
+`ECHO_MODERATORS`; anyone else is told the page is for moderators, and shown nothing. Reports come
+newest open first, with their snapshots. A stranger's whole trace is shown with a preview of what an
+undo would do, before anyone does it. Then: undo, bar (a week by default), lift a bar, dismiss.
+Every action is logged with the moderator (`moderation_actions`), and closes the report it was
+taken on. A moderator cannot act on themselves.
+
+**What an undo does, and cannot** (`lib/moderation.ts` `undoPlan`, pure). L2 says the past does not
+move. Undone today:
+
+| A trace | Undone as |
+|---|---|
+| a leaving still planned | a `stay` (C44's own cancel), today |
+| anything else not yet in effect (a wedding to come, an arrival, a trade from tomorrow) | withdrawn: nobody has lived it |
+| a wish talked into someone | let go (`drop`), today |
+| a trade talked into someone | the old one back, from tomorrow |
+| what already happened: a family left, a marriage, a meeting | stands, as history |
+| a mark still showing | healed today |
+| deeds | forgotten |
+| their house | taken down only if the moderator says so |
+
+The moderators' own changes are made under `moderation`, and are never anyone's traces to undo.
+
+**Bars.** A barred stranger is refused (403 `barred`) by everything that changes the shared world:
+acts, talk and its beginning, trade, their house. The panels say "A moderator has barred you from
+changing this world for now." A bar is read at most every 30 s a stranger. A store that cannot be
+read bars nobody.
+
+**Kept** (migration 0031): `moderation_reports`, `barred_subjects`, `moderation_actions`, and
+indexes for finding one stranger's marks and deeds. On erasure:
+
+- the reports a stranger filed and a bar on them are deleted;
+- what moderators did stays, with whom it was done to cleared.
+
+The in-memory store now keeps who made each change and mark, as the tables always did.
+
+**Found on the way.**
+
+- **The moderators' page wiped its own confirmation.** Reading the stranger again after an action
+  cleared what had just been said. The real browser run found it.
+- **A test passed for the wrong reason.** talk/begin refuses a far stranger with 403 too, so the
+  barred check now pins the reason. Defect injection found it.
+
+**Measured.**
+
+- `moderation.test.mts`, 5 tests:
+  - the undo plan: stays, drops, trades back, withdrawals, history standing, only showing marks
+    healed, no house unasked, nothing dated into the past;
+  - reports: a snapshot without the reporter, one from a stranger with no identity, moderators only;
+  - an undo in Senstrand: a planned leaving stayed, a wish dropped, a trade given back, a mark
+    healed, deeds forgotten, the moderators' reversals never traces, logged;
+  - the village through yesterday exactly the same people, partners, leavings and trades: the past
+    did not move;
+  - a bar: no act and no talk, others untouched, and lifted;
+  - the erasure lists.
+- 16 injected defects, all caught. The first pass missed one (the talk route barred for the wrong
+  reason), now pinned.
+- Browser:
+  - a griefer trampled three of Senstrand's fields while eight villagers watched;
+  - a reporter filed "Someone is trampling every field on the green side";
+  - someone else was turned away from `/moderation`;
+  - the moderator saw the report with the griefer's marks, deeds and three wrongs, previewed, undid
+    (three marks healed, deeds forgotten) and barred for a week;
+  - the griefer's next trample came back 403 `barred`.
+
+**Not done.** See ⚑56.
+
+## C68 — the world's screen, simplified: one HUD, one palette, a lighter phone
+
+Feature 20 of the twenty, first half. What was promised: the phone, performance, and Turkish. The
+owner asked for more on the way: "the interface should be simpler; the landing's colours are
+mismatched, it goes from green to purple; and in the world there is an information card everywhere,
+it is not playable, and the cards are very AI slop. Add taste. Keep everything needed, but simplify."
+
+**What was on screen on arriving in a village** (screenshots before, at 1440×900 and on an iPhone 13):
+
+- the meter's banner top centre: a header, a badge, a dashed rule and the line
+  `demo values · ml_forward_failed`;
+- the frame readout under it: fps, triangles and calls, in development, always;
+- the village news card top left;
+- the place card bottom left: the name, the cell's code, "Report something here", two lines of keys;
+- the sound pill and "Back to the planet" top right, and under them the minimap with a globe and
+  coordinates;
+- on a phone, the touch controls' third round button, labelled with a backtick.
+
+On a phone the meter, the readout, the place card and the minimap covered the top half of the screen.
+
+**What is there now** (`components/world/WorldHud.tsx`):
+
+- **top left, on the world rather than in a box**: the place's name, which steps back to 60% after
+  six seconds; under it the meter, now a small chip of eight dots and a thin line; under that, the
+  village's news, two or three lines (one on a phone);
+- **top right**: three buttons, the map, the menu, and "‹ Planet";
+- **the menu**: sound (M), how your echo sees you (Y), what is being measured (`), controls, report
+  something here, the language, and the cell's code at the foot;
+- **the controls**: said once, on a first visit, after the consent question, for nine seconds; again
+  from the menu;
+- **the map**: folded until asked for, and the choice kept.
+
+Nothing that was reachable is unreachable: every key still works, and everything a key does has a
+line in the menu for a thumb.
+
+**The meter says less, and in plain words** (`recognitionReading.ts` `headline`). Its words are on
+hover or a tap. "demo values · ml_forward_failed" became "your echo cannot hear you just now"; the
+reason is the inspector's to show, as it already did beside the posterior. The mirror does the same.
+The measured sentence is unchanged ("98% sure · names 2 of 8 · 25+ windows"); its states, its
+numbers and the rule that only one state has a percentage are what the tests pin, and they hold.
+
+**One register for everything over the world** (`globals.css`):
+
+- `.hud-pop` is the one surface for the menu, popovers, the consent card, the report form, the pack,
+  the talk panel, the mirror and the echo's report;
+- `.hud-btn` is the one button;
+- `.hud-shadow` is for text set on the world.
+
+The pixel face is gone from the world's chrome: serif for names and titles, sans for everything
+read. Keycaps are small outlined marks. The talk panel's privacy paragraph is one line ("Not
+stored, and not read into your echo. How this works"); every promise it made is behind the link,
+word for word. The consent card makes the same three promises in fewer words.
+
+**The palette.**
+
+- The theme gained `ink-deep`, `echo-soft`, `ember` and `danger`.
+- 25 files' green and stray hexes (#16241f, #e2edc8, #101c19, #c4d5b3…) now map to them.
+- The landing's hero lost its green gradient and stands on the page's own ink.
+- The globe clears to that ink.
+- "learns you." is set in the echo's violet.
+- The lower sections set sentences and form fields in sans, keeping pixel for headings.
+
+**The frame readout** is drawn only when the URL asks (`?debug=render`, `?debug=layers`, in any build).
+Development still measures and writes the `data-world-*` attributes the browser tests read.
+
+**A lighter phone** (`terrainChunks.ts`). On a coarse pointer the shadow map is 1024 on a side, not
+2048: a quarter of the texels, nothing else changed. Plain PCF was tried as well and dropped: it drew
+stair-stepped shadows across a house wall at 390 px; the soft filter hides the coarser texel. The pixel
+ratio cap and multisampling were already lean (C23).
+
+**Found on the way.**
+
+- **The entrance animation undid the centring.** `hud-in` animated `transform`, which replaced
+  Tailwind's `-translate-x-1/2` on every centred element, so the controls line sat off to the right.
+  It animates `translate` now, and a test reads the keyframes.
+- **The dev server had not seen the new colours.** A Tailwind config change needs a restart. The
+  first screenshots had no `ink-deep`, which is why the meter's dots vanished against a bright sky.
+  Re-shot after a restart.
+- **A test stubs `window` without `matchMedia`.** The pointer check now asks whether it exists.
+
+**Measured.**
+
+- `worldHud.test.mts`, 4 tests:
+  - arriving: name, mark, three buttons, and no menu, hint, news box, open map or readout;
+  - the three names for land;
+  - every old affordance is a menu line;
+  - the keyframes.
+- `renderDebug.test.mts` +1 (the readout only when asked).
+- `recognitionMeter.test.mts` +1 and one changed (the plain offline line, no route code).
+- `scatterSplit.test.mts` +1 (the shadow pad still covers a phone texel).
+- 17 injected defects across C68 and C69, all caught.
+- Web 449/449. Planet 313 plus the known flaky lattice timing test. Typecheck clean.
+- Browser specs:
+  - against my own server: minimap, touch, recognitionMeter, consentRevoke, stations, renderDebug and
+    smoke, 17/17;
+  - the minimap spec now opens the map, and the touch spec opens the menu for the inspector.
+- Screenshots before and after, desktop and phone, in English and Turkish.
+
+**Not done.** See ⚑57.
+
+## C69 — the world's chrome in Turkish
+
+Feature 20, second half.
+
+**What** (`lib/i18n.ts`). English and Turkish for everything the page itself says:
+
+- the HUD and the menu, the consent card and the controls;
+- the meter's words; Turkish sets the sign first: "%98 emin";
+- the prompts beside a thing, the pack line and panel, and the report form;
+- the echo's "while you were away" line;
+- the talk panel's chrome;
+- the build and failure line;
+- the three gathering beats, and the news's times ("yaklaşık 20 dakika sonra", "yarın").
+
+Every verb a thing offers, every recipe and every house stage has a Turkish label. The labels are
+keyed by their English text, because one verb id names different acts on different things (`play`
+is a snowball, a pebble and a dog). A test walks the registry and fails on any missing; it found
+five on the first run.
+
+**Which language.** The person's choice, from the menu, kept in this browser. Before any choice, the
+browser's first language if it is Turkish, else English. The server renders English and the page
+switches on the client, so hydration never disagrees. The document's `lang` follows.
+
+**The villagers.** Their prompt already says "answer in the language the stranger writes in", so a
+stranger who writes Turkish is answered in Turkish. Nothing changed there.
+
+**Measured.**
+
+- `i18n.test.mts`, 3 tests: verb coverage, detection, filling.
+- The Turkish meter line is in `recognitionMeter.test.mts`.
+- Browser:
+  - with `tr-TR`, the parcel opened in Turkish: consent card, "‹ Gezegen", menu;
+  - the language toggle switched in place.
+
+**Not done.** See ⚑58.
+
+## C70 — two defects only a real Postgres showed, and a gate for them
+
+0018–0031 had never run on a real Postgres. The owner wanted them in one SQL file for the Supabase
+editor, so a combined file was built: every migration byte for byte, its `schema_migrations` row
+with the runner's checksum, and all of it in one transaction. It was dry-run first on a throwaway
+Postgres 16 with pgvector, brought to 0017 by the runner:
+
+- the schema came out identical to the runner's (pg_dump diff);
+- the ledger rows were identical, and the runner reported 0 pending with no drift;
+- a second run refused and changed nothing;
+- with a failure injected half-way, nothing was left behind.
+
+The owner then applied it to Supabase. The dry run showed two defects that every test had missed.
+The tests run on the in-process store, which enforces no check and builds no index.
+
+1. **A mark made today could not be healed today.**
+   - 0020 has `check (until_day > day)` on `world_effects`.
+   - C67's undo heals a mark by setting `until_day` to today. For a mark made today that is
+     `until_day = day`, and Postgres refused it: `violates check constraint "world_effects_check"`.
+   - The newest marks, which an undo is most often for, would have stayed for their whole term.
+   - Every read already shows a mark only while `until_day > day`, so the check is now
+     `until_day >= day`.
+   - Marks are still written with at least a day to run: the act route records an effect only when
+     `lastsDays > 0`. The one zero (the boat taken) is never stored.
+2. **The newest-first index 0023 asked for was never built.**
+   - 0023's `create index if not exists villager_memories_subject_idx … (subject, updated_at desc)`
+     reused the name 0019 had given a `(subject)` index.
+   - `if not exists` checks the name and nothing else, so Postgres skipped it with a notice.
+   - On 60,000 memories, `metBy` was a sort over a bitmap scan. With 0032's
+     `villager_memories_subject_recent_idx` it reads the index in order, with no sort.
+
+**0032** (`db/migrations/0032_heal_today_and_recent_index.sql`) fixes both, forward-only: the check
+is replaced by name, and the index is built under its own name; 0019's index stays. It is re-runnable
+(run twice, exit 0). The owner applies it with a one-file SQL, like the first.
+
+**So it does not happen again.**
+
+- **A CI gate** (`gate — the schema takes what the code writes`), in the gates job after the RLS gate,
+  on the schema `db:migrate:apply` just built:
+  - it inserts a same-day-healed mark, rolled back;
+  - it requires a `(subject, updated_at desc)` index on `villager_memories`.
+  - Run against a database at 0031 it is red on both counts; at 0032 it is green, whether 0032 went
+    in by the runner or by the one-file SQL.
+- **`apps/web/tests/migrations.test.mts`** reads `db/migrations` as text and pins three things:
+  - no index name is declared twice with different definitions. The 0019/0023 clash is listed, with
+    what superseded it;
+  - the newest-first index is built under a name of its own;
+  - the last word on `world_effects`' days allows `until_day = day`.
+  - Without 0032 all three are red.
+
+**Measured.**
+
+- Web 452/452.
+- Things that went right that day: 50 index statements in the folder; one other name is declared
+  twice (`world_effects_subject_idx`, 0020 and 0031), identically, which is harmless. Every column the
+  Supabase store reads and writes exists. Every `check (… in (…))` list matches the union the code
+  writes (change kinds, effect kinds, deed readings).
+
+**Not done.** See ⚑59.
+
+## C71 — two echoes meeting while their people are away
+
+What the owner asked for, after asking what would be the most "wow" and most absurd thing an
+investor could see: your echo and a friend's echo meet in a village while you are both away. They
+talk in your own voices, the village sees them, and each of you is shown the scene when you come
+back.
+
+**Who.** Only two people who have both said yes (`/api/echo/pair`). One makes a code: single use, a
+day long, with the name the other knows them by. The other types it in with theirs. Either can stop
+it. Nobody's echo meets a stranger's.
+
+**When.** There is still no worker, as with the outings (C64). An absence is found when someone comes
+back.
+
+- **Planned on return.** When someone comes back (`/api/echo/away`, `back`), a meeting is planned for
+  each pair whose two absences overlap by an absence's length (30 minutes).
+  - It is planned before the return is recorded, so two people coming back in the same moment still
+    find each other away.
+  - Its id is the pair plus the overlap's start, which both compute alike, and it is written only if
+    nobody has written it.
+  - Planning calls no model.
+- **Filled afterwards.** The page then asks `/api/echo/meet`, and the meeting is filled.
+  - A fill is taken by exactly one caller, and one that died is taken over after two minutes.
+  - One meeting per pair per outing gap (three hours).
+- **Where.** On the green of a village one of them was last in, at a daytime hour inside the overlap.
+
+**What is said.** Up to six lines, taking turns, each its own echo's.
+
+- **The engine writes them.** Each line comes from `/agent/turn`, from that person's posterior and
+  past, and goes through that person's gate.
+- **The same buckets as the outings** (a first greeting, then small talk), so trust earned with
+  villagers holds here, and an answer here trains what the echo may say there.
+- **What each echo is told:**
+  - where and when;
+  - whom it has run into;
+  - what the village is talking about that day;
+  - what has been said so far.
+- **What each echo is never told:** any villager memory, deed or conversation of either person. A
+  test seeds both and checks every context sent to the engine.
+- **Nothing it says** changes anything or is measured.
+
+**The gate is kept, and that decides what a meeting is.**
+
+- **Said aloud.** A line its gate lets through is said in the village. The villagers nearby see the
+  two talk, and may mention it later to either person, with what was said aloud
+  (`strangerNotes` → `seenTalking`).
+- **Held back.** A line the gate holds back is only what that echo would have said. Its own person
+  sees it, marked. **The friend never sees it.** The gate holds a line back so that nobody is
+  misrepresented by it, and the person it would mislead most is the friend it was meant for. So the
+  friend sees "held something back", not the words. The other echo still answers the draft, so the
+  conversation runs on.
+- **Untrained echoes rehearse.** Two echoes nobody has trained hold back every line. Their first
+  meeting is a rehearsal, seen by no villager, and each person sees their own half of it. Each person's
+  answers are what lets the next meeting be said.
+
+**Answers and voices** (`/api/echo/meet`).
+
+- **Answers.** Each person answers only their own echo's lines, once. The answer reaches the engine
+  with the confidence the gate had then, and trains that person's own bucket. Each side's answers and
+  read mark have their own column, so two people answering at once lose nothing.
+- **Voices.** A line can be heard in its speaker's own voice. That is the owner's (C62), or anyone's
+  bound in `ECHO_VOICES` (`subject=voiceId,…`). Only the two people in the meeting can hear it; only
+  their own lines or lines said aloud; and only the stored words, so nobody can make another person's
+  voice say anything. Every bound voice is kept out of the villagers' pool. With no voice, the page
+  speaks in two different browser voices.
+
+**On the page.**
+
+- **The menu** gains "Let a friend's echo meet yours".
+- **On return**, a line says the echo met the friend's.
+- **In the world.** If the meeting was here, the two bodies stand faint on the green, yours cool and
+  your friend's warm, turned to each other (`echoMeetingLayer`). Walk up and they say it again, a
+  bubble over whoever speaks, while the voices play. Then the account opens with "That's me / Not me"
+  under your own lines.
+- **In Turkish** as well (C69). Turkish strings use "ile" rather than inflecting a name the page
+  cannot predict.
+
+**Kept** (migration 0033): `echo_invites`, `echo_pairs` (one per two people, whichever asked) and
+`echo_meetings`, all RLS-on with no policies.
+
+- An erasure takes the person's codes and pairs, and every meeting their echo was in, on either side.
+- Meetings and codes are raw, swept at 90 days.
+
+**Found on the way.**
+
+- **The friend's held-back words** would have been shown to them, defeating the gate. Found in
+  design, before any code shipped.
+- **Two returns in the same moment** each recorded themselves before planning, so each saw the other
+  back and neither planned. Fixed by planning first, with an id from the overlap.
+- **Answers raced** when written as one row. They now have a column per person.
+- **An import cycle** (outings → villagers' notes → meetings → outings) would have read a constant
+  half-initialised. The pure parts moved to `meetingWords.ts`.
+- **Mutation testing found a redundant check:** "the other is away" is implied by the overlap. It
+  also found an untested case: an absence that ended earlier. The check is gone; the case is tested.
+- **The bubbles sat 1.6× too high** (`tileM` instead of `tileM / 1.6`), seen in the browser check.
+- **The villagers' name plate** kept C68's last green (an inline style). It is ink now.
+
+**Measured.**
+
+- `echoMeeting.test.mts`, 16 tests:
+  - pairing and its refusals;
+  - planning, including no pair, the other here, a pause, the gap, an ended absence, two returns at
+    once through the planner and through the route;
+  - filling: turns, gates, buckets, answered drafts, witnesses equal to `witnessesOf`, a rehearsal
+    seen by nobody, the privacy of the contexts, take-once, stale takeover, no engine;
+  - showing, answers, voices, witnesses' words, erasure.
+- 32 injected defects, all caught.
+- Web 468/468. Typecheck clean.
+- **Real engine** (`services/ml` local with its Anthropic key, two test identities):
+  - Artun was given a sociable past and a trained gate; Deniz a quiet past and a fresh gate.
+  - Artun's echo spoke aloud ("been too busy running around the market making friends with
+    everyone"). Deniz's held back every line ("Been sitting by the water mostly, watching things").
+  - Twelve villagers saw it. The fill took 21 s.
+- **Browser**, as both people:
+  - the two bodies on the green with bubbles as they spoke;
+  - Artun's account showing "Deniz's echo held something back" three times;
+  - Deniz's account showing their own three drafts with "I'd have said that" under each.
+- **Postgres 16:** 0033 by the runner and by the one-file SQL gave identical schemas. Every table has
+  RLS. A pair is unique either way round. A claim returns the meeting once, and a fill is taken once.
+
+**Not done.** See ⚑60.
+
+## C72 — five minutes to you
+
+What the owner asked for next: the most wow, absurd, investor-pleasing thing. The answer was the
+investor as the protagonist. They walk the world for five minutes, read three sentences aloud, and
+their echo meets the owner's on the green, in their own voice. Then everything is erased with one
+button.
+
+**Off unless switched on.** The demo needs three settings: `ECHO_DEMO=1`, `ECHO_DEMO_HOST` (the
+owner's subject, as the mirror shows it under "Your id here") and `ECHO_DEMO_HOST_NAME`.
+`ECHO_DEMO_CELL` is optional and defaults to Senstrand. Without all three there is no `/you` page and
+every `/api/demo` call answers 404, so no ordinary visitor reaches it. It runs on the owner's laptop
+or on any deployment with the settings, and nowhere else.
+
+**A visit** (`/you`, `components/demo`, `lib/demo.ts`, `/api/demo`).
+
+- **The first screen** asks, in plain words:
+  - whether the world may learn from how they move for these five minutes (that is the visit);
+  - separately and unticked, whether their voice may be copied from three sentences, to speak only
+    their own echo's lines, here, for a day.
+- **A fresh person.** Every visitor gets a new identity; nobody's is carried over from the last
+  visitor on that machine.
+- **The world.** Then comes the world itself, at Senstrand, with:
+  - a clock;
+  - the director at a demo's pace, for this visitor only: one encounter every 40 s instead of every
+    20 minutes, up to six (`mayStage` takes the gap);
+  - their voice after the first minute, if they said yes;
+  - after two minutes, "Let my echo meet Artun's", which happens by itself at five.
+- **The meeting is C71's own,** with no absence to wait for. The host said yes by being set as host.
+  - It is made on the spot and handed to the meeting component, which puts the two on the green and
+    offers "Take me there".
+  - A five-minute echo has earned nothing, so its lines are what it would have said, and the visitor
+    hears them in their own voice.
+  - The owner's echo, trained, speaks aloud.
+- **The end.** "That was you, five minutes in", and one button to erase everything now.
+
+**Their voice: only with a yes, and for a day.**
+
+- **The clone.** The recording is sent to ElevenLabs (instant voice cloning) only with
+  `x-voice-consent: yes`, from a real recording of at least 8 KB.
+- **Where it speaks.** It speaks only that person's echo's lines, for them and the host. It is found
+  by `personVoice` (the C62/C71 bindings first, then a visit's voice in its day). Every caller that
+  spoke the owner's voice now asks `personVoice`.
+- **A second reading** deletes the first voice before the new one exists.
+- **Lifetime.** It is deleted at ElevenLabs within a day by a sweep that runs on every demo request
+  and on the daily cron. On erase it is deleted at once, and the erasure fails if it would not go.
+
+**And the rest of the visit, within a day too.**
+
+- **One erasure path.** Erasure goes through `/api/account/delete`, called as the visitor with a
+  token the server signs. The migrations README asks for one erasure path, and this is that path.
+- **The visit row is the mark that an erasure is still owed.** It is removed last, and only when
+  everything else is gone. Otherwise it stays, and the sweep comes back for it.
+- **The page's erase** is the demo's own (the voice, at once) followed by the account erasure. If not
+  everything could be erased, it says so and offers to try again.
+- **Local erasure is real.** The in-process store gained `forgetSubject`, so erasing on a laptop with
+  `VILLAGE_STORE=memory` erases there too. The account route calls it as well.
+
+**Found on the way.**
+
+- **The first erase design took the mark with it.** A half-finished erasure (the engine down, say)
+  would have been forgotten, and "erased within a day" would have been false. The visit is now the
+  last thing deleted, and a test proves the sweep finishes a half-done erasure a day later.
+- **A click before hydration did nothing.** The intro is server-rendered. It now says when it is
+  live, and Begin waits for it.
+- **The recorder stopped at 15 s.** It now takes a limit, and the voice step uses 30 s.
+
+**Measured.**
+
+- `demo.test.mts`, 11 tests:
+  - off without the switch or a host;
+  - a visit, its pair, the host refused as a visitor, a fresh name cleaned;
+  - the meeting: too soon, then made once, the host speaking and the visitor's lines held;
+  - the voice: no yes means nothing sent; bad types and clicks refused; replaced cleanly;
+    `voice/self` says it is theirs;
+  - the sweep: due voices deleted once;
+  - erasure: a voice that would not go keeps the mark; the full erase takes it all, from both sides;
+    a half-done erasure is finished by the sweep; the demo erase takes only the voice;
+  - visits erased after a day;
+  - the director's demo pace for visitors only.
+- 29 injected defects: 28 caught, and one equivalent (a shortcut the claim already covers).
+- Web 479/479. Planet 313, plus the known flaky timing test.
+- **A real run**, in a browser with a microphone fed a recording (macOS `say`), against the local
+  engine with its key and a host trained the way a person trains one:
+  - the world at 7–9 s;
+  - the voice card at 64 s;
+  - a real ElevenLabs clone at 78 s;
+  - the meeting at 105 s, with the host speaking ("Hey Deniz! What're you doing out here in
+    Senstrand?") and the visitor's would-be lines played in the cloned voice;
+  - then erase.
+  - Afterwards ElevenLabs listed one cloned voice, the owner's, as before.
+  - The account erasure honestly said not everything was erased: the owner's Supabase lacks 0033 and
+    0034, so those six table deletes returned 404.
+- **Postgres 16:** 0034 by the runner and by the one-file SQL gave identical schemas. Every table has
+  RLS. The sweep's query returns exactly the voices past their day.
+
+**Not done.** See ⚑61.
+
+## C73 — the echo hears only what it measured
+
+**How it was found.** The owner tried the echo on themselves first, 2026-10-28. They used a fresh
+identity and played for ten minutes, with their own eight-axis rating sealed beforehand (SHA-256
+98ed3026…).
+- The echo saw 60 walking windows and 3 acts. It sat within ±0.16 of the prior on every axis but pace,
+  while the meter said 98%.
+- Its profile correlation with the owner's rating was −0.14. On the five axes that can tell knowing
+  from not knowing it did worse than the prior: mean error 0.53 against 0.47.
+- It was indistinguishable from an echo built from anyone's walk, at a mean difference of 0.06.
+
+Replaying the trial with the engine's own code found two defects.
+
+**1. What was not measured counted as average.**
+- `featurize_raw` fills all 66 features, and one nobody measured comes out as 0. The update
+  conditioned on all of them. A walking window, which measures two things, also "measured" the other
+  64 as average.
+- Sixty windows put every axis at sd 0.141: as sure of warmth as of pace. After that, an approach act
+  moved warmth by +0.07. This is the root of ⚑51's walking bias and of the meter's "97% after 12 s".
+- **The fix.** `persona.observed_mask(text, telemetry)` marks what was measured:
+  - the text block only when there is text;
+  - a telemetry feature only when its key arrived and is not None.
+
+  `observe` then conditions on the same model's marginal over those features: their rows of Wᵀ, their
+  block of Ψ.
+- **What follows from it:**
+  - `has_latency`, the old presence flag, is never a measurement on its own, since presence is the
+    mask now.
+  - A behavior that measured nothing is no update. It is still recorded in the behavior index, and
+    the version does not advance.
+  - Without text the embedding is not computed, which removes one embed call per walking window.
+
+**2. Our words were read as theirs.**
+- `/observe/behavioral` passed the cue's name (`approach_distant_lone`) as the text, and `/observe`
+  passed the web's sentence about a choice. Since L3, nothing the engine receives as text is the
+  person's own words.
+- W reads intellect almost entirely from mean word length (loading 0.99). Three identical approach
+  acts gave intellect −0.22 with no text and +0.85 with that name.
+- The trial's three acts made its context bucket "calm, formal, cerebral, reserved": r = −0.85 with
+  the owner's rating.
+- **The fix.** Both endpoints update the persona from the telemetry alone. The name and the sentence
+  still go to the behavior index, where retrieval reads them.
+
+**Approval.** C7 stands. The owner approved exactly these two changes on 2026-10-28.
+
+**Measured, the same 60 windows from the prior:**
+
+| | Before | After |
+|---|---|---|
+| sd after the walk | 0.14 on every axis | openness 0.58, energy 0.73, affect 0.81, warmth 0.95, the rest ≥ 0.98 |
+| Meter certainty | 98% | 21% |
+| Warmth after one approach act | +0.07 | +0.73 |
+
+**What it exposed: ⚑62.**
+- Walking now pushes the mean too far: openness +0.88, energy +1.00. The false average used to hide
+  this.
+- Some cues move nothing, because they only ever moved through their names:
+  - `take_marked_path`;
+  - `conform_custom` and `travel_near` (⚑23);
+  - E1 `first_contact`.
+
+  The flow-0, flow-3 and travel walkthroughs now pin them silent. The race test's event carries its
+  decision latency, since it counts updates.
+
+**Tests.** `services/ml/tests/test_observed_only.py` has 8 tests:
+- the mask is what arrived;
+- measuring nothing is no update;
+- an absent key is not average, while an explicit 0 is a measurement;
+- a walk sharpens only what it measures;
+- after a walk, an act still moves the echo;
+- the cue's name is not read, for the pooled posterior and the bucket;
+- our sentence about a choice is not their style;
+- an event that measures nothing is recorded but is no update.
+
+Undoing each part of the fix, eight mutations in all, fails at least one of them. The engine passes
+212/212; `brs_eval` and `individuation_eval` pass.
+
+## C74 — a session's walk is one measurement
+
+**Why.** C73 stopped counting what a walk does not see as average, and that showed what the false
+average had hidden (⚑62).
+- **What happened.** Sixty walking windows from a fresh echo gave openness +0.88, energy +1.00 and
+  warmth −0.45.
+- **First cause: the synthetic W.** It loads the two walking features almost alike, with a small Ψ, so
+  the model explains their small difference by inflating energy, an axis neither loads much.
+- **Second cause: independent windows.** Each window counted as an independent measurement. A
+  session's walking is one way of walking, measured sixty times.
+
+**What changed** (owner's approval under C7, 2026-11-02):
+- **The weight.** `persona.observe(..., weight)` takes how much of one measurement a behavior is,
+  between 0 and 1, and its noise becomes Ψ / weight. N updates at weight 1/N carry what one update
+  carries, on the learned path and on the heuristic one. Any other weight raises an error.
+- **The session rule.** `/telemetry` gives a walking window `1/HYPER.walk_windows_per_measurement`
+  (60) of a measurement, and a session's walking stops at one (`app._walk_share`). The count lives in
+  `UserState.walk_session_at` and `walk_session_windows`, in memory like `locomotion`.
+- **Session boundaries.** A session ends after `HYPER.walk_session_gap_s` (30 minutes) without a
+  walking window. The 60 is what ten minutes of walking sent in the first self-trial.
+- **What still counts in full.** Acts, choices and every other telemetry signal keep weight 1. A
+  window that measured neither walking feature spends nothing.
+
+**Measured through the engine, the same walk:**
+- 60, 150 and 400 windows in one session all give openness +0.29, affect +0.15, warmth −0.11 and
+  energy +0.04.
+- Openness sd is 0.82 and the meter reads 7%.
+- An approach act after the walk still moves warmth by more than 0.3.
+
+**Tests.** `services/ml/tests/test_walk_session.py` has 9 tests:
+- N windows at 1/N carry what one carries;
+- a weight outside (0, 1] is refused;
+- a session's walk stops at one measurement, while every window is still recorded;
+- a pause starts a new session;
+- a whole day of walking makes nobody open and energetic;
+- an act after the walk still counts in full;
+- the weight holds without a learned model too;
+- other signals count in full;
+- a window that measured nothing spends nothing.
+
+Undoing each part of the change, eight mutations in all, fails at least one of them. The engine
+passes 221/221; `brs_eval` and `individuation_eval` pass.
+
+**What it leaves: ⚑63.**
+- The session lives in memory.
+- A session is a pause, not a visit.
+- A session's first ten minutes speak for it, and the 60 comes from one trial.
+- Sessions still add up, so the real fix stays re-fitting W on real people.
+
+## C75 — the pilot village
+
+What the owner asked for: integrate six classic paradigms into the world and build a pilot place to
+put all their friends into. They also said it should not be "only money": the stakes must be real, but
+the world's own. Their friends are the participants, unpaid, and there is no academic partner yet: the
+owner wants to arrive at one with something in hand.
+
+**Off unless switched on.**
+- The pilot needs `ECHO_PILOT=1` and `ECHO_PILOT_CODE`, the code the owner gives their friends, at
+  least four characters.
+- `ECHO_PILOT_CELL` picks the village; Senstrand by default, by the sea.
+- `ECHO_PILOT_ADMIN` (at least twelve characters) opens the export.
+- Without the first two there is no `/pilot` page, and `/api/pilot` answers 404.
+
+**The six.** A classic paradigm each, as something that happens to you (`director.ts`,
+`affordances.ts`, `pilot.ts` in `@echo/planet`):
+
+| Situation | Paradigm | What you can do | Read by the engine as |
+|---|---|---|---|
+| A thin stranger by the path, looking at your bread | Dictator game | Give 1, 2 or all 3 loaves; walking past gives none | F7 `give_gift`, `amount` a third, two thirds or all |
+| Someone at the water with nets and no boat | Trust game | Lend your raft, or say no | G16 `lend_raft` / `keep_raft`, **unrouted** |
+| A fisher with a basket and a bet on the tide | Risk, mean held at 2 fish | Two fish sure; three or one; four or none | F3 `tide_wager`, `variance` 0, 0.25, 1 |
+| A farmer's child holding out seed | Delay discounting | A handful of grain now, or plant it for three tomorrow | F1 `eat_now` / `plant_seed` |
+| An overgrown path into the trees | Exploration | Follow it, or keep to the way | I3 `enter_unmarked` |
+| A traveller alone by a small fire | Approaching a stranger | Go and say hello, or walk on | G1 `initiate`, approach |
+
+- **No money.** Every stake is the world's:
+  - bread you will want on the water;
+  - a raft you will not have while it is lent, and that one time in four does not come back;
+  - fish that land in the pack;
+  - a crop that is there a day later;
+  - and a village your friends share.
+- **The engine reads five of the six** by routes ingest.py already has, so there is no engine change
+  (C7). Trust has no route and no W direction. It is recorded, moves nothing, and says so: cue-catalog
+  gains G16. G16 rather than an F1x or H1x line because ingest reads cues by prefix: F10–F13 would
+  be read as F1 (save), and H10 onwards as H1 (queue) (⚑64).
+- **An unrouted act carries no distance.** `acts.ts` and the director's pass emission add one only
+  for a route that reads it, so the G branch cannot take a lent raft for an approach.
+
+**A visit.**
+- **Joining comes first** (`components/pilot/PilotFlow.tsx`). Before anything, the friend gives:
+  - a research consent of its own;
+  - the group's code;
+  - a nickname the group knows;
+  - where they place themselves on the eight axes (1–7);
+  - what they say they would do in each of the six, before they meet any. These are the words to
+    set against the actions.
+- **A fresh identity.** A first join starts a new person in that browser; a returning friend is
+  recognised by the same browser.
+- **Two visits of 25 minutes**, the second at least 20 hours after the first began. That is the retest,
+  and it is when the seed is up. Each visit starts with the pack topped up to three loaves and a raft.
+- **In the world** (`ParcelCanvas` `pilot`):
+  - the director runs at the pilot's pace;
+  - a clock and "End visit" sit at the top centre;
+  - one line says to walk the village and the shore, and that what you do is up to you;
+  - nothing shows how the echo reads you while you play: no meter, mirror, inspector or meetings.
+- **The director in a visit** (`pilotAsk`):
+  - the six come one at a time, in an order fixed per person and visit (`pilotOrder`, counterbalanced
+    across a group);
+  - the first comes 20 s after arriving, and each next 30 s after the last was answered or gone;
+  - they are set 10–22 m away on land and 14–40 m at the shore;
+  - one left unmet for 4 minutes is gone, marked `unmet`;
+  - bread and a raft must be in the pack for the two that ask for them, and the shore two wait for a
+    shore;
+  - no engine is asked;
+  - the world's own director never sets the six out, and the six never hold it up.
+- **The people are people.** They use the world's own body, sit on a log or a stone, and carry a
+  basket, nets or a fire. One standing turns to you as you come near; one sitting turns their head.
+- **Afterwards** the world says, in your language, if a lent raft came back. A planted seed is
+  settled when you next look, a day on.
+- **After a visit**, each friend places the others they know: how well they know them (0–3), then the
+  eight axes. Rating someone they do not know at all is refused.
+
+**The record.**
+- The six as set out and answered are in `player_stagings`, the events in `behavioral_events`, and
+  the people and ratings in the new `pilot_people` and `pilot_ratings` (migration 0035, which also
+  adds the six to the stagings check).
+- `GET /api/pilot?op=export` with `x-pilot-admin` returns everything for the analysis, including each
+  echo as the engine holds it then.
+- The one erasure takes the person and every rating either way. The pilot tables are not swept by
+  retention.
+
+**Tests.**
+- `packages/planet/tests/pilot.test.ts` (7):
+  - the catalogue;
+  - the routes;
+  - the dictator's thirds;
+  - the tide's held mean;
+  - the raft's three in four;
+  - the counterbalanced order;
+  - the nearer rings.
+- `apps/web/tests/pilot.test.mts` (13):
+  - off unless on;
+  - joining;
+  - two visits and the top-up;
+  - the order, pace, unmet and no engine;
+  - the world's director never sets out the six;
+  - spending from the pack;
+  - the tide's payout and a full pack;
+  - the raft and the crop settled once;
+  - no distance on an unrouted act;
+  - ratings;
+  - the export;
+  - the erasure;
+  - the Turkish.
+
+Breaking the code in 15 places, each fails a test.
+
+**Checks.** Web 492/492, planet 321 passing with none failing, engine 221/221. All migrations
+0001–0035 were applied on a local Postgres 16; the one-file `apply_0035.sql` applies on a 0034
+database and records the runner's checksum.
+
+**In a browser** (headless, Turkish, desktop and phone):
+- the flow from the first screen to the world;
+- the child with the seed, 20 m away;
+- walked up to it;
+- ending the visit;
+- the friends page.
+
+## C76 — friends guess what friends would do
+
+What the owner asked for: a validation fit for a paper, built from what the pilot already has, with
+positive findings rather than a list of what could not be found. A study of who knows a person best
+needs a third witness beside the person's own words and the world. In the self–other knowledge
+literature (Vazire 2010) that witness is the person's friends.
+
+**What a rating asks now.**
+- After the axes, a rating asks "what would {name} do?" for each of the six:
+  - the same questions as the person's own, by the friend's nickname (`pilot.fq*`);
+  - in Turkish the name stays unsuffixed: "Üç ekmeği var… {name} kaç ekmek verir?".
+- "No idea" is allowed.
+- Someone the rater does not know (0) is never guessed at: `validRating` refuses a guess with
+  `know: 0`, as it refuses axes.
+- The guess has the shape of the person's own (`PilotStated`). It is stored in
+  `pilot_ratings.predicted` (jsonb, migration 0036), and null where there is no guess.
+
+**The record.** The export carries the guess with each rating. The erasure is unchanged: it takes the
+person's ratings either way, guesses included.
+
+**Migration.**
+- `0036_pilot_predictions.sql` adds the column.
+- `~/Desktop/apply_0036.sql` is the one-file form, with the runner's checksum a49a1a79….
+  - It refuses if 0036 is recorded already, and if 0035 is not.
+  - Dry run on a local Postgres 16 brought to 0035 by the runner: it applies, the runner then reports
+    0 pending and no drift, a second run refuses, and run against 0034 it refuses and records nothing.
+- The supabase store writes and reads the column. **Ratings fail to save on a database without 0036**:
+  apply 0035 and 0036 before the pilot.
+
+**Tests.** `apps/web/tests/pilot.test.mts`, ratings:
+- a guess at someone not known is refused;
+- a malformed guess is refused;
+- a guess is stored and read back whole.
+
+## C77 — who knows you best: the pilot's analysis, and a second layer for the echo
+
+What the owner asked for: about eight hours of autonomous work while they slept. They wanted
+something creative and paper-worthy, a step closer to the paper, every part of it tested.
+
+The pilot (C75, C76) collects three witnesses to each choice: the person's own words, their friends'
+guesses, and the world. This decision is everything that turns those into a study:
+- the analysis;
+- what it found about echoes;
+- a simulation built to published ranges;
+- power;
+- a report;
+- a paper draft and a pre-registration.
+
+It is all research code. **services/ml is not touched (C7).** The engine is used as a library: its
+own endpoints in-process for real data, and the same library calls for simulation, held to each other
+bit for bit.
+
+**Where.**
+- `research/pilot/` (Python, run with the engine's virtualenv):
+  - `analyze.py`: an export, or `--simulate`;
+  - `power.py`, `study.py`, `sensitivity.py`;
+  - the package `echo_pilot/`;
+  - `tests/`.
+- `research/paper/`:
+  - `draft.template.md` and `preregistration.template.md`;
+  - `build.py`, which fills every number from the runs' JSON (so `draft.md` is never edited by hand);
+  - `page.py`, which typesets the draft.
+- The runs the draft rests on are kept: `runs/power.json`, `runs/study-16.json`, `runs/sensitivity.json`.
+
+**The question.** Each choice is predicted by eight witnesses:
+
+| Witness | What it is |
+|---|---|
+| self | the person's own words |
+| friends | the median of their friends' guesses |
+| echo | the engine as built |
+| echo_axes | one layer, fitted on the group |
+| echo_2l | two layers |
+| traits | a questionnaire twin: the rated axes through the fitted model |
+| twin | ridge regression on the person's other choices |
+| together | the median of self, friends and echo_2l |
+
+They are asked in two settings:
+- **again**: the second visit predicted from the first;
+- **elsewhere**: a paradigm never seen, on either visit.
+
+**Scoring.**
+- Skill is 1 − MAE/MAE_bar. The bar is everyone else's median choice. A silent witness is scored as
+  the bar.
+- The curve gives the echoes' skill after the first t minutes of the first visit.
+- In simulation, two oracles mark the ceilings: the person's traits known exactly, and the person
+  known exactly.
+
+**The finding: a second layer.** A persona model with one layer, traits plus noise, has nowhere to
+keep what is steady about a person's choices but unexplained by traits: personality psychology's
+nuances, a latent state–trait model's specific variance. So it under-reacts to what it sees. It
+catches up only by bending the person's traits to fit one kind of choice, which moves every other
+prediction too.
+
+The two-layer echo adds one person-specific number per feature to the state, [z; u], under the
+engine's own Kalman step (Joseph form). With τ = 0 it is exactly one layer, so the ablation is exact.
+
+It is fitted on everyone but the person predicted, by variance components:
+- the day's noise, from how far a person's two visits differ;
+- the steady part, from how far people differ beyond that;
+- the traits' share, from what self- and friends' ratings predict of people's means out of sample
+  (leave-one-out ridge, its direction scaled to that share).
+
+**Closed forms** (`theory.py`, held to a Monte Carlo of the model):
+
+| Predictor | Skill (1 − MSE/var) |
+|---|---|
+| Traits known exactly | h² |
+| Copying the last choice | 2ρ − 1 |
+| Two layers after n looks | nρ²/(nρ + ε) |
+| One layer after n looks | 2cρ − c²(ρ + ε/n), with c = h²/(h² + (ν + ε)/n) |
+
+Two consequences follow:
+- One look beats perfect trait knowledge whenever ρ² > h².
+- A person's retest agreement is a yardstick, not a ceiling. Simile's normalised accuracy can pass
+  100% in principle.
+
+**Simulation, 200 groups of 16** (medians [middle half]):
+
+| Witness | again | elsewhere |
+|---|---|---|
+| two layers | +.29 [.17, .41] | +.00 |
+| pooled | +.33 | |
+| own words | +.26 | +.25 |
+| friends | +.25 | +.24 |
+| one layer | +.04 | +.00 |
+| traits known exactly | +.21 | |
+| engine as built | −.05 | −.19 |
+| own other visit | +.34 | |
+| person known exactly | +.57 | |
+
+- In *again*, the two-layer echo reaches the friends after a median of 7 minutes of play, and does
+  so within the visit in 68% of groups.
+- In *elsewhere*, nobody beats the person's own words and their friends.
+
+**Power** (200 groups per size, one-sided sign-flip):
+- The central test, two layers > one, has .58 at 16 people, .66 at 20 and .81 at 40.
+- The echo against the bar has .63 at 16.
+- Echo against friends sits near .1 to .2 at every size: it is an estimate, not a test.
+- A circle of friends is a pilot in the proper sense. The confirmatory study needs about 40.
+
+Two variants were tried and set aside; both are reported:
+- RPS scoring gives the central test less power (.35 against .57), because at pilot size the two-layer
+  echo's probabilities are not yet calibrated.
+- Predicting each visit from the other gives little more (.57 to .60), because both directions rest
+  on the same pairs.
+
+**No witness sees what it predicts.** The tests change, to the last float:
+- a person's second visit;
+- an unseen paradigm;
+- the curve's later minutes;
+- the person's own ratings.
+
+They check that nothing predicted without these moves. Twelve leaks were planted, in the echoes, the
+bar, the twin, the fit and the anchors' scale. All twelve are caught. An earlier version that compared
+only the medians caught 2 of 8; floats are the test.
+
+**Also checked.**
+- The exact path through the engine's endpoints gives every prediction and every echo of the library
+  path, end to end, on a 10-person export (87 s against 5 s).
+- Each option's telemetry is what ingest really makes of it.
+- The research code reads verbs, passing and the export as the TypeScript sources write them.
+
+**Found in the engine, for the owner to decide (C7).**
+- Every act's noise is multiplied by 7: `reliability_noise_scale("")`, a heuristic for short chat
+  messages, applied to acts. Removing it alone barely moves the engine echo (−0.02 → +0.01); the one
+  layer and the synthetic W are what hold it back.
+- Trust is unrouted (⚑64).
+- The engine has one layer.
+- The proposal, none of it done: a person layer per feature in the engine's state; W re-fit on the
+  pilot's own data; a route for G16.
+
+**The report**, `report.py`:
+- One self-contained page with inline SVG, light and dark.
+- Every headline follows the numbers, so the same page will carry the pilot's data.
+- Simulated pages say so at the top.
+- It includes the theory as a live explorer (h² and ν sliders) and the assumptions moved one at a time.
+
+**Tests.**
+- `research/pilot/tests`: 37 passing, run with `-W error`. They cover contracts, the engine path,
+  the two-layer model, the theory, stats, the simulation, the analysis and its no-peeking guarantees,
+  the report and power.
+- Engine 221/221. Web 492/492. tsc clean.
+- Planet 321 passing, none failing. Its region-build budget test fails only while the power run holds
+  ten cores; it is unchanged since C75.
+
+**Published, private to the owner:**
+- the simulated report: https://claude.ai/artifact/SKG7wYWpE66toBLkf1DTWp;
+- the draft as a page: https://claude.ai/artifact/WEU3sbbnrTd3SdZqCAt7Gi.
+
+What it leaves is ⚑65.
+
+## C78 — a third visit, on the owner's switch
+
+What it answers: the power run (C77) put the central test, two layers against one, at .58 with 16
+friends and .66 with 20. It reaches .8 only near 40, more than a circle of friends. The cheaper lever
+is time rather than people. Asked to come three times, the same friends give the echo a second look,
+and the study gets twice the choices to predict. The third visit is predicted from the first two.
+
+**What the simulation says** (`research/pilot/visits.py`, 200 groups per size, `runs/power-3visits.json`):
+
+| Test | 16 friends: 2 → 3 visits | 20 friends: 2 → 3 visits |
+|---|---|---|
+| two layers > one | .58 → .64 | .66 → .815 |
+| the echo > the bar | .63 → .745 | .695 → .87 |
+
+So 20 friends with three visits reach the conventional .8 for the central test.
+
+**The switch.**
+- `ECHO_PILOT_VISITS=3` asks each friend for three visits. Anything else, or nothing, is two, exactly as
+  before.
+- Each next visit opens a day after the last began. It used to count from the first; with two visits
+  that is the same moment.
+- The status reports the number (`sessions`). The flow says "come back twice more, a day apart", "your
+  third visit", "visit 3 of 3" and "all three visits are done", in English and Turkish.
+- Nothing else changes. The six, the pack's top-up at each visit's start, the ratings and the export
+  are the same; the analysis already predicts each visit from all before it (C77).
+- **It is the owner's choice, made before the first friend's first visit**, since it changes what
+  friends are asked for. It goes into the pre-registration either way.
+
+**Tests.** `apps/web/tests/pilot.test.mts`:
+- three visits only when switched on, each a day after the last began, then done;
+- anything but "3" is two;
+- the third visit's words exist in both languages.
+
+Three planted faults, each caught: the day counted from the first visit, the switch ignored, and any
+value switching it on.
+
+**Checks.**
+- Web 494/494, tsc clean.
+- In a browser at phone width, in Turkish, with the switch on: the intro says "birer gün arayla iki kez
+  daha" and the status reports three.
+
+## C79 — the echo pools the choices' stability
+
+What it answers: in C77's runs, copying a person's first-visit choice (+.34 at 16 people) beat the
+two-layer echo (+.29). Copying is the second layer's special case: the echo copies when it trusts
+what it saw. So the gap could only come from how far it trusted it. It learns that from the group:
+each choice's stability, τ²/(τ² + σ²), estimated from about a dozen pairs of visits each, which is
+noisy. Where a choice's τ² came out near zero, the echo stopped copying it.
+
+**The change** (`research/pilot/echo_pilot/layers.py`, `POOL_PAIRS = 10`):
+- Each choice's stability is shrunk toward the pairs-weighted mean of the six, by a prior worth ten
+  pairs of visits (about what each choice has at sixteen people).
+- Its residual variance τ² + σ² is kept; only the split moves.
+- Walking and decision time are not pooled.
+- `POOL_PAIRS = 0` gives C77's model back.
+
+**Chosen on simulation, before any real data, and not on the simulation's terms alone**
+(`experiments/pooling.py`, `runs/pooling.json`). Sixty groups of 16 were run with the stability equal
+for all six (the simulation as assumed), and again with it unequal, from .3 for the tide to .9 for
+bread:
+
+| Stability | Pooling | Two layers | Echo − copying (median) | H1 power |
+|---|---|---|---|---|
+| equal | none | +.313 | −.058 | .57 |
+| equal | 10 pairs | +.336 | −.015 | .60 |
+| unequal | none | +.313 | −.022 | .63 |
+| unequal | 10 pairs | +.338 | −.018 | .62 |
+
+Pooling helps where the six are alike and does no harm where they are not. Thirty pairs was no better
+with equal stability (+.334) and somewhat better with unequal (+.354). Ten is the moderate choice.
+
+**Everything rerun with it**: power, the many-group study, sensitivity and the third visit. The
+report, the draft and the pre-registration draw their numbers from the new runs.
+
+**The pooled runs.** The machine's idle sleep had been throttling the first attempt (see below), so they
+were rerun with 120 groups per size instead of 200.
+
+At 16 people:
+
+| Witness | again |
+|---|---|
+| two layers | +.342 [.20, .44] |
+| copying the first visit | +.338 |
+| self, friends and echo pooled | +.358 |
+| own words | +.260 |
+| friends | +.256 |
+| one layer | +.026 |
+| traits known exactly | +.221 |
+
+- The two-layer echo now matches copying. Copying still agrees exactly a little more often: 64%
+  against 62%, against 47% for the bar.
+- It reaches the friends after a median of 7 minutes, within the visit in 73% of groups.
+- Elsewhere is unchanged: own words +.257, friends +.235, the echo +.000.
+
+Power for the central test: .65 at 16 people (.58 without pooling), .675 at 20 and .86 at 40.
+Sensitivity (40 groups per assumption): two layers beat one under all six assumptions.
+
+**A third visit, pooled** (100 groups per size, `runs/power-3visits.json`): two layers > one goes 0.65 → 0.67 at 16, 0.675 → 0.82 at 20; the echo > the bar 0.65 → 0.82 at 16, 0.7 → 0.88 at 20. Twenty friends with three visits still reach .8.
+
+**A note on the runs, for whoever reruns them.** This Mac is set to idle-sleep after one minute
+(`pmset sleep 1`) and stays up only on other processes' assertions. Overnight it slept between them, and
+a power run that takes 42 minutes awake had done a fraction of its work after 80. Long runs now go under
+`caffeinate -i -s -w <pid>`, and with one matrix thread per worker (`VECLIB_MAXIMUM_THREADS=1`). The
+scripts take their worker count from `ECHO_RESEARCH_WORKERS`.

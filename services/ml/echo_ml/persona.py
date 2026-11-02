@@ -407,7 +407,7 @@ TELEMETRY_FEATURE_NAMES = [
     # The whole vision rides on reading what you choose; these grow F from 50 → 62 so allocation,
     # timing, risk, and solitude choices move the persona posterior. Populated by the island
     # day-loop (allocation, resource_bet, choice_made, structure_progress) via /observe, and by
-    # pet_talk/leave_intent via /telemetry. All bounded; absent ⇒ 0 (neutral).
+    # pet_talk/leave_intent via /telemetry. All bounded; absent ⇒ 0 in φ, and unmeasured in the update (C73).
     "ts_earn", "ts_learn", "ts_social", "ts_leisure", "ts_build",  # time-share (revealed priorities)
     "save_rate",          # saved / earned — future-orientation / delay discounting
     "risk_index",         # E[chosen variance] — risk tolerance
@@ -420,7 +420,7 @@ TELEMETRY_FEATURE_NAMES = [
     # W lacked. Grows F 62 → 66; each is an IDENTIFIED direction for novelty-seeking so
     # exploration stops leaking onto dominance/warmth (the factor-degeneracy fix, blueprint IV.4).
     # Populated by the P3 passive locomotion sampler, the travel stand (dest_occupants-modulated),
-    # and the ⚑ exploration/dialogue cues re-routed in ingest.py. All bounded; absent ⇒ 0.
+    # and the ⚑ exploration/dialogue cues re-routed in ingest.py. All bounded; absent ⇒ 0 in φ, unmeasured (C73).
     "novel_tile_ratio",   # fraction of newly-visited ground per window — exploration breadth (A9)
     "path_tortuosity",    # wander vs beeline (A6), normalized from the raw ≥1 ratio
     "travel_novelty",     # sails far / to bare shores (A11 / travel_far)
@@ -493,19 +493,54 @@ def feature_names() -> list[str]:
     return list(FEATURE_NAMES)
 
 
+# The telemetry key each telemetry feature is read from; a feature not listed reads the key of its own
+# name. `has_latency` is the presence flag of the full-vector update: with a mask, presence IS the mask,
+# so the flag is never a measurement of the person on its own.
+_TELEMETRY_SOURCE: dict[str, Optional[str]] = {
+    "latency_norm": "latencyMs",
+    "has_latency": None,
+    "edits_norm": "editsCount",
+}
+_TEXT_FEATURES = HYPER.embed_proj_dim + len(STYLOMETRY_FEATURE_NAMES)
+
+
+def observed_mask(text: str, telemetry: Optional[dict] = None) -> np.ndarray:
+    """Which of the FEATURE_DIM raw features one behavior actually measured (C73).
+
+    featurize_raw fills every feature, and one nobody measured comes out as 0 ("absent ⇒ 0, neutral").
+    Fed whole to the update, that 0 was a measurement: every walking window told the posterior the
+    person is average on everything a walk cannot see, and after a minute it was as sure of their warmth
+    as of their pace. The text block is measured only when there is text; a telemetry feature only when
+    its key arrived (and is not None). An explicit 0 is still a measurement; a missing key is not.
+    """
+    t = telemetry or {}
+    seen = np.zeros(FEATURE_DIM, dtype=bool)
+    seen[:_TEXT_FEATURES] = bool((text or "").strip())
+    for j, name in enumerate(TELEMETRY_FEATURE_NAMES):
+        key = _TELEMETRY_SOURCE.get(name, name)
+        seen[_TEXT_FEATURES + j] = key is not None and t.get(key) is not None
+    return seen
+
+
 @quiet_fp
 def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
-            model: Optional["object"] = None, trace: Optional[dict] = None) -> Posterior:
+            model: Optional["object"] = None, trace: Optional[dict] = None,
+            weight: float = 1.0) -> Posterior:
     """One online persona update from a single behavior (§9.8 `update persona posterior`).
 
     When a learned measurement model is available (committed artifact, WI-2) the update is
     the *robust* general linear-Gaussian step on the rich features φ = featurize_raw, with
     heteroscedastic reliability noise and Student-t outlier downweighting (WI-4):
-        φ − μ_φ = Wᵀ z + ε  →  robust_kalman_update(post, φ−μ_φ, Wᵀ, Ψ·reliability).
+        φ − μ_φ = Wᵀ z + ε  →  robust_kalman_update(post, (φ−μ_φ)[m], Wᵀ[m], Ψ[m,m]·reliability),
+    where m = observed_mask(text, telemetry): only the features this behavior measured (C73).
     On a clean checkout with no artifact the model is *untrained* and we fall back to the
     legacy heuristic featurizer — preserving the zero-key / clean-checkout invariant.
     Pass `trace={}` to capture the gating diagnostics (Mahalanobis d², weight, surprising).
+    `weight` (0 < weight ≤ 1) is how much of one measurement this behavior is: its noise is Ψ / weight,
+    so N updates at weight 1/N carry what one carries (C74, a walking window).
     """
+    if not 0.0 < weight <= 1.0:
+        raise ValueError(f"weight must be in (0, 1], got {weight}")
     from .persona_model import get_persona_model
     model = model if model is not None else get_persona_model()
     # A trained artifact whose feature width no longer matches FEATURE_DIM (e.g. F grew in §0.D
@@ -518,21 +553,24 @@ def observe(post: Posterior, text: str, telemetry: Optional[dict] = None,
         and model.mu_phi.shape[0] == FEATURE_DIM
     )
     if trained_and_compatible:
-        # No information at all (empty text AND no telemetry) ⇒ no-op, matching the heuristic
-        # path's mask.sum()==0 short-circuit. Telemetry-only updates (e.g. latency→pace) still
-        # flow through, since their signal lives in the telemetry features of φ.
-        if not (text or "").strip() and not (telemetry or {}):
+        # The update conditions on what this behavior measured and nothing else (C73): the marginal
+        # of φ − μ_φ = Wᵀz + ε over the observed features is the same model restricted to their rows
+        # of Wᵀ and their block of Ψ. Nothing measured ⇒ no update, as on the heuristic path.
+        seen = observed_mask(text, telemetry)
+        if not seen.any():
             return post
-        phi = featurize_raw(text, telemetry)
+        has_text = bool((text or "").strip())
+        # No text ⇒ the text block is unobserved, so it is not computed (no embedding call per walk).
+        phi = featurize_raw(text, telemetry, embedding=None if has_text else np.zeros(SETTINGS.embed_dim))
         W_meas, Psi = model.apply(phi)
-        Psi = Psi * reliability_noise_scale(text, telemetry)   # heteroscedastic (WI-4)
-        return robust_kalman_update(post, model.center(phi), W_meas, Psi, trace=trace)
+        Psi = Psi * reliability_noise_scale(text, telemetry) / weight   # heteroscedastic (WI-4)
+        return robust_kalman_update(post, model.center(phi)[seen], W_meas[seen], Psi[np.ix_(seen, seen)], trace=trace)
 
     # heuristic fallback (no learned artifact)
     y, mask, r = featurize(text, telemetry)
     if mask.sum() == 0:
         return post
-    return kalman_update(post, y, mask, r)
+    return kalman_update(post, y, mask, r / weight)
 
 
 # ── decoding (for the cloning policy, §9.3) ──────────────────────────────────────

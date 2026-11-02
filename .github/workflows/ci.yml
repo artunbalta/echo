@@ -102,6 +102,81 @@ jobs:
         env:
           DATABASE_URL: postgres://echo@127.0.0.1:55432/echo_planet
 
+      # EVERY TABLE HAS RLS, AND NO TABLE HAS A POLICY — asserted against the schema the runner just
+      # built, which is the only database where the question means anything.
+      #
+      # This exists because the invariant has now been broken twice by the same mechanism: a
+      # migration enables RLS for the tables it can see, later migrations add tables, and nobody
+      # re-counts. 0015 covered what 0001 created and `⚑25` closed on "sixteen tables"; MEASURED on
+      # this tree before 0017, the real coverage was 20 of 30, with full conversation transcripts
+      # (`connection_analyses.transcript_json`) among the ten. A third round of that is a gate's job,
+      # not a reviewer's.
+      #
+      # It is deliberately NOT a node test. `PLANET_TEST_DATABASE_URL` points at a database
+      # `packages/planet/tests/registry.test.ts:9-14` tells people to build from ONE migration, so a
+      # suite gated on it goes red on a developer's machine for the wrong reason — reporting "tables
+      # with RLS disabled" when the truth is "this database was not built by db:migrate:apply". A red
+      # that means something else is the failure mode `⚑11` is about.
+      #
+      # ZERO POLICIES IS THE INVARIANT, not an oversight: 0007:20 and 0015:23 both say a policy can
+      # only widen access, and every writer in this repo uses the service role, which bypasses RLS
+      # entirely. If a policy is ever genuinely wanted, this step is where that argument gets made.
+      - name: gate — row level security covers every table
+        run: |
+          set -euo pipefail
+          open=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select string_agg(tablename, ', ' order by tablename) from pg_tables where schemaname='public' and not rowsecurity;")
+          policies=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select count(*) from pg_policies where schemaname='public';")
+          covered=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select count(*) filter (where rowsecurity) || ' of ' || count(*) from pg_tables where schemaname='public';")
+          total=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select count(*) from pg_tables where schemaname='public';")
+          echo "RLS coverage: $covered ; policies: $policies"
+          # A GREEN THAT MEANS NOTHING IS WORSE THAN A RED. Both assertions below are satisfied by an
+          # EMPTY schema — no table lacks RLS when there is no table — so a migration step that
+          # silently did nothing, or a psql pointed at the wrong database, would print
+          # "RLS coverage: 0 of 0" and pass. The migrations create 30 tables; anything far below that
+          # means this gate is not looking at the schema it thinks it is.
+          if [ "$total" -lt 25 ]; then
+            echo "::error::only $total tables in public — this is not a migrated database, so the"
+            echo "coverage assertion below would pass vacuously. Check the migrate step."
+            exit 1
+          fi
+          if [ -n "$open" ]; then
+            echo "::error::these public tables have RLS disabled: $open"
+            echo "PostgREST exposes them to anyone holding the anon key, which ships in the browser"
+            echo "bundle. Add them to a new migration the way 0017 does, or write down why not."
+            exit 1
+          fi
+          if [ "$policies" != "0" ]; then
+            echo "::error::$policies row level security policies exist; this repo's posture is zero."
+            echo "A policy can only WIDEN access (0007:20, 0015:23). Every writer uses the service"
+            echo "role, which bypasses RLS. If one is genuinely wanted, change this gate deliberately."
+            exit 1
+          fi
+
+      # THE SCHEMA TAKES WHAT THE CODE WRITES (DECISIONS C70). The web tests run on the in-process
+      # store, which enforces no check and builds no index, so two defects in 0020 and 0023 passed every
+      # one of them and showed only on the first real Postgres: a moderator could not heal a mark made
+      # that day (C67's undo writes until_day = day), and the newest-first index `metBy` reads was never
+      # built, because its name was taken. Both are asked of the schema the runner just built; the
+      # insert is rolled back.
+      - name: gate — the schema takes what the code writes
+        run: |
+          set -euo pipefail
+          if ! docker exec -i echo-pg psql -v ON_ERROR_STOP=1 -qtA -U echo -d echo_planet \
+            -c "begin; insert into world_effects (cell, thing, kind, day, until_day) values ('ci-gate', 'field:0', 'trampled', 7, 7); rollback;"; then
+            echo "::error::world_effects refuses a mark healed on the day it was made, which C67's undo writes. See 0032."
+            exit 1
+          fi
+          recent=$(docker exec -i echo-pg psql -qtA -U echo -d echo_planet \
+            -c "select count(*) from pg_indexes where schemaname='public' and tablename='villager_memories' and indexdef like '%(subject, updated_at DESC)%';")
+          if [ "$recent" -lt 1 ]; then
+            echo "::error::villager_memories has no (subject, updated_at desc) index, so metBy sorts instead of reading in order. See 0032."
+            exit 1
+          fi
+
       # planet + shared + web. NOT realtime: apps/realtime/package.json has no `test` key, so
       # `--workspaces --if-present` skips it silently. Its suites are run explicitly below.
       # With PLANET_TEST_DATABASE_URL set, the planet suite runs its four skipped registry tests —

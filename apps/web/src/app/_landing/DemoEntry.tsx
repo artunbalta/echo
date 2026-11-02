@@ -66,7 +66,7 @@ export default function DemoEntry() {
           Demo
         </p>
 
-        <div className="mx-auto mt-8 overflow-hidden rounded-sm border-2 border-[#2a2340] bg-[#120c19] shadow-[0_8px_0_#0d0812]">
+        <div className="mx-auto mt-8 overflow-hidden rounded-sm border-2 border-[#2a2340] bg-ink-deep shadow-[0_8px_0_#0d0812]">
           <video
             controls
             muted
@@ -75,7 +75,7 @@ export default function DemoEntry() {
             poster="/echo-trailer-poster.jpg"
             width={1280}
             height={720}
-            className="block aspect-video h-auto w-full bg-[#120c19]"
+            className="block aspect-video h-auto w-full bg-ink-deep"
           >
             <source src="/echo-trailer.av1.mp4" type='video/mp4; codecs="av01.0.08M.08, mp4a.40.2"' />
             <source src="/echo-trailer.mp4" type='video/mp4; codecs="avc1.64001F, mp4a.40.2"' />
@@ -84,7 +84,7 @@ export default function DemoEntry() {
           </video>
         </div>
 
-        <p className="mx-auto mt-8 max-w-sm text-center font-pixel text-sm leading-relaxed text-parchment/55">
+        <p className="mx-auto mt-8 max-w-sm text-center text-[15px] leading-relaxed text-parchment/55">
           Part of the world is already walkable. It is rough, and it is not the whole thing, but the
           shore is real and your echo is already watching.
         </p>

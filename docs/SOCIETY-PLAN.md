@@ -13,7 +13,45 @@
 
 ---
 
-### Where this stands — 2026-09-09
+### Where this stands — 2026-09-14
+
+> **2026-10-18 — `C45`, everything can be acted on.** One registry of verbs for every scatter class,
+> every village thing, the villagers and the water, and a test that stops a new thing shipping without
+> them. Acts are measured under ingest.py's own labels (no `services/ml` change), leave shared healing
+> marks, and are deeds with witnesses: a household you wronged turns its back on you, and villagers
+> speak of what they saw. A mine where the ground has metal; boats you can row; a meter that no longer
+> freezes after the first act. The posterior's real movement under acts is unmeasured (`⚑40`).
+>
+> **2026-10-18 — `C43` + `C44`, lives that change.** The planet was re-rolled once: the society's
+> stream had been one number and its shifts (`⚑38`), and a person's id is now their lineage (`⚑33`
+> closed). Villagers remember each stranger (a private note in their own words), want things (a closed
+> catalogue of eight goals, seed and talk), and a conversation can change the rest of a life — leave,
+> stay, take up a trade, want or give up a goal — as a structured event the generator reads, so a
+> family that leaves takes its unborn with it and the past never moves. This amends C26 and L3, and
+> C44 says how far. SOC-6.C's delta layer and SOC-6.F's memory exist; 0019 is applied nowhere (`⚑39`).
+>
+> **2026-10-18 — `C42`, talking.** Press E beside a villager and they answer from the life they
+> lived — family, dated life, the chronicle they witnessed, the whole village's roster — in the
+> stranger's own language, with a mechanical check that they name nobody who is not there. Measured
+> on the real model: ~$0.012 for a first line, ~$0.004 after, 2.6–3.8 s. Not yet: memory of the
+> stranger (SOC-6.C/6.F); closed wherever migration 0018 is missing (`⚑37`).
+>
+> **2026-10-17 — `C41`, the village slice itself (§7 step 5), on every settled parcel.** Houses by
+> household, dock and boats, fields, graveyard and benches laid out from the substrate; everyone's
+> day as a closed form of the hour (`schedule.ts`) — to the boats and the fields before sunrise, on
+> the green at dusk, home after dark; a crowd drawn by part; village lights and names on the landing
+> globe. Seen at the main entrance through the shared parcel layers, not on a route of its own. On a
+> settled parcel you now arrive at the village's edge. Worst frame with people: 110 of 120 calls on
+> the largest village measured (`⚑36`). Not yet: talking, avoidance, smoke, impostors, a phone.
+>
+> **2026-10-17 — `C40`, step 1 of §7 step 5's village slice.** `packages/planet/lib/life.ts`: every
+> person's lived past (kinship, the trade and who taught it, close friends, estate rifts, what they
+> died of), the village's chronicle (fever, storm, hungry year, fire) and a heritable temperament on
+> the player's eight axes — read off the substrate, never written back; `society.ts` output
+> byte-identical, C33 reproduced. It feeds SOC-6.F (axis vectors from a demographic model) and
+> SOC-6.H (an old person talking about the dead). Found beside it: `⚑32`, `⚑33` — and `⚑33` has a
+> deadline, SOC-6.C's first row. Not built: narration, schedules, bodies. The block below is
+> unchanged and keeps its own date.
 
 **Decisions taken and recorded** as `C24`–`C38` in `docs/DECISIONS.md`: the world clock, NPC land in
 the substrate, read-only mortality, the planet frame and the parcel as the shared unit (which also
@@ -30,7 +68,8 @@ stated cause refuted; the real one was the test runner)* · SOC-1.E *(the promis
 browser)* · SOC-2.B *(the collision, not the foreign key)* · SOC-2.C *(a ledger, verified against a
 real Postgres)* · SOC-2.D *(the durable half; `shared` deliberately not taken)* · SOC-2.F *(the class
 that exists is carried)* · SOC-2.G *(taken as C35)* · SOC-2.H *(eight holes, not one, and the
-registry suite now actually runs)* · SOC-2.E *(five surfaces, not three — `C39`)* · SOC-6.A ·
+registry suite now actually runs)* · SOC-2.E *(five surfaces, not three — `C39`; and marked ✅ on a
+count that could not see the sixth — `⚑28`, §3 item 10)* · SOC-6.A ·
 SOC-6.B · SOC-6.G.
 
 **Nine things found while doing it, each worse than the plan assumed.**
@@ -80,19 +119,29 @@ reclassified by anyone.
 0.3 — 26,602 settlements and a 41-minute walk between them (`C33`) — and `feat/f4-trust` is merged
 rather than retired (SOC-0.G).
 
-**Gates, measured 2026-09-09:** `check:register` ✅ *(1,196 lines, 27 entries, every ⚑ resolves)* ·
+**Gates, measured 2026-09-14** *(four of the figures this block carried on 2026-09-09 had moved;
+every figure below was re-run on `b22c3d4` plus the `⚑28`/`⚑29` fixes **except the two marked NOT
+re-measured**, which need a dev server and are carried with their old date rather than restated as
+if they were fresh)***:**
+`check:register` ✅ *(1,613 lines, 32 entries, every ⚑ resolves)* ·
 `build:shared` + `typecheck` ✅ (4 workspaces, and in that order — SOC-2.H hole 6) · `@echo/planet`
 160/164 with 4 skipped, 0 failed *(the 4 need `PLANET_TEST_DATABASE_URL`; **164/164 against a real
 Postgres migrated by `db:migrate:apply`** was measured 2026-09-08 and is not re-measured here, so it
-carries that date)* · `@echo/shared` 31/31 · `@echo/web` **256/256** · `@echo/realtime` copresence ✅ ·
-`services/ml` **186/186** · e2e **27 passed of 37**, at `workers: 1` — see SOC-1.D, where that
+carries that date)* · `@echo/shared` **53/53** · `@echo/web` **286/286** · `@echo/realtime` copresence
+✅ *(and FAILS with `exit 1`, `identity_no-identity`, with no relaxation — both halves re-measured)* ·
+`services/ml` **200/200** · **RLS 31 of 31 public tables, 0 policies**, measured through
+`db:migrate:apply` against PostgreSQL 16.15 *(and 24 of 24 on a `--baseline`d database that never ran
+`0009` — `⚑29`)* · e2e **NOT re-measured here**, and the last reading is 2026-09-09's **27 passed of
+37**, at `workers: 1` — see SOC-1.D, where that
 constant was wrong the first time and is now measured on this tree. **Red, all ten pre-existing:**
 `scatterSplit` ×2 (the `C28` overage), `scatterImpostor` ×4, `globePick` ×2, `slice` ×1, `spawnSea` ×1
 — quarantined by reason, never by retuning a threshold, and **re-verified pre-existing on 2026-09-09**
 by reverting `detailLayer.ts` and `scatterDetail.ts` to the pre-`C38` commit and re-running: the same
-five tests fail in the three specs checked, so the mid band caused none of them. *(A bare `npm run
-e2e` runs all 37; `E2E_QUARANTINE=skip` is what reports 21/21, and the two counts describe the same
-tree.)*
+five tests fail in the three specs checked, so the mid band caused none of them. *(⚠️ **These numbers do not reconcile and the reconciliation sentence was wrong.** A bare
+`npm run e2e` runs all 37 and `E2E_QUARANTINE=skip` was said to report 21/21 — but 37 − 10 = 27, not
+21, and `NEW-AGENT.md` reports the same gate as 24 passing. Quarantine is applied by FILE, so the
+excluded files hold more tests than the ten that fail. Three counts for one gate, none of them
+re-derived since tests were added. Not re-measured here, and not restated as agreeing.)*
 
 ---
 
@@ -207,13 +256,19 @@ exists. So does `docs/MULTIPLAYER.md:19`.
 
 ## §3. Corrections this plan makes to the record
 
-A roadmap that cites a wrong record inherits the error. **Nine are listed here — four record
-errors, two live defects, and three this document produced itself.** Item 7 was found by the
-ground-truth pass that CORRECTED the first four, in this document's own SOC-1.B; item 8 was CREATED
-by this document's own SOC-0.E and found by its SOC-2.C; item 9 was created and committed by SOC-1's
-own frame work and found by an adversarial review of it.
+A roadmap that cites a wrong record inherits the error. **Eleven are listed here — four record
+errors, two live defects, and five this document produced itself.** Items 10 and 11 were added
+2026-09-14 by the pass that closed `⚑28` and `⚑29`, and BOTH are this document's own: item 10 is it
+marking SOC-2.E ✅ on a coverage count that could not fail, and item 11 corrects a sentence that lives
+in this file, at :875. That is five of eleven — and the correction to *that* number is itself the
+sixth time this list has had to count its own errors rather than someone else's.
+Item 7 was found by the ground-truth pass that CORRECTED the first four, in this document's own
+SOC-1.B; item 8 was CREATED by this document's own SOC-0.E and found by its SOC-2.C; item 9 was
+created and committed by SOC-1's own frame work and found by an adversarial review of it; items 10
+and 11 are this document's own, and were found by a pass that re-measured the claims rather than
+re-reading it.
 
-**Items 1–4 (SOC-0.C), 6 (SOC-1.E), 7, 8 and 9 are ✅ done. Item 5 is ◑ — SOC-2.B removed the
+**Items 1–4 (SOC-0.C), 6 (SOC-1.E), 7, 8, 9, 10 and 11 are ✅ done. Item 5 is ◑ — SOC-2.B removed the
 name-as-key collision, and the foreign key is still owed to SOC-2.E.**
 
 *That two of the eight are this plan's own is not an embarrassment to be tidied away; it is the
@@ -305,6 +360,36 @@ closely enough.*
    times the failure was invisible because the check passed. It was found by pointing four
    adversarial reviewers at the design before it shipped, which is the only reason it is item 9 of
    this list rather than a wrong sentence in `DECISIONS`.
+
+10. **SOC-2.E was marked ✅ on a coverage count that the count's own unit could not see through.**
+    ✅ *corrected 2026-09-14.* This document says SOC-2.E is done and `C39`/`⚑27` both say "16 of 19
+    id-bearing routes are guarded". MEASURED: the unit is the route FILE, `island/state` is the only
+    route in the tree exporting two verbs, and its POST was writing whatever `userId` arrived in the
+    body. **The sentence was arithmetically true for as long as the hole was open**, because a grep
+    over files cannot see inside one.
+    *And the larger half was on the other side of the wire.* 30 of 33 browser fetch expressions to
+    guarded routes sent no signature at all — 23 of 26 distinct *(file, route)* pairs — because `identityHeaders()` lived in one component's closure —
+    so every guarded route outside the parcel chain had been answering 403 to its only caller since
+    C39 shipped, silently. The worst case was `/play`, which never minted a token and therefore
+    joined nothing: the player got a solo world that **looks exactly like an empty shared one.**
+    *This is item 9's species pointed at a coverage claim rather than a measurement.* A count is an
+    instrument too, and "16 of 19" could not fail. Closed as `⚑28`; the record is amended in
+    `DECISIONS.md` under "C39, corrected after review".
+
+11. **"The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
+    server component" is false on this tree.** ✅ *corrected 2026-09-14.* SOC-2.B (below, **:875** on this
+    tree — it was :836 before this item was added, and adding the item moved it, which is a small live
+    demonstration of why §3 exists)
+    records that as the reason its test had to live in `lib/claimRequest.ts`, and the reasoning it
+    draws from that — a test that writes its own branch is testing its own branch — is right and
+    unaffected. But the stated blocker is not the blocker. MEASURED: `next/server` loads fine under
+    `tsx`; `NextResponse.json({…},{status:403})` returns a 403. What throws is **`server-only`**, a
+    marker package whose `index.js` throws on purpose outside a React Server Component, and seeding
+    the CJS require cache with an empty module for it is enough to import a route handler directly.
+    `apps/web/tests/islandState.test.mts` drives the real `POST` that way, with `lib/subject.ts`, the
+    pure `subjectFor` and the store all real. **This matters because the sentence is load-bearing in
+    the wrong direction:** left standing, it tells the next author that no route can carry its own
+    gate, and every guard gets tested one layer away from the thing that ships.
 
 ---
 
@@ -833,7 +918,10 @@ taken an `ownerId`, and `parcels` has carried a `display_name` column since migr
 
 **Where the test had to go, and why the obvious place was wrong.** A test driving the registry with
 two ids would have passed *before* the fix and caught nothing: the registry contract was never the
-bug. The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
+bug. ⚠️ *The next sentence is corrected by §3 item 11: the blocker is `server-only`, not `next/server`,
+and a route handler CAN be driven directly — `apps/web/tests/islandState.test.mts` does. The reasoning
+that follows it is unaffected.*
+The route itself cannot be tested — it imports `next/server`, which refuses to load outside a
 server component — so the branch lives in `lib/claimRequest.ts` and the route calls it, which is
 `sliceOptionsFor`'s move for `sliceOptionsFor`'s stated reason: a test that writes its own branch is
 testing its own branch. Seven tests there, five in `packages/planet/tests/ownership.test.ts` for the
@@ -1485,13 +1573,13 @@ also the highest-signal measurement moment the world can offer.
 ledger, no server-side transaction. The trader is an entity whose only fields are `role: "trader"`
 and `status: "peer"`; `bargain_hard` and the fairness-split cues exist purely as measurement labels.
 
-### SOC-7.A — Simulation-visible, player-inert, first ☐
+### SOC-7.A — Simulation-visible, player-inert, first ◑ *(C58: markets between neighbouring villages, closed-form and player-inert; no development yet)*
 
 Prices move, trade routes matter, a village visibly gets rich — and players do **not** arbitrage it.
 Opening it later is easy; closing it later is impossible. The land registry is already a scarce-good
 market with a waitlist, and a player-exploitable economy touches it.
 
-### SOC-7.B — The Design Law 1 exemption ☐
+### SOC-7.B — The Design Law 1 exemption ✓ *(C58, 2026-10-18: the different shape — valueless barter, no exemption written)*
 
 No XP, no score, no levels, no points — with a grep-able CI invariant. Wealth ladders and reputation
 scores need an **explicit written exemption or a different shape**. Do not let an economy quietly

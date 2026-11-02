@@ -23,8 +23,14 @@
  * of a Supabase session in the tree and not two.
  *
  * CONSENT: this route MINTS, so it must only ever be called after the consent card is answered —
- * `lib/identity.ts` argues why (`peekUserId` exists so nothing mints before the question), and
- * `ensureIdentity()` is called from `arm()`, never from a render.
+ * `lib/identity.ts` argues why (`peekUserId` exists so nothing mints before the question). The rule
+ * is *after the answer*; "called from `arm()`, never from a render" was this sentence's earlier
+ * wording and named the mechanism that happened to be true rather than the rule (⚑28). There are
+ * three callers now, and each satisfies the rule differently: `arm()` is the parcel chain's accept
+ * path; `/play`'s connect effect is behind a render gate that will not mount `WorldClient` until
+ * `echo.character` exists, and `/onboard` writes `echo.consent` before it writes that; and `/claim`
+ * asks no consent question a stamped key would answer early and already promises the identifier is
+ * permanent. **If you add a fourth, say which of those three it is.**
  */
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";

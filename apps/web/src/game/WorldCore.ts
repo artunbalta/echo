@@ -50,7 +50,8 @@ export const INTERP_DELAY = 100;
  * so it always runs zero-key and carries the manner cues in 2D or 3D alike. `intensity` scales the
  * motion (a vigorous vs languid build).
  */
-export type ActivityKind = "gather" | "carry" | "build" | "dig" | "plant" | "study" | "still";
+/** The last five are the planet world's acts (C45): seated, kneeling, pushing, climbing, rowing. */
+export type ActivityKind = "gather" | "carry" | "build" | "dig" | "plant" | "study" | "still" | "sit" | "kneel" | "push" | "climb" | "row";
 export interface EntityActivity {
   kind: ActivityKind;
   /** performance.now() when the activity started (drives the rhythmic phase). */

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+import { clientIp, hashIp, rateLimit } from "@/lib/rateLimit";
 import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabaseAdmin";
 import { hasFal, submitPortrait } from "@/lib/fal-portrait";
@@ -84,25 +86,7 @@ function validEmail(s: string): boolean {
   return /^[^@]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(s);
 }
 
-/**
- * Salted SHA-256 of the client IP. We count requests; we do not keep a network identifier for
- * everyone who visits the landing page. The salt makes the hashes non-reversible against the
- * trivially small IPv4 space — an unsalted SHA-256 of an IP is brute-forceable in seconds.
- * Falls back to a constant so local dev works keyless; set WAITLIST_IP_SALT in production.
- */
-function hashIp(ip: string): string {
-  const salt = process.env.WAITLIST_IP_SALT || "echo-dev-salt";
-  return createHash("sha256").update(`${salt}:${ip}`).digest("hex").slice(0, 32);
-}
-
-/** Vercel terminates TLS upstream, so the socket address is a proxy. x-forwarded-for is
- *  client-controlled in general, but on Vercel the platform overwrites/appends the real client IP as
- *  the LEFTMOST entry, so that is the one to read. Never trust it outside a trusted proxy. */
-function clientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]!.trim();
-  return req.headers.get("x-real-ip")?.trim() || "unknown";
-}
+// `hashIp` and `clientIp` now live in `lib/rateLimit.ts` beside the limiter that uses them.
 
 /**
  * Decode and check the uploaded selfie.
@@ -218,14 +202,21 @@ export async function POST(req: Request) {
   // 3. Rate limit. After validation so a malformed flood does not consume a window, before the
   //    write so a valid flood does not. Fail OPEN: if the counter is unavailable (e.g. migration
   //    0006 not yet applied) a real person must still be able to join.
-  const windowStart = new Date(Math.floor(Date.now() / WINDOW_MS) * WINDOW_MS).toISOString();
-  const { data: hits, error: rateErr } = await admin.rpc("waitlist_rate_hit", {
-    p_ip: hashIp(clientIp(req)),
-    p_window: windowStart,
+  // THE SAME LIMITER THE PAID ROUTES USE, with this route's own posture kept verbatim. It moved to
+  // `lib/rateLimit.ts` with a BUCKET column (0018) because `waitlist_rate`'s key is
+  // `(ip_hash, window_start)` alone: the moment a second caller used it, a burst on that caller
+  // would consume this one's window and tell a real person the waitlist was full. `hashIp` and
+  // `clientIp` moved with it rather than being copied — two IP-hashing policies with two salts is
+  // the drift L5 is about. Behaviour here is unchanged, INCLUDING the fail-open, whose reason still
+  // stands and is now declared rather than implied: if the counter is unavailable a real person
+  // must still be able to join. The paid routes declare the opposite for the opposite reason.
+  const rate = await rateLimit(req, {
+    bucket: "waitlist",
+    windowMs: WINDOW_MS,
+    max: MAX_PER_WINDOW,
+    onUnavailable: "allow",
   });
-  if (rateErr) {
-    console.warn("[waitlist] rate counter unavailable, allowing:", rateErr.message);
-  } else if (typeof hits === "number" && hits > MAX_PER_WINDOW) {
+  if (!rate.ok) {
     return NextResponse.json(
       { error: "Too many signups from here. Try again a little later." },
       { status: 429 },

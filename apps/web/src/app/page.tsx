@@ -95,26 +95,26 @@ export default function Landing() {
         <div className="world-vignette pointer-events-none absolute inset-0" />
         {/* A soft wash on the reading side only, so the copy has contrast wherever the planet's
             lit limb happens to be turning. It stops well short of the sphere's middle. */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#101c19] via-[#101c19]/70 to-transparent lg:to-40%" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-ink via-ink/70 to-transparent lg:to-40%" />
 
         {/* pointer-events-none so the copy does not swallow clicks meant for the planet behind it;
             the one thing that must stay clickable turns them back on for itself. */}
         <div className="echo-rise pointer-events-none absolute inset-0 z-10 flex flex-col justify-center px-6 sm:px-12 lg:px-24">
           <div className="max-w-xl">
-            <p className="mb-5 text-[10px] uppercase tracking-[.32em] text-[#c4d5b3]">A living world. A place of your own.</p>
-            <h1 className="max-w-xl font-serif text-[clamp(3.6rem,6.6vw,6.8rem)] leading-[.98] tracking-[-.045em] text-[#f1f0df]">
-              A world that<br /><span className="italic text-[#c6d5b3]">learns you.</span>
+            <p className="mb-5 text-[10px] uppercase tracking-[.32em] text-echo-soft">A living world. A place of your own.</p>
+            <h1 className="max-w-xl font-serif text-[clamp(3.6rem,6.6vw,6.8rem)] leading-[.98] tracking-[-.045em] text-parchment">
+              A world that<br /><span className="italic text-echo-soft">learns you.</span>
             </h1>
-            <p className="mt-7 max-w-sm text-base leading-relaxed text-[#e7ecdf]/75 sm:text-lg">
+            <p className="mt-7 max-w-sm text-base leading-relaxed text-parchment/75 sm:text-lg">
               Your first day somewhere new. Find a place on the planet, step into its landscape, and make yourself at home.
             </p>
-            <p className="mt-4 max-w-sm text-xs leading-relaxed text-[#e7ecdf]/45">
+            <p className="mt-4 max-w-sm text-xs leading-relaxed text-parchment/45">
               Choose a patch of land to see it from the ground. Every place you explore is part of this same world.
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-4">
               {/* Was "Get Started" into the auth modal. With auth gone the only thing to start is
                   the waitlist, so it goes there rather than nowhere. */}
-              <a href="#waitlist" className="pointer-events-auto rounded-full bg-[#dce8c3] px-7 py-3.5 text-sm font-medium text-[#243622] transition-colors hover:bg-white" aria-label="Join the waitlist">
+              <a href="#waitlist" className="pointer-events-auto rounded-full bg-parchment px-7 py-3.5 text-sm font-medium text-ink transition-colors hover:bg-white" aria-label="Join the waitlist">
                 Join the waitlist{" "}
                 <span className="chev" aria-hidden>
                   ›

@@ -123,6 +123,36 @@ export async function readRecent(actorId: string, n = 25): Promise<RecentEvents>
 }
 
 /**
+ * Every row for one actor, oldest first, a page at a time, up to `max` (C75: the pilot's export). From the
+ * table when it can be read, else the ring; `source` says which, so an export never passes a ring for a record.
+ */
+export async function readAllOf(actorId: string, max = 10_000): Promise<RecentEvents> {
+  const admin = adminClient();
+  if (!admin) return { rows: fromRing(actorId, RING_SIZE).reverse(), source: "ring", reason: "supabase_unkeyed" };
+  const rows: StoredEventRow[] = [];
+  const page = 1000;
+  try {
+    while (rows.length < max) {
+      const { data, error } = await admin
+        .from(TABLE)
+        .select("*")
+        .eq("actor_id", actorId)
+        .order("created_at", { ascending: true })
+        .range(rows.length, Math.min(rows.length + page, max) - 1);
+      if (error) throw new Error(error.message);
+      const got = (data ?? []) as StoredEventRow[];
+      rows.push(...got);
+      if (got.length < page) break;
+    }
+    return { rows, source: "table" };
+  } catch (err) {
+    const message = (err as Error).message;
+    console.warn(`[behavioral-store] export read failed, reading the ring: ${message}`);
+    return { rows: fromRing(actorId, RING_SIZE).reverse(), source: "ring", reason: `select_failed: ${message}` };
+  }
+}
+
+/**
  * The row for a BehavioralEvent envelope as the client sent it. Null without an actor_id: there is
  * no silo for it to land in, and ML rejects it on the same ground.
  */

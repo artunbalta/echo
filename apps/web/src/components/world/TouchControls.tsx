@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * The controls a phone has (DECISIONS C23): a thumbstick, a jump, and a way into the inspector.
+ * The controls a phone has (DECISIONS C23): a thumbstick and a jump. The way into the inspector was a
+ * third round button with a backtick on it; it is a line of the HUD's menu now (C68).
  *
  * Everything a keyboard did and a finger could not. Looking around already worked — the canvas
  * carries `touch-action: none` and the orbit path is pointer events — and pinch-to-zoom is a canvas
@@ -43,10 +44,6 @@ import { TOUCH, stickAxes, type TouchControlHandle } from "@/game/world/touchInp
 export interface TouchControlsProps {
   /** The handle game/world/input.ts reads. The same object the world was built with. */
   handle: TouchControlHandle;
-  /** Opens and closes the measurement panel, which otherwise answers only to a key nobody has. */
-  onToggleInspector: () => void;
-  /** Whether that panel is open, so the control can say which way it goes. */
-  inspecting: boolean;
 }
 
 /** Where the thumb is, in the pad's own pixels. Null when nothing is down. */
@@ -61,7 +58,7 @@ interface Stick {
 const RING = TOUCH.stickRadiusPx;
 const KNOB = 26;
 
-export default function TouchControls({ handle, onToggleInspector, inspecting }: TouchControlsProps) {
+export default function TouchControls({ handle }: TouchControlsProps) {
   const pad = useRef<HTMLDivElement>(null);
   const [stick, setStick] = useState<Stick | null>(null);
   const [jumping, setJumping] = useState(false);
@@ -151,12 +148,12 @@ export default function TouchControls({ handle, onToggleInspector, inspecting }:
           <>
             <span
               aria-hidden
-              className="absolute rounded-full border border-[#f4e9d0]/25 bg-[#1c1326]/25 backdrop-blur-[2px]"
+              className="absolute rounded-full border border-parchment/25 bg-ink/25 backdrop-blur-[2px]"
               style={{ left: stick.ox - RING, top: stick.oy - RING, width: RING * 2, height: RING * 2 }}
             />
             <span
               aria-hidden
-              className="absolute rounded-full border border-[#f4e9d0]/50 bg-[#f4e9d0]/70"
+              className="absolute rounded-full border border-parchment/50 bg-parchment/70"
               style={{
                 left: stick.ox + (offset?.dx ?? 0) * clamp - KNOB,
                 top: stick.oy + (offset?.dy ?? 0) * clamp - KNOB,
@@ -170,9 +167,9 @@ export default function TouchControls({ handle, onToggleInspector, inspecting }:
           // stick has no fixed position, and drawing one here would teach people to aim at it.
           <span
             aria-hidden
-            className="absolute bottom-4 left-4 grid h-[76px] w-[76px] place-items-center rounded-full border border-dashed border-[#f4e9d0]/20 font-pixel text-[10px] leading-tight text-[#f4e9d0]/35"
+            className="absolute bottom-4 left-4 grid h-[76px] w-[76px] place-items-center rounded-full border border-dashed border-parchment/20"
           >
-            walk
+            <span className="h-2 w-2 rounded-full bg-parchment/25" />
           </span>
         )}
       </div>
@@ -185,14 +182,6 @@ export default function TouchControls({ handle, onToggleInspector, inspecting }:
         }}
       >
         <Control
-          label={inspecting ? "Close the inspector" : "Open the inspector"}
-          data-touch-inspector
-          onPointerUp={onToggleInspector}
-          className="h-12 w-12 text-[15px]"
-        >
-          {inspecting ? "×" : "`"}
-        </Control>
-        <Control
           label="Jump"
           data-touch-jump
           pressed={jumping}
@@ -204,9 +193,11 @@ export default function TouchControls({ handle, onToggleInspector, inspecting }:
             setJumping(false);
             handle.releaseJump();
           }}
-          className="h-[68px] w-[68px] text-[11px] uppercase tracking-wider"
+          className="h-[64px] w-[64px]"
         >
-          jump
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 13.5 11 7.5l6 6" />
+          </svg>
         </Control>
       </div>
     </div>
@@ -240,10 +231,10 @@ function Control({
       role="button"
       aria-label={label}
       aria-pressed={pressed}
-      className={`pointer-events-auto grid touch-manipulation place-items-center rounded-full border font-pixel transition-colors ${
+      className={`pointer-events-auto grid touch-manipulation place-items-center rounded-full border transition-colors ${
         pressed
-          ? "border-[#f4e9d0]/60 bg-[#f4e9d0]/70 text-[#1c1326]"
-          : "border-[#f4e9d0]/25 bg-[#1c1326]/55 text-[#f4e9d0]/80 backdrop-blur-sm"
+          ? "border-parchment/60 bg-parchment/70 text-ink"
+          : "border-parchment/25 bg-ink/55 text-parchment/80 backdrop-blur-sm"
       } ${className}`}
       style={{ WebkitTapHighlightColor: "transparent" }}
       onPointerDown={(e) => {

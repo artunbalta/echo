@@ -16,8 +16,16 @@
  * demographic layer is READ-ONLY to players, because the moment one life can be saved or ended, that
  * person leaves the closed form and so does every descendant.
  *
+ * C66 OPENS ONE LOCK, AND KEEPS THE CLOSED FORM. A death after `MORTALITY.fromDay` (2026-10-20) is
+ * no longer the lifespan drawn at birth: it is decided by a yearly risk (`mortality.ts`), from the
+ * person's own stream, and a stranger can meet it — fetch the healer, keep a fisher ashore — as a
+ * change on its own day. It is still arithmetic at any instant, still the same for every visitor, and
+ * nothing before the change's day moves (L2): a death drawn for that day or earlier stands as drawn.
+ * A saved life, like any change, moves only that person's future and what follows from it.
+ *
  * WHAT IS MUTABLE AND WHAT IS NOT, restated here because this file is where it is enforced:
- *   IMMUTABLE, and computed here — birth, lifespan, death, parentage, pairing, household.
+ *   IMMUTABLE, and computed here — birth, parentage, pairing, household, and every death on or before
+ *     `MORTALITY.fromDay`. A later death is computed here too, and changes only through a change (C66).
  *   MUTABLE, and NOT in this file — relationships with players, regard, reputation, wealth,
  *     employment changes, where someone is standing this afternoon. Those are the sparse delta
  *     (SOC-6.C) and they never come back here.
@@ -61,7 +69,9 @@
  * under `node --test` with nothing mocked.
  */
 
-import { hashString } from "./terrain.js";
+import { arrivalsOf, pairsOf, resolveChanges, type Arrival, type LifeChange, type PortablePerson, type Resolved } from "./changes.js";
+import { fateOf, type Cause } from "./mortality.js";
+import type { hashString } from "./terrain.js";
 import { DAYS_PER_YEAR, daysToYears, yearsToDays } from "./worldclock.js";
 
 // ── the dials ───────────────────────────────────────────────────────────────────
@@ -155,8 +165,11 @@ export const MIN_HABITABILITY = 0.2;
  * one cell in three is not that world. At 0.3 it is roughly one in ten: a village every ~4.1 km,
  * about a 41-minute walk at the parcel's 1.65 m/s, with real ground in between.
  *
- * Re-measure with `npm run census:planet -w @echo/planet` after touching it, and put the number in
- * C33 rather than in a commit message. Free to move: C25 means zero rows, so the whole planet
+ * Re-measure with `npm run census:planet -w @echo/planet -- 3000` after touching it, and put the
+ * number in C33 rather than in a commit message. The `3000` is C33's sample and is not optional: the
+ * script's default is 4,000 cells, which is a different estimate (27,477 settlements and 626,229
+ * living rather than 26,602 and 619,413, measured 2026-10-17 on an unchanged substrate), so the bare
+ * command does not reproduce the record and looks like a regression when it is not. Free to move: C25 means zero rows, so the whole planet
  * re-derives from the seed the moment it changes.
  */
 export const SETTLEMENT_RATE = 0.3;
@@ -218,9 +231,11 @@ export const OCCUPATIONS: readonly Occupation[] = [
 /**
  * One person. Every field here is IMMUTABLE (C26) and is a function of the seed.
  *
- * `index` is the person's identity inside the settlement and is stable for a given `(seed, cell)`
- * because generation order is deterministic; `id` is the identity across the planet and is what a
- * delta row keys on. Neither is a display name: two people in a village are called Mira.
+ * `id` is the identity across the planet and is what a memory or a change keys on: {@link uidOf} of
+ * the person's lineage key, so it says who someone IS and not where they landed in an array (C43).
+ * `index` is a position in this settlement's `people` and is what `parents`, `children` and `partner`
+ * point with; it is stable for a given world but is not an identity. Neither is a display name: two
+ * people in a village are called Mira.
  */
 export interface Person {
   id: string;
@@ -234,6 +249,15 @@ export interface Person {
   lifespanDays: number;
   /** `birthDay + lifespanDays`. Stored so no caller has to remember which way the arithmetic goes. */
   deathDay: number;
+  /**
+   * Why they die, for a death decided by the risk model (C66, `mortality.ts`); null or absent for one
+   * drawn at birth on or before `MORTALITY.fromDay`, which is history.
+   */
+  deathCause?: Cause | null;
+  /** For a death of illness: the first day they lie ill (C66). */
+  ailingFrom?: number | null;
+  /** For a fisher lost at sea: the day they go out and do not come back (C66). */
+  seaDay?: number | null;
   /** `[mother, father]` as indices, or null for a founder or an incomer. */
   parents: readonly [number, number] | null;
   children: number[];
@@ -260,8 +284,39 @@ export interface Person {
    *
    * Carried so that everything downstream of a person — their pairing, the stranger who married
    * them — keys on WHO THEY ARE rather than on where they landed in an array. See {@link stream}.
+   *
+   * BOUNDED SINCE C43 (⚑33). A child's key used to concatenate both parents' whole keys, so it
+   * doubled every generation — 36,037 characters at the longest over 60 cells — and the hash read all
+   * of it on every draw. It now names the parents by their ids: `${mother.id}+${father.id}/kid/${i}`,
+   * about forty characters in any generation, and exactly as semantic.
    */
   seedKey: string;
+  /**
+   * The day this person left the village for good, or `Infinity` (C44). Only a change sets it — the
+   * seed has nobody leave — and a partner and young children leave on the same day. After it they
+   * are alive somewhere else: not here, not in the census, and not in the graveyard.
+   */
+  leftDay: number;
+  /** Where they went when they left, if it is known: another village's cell (C53). */
+  toCell: string | null;
+  /**
+   * The day they came here from another village, and which (C53), or `-Infinity` and null for
+   * everyone the seed has here: they were born here, founded it, or married in from nowhere in
+   * particular. Someone who came is a stranger's whole life carried in a change (`PortablePerson`).
+   */
+  arrivedDay: number;
+  fromCell: string | null;
+  /** The day someone who left came home (C53), or `Infinity`. Here before `leftDay` and again from this. */
+  backDay: number;
+  /** For someone who came from elsewhere: the temperament their own village drew (C53). */
+  temperament?: readonly number[];
+  /** Here for a day to meet someone (C53): whom, by id. A visitor pairs with nobody here. */
+  visiting?: string;
+  /**
+   * Trades taken up after the one they were raised to, oldest first (C44). Empty for almost everyone.
+   * `occupation` stays what they were raised to; {@link occupationOn} is what they do on a day.
+   */
+  trades: readonly { day: number; occupation: Occupation }[];
 }
 
 /** A household is a pairing and the children it raises, from the day it forms until it empties. */
@@ -306,18 +361,81 @@ export interface Settlement {
 // ── a deterministic stream ──────────────────────────────────────────────────────
 
 /**
+ * Two 32-bit lanes of a string hash (cyrb53's construction, both lanes kept whole).
+ *
+ * Every character goes through two different multiplications and the lanes are cross-mixed at the
+ * end, so two keys that differ only in their last character — two siblings, `kid/0` and `kid/1` —
+ * come out unrelated. That last property is the one {@link hashString} does not have (C43).
+ */
+function lanes(key: string): [number, number] {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < key.length; i++) {
+    const ch = key.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return [h1 >>> 0, h2 >>> 0];
+}
+
+/** murmur3's finaliser: every input bit reaches every output bit. */
+function fmix32(h: number): number {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
  * A reproducible sequence of numbers in `[0, 1)` from a string key.
  *
- * Built on {@link hashString}, which is the generator the rest of the package already orders its
- * draws with. The KEY IS SEMANTIC, never an array position: a child's stream is keyed on its
- * parents and its birth order, a founder's on which founder it is. That is deliberate. An
- * index-keyed stream means inserting one person early in the generation re-rolls every person after
- * them, and the day someone adds a rule that creates one extra incomer, every lifespan on the
- * planet changes and every NPC anybody met becomes a different person.
+ * The KEY IS SEMANTIC, never an array position: a child's stream is keyed on its parents and its
+ * birth order, a founder's on which founder it is. That is deliberate. An index-keyed stream means
+ * inserting one person early in the generation re-rolls every person after them, and the day someone
+ * adds a rule that creates one extra incomer, every lifespan on the planet changes and every NPC
+ * anybody met becomes a different person.
+ *
+ * THE DRAWS ARE INDEPENDENT, and the first version's were not (C43). It was `hashString(key, n++)`:
+ * FNV with the counter XORed in and no final mixing, so draw `n` was draw 0 plus `n` times one
+ * constant, modulo 1. A person's whole life was one number and its shifts — over 20,000 keys the gap
+ * between the first two draws took TWO values, siblings' first draws differed by ONE constant in every
+ * family, the three-uniform bell had sd 0.135 instead of 1/6, and founders' temperaments came out
+ * with dominance and pace correlated at 0.52. Now: a counter stepped by the golden ratio and pushed
+ * through a full-avalanche finaliser, seeded from both lanes of the key (splitmix's shape).
+ *
+ * Exported for `life.ts` (C40), so there is one stream in the package and not two (L5).
  */
-function stream(key: string): () => number {
-  let n = 0;
-  return () => hashString(key, n++);
+export function stream(key: string): () => number {
+  const [h1, h2] = lanes(key);
+  let state = h1;
+  return () => {
+    state = (state + 0x9e3779b9) | 0;
+    return fmix32(state ^ h2) / 4294967296;
+  };
+}
+
+/** One number in `[0, 1)` for a key: the first draw of its {@link stream}. */
+export function hash01(key: string): number {
+  return stream(key)();
+}
+
+/**
+ * A person's identity, from the key their life was drawn from: sixteen hex characters, the same on
+ * every machine, and unchanged by anything that happens to anyone else (C43).
+ *
+ * WHY NOT THE INDEX. `index` is a position in generation order, and once a life can change (C44) a
+ * person who leaves before having children removes those children from the list, and everyone
+ * generated after them moves down a place. A memory or a change keyed on an index would then belong
+ * to somebody else. The lineage key does not move: a person is who their parents were and which of
+ * their children they were.
+ */
+export function uidOf(key: string): string {
+  const [h1, h2] = lanes(key);
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
 }
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -453,6 +571,12 @@ interface Ctx {
   people: Person[];
   households: Household[];
   truncated: boolean;
+  /** This cell's changes, resolved per `Person.id` (C44). Empty for a village nobody has changed. */
+  changes: Map<string, Resolved>;
+  /** Who came here, and when (C53), soonest first. */
+  arrivals: Arrival[];
+  /** Marriages a stranger brought about (C53), soonest first. */
+  pairs: { a: string; b: string; day: number; madeDay: number }[];
 }
 
 function drawLifespanDays(r: () => number): number {
@@ -465,10 +589,22 @@ function drawLifespanDays(r: () => number): number {
 
 const isAlive = (p: Person, day: number): boolean => p.birthDay <= day && p.deathDay > day;
 
-function occupationFor(ctx: Ctx, r: () => number, parents: readonly [number, number] | null): Occupation {
+/** Alive AND here: arrived, and not gone — or gone and come back (C44, C53). */
+const inVillage = (p: Person, day: number): boolean => isAlive(p, day) && p.arrivedDay <= day && (p.leftDay > day || p.backDay <= day);
+
+/** What someone does on a day: the trade they were raised to, or the last one they took up since. */
+export function occupationOn(p: Person, day: number): Occupation {
+  let o = p.occupation;
+  for (const t of p.trades) if (t.day <= day) o = t.occupation;
+  return o;
+}
+
+function occupationFor(ctx: Ctx, r: () => number, parents: readonly [number, number] | null, birthDay: number): Occupation {
   if (parents !== null && r() < OCCUPATION_INHERITANCE) {
     const from = ctx.people[r() < 0.5 ? parents[0] : parents[1]];
-    if (from !== undefined) return from.occupation;
+    // What the parent did when the child was born: a father who took up smithing at forty raises
+    // his later children to the forge (C44).
+    if (from !== undefined) return occupationOn(from, birthDay);
   }
   return pick(r(), occupationWeights(ctx.geo));
 }
@@ -493,7 +629,7 @@ function addPerson(ctx: Ctx, spec: NewPerson): Person | null {
   const r = stream(spec.key);
   const index = ctx.people.length;
   const person: Person = {
-    id: `${ctx.key}#${index}`,
+    id: uidOf(spec.key),
     index,
     given: givenName(r, ctx.culture),
     family: spec.family ?? familyName(r, ctx.culture),
@@ -512,19 +648,110 @@ function addPerson(ctx: Ctx, spec: NewPerson): Person | null {
     bornInto: spec.bornInto,
     pairAgeDays: 0,
     seedKey: spec.key,
+    leftDay: Infinity,
+    toCell: null,
+    arrivedDay: -Infinity,
+    fromCell: null,
+    backDay: Infinity,
+    trades: [],
   };
   person.lifespanDays = drawLifespanDays(r);
   person.deathDay = person.birthDay + person.lifespanDays;
   person.pairAgeDays = Math.round(yearsToDays(PAIRING.minAgeYears + r() * PAIRING.ageSpanYears));
-  person.occupation = occupationFor(ctx, r, spec.parents);
+  person.occupation = occupationFor(ctx, r, spec.parents, spec.birthDay);
+  applyChanges(ctx, person);
+  settleFate(ctx, person);
   ctx.people.push(person);
   return person;
 }
 
+/**
+ * A death not yet lived is the risk model's (C66): `deathDay` as drawn stands if it falls on or before
+ * `MORTALITY.fromDay`; otherwise it is decided year by year, with whatever strangers have done for
+ * them here. Called wherever a death is set, after it is.
+ */
+function settleFate(ctx: Ctx, p: Person): void {
+  const f = fateOf(p.seedKey, p.birthDay, (day) => occupationOn(p, day), p.deathDay, ctx.changes.get(p.id)?.fate ?? []);
+  p.deathDay = f.deathDay;
+  p.lifespanDays = f.deathDay - p.birthDay;
+  p.deathCause = f.cause;
+  p.ailingFrom = f.ailingFrom;
+  p.seaDay = f.seaDay;
+}
+
+function applyChanges(ctx: Ctx, person: Person): void {
+  const changed = ctx.changes.get(person.id);
+  if (changed !== undefined) {
+    person.leftDay = changed.leftDay;
+    person.toCell = changed.toCell;
+    person.trades = changed.trades;
+  }
+}
+
+/**
+ * Someone who came from another village (C53), as their change carries them: drawn nowhere, so the
+ * village they left need not be generated for this one to have them. Their lodging is set by the
+ * caller; their own changes here (leaving again, a new trade) apply as anyone's.
+ */
+function addArrival(ctx: Ctx, spec: PortablePerson, day: number, fromCell: string): Person | null {
+  if (ctx.people.length >= MAX_PEOPLE) {
+    ctx.truncated = true;
+    return null;
+  }
+  const person: Person = {
+    id: spec.id,
+    index: ctx.people.length,
+    given: spec.given,
+    family: spec.family,
+    sex: spec.sex,
+    birthDay: spec.birthDay,
+    lifespanDays: spec.deathDay - spec.birthDay,
+    deathDay: spec.deathDay,
+    parents: null,
+    children: [],
+    partner: null,
+    partnerDay: null,
+    household: -1,
+    occupation: spec.occupation,
+    incomer: true,
+    founder: false,
+    bornInto: -1,
+    pairAgeDays: spec.pairAgeDays,
+    seedKey: spec.seedKey,
+    leftDay: Infinity,
+    toCell: null,
+    arrivedDay: day,
+    fromCell,
+    backDay: Infinity,
+    temperament: [...spec.temperament],
+    ...(spec.visiting && spec.hostOf ? { visiting: spec.hostOf } : {}),
+    trades: [],
+  };
+  applyChanges(ctx, person);
+  // Their death is their own, the same in any village: the risk model keyed on who they are (C66).
+  settleFate(ctx, person);
+  ctx.people.push(person);
+  return person;
+}
+
+/**
+ * A pair leaves together (C44): whichever of them decided, the other goes on the same day if they are
+ * still alive then. Called the moment a pair is made, which is before either of their children is
+ * drawn, so `bearChildren` already knows the day births stop.
+ */
+function leaveTogether(a: Person, b: Person): void {
+  const day = Math.min(a.leftDay, b.leftDay);
+  if (day === Infinity) return;
+  for (const p of [a, b]) if (p.deathDay > day && p.leftDay > day) p.leftDay = day;
+}
+
+/** Children under this age on the day their family leaves go with it; older ones choose for themselves. */
+export const LEAVE_WITH_FAMILY_YEARS = 16;
+
 /** Everyone alive on a day. O(n), and called once per pairing, which is where the n^2 comes from. */
 function populationAt(ctx: Ctx, day: number): number {
   let n = 0;
-  for (const p of ctx.people) if (isAlive(p, day)) n++;
+  for (const p of ctx.people) if (inVillage(p, day)) n++;
   return n;
 }
 
@@ -539,8 +766,13 @@ function tooClose(a: Person, b: Person): boolean {
   return false;
 }
 
-/** The day a person is ready to pair. Drawn at birth (see {@link addPerson}), so it never moves. */
-const readyDay = (p: Person): number => p.birthDay + p.pairAgeDays;
+/**
+ * The day a person is ready to pair. Drawn at birth (see {@link addPerson}), so it never moves — but
+ * nobody pairs here before they are here: someone who came (C53) is ready from the day they came, and
+ * someone who came home from the day they came back.
+ */
+const readyDay = (p: Person): number =>
+  p.visiting ? Infinity : Math.max(p.birthDay + p.pairAgeDays, p.arrivedDay, p.backDay === Infinity ? -Infinity : p.backDay);
 
 function makeHousehold(ctx: Ctx, partners: readonly [number, number], family: string, day: number): number {
   const index = ctx.households.length;
@@ -572,22 +804,29 @@ function bearChildren(
   household: number,
   family: string,
   pairDay: number,
+  /**
+   * A couple who came here already married (C53): the children still to come are born here, drawn
+   * from this village's own stream under a key no child of theirs at home could have — so a family
+   * that moves never has the same child twice — and no more of them than they had left to have.
+   */
+  moved: { had: number } | null = null,
 ): void {
-  const r = stream(`${mother.seedKey}+${father.seedKey}/kids`);
+  const r = stream(moved ? `${mother.id}+${father.id}/kids-in/${ctx.key}` : `${mother.id}+${father.id}/kids`);
   const pressure = clamp(populationAt(ctx, pairDay) / ctx.capacity, 0, 1);
   const rate = FERTILITY.baseRate * clamp(1 - pressure, FERTILITY.pressureFloor, 1);
+  const childKey = (i: number) => (moved ? `${mother.id}+${father.id}/kid-in/${ctx.key}/${i}` : `${mother.id}+${father.id}/kid/${i}`);
 
   let day = pairDay + Math.round(yearsToDays(FERTILITY.firstBirthMinYears + r() * FERTILITY.firstBirthSpanYears));
-  for (let i = 0; i < FERTILITY.maxChildren; i++) {
+  for (let i = 0; i < FERTILITY.maxChildren - (moved?.had ?? 0); i++) {
     if (r() >= rate) {
       day += Math.round(yearsToDays(FERTILITY.spacingMinYears + r() * FERTILITY.spacingSpanYears));
       continue;
     }
-    if (!isAlive(mother, day) || !isAlive(father, day)) break;
+    if (!inVillage(mother, day) || !inVillage(father, day)) break;
     if (daysToYears(day - mother.birthDay) > FERTILITY.maxMotherAgeYears) break;
 
     const child = addPerson(ctx, {
-      key: `${mother.seedKey}+${father.seedKey}/kid/${i}`,
+      key: childKey(i),
       birthDay: day,
       parents: [mother.index, father.index] as const,
       family,
@@ -595,6 +834,11 @@ function bearChildren(
       bornInto: household,
     });
     if (child === null) return;
+    // Born before the family went, and young enough on that day to be taken with it.
+    const familyLeaves = Math.min(mother.leftDay, father.leftDay);
+    if (familyLeaves < child.leftDay && familyLeaves - child.birthDay < yearsToDays(LEAVE_WITH_FAMILY_YEARS) && child.deathDay > familyLeaves) {
+      child.leftDay = familyLeaves;
+    }
     mother.children.push(child.index);
     father.children.push(child.index);
 
@@ -611,6 +855,113 @@ function bearChildren(
  */
 function pairEveryone(ctx: Ctx, throughDay: number): void {
   const settled = new Set<number>();
+  const find = (id: string): Person | undefined => ctx.people.find((p) => p.id === id);
+  const homeOn = (p: Person, day: number): number => (p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto);
+
+  // C53: the days someone came, and the marriages a stranger brought about, are events in the same
+  // chronological walk — taken in their turn, so everything before them is the seed's (or the earlier
+  // changes') exactly, and the village generated to any day before them is the village without them.
+  const arrivals = ctx.arrivals.filter((a) => a.day <= throughDay);
+  const pairs = ctx.pairs.filter((x) => x.day <= throughDay);
+  let ai = 0;
+  let pi = 0;
+  /** Promised to someone (a `pair` decided, not yet the day): not free for anybody else meanwhile. */
+  const promised = (p: Person, day: number) => ctx.pairs.some((x) => (x.a === p.id || x.b === p.id) && x.madeDay <= day && day < x.day);
+
+  /** The household with the fewest people in it on a day: where someone with nobody here lodges. */
+  const quietest = (day: number): number => {
+    const count = new Map<number, number>();
+    for (const p of ctx.people) {
+      if (!inVillage(p, day)) continue;
+      const h = homeOn(p, day);
+      if (h >= 0) count.set(h, (count.get(h) ?? 0) + 1);
+    }
+    let best = -1;
+    for (const [h, n] of count) if (best < 0 || n < count.get(best)! || (n === count.get(best)! && h < best)) best = h;
+    return best;
+  };
+
+  const arrive = (a: Arrival) => {
+    const made: { person: Person; spec: PortablePerson }[] = [];
+    for (const spec of a.people) {
+      const known = find(spec.id);
+      if (known) {
+        // Coming home: here again from today, and free to pair again if they never did.
+        if (known.leftDay <= a.day && known.backDay === Infinity && isAlive(known, a.day)) {
+          known.backDay = a.day;
+          if (known.partner === null) settled.delete(known.index);
+        }
+        continue;
+      }
+      const person = addArrival(ctx, spec, a.day, a.fromCell);
+      if (person === null) return;
+      made.push({ person, spec });
+    }
+    const byId = new Map(made.map((m) => [m.person.id, m]));
+    // A couple who came together stay a couple: a household of their own here, from the day they came.
+    const couples: { mother: Person; father: Person; household: number; family: string; had: number }[] = [];
+    for (const { person, spec } of made) {
+      if (!spec.partner || person.partner !== null) continue;
+      const other = byId.get(spec.partner);
+      if (!other || other.person.partner !== null) continue;
+      const mother = person.sex === "f" ? person : other.person;
+      const father = person.sex === "f" ? other.person : person;
+      const family = father.family;
+      const household = makeHousehold(ctx, [mother.index, father.index] as const, family, a.day);
+      for (const q of [mother, father]) {
+        q.partner = (q === mother ? father : mother).index;
+        q.partnerDay = spec.partnerDay ?? a.day;
+        q.household = household;
+        settled.add(q.index);
+      }
+      leaveTogether(mother, father);
+      couples.push({ mother, father, household, family, had: Math.max(spec.children ?? 0, other.spec.children ?? 0) });
+    }
+    // Their children with them.
+    for (const { person, spec } of made) {
+      if (!spec.parents) continue;
+      const mother = byId.get(spec.parents[0])?.person;
+      const father = byId.get(spec.parents[1])?.person;
+      if (!mother || !father || mother.household < 0) continue;
+      person.parents = [mother.index, father.index] as const;
+      person.bornInto = mother.household;
+      person.household = mother.household;
+      mother.children.push(person.index);
+      father.children.push(person.index);
+    }
+    // Anyone on their own lodges: with the family of whoever they came to marry, or the quietest house.
+    for (const { person, spec } of made) {
+      if (person.partner !== null || person.bornInto >= 0) continue;
+      const host = spec.hostOf ? find(spec.hostOf) : undefined;
+      const h = host ? homeOn(host, a.day) : quietest(a.day);
+      person.bornInto = h;
+      person.household = h;
+    }
+    for (const c of couples) bearChildren(ctx, c.mother, c.father, c.household, c.family, a.day, { had: c.had });
+  };
+
+  const marry = (x: { a: string; b: string; day: number }) => {
+    const a = find(x.a);
+    const b = find(x.b);
+    if (!a || !b || a.partner !== null || b.partner !== null) return;
+    if (!inVillage(a, x.day) || !inVillage(b, x.day) || a.sex === b.sex || tooClose(a, b)) return;
+    const mother = a.sex === "f" ? a : b;
+    const father = a.sex === "f" ? b : a;
+    // The family name is the one that belongs here, as when anyone marries in.
+    const newcomer = (p: Person) => p.incomer || p.fromCell !== null;
+    const family = newcomer(a) && !newcomer(b) ? b.family : a.family;
+    const household = makeHousehold(ctx, [a.index, b.index] as const, family, x.day);
+    a.partner = b.index;
+    b.partner = a.index;
+    a.partnerDay = x.day;
+    b.partnerDay = x.day;
+    a.household = household;
+    b.household = household;
+    settled.add(a.index);
+    settled.add(b.index);
+    leaveTogether(a, b);
+    bearChildren(ctx, mother, father, household, family, x.day);
+  };
 
   for (;;) {
     // The earliest unsettled person whose day has come. A linear scan, because the people list
@@ -626,18 +977,29 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
         nextDay = day;
       }
     }
+    // An arrival or a promised wedding that comes first is taken first (C53).
+    const arrivalDay = arrivals[ai]?.day ?? Infinity;
+    const pairDay = pairs[pi]?.day ?? Infinity;
+    if (Math.min(arrivalDay, pairDay) <= nextDay && Math.min(arrivalDay, pairDay) !== Infinity) {
+      if (arrivalDay <= pairDay) arrive(arrivals[ai++]);
+      else marry(pairs[pi++]);
+      continue;
+    }
     if (next === null) break;
     settled.add(next.index);
 
     // Died before ever pairing. Common, and it is where the child graves come from.
-    if (!isAlive(next, nextDay)) continue;
+    if (!inVillage(next, nextDay)) continue;
+    // Promised to somebody a stranger told them of (C53): the wedding will pair them, nobody else.
+    if (promised(next, nextDay)) continue;
 
-    const r = stream(`${next.seedKey}/pair`);
+    const r = stream(`${next.id}/pair`);
     let match: Person | null = null;
     for (const other of ctx.people) {
       if (other.index === next.index) continue;
       if (other.partner !== null || other.sex === next.sex) continue;
-      if (!isAlive(other, nextDay)) continue;
+      if (!inVillage(other, nextDay)) continue;
+      if (promised(other, nextDay)) continue;
       if (readyDay(other) > nextDay) continue;
       if (tooClose(next, other)) continue;
       if (Math.abs(daysToYears(other.birthDay - next.birthDay)) > PAIRING.maxAgeGapYears) continue;
@@ -657,7 +1019,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
       const arrivesAt = PAIRING.minAgeYears + r() * PAIRING.ageSpanYears;
       const born = nextDay - Math.round(yearsToDays(arrivesAt));
       partner = addPerson(ctx, {
-        key: `${next.seedKey}/incomer`,
+        key: `${next.id}/incomer`,
         birthDay: born,
         parents: null,
         family: null,
@@ -677,6 +1039,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
         const rest = Math.round(yearsToDays(2 + r() * 45));
         partner.lifespanDays = Math.min(arrived + rest, Math.round(yearsToDays(VITALS.maxYears)));
         partner.deathDay = partner.birthDay + partner.lifespanDays;
+        settleFate(ctx, partner);
       }
     }
 
@@ -688,6 +1051,7 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
     partner.partnerDay = nextDay;
     next.household = household;
     partner.household = household;
+    leaveTogether(next, partner);
 
     const mother = next.sex === "f" ? next : partner;
     const father = next.sex === "f" ? partner : next;
@@ -703,6 +1067,8 @@ function pairEveryone(ctx: Ctx, throughDay: number): void {
  * grew up in can outlast both their parents, which is exactly the unmarried daughter still living in
  * the family house, and it is the shape a schedule and a dwelling want later.
  */
+const goneDay = (p: Person): number => Math.min(p.deathDay, p.leftDay);
+
 function closeHouseholds(ctx: Ctx): void {
   const lastOut = new Map<number, number>();
   const bump = (house: number, day: number) => {
@@ -712,12 +1078,14 @@ function closeHouseholds(ctx: Ctx): void {
   };
 
   for (const h of ctx.households) {
-    bump(h.index, ctx.people[h.partners[0]].deathDay);
-    bump(h.index, ctx.people[h.partners[1]].deathDay);
+    bump(h.index, goneDay(ctx.people[h.partners[0]]));
+    bump(h.index, goneDay(ctx.people[h.partners[1]]));
   }
   for (const p of ctx.people) {
     if (p.bornInto < 0) continue;
-    bump(p.bornInto, p.partnerDay ?? p.deathDay);
+    // Someone who came home (C53) is in the house they grew up in again, until they pair or die.
+    if (p.backDay !== Infinity) bump(p.bornInto, p.partnerDay !== null && p.partnerDay > p.backDay ? p.partnerDay : p.deathDay);
+    else bump(p.bornInto, Math.min(p.partnerDay ?? p.deathDay, p.leftDay));
   }
 
   for (const h of ctx.households) {
@@ -739,6 +1107,11 @@ export function settlementAt(
   cell: string,
   geo: SettlementGeography,
   throughDay: number,
+  /**
+   * What conversations have decided here (C44), in any order. Each takes effect on its own day, so a
+   * village generated to a day before the first of them is the seed's village exactly.
+   */
+  changes: readonly LifeChange[] = [],
 ): Settlement | null {
   if (geo.habitability < MIN_HABITABILITY) return null;
 
@@ -761,7 +1134,18 @@ export function settlementAt(
     yearsToDays(FOUNDING.minYearsAgo + rs() * (FOUNDING.maxYearsAgo - FOUNDING.minYearsAgo)),
   );
 
-  const ctx: Ctx = { key, culture, geo, capacity, people: [], households: [], truncated: false };
+  const ctx: Ctx = {
+    key,
+    culture,
+    geo,
+    capacity,
+    people: [],
+    households: [],
+    truncated: false,
+    changes: resolveChanges(changes),
+    arrivals: arrivalsOf(changes),
+    pairs: pairsOf(changes),
+  };
 
   const founderPairs = clamp(
     Math.round(capacity * FOUNDING.founderFraction),
@@ -806,6 +1190,7 @@ export function settlementAt(
     b.partner = a.index;
     a.partnerDay = foundedDay;
     b.partnerDay = foundedDay;
+    leaveTogether(a, b);
     // A founder's lifespan may have been drawn short enough to have ended before the founding day.
     // They founded the place, so they were alive on the day they did it.
     for (const p of [a, b]) {
@@ -813,6 +1198,7 @@ export function settlementAt(
         const settled = foundedDay - p.birthDay;
         p.lifespanDays = Math.min(settled + Math.round(yearsToDays(1 + rf() * 40)), Math.round(yearsToDays(VITALS.maxYears)));
         p.deathDay = p.birthDay + p.lifespanDays;
+        settleFate(ctx, p);
       }
     }
     founded.push({ a, b, household, family });
@@ -859,6 +1245,8 @@ export interface Census {
   households: Household[];
   /** Everyone already dead. The graves, and what SOC-6.H has to make visible in a first session. */
   dead: Person[];
+  /** Everyone who has left for good (C44), alive or not: neither here nor buried here. */
+  left: Person[];
   /** Deaths inside {@link LIVING_MEMORY_YEARS}. What people still bring up unprompted. */
   recentlyDead: Person[];
   medianAgeYears: number;
@@ -873,8 +1261,11 @@ export interface Census {
 export function census(s: Settlement, day: number): Census {
   const living: Person[] = [];
   const dead: Person[] = [];
+  const left: Person[] = [];
   for (const p of s.people) {
-    if (isAlive(p, day)) living.push(p);
+    // Gone and not come home (C53); here, which for someone who came is from the day they came.
+    if (p.leftDay <= day && p.leftDay < p.deathDay && !(p.backDay <= day)) left.push(p);
+    else if (isAlive(p, day) && p.arrivedDay <= day) living.push(p);
     else if (p.deathDay <= day) dead.push(p);
   }
 
@@ -890,6 +1281,7 @@ export function census(s: Settlement, day: number): Census {
     day,
     alive: living,
     population: living.length,
+    left,
     households: s.households.filter((h) => h.foundedDay <= day && h.dissolvedDay > day),
     dead,
     recentlyDead: dead.filter((p) => p.deathDay > memory),

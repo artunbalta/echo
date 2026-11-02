@@ -39,8 +39,6 @@ export const falProvider: ArtProvider = {
       image_size: "square",
       num_images: 1,
     };
-    // img2img / style conditioning when a model that supports it is configured.
-    if (req.selfieUrl) input.image_url = req.selfieUrl;
 
     const submit = await fetch(`https://queue.fal.run/${FAL_MODEL}`, {
       method: "POST",

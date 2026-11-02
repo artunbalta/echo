@@ -22,6 +22,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# The dev credential for a local run, from the one place the launchers share. `_auth` refuses an
+# empty ML_SERVICE_TOKEN now, so this import is what keeps `python scripts/<name>.py` working with no
+# keys — the same role run.sh plays for the service.
+import _devlauncher  # noqa: F401,E402  (side effect: the setdefault)
+
 import numpy as np
 from fastapi.testclient import TestClient
 
@@ -131,7 +136,12 @@ def walk():
     report["missing_context_status"] = post(ev(u, "courtesy_warm_server", "low", bad=True)).status_code
 
     c = report["checks"]
-    c["every_station_moves_posterior"] = all(s["delta_mu"] > 1e-4 for s in report["steps"])
+    # ⚑23: conform_custom sets only `consistency`, a dead column of the committed W. Until C73 it moved
+    # the posterior anyway, because the engine read the station's name as the player's words. Pinned
+    # silent until the re-anchor gives consistency a direction (tests/test_zero_columns.py).
+    dark = {"conform_custom"}
+    c["every_station_moves_posterior"] = all(s["delta_mu"] > 1e-4 for s in report["steps"] if s["action"] not in dark)
+    c["dark_stations_stay_silent"] = all(s["delta_mu"] <= 1e-4 for s in report["steps"] if s["action"] in dark)
     c["courtesy_gradient_recoverable"] = (
         "counterpart:high" in report["gradient"]["cond_keys"]
         and "counterpart:low" in report["gradient"]["cond_keys"]

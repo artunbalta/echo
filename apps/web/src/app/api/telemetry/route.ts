@@ -18,6 +18,9 @@
  * lib/behavioral-store.ts BEFORE the forward and awaited, and the response says `durable` for
  * what actually happened, with `durable_reason` when it did not.
  *
+ * The mirror (DECISIONS C61): after the forward, each update's own move as the engine reported it
+ * goes to `echo_ledger` (lib/ledger.ts). Walking windows that follow one another fold into one row.
+ *
  * Forward-compatible: we already emit the behavioral feature keys (save_rate, risk_index, …)
  * that persona._telemetry_features will read once §0.D grows F and re-anchors W. Until then
  * the ML service reads the keys it knows (latencyMs) and ignores the rest — the pipe is proven
@@ -27,6 +30,7 @@ import { NextResponse } from "next/server";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { observeEvent, telemetryEvent } from "@/lib/ml";
 import { recordEvents, rowFromTelemetry } from "@/lib/behavioral-store";
+import { appendLedger, entryForTelemetry, type LedgerEntry } from "@/lib/ledger";
 import type { TelemetryEvent } from "@echo/shared";
 
 export const runtime = "nodejs";
@@ -60,27 +64,34 @@ export async function POST(req: Request) {
 
   let mocked = false;
   let forwarded = 0;
+  const moved: LedgerEntry[] = [];
   // Forward sequentially: persona updates are stateful and order-sensitive (consistency
   // across the day is itself a feature — §3.2). Cheap (a handful of events per flush).
   for (const ev of events) {
     try {
       if (CHOICE_TYPES.has(ev.type)) {
+        const telemetry = behavioralTelemetry(ev);
         const r = await observeEvent({
           userId,
           action: actionText(ev),
-          telemetry: behavioralTelemetry(ev),
+          telemetry,
           context: eventContext(ev),
         });
         mocked = mocked || !!r.mocked;
+        const e = entryForTelemetry(ev, r, true, telemetry);
+        if (e) moved.push(e);
       } else {
         const r = await telemetryEvent({ userId, sessionId: body.sessionId, event: { type: ev.type, payload: ev.payload } });
         mocked = mocked || !!r.mocked;
+        const e = entryForTelemetry(ev, r, false);
+        if (e) moved.push(e);
       }
       forwarded++;
     } catch {
       // best-effort; never block the player on a telemetry hiccup
     }
   }
+  if (moved.length) await appendLedger(userId, moved);
   return NextResponse.json({
     ok: true,
     forwarded,

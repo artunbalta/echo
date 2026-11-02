@@ -82,6 +82,10 @@ export interface WorldInput {
   setEnabled(enabled: boolean): void;
   /** Whether the canvas has keyboard focus, i.e. whether the world owns the arrows and space. */
   readonly focused: boolean;
+  /** The keys down right now (C57: handed to the next parcel's world, which never saw them go down). */
+  heldKeys(): string[];
+  /** Keys already down when this input began listening. Each still comes up on its own keyup. */
+  hold(codes: readonly string[]): void;
   dispose(): void;
 }
 
@@ -236,6 +240,11 @@ export function createInput(canvas: HTMLCanvasElement, options: WorldInputOption
   return {
     get focused() {
       return focused();
+    },
+    heldKeys: () => [...held],
+    hold(codes) {
+      if (!enabled) return;
+      for (const code of codes) held.add(code);
     },
     read(cameraYaw) {
       const drained = drainGesture(gesture);

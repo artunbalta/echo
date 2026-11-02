@@ -13,7 +13,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { BuildPhase, PlanetWorld, PlanetWorldOptions, RenderInfo, WorldLayer } from "@/game/world/PlanetWorld";
-import { renderDebugEnabled } from "@/lib/renderDebug";
+import { renderDebugEnabled, renderReadoutFor } from "@/lib/renderDebug";
+import { t, useLang } from "@/lib/i18n";
 
 export interface WorldCanvasProps extends Omit<PlanetWorldOptions, "handle"> {
   /** Layers to add, in build order. Called once per world instance. */
@@ -21,7 +22,12 @@ export interface WorldCanvasProps extends Omit<PlanetWorldOptions, "handle"> {
   /** Follow target, e.g. the player layer's position getter. */
   follow?: (world: PlanetWorld) => () => { x: number; y: number; liftM?: number };
   onPhase?: (phase: BuildPhase, error?: unknown) => void;
-  onWorld?: (world: PlanetWorld | null) => void;
+  /**
+   * The world, once made, and null when it goes. `adopt` hands this canvas a successor (C57): the
+   * world for the parcel a raft has crossed into, built asleep beside this one. From then on that is
+   * the world this canvas reports, measures and disposes.
+   */
+  onWorld?: (world: PlanetWorld | null, adopt: (next: PlanetWorld) => void) => void;
   className?: string;
   children?: ReactNode;
 }
@@ -30,6 +36,7 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export default function WorldCanvas({ layers, follow, onPhase, onWorld, className, children, ...options }: WorldCanvasProps) {
   const host = useRef<HTMLDivElement>(null);
+  const lang = useLang();
   const [phase, setPhase] = useState<BuildPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   // The last reading, for the readout below. It is state and not a ref because the readout is the
@@ -81,17 +88,27 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
             host.current.dataset.worldPixelRatio = String(info.pixelRatio);
             host.current.dataset.worldBuffer = `${info.width}x${info.height}`;
             host.current.dataset.worldLayers = JSON.stringify(info.layers);
-            setReading(info);
+            if (renderReadoutFor(window.location.search)) setReading(info);
           }, 1000);
         }
-        world.onPhase = (p, err) => {
+        const report = (p: BuildPhase, err?: unknown) => {
           setPhase(p);
           if (p === "failed") setError(message(err));
           onPhase?.(p, err);
         };
+        world.onPhase = report;
+        const adopt = (next: PlanetWorld) => {
+          if (!live) {
+            next.dispose();
+            return;
+          }
+          world = next;
+          next.onPhase = report;
+          onWorld?.(next, adopt);
+        };
         for (const layer of layers(world)) world.addLayer(layer);
         if (follow) world.setFollow(follow(world));
-        onWorld?.(world);
+        onWorld?.(world, adopt);
         world.start().catch(fail);
       } catch (e) {
         fail(e);
@@ -101,30 +118,32 @@ export default function WorldCanvas({ layers, follow, onPhase, onWorld, classNam
       live = false;
       clearInterval(diagnostics);
       world?.dispose();
-      onWorld?.(null);
+      onWorld?.(null, () => undefined);
     };
     // The world is rebuilt only when the manifest or the frame changes; layer and callback
     // identity is not a reason to rebuild a planet. devInfo is read once at construction.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options.cell, options.seed, options.seaLevel, options.peakElevation, options.radiusKm, options.k, options.heightScaleM, options.tileM]);
+    // The commons are an array a parent may rebuild every render, so the dependency is their contents.
+  }, [options.cell, options.seed, options.seaLevel, options.peakElevation, options.radiusKm, options.k, options.heightScaleM, options.tileM, options.commons?.join(","), options.day]);
 
   return (
     <div className={className ?? "relative h-full w-full"}>
       <div ref={host} className="absolute inset-0" data-phase={phase} />
       {phase !== "ready" ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
-          <p className="rounded border border-[#a06cd5]/30 bg-[#1c1326]/85 px-4 py-2 font-pixel text-xs text-[#f4e9d0]/80">
-            {phase === "failed" ? `The ground could not be built: ${error ?? "unknown error"}` : "Building the ground"}
+          <p className="hud-pop px-4 py-2 text-xs text-parchment/80">
+            {phase === "failed" ? t(lang, "build.failed", { why: error ?? "unknown error" }) : t(lang, "build.ground")}
           </p>
         </div>
       ) : null}
       {/* The readout, which exists for exactly one reason: a phone has no devtools, and DECISIONS
           C23 ends on the fact that this frame has never been measured on one. Rendered only when a
-          reading exists, which is only when the gate above opened. */}
+          reading exists, which is only when the URL asked for it (C68): development still measures
+          and writes the data-world-* attributes, but draws no table over the world unasked. */}
       {reading ? (
         <pre
           data-world-readout
-          className="pointer-events-none absolute right-3 top-16 z-40 whitespace-pre rounded bg-[#120c19]/85 px-2 py-1 font-mono text-[10px] leading-tight text-[#f4e9d0]/85"
+          className="pointer-events-none absolute right-3 top-16 z-40 whitespace-pre rounded bg-ink-deep/85 px-2 py-1 font-mono text-[10px] leading-tight text-parchment/85"
         >
 {`${reading.fps.toFixed(1)} fps   ${reading.width}x${reading.height} @${reading.pixelRatio}
 whole  ${reading.triangles.toLocaleString()} tri / ${reading.calls} calls   worst ${reading.worstTriangles.toLocaleString()} / ${reading.worstCalls}

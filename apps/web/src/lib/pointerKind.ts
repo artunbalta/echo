@@ -29,7 +29,7 @@ const QUERY = "(pointer: coarse)";
 
 /** One answer, now. For code inside an effect that will not re-run. */
 export function coarsePointer(): boolean {
-  return typeof window !== "undefined" && window.matchMedia(QUERY).matches;
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(QUERY).matches;
 }
 
 /** The same answer, kept current. False through the server render, so hydration cannot mismatch. */

@@ -97,7 +97,9 @@ def _event(actor: str, n: int) -> dict:
             "counterpart_status": "peer", "stage": 2, "scarcity_level": 0.2,
             "mood_proxy": 0.0, "time_pressure": 0.0,
         },
-        "raw_signals": {"distance": 0.5}, "payload": {}, "provenance": "live",
+        # The decision latency is what this event measures: since C73 an event that measures nothing
+        # is recorded but is not an update, and this test counts updates.
+        "raw_signals": {"distance": 0.5, "decision_latency_ms": 900}, "payload": {}, "provenance": "live",
     }
 
 

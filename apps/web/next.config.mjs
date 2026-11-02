@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  /**
+   * A second dev server on the same checkout (a check run beside the one you are using) must not
+   * share the build folder: each rewrites it, and the other then fails with ENOENT on files that were
+   * just there. `NEXT_DIST_DIR=.next-check next dev -p 3100` keeps the second one to itself; unset,
+   * it is `.next` as always.
+   */
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   transpilePackages: ["@echo/shared"],
   eslint: { ignoreDuringBuilds: true },
 

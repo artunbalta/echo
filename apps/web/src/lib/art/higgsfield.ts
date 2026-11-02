@@ -40,10 +40,6 @@ export const higgsfieldProvider: ArtProvider = {
       width_and_height: helpers.SoulSize?.SQUARE_1536x1536,
       quality: helpers.SoulQuality?.HD,
     };
-    if (req.selfieUrl && helpers.InputImage) {
-      input.input_images = [helpers.InputImage.fromUrl(req.selfieUrl)];
-      if (helpers.strength) input.style_strength = helpers.strength(0.75);
-    }
 
     const jobSet = await client.generate("/v1/text2image/soul", input, { withPolling: true });
     const url = jobSet?.jobs?.[0]?.results?.raw?.url;

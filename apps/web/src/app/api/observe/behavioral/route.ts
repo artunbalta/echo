@@ -10,10 +10,14 @@
  * Persistence (plan W5-0): every envelope with an actor_id is recorded in behavioral_events
  * (db/migrations/0011) through lib/behavioral-store.ts BEFORE the forward and awaited; the
  * response carries `durable` for what actually happened and `durable_reason` when it did not.
+ *
+ * The mirror (DECISIONS C61): AFTER the forward, each act's own move as the engine reported it goes
+ * to `echo_ledger` (lib/ledger.ts), so the person can later see which act moved which axis.
  */
 import { NextResponse } from "next/server";
-import { observeBehavioralEvent } from "@/lib/ml";
+import { observeBehavioralEvent, type BehavioralObserveResult } from "@/lib/ml";
 import { recordEvents, rowFromBehavioral } from "@/lib/behavioral-store";
+import { appendLedger, entryForAct } from "@/lib/ledger";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 
 export const runtime = "nodejs";
@@ -54,9 +58,13 @@ export async function POST(req: Request) {
   const record = await recordEvents(rows);
 
   // Forward sequentially: persona updates are stateful and order-sensitive within an actor.
-  const results = [];
+  const results: BehavioralObserveResult[] = [];
   for (const event of events) {
     results.push(await observeBehavioralEvent({ event }));
+  }
+  if (actors.length) {
+    const entries = events.map((e, i) => entryForAct(e, results[i]!)).filter((x): x is NonNullable<typeof x> => x !== null);
+    if (entries.length) await appendLedger(actors[0]!, entries);
   }
   const mocked = results.some((r) => r.mocked);
   return NextResponse.json({

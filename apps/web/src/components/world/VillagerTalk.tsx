@@ -1,0 +1,524 @@
+"use client";
+
+/**
+ * Talking to a villager (DECISIONS C42, C44). Walk up to someone until their nameplate shows, press E
+ * (or tap Talk), and say something; they stop, turn to you, and answer from the life they have lived.
+ *
+ * A CONVERSATION BEGINS WHERE THEY ARE. Pressing E asks the server to begin one (`talk/begin`) with
+ * where you stand; the server checks that against where the villager is, counts the meeting in their
+ * memory of you, and hands back the token every line carries. A villager who remembers you says so.
+ *
+ * WHAT IT SENDS AND WHAT IT KEEPS. The cell, the villager's id, your position at the start, your line
+ * and the conversation so far — never a description of the villager, which the server rebuilds. Your
+ * words go to the model to be answered and are not stored. What the villager makes of you is: a short
+ * note in their own words, so they remember you next time, private to you, and erased by "Forget me".
+ * None of it is read into your echo. The line under the input says so before anything is typed.
+ *
+ * A CONVERSATION CAN CHANGE A LIFE (C44). When the villager decides something — to keep a grave, to
+ * build a boat, to leave — the panel says so, and the page regenerates the village with the change in
+ * it, so the stranger who caused it sees it at once and everyone else on their next visit.
+ *
+ * WHY IT WAITS FOR THE CARD. The routes need a signed id and minting one is only allowed after the
+ * consent question is answered, either way (identity/session's own rule).
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { t as tr, useLang } from "@/lib/i18n";
+
+import type { LifeChange } from "@echo/planet";
+
+import type { ConsentState } from "@/game/world/measure";
+import type { PlanetWorld } from "@/game/world/PlanetWorld";
+import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
+import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { canRecord, canSpeak, cloudWanted, hearIt, hush, hushCloud, ownVoiceHere, recorder, setCloudWanted, setVoiceWanted, speak, speakCloud, speakSelf, unlockCloud, voiceWanted } from "@/lib/villagerVoice";
+
+interface Turn {
+  role: "stranger" | "villager" | "decided";
+  text: string;
+}
+
+/** Beyond this many metres a conversation is over: they have walked on with their day. */
+const PARTING_M = 12;
+
+/** What a refusal from the routes means, in the villager's world rather than the server's. */
+function trouble(status: number, error: string | undefined, name: string): string {
+  if (error === "barred") return "A moderator has barred you from changing this world for now.";
+  if (status === 429) return `${name} has had enough talk for now. Come back in a while.`;
+  if (error === "too_far") return `${name} is too far away to hear you.`;
+  if (error === "not_out") return `${name} has gone indoors.`;
+  if (error === "asleep") return `${name} is asleep.`;
+  if (error === "at_sea") return `${name} is out at sea.`;
+  if (error === "no_conversation") return `${name} has lost the thread. Say hello again.`;
+  if (status === 401 || status === 403) return "You need to answer the card first.";
+  // The routes' own words for "not now", taken from rateLimit.ts and lib/subject.ts, not guessed.
+  if (error === "identity_unconfigured" || error === "rate_limiter_unavailable") return `${name} cannot hear you just now.`;
+  if (status === 413) return "That is too much to say at once.";
+  return `${name} does not seem to hear you.`;
+}
+
+export default function VillagerTalk({ world, cell, consent, coarse }: { world: () => PlanetWorld | null; cell: string; consent: ConsentState; coarse: boolean }) {
+  const lang = useLang();
+  const [how, setHow] = useState(false);
+  const [near, setNear] = useState<NearVillager | null>(null);
+  const [talking, setTalking] = useState<NearVillager | null>(null);
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [greeting, setGreeting] = useState<string | null>(null);
+  const [voice, setVoice] = useState(false);
+  const conv = useRef<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const log = useRef<HTMLDivElement>(null);
+
+  /** Whether this stranger said yes to ElevenLabs (C60): yes, no, or never asked. */
+  const [cloud, setCloud] = useState<boolean | null>(null);
+  /** The question about ElevenLabs is showing. */
+  const [asking, setAsking] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const rec = useRef(recorder());
+  /** The key or the button is down: what a late microphone is checked against. */
+  const holding = useRef(false);
+  /** This stranger has a voice of their own here (C62): typed lines are said in it. */
+  const [mine, setMine] = useState(false);
+  useEffect(() => {
+    if (!cloud || consent === "unset") return;
+    let live = true;
+    void ensureIdentity()
+      .then(() => ownVoiceHere(identityHeaders()))
+      .then((yes) => live && setMine(yes))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [cloud, consent]);
+  useEffect(() => {
+    const c = cloudWanted();
+    setCloud(c);
+    setVoice(voiceWanted() && (canSpeak() || c === true));
+  }, []);
+
+  // The parent hands a fresh getter every render; held in a ref, so the four-a-second poll below is
+  // set up once rather than torn down and rebuilt on every render it causes.
+  const worldRef = useRef(world);
+  worldRef.current = world;
+  const layer = useCallback(() => worldRef.current()?.context().layer<VillagersLayer>("villagers") ?? null, []);
+  const personOf = useCallback((id: string) => worldRef.current()?.region.village?.settlement.people.find((p) => p.id === id) ?? null, []);
+  const first = (talking ?? near)?.name.split(" ")[0];
+
+  const end = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("echo:talking", { detail: false }));
+    layer()?.hold(null);
+    hush();
+    hushCloud();
+    holding.current = false;
+    rec.current.cancel();
+    setRecording(false);
+    conv.current = null;
+    setTalking(null);
+    setTurns([]);
+    setDraft("");
+    setNote(null);
+    setGreeting(null);
+    setPending(false);
+    (document.activeElement as HTMLElement | null)?.blur?.();
+  }, [layer]);
+
+  /** Ask the server to begin: it checks where you both are and counts the meeting. */
+  const begin = useCallback(
+    async (who: NearVillager): Promise<boolean> => {
+      const at = layer()?.playerPosition();
+      if (!at) return false;
+      try {
+        await ensureIdentity();
+        const res = await fetch("/api/village/talk/begin", {
+          method: "POST",
+          headers: identityHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ cell, person: who.id, at }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { conv?: string; recognised?: string | null; error?: string };
+        if (!res.ok || !data.conv) {
+          setNote(trouble(res.status, data.error, who.name.split(" ")[0]));
+          return false;
+        }
+        conv.current = data.conv;
+        setGreeting(data.recognised ?? null);
+        return true;
+      } catch {
+        setNote(`${who.name.split(" ")[0]} does not seem to hear you.`);
+        return false;
+      }
+    },
+    [cell, layer],
+  );
+
+  const start = useCallback(() => {
+    const v = layer();
+    const who = v?.nearest();
+    if (!v || !who) return;
+    v.hold(who.id);
+    window.dispatchEvent(new CustomEvent("echo:talking", { detail: true }));
+    setTalking(who);
+    setTurns([]);
+    setNote(null);
+    setGreeting(null);
+    conv.current = null;
+    if (consent === "unset") setNote("Answer the card first: talking needs the answer, either way.");
+    else void begin(who);
+    setTimeout(() => input.current?.focus(), 0);
+  }, [layer, consent, begin]);
+
+  // Who is near, four times a second; and whether the one being talked to has walked off.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const v = layer();
+      setNear(v?.nearest() ?? null);
+      if (talking && v) {
+        const d = v.distanceTo(talking.id);
+        if (d === null || d > PARTING_M) {
+          setNote(`${talking.name.split(" ")[0]} has gone on with their day.`);
+          setTimeout(end, 1600);
+        }
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [layer, talking, end]);
+
+  // Escape ends a conversation; beginning one is `Interact`'s (C45): one prompt for everything within
+  // reach, `T` for whoever is near enough to talk to, and an `echo:talk` event to open this panel.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Escape" && talking) {
+        e.preventDefault();
+        end();
+      }
+    };
+    const onTalk = () => {
+      if (!talking && near) start();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("echo:talk", onTalk);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("echo:talk", onTalk);
+    };
+  }, [near, talking, start, end]);
+
+  useEffect(() => {
+    log.current?.scrollTo({ top: log.current.scrollHeight });
+  }, [turns, pending]);
+
+  /** A decision this conversation made, folded into the page's own village at once. */
+  const adopt = useCallback((change: LifeChange) => {
+    const w = worldRef.current();
+    const had = w?.region.village?.changes ?? [];
+    if (w && !had.some((c) => c.id === change.id)) w.revillage([...had, change]);
+  }, []);
+
+  const send = useCallback(async (spoken?: string) => {
+    const text = (spoken ?? draft).trim();
+    if (!talking || !text || pending) return;
+    if (voice && cloud) {
+      unlockCloud();
+      // Typed, it is said in your own voice where you have one; spoken aloud, it already was.
+      if (mine && spoken === undefined) void speakSelf(text, identityHeaders());
+    }
+    if (consent === "unset") {
+      setNote("Answer the card first: talking needs the answer, either way.");
+      return;
+    }
+    setDraft("");
+    setPending(true);
+    setNote(null);
+    const history = turns.filter((t) => t.role !== "decided") as { role: "stranger" | "villager"; text: string }[];
+    const before = turns;
+    setTurns([...before, { role: "stranger", text }]);
+    try {
+      if (!conv.current && !(await begin(talking))) {
+        setTurns(before);
+        setDraft(text);
+        return;
+      }
+      const res = await fetch("/api/village/talk", {
+        method: "POST",
+        headers: identityHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ cell, person: talking.id, message: text, history, conv: conv.current }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; change?: LifeChange; decided?: string; invited?: string; voice?: string | null };
+      if (!res.ok || !data.reply) {
+        if (data.error === "no_conversation") conv.current = null;
+        setTurns(before);
+        setDraft(text);
+        setNote(trouble(res.status, data.error, talking.name.split(" ")[0]));
+      } else {
+        const next: Turn[] = [...before, { role: "stranger", text }, { role: "villager", text: data.reply }];
+        if (data.change && data.decided) {
+          next.push({ role: "decided", text: data.decided });
+          adopt(data.change);
+        }
+        // Asked in (C54): their door is open to you for the day — the interior layer hears of it.
+        if (data.invited) {
+          if (data.decided) next.push({ role: "decided", text: data.decided });
+          window.dispatchEvent(new CustomEvent("echo:invited", { detail: { house: data.invited, host: talking.id } }));
+        }
+        setTurns(next);
+        if (voice) {
+          // In their own voice when the stranger said yes to ElevenLabs (C60); in this browser's
+          // local voice otherwise, or when the cloud does not answer.
+          const p = personOf(talking.id);
+          const local = () => {
+            if (p) speak(data.reply!, { id: p.id, sex: p.sex, age: talking.age });
+          };
+          if (cloud) void speakCloud({ cell, person: talking.id, text: data.reply, token: data.voice ?? null }, identityHeaders()).then((ok) => ok || local());
+          else local();
+        }
+      }
+    } catch {
+      setTurns(before);
+      setDraft(text);
+      setNote(`${talking.name.split(" ")[0]} does not seem to hear you.`);
+    } finally {
+      setPending(false);
+      setTimeout(() => input.current?.focus(), 0);
+    }
+  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf, cloud, mine]);
+
+  const forget = useCallback(async () => {
+    if (!talking || consent === "unset") return;
+    try {
+      await ensureIdentity();
+      const res = await fetch("/api/village/memory", {
+        method: "DELETE",
+        headers: identityHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ cell, person: talking.id }),
+      });
+      setNote(res.ok ? `${talking.name.split(" ")[0]} will not remember you.` : `${talking.name.split(" ")[0]} could not forget you just now. Try again.`);
+      if (res.ok) setGreeting(null);
+    } catch {
+      setNote("That did not go through. Try again.");
+    }
+  }, [talking, consent, cell]);
+
+  const toggleVoice = useCallback(() => {
+    const on = !voice;
+    // Asked once, before anything goes to ElevenLabs (C60).
+    if (on && cloud === null) {
+      setAsking(true);
+      return;
+    }
+    setVoice(on);
+    setVoiceWanted(on);
+    if (!on) {
+      hush();
+      hushCloud();
+    }
+  }, [voice, cloud]);
+  const answer = useCallback((yes: boolean) => {
+    if (yes) unlockCloud();
+    setCloudWanted(yes);
+    setCloud(yes);
+    setAsking(false);
+    setVoice(yes || canSpeak());
+    setVoiceWanted(yes || canSpeak());
+  }, []);
+  /** Taking the yes back: nothing more goes to ElevenLabs from this browser. */
+  const withdraw = useCallback(() => {
+    setCloudWanted(false);
+    setCloud(false);
+    hushCloud();
+    holding.current = false;
+    rec.current.cancel();
+    setRecording(false);
+    if (!canSpeak()) setVoice(false);
+  }, []);
+
+  // Speaking aloud (C60): hold the button, or Ctrl alone, and let go to send what was said.
+  const talkStart = useCallback(async () => {
+    if (!cloud || pending || holding.current) return;
+    holding.current = true;
+    hush();
+    hushCloud();
+    const got = await rec.current.start();
+    if (got === "on" && holding.current) setRecording(true);
+    else if (got === "denied") {
+      holding.current = false;
+      setNote("The microphone is not allowed on this page.");
+    }
+  }, [cloud, pending]);
+  const talkCancel = useCallback(() => {
+    holding.current = false;
+    rec.current.cancel();
+    setRecording(false);
+  }, []);
+  const talkStop = useCallback(async () => {
+    if (!holding.current) return;
+    holding.current = false;
+    if (voice) unlockCloud();
+    setRecording(false);
+    const blob = await rec.current.stop();
+    if (!blob) return;
+    setNote(`${talking?.name.split(" ")[0] ?? "They"} listens…`);
+    await ensureIdentity();
+    const heard = await hearIt(blob, identityHeaders());
+    if ("text" in heard && heard.text) {
+      setNote(null);
+      void send(heard.text);
+    } else setNote("That did not come through. Say it again, or type it.");
+  }, [talking, send, voice]);
+  useEffect(() => {
+    if (!talking || !cloud) return;
+    const down = (e: KeyboardEvent) => {
+      if ((e.code === "ControlLeft" || e.code === "ControlRight") && !e.repeat) void talkStart();
+      // Ctrl with another key is a shortcut, not speech.
+      else if (holding.current && e.key !== "Control") talkCancel();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "ControlLeft" || e.code === "ControlRight") void talkStop();
+    };
+    // A window left with the key down never hears it come up: what was being said is dropped.
+    const away = () => {
+      if (holding.current) talkCancel();
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", away);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", away);
+    };
+  }, [talking, cloud, talkStart, talkStop, talkCancel]);
+
+  // The prompt to talk is `Interact`'s now (C45); this is only the conversation.
+  if (!talking) return null;
+
+  return (
+    <section
+      data-talk-panel={talking.id}
+      aria-label={`Talking to ${talking.name}`}
+      className="absolute bottom-6 left-1/2 z-40 w-[min(560px,92vw)] -translate-x-1/2 hud-pop hud-in text-parchment"
+    >
+      <header className="flex items-baseline justify-between gap-3 px-5 pt-4">
+        <p className="font-serif text-lg text-parchment">
+          {talking.name}
+          <span className="ml-2 text-xs text-parchment/45">
+            {talking.age} · {talking.age >= 13 ? talking.occupation : tr(lang, "talk.child")}
+          </span>
+        </p>
+        <div className="flex shrink-0 items-baseline gap-3 text-xs text-parchment/50">
+          {canSpeak() || canRecord() ? (
+            <button type="button" onClick={toggleVoice} aria-pressed={voice} data-talk-voice className="hover:text-parchment">
+              {voice ? tr(lang, "talk.voiceOn") : tr(lang, "talk.voiceOff")}
+            </button>
+          ) : null}
+          <button type="button" onClick={() => void forget()} data-talk-forget className="hover:text-parchment">
+            {tr(lang, "talk.forget")}
+          </button>
+          <button type="button" onClick={end} aria-label={tr(lang, "talk.leave")} className="hover:text-parchment">
+            {coarse ? tr(lang, "talk.leave") : `Esc · ${tr(lang, "talk.leave")}`}
+          </button>
+        </div>
+      </header>
+      {asking ? (
+        <div data-voice-question className="mx-5 mt-3 rounded-xl border border-ember/30 bg-ember/10 px-4 py-3 text-xs leading-relaxed text-parchment/85">
+          <p>{tr(lang, "talk.voiceAsk")}</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" data-voice-yes onClick={() => answer(true)} className="rounded-full bg-parchment px-3 py-1 font-medium text-ink">
+              {tr(lang, "talk.voiceYes")}
+            </button>
+            <button type="button" data-voice-no onClick={() => answer(false)} className="rounded-full border border-parchment/20 px-3 py-1">
+              {tr(lang, "talk.voiceNo")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+      <div ref={log} className="mt-2 max-h-[38vh] space-y-2 overflow-y-auto px-5">
+        {greeting ? <p className="text-sm italic text-ember/80">{greeting}</p> : null}
+        {turns.length === 0 && !pending ? <p className="text-sm italic text-parchment/45">{tr(lang, "talk.looks", { name: first })}</p> : null}
+        {turns.map((t, i) =>
+          t.role === "decided" ? (
+            <p key={i} data-talk-decided className="rounded-lg bg-ember/10 px-3 py-1.5 text-sm italic text-ember">
+              {t.text}
+            </p>
+          ) : (
+            <p key={i} className={t.role === "stranger" ? "text-right text-sm text-parchment/70" : "text-sm leading-relaxed text-parchment"}>
+              {t.role === "villager" ? <span className="mr-1.5 text-ember">{first}:</span> : null}
+              {t.text}
+            </p>
+          ),
+        )}
+        {pending ? <p className="text-sm italic text-parchment/45">{tr(lang, "talk.thinks", { name: first })}</p> : null}
+        {note ? <p className="text-sm italic text-ember/80">{note}</p> : null}
+      </div>
+      <form
+        className="flex gap-2 px-5 pb-2 pt-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <input
+          ref={input}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 400))}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              end();
+            }
+          }}
+          placeholder={tr(lang, "talk.placeholder", { name: first })}
+          maxLength={400}
+          className="min-w-0 flex-1 rounded-full border border-parchment/15 bg-parchment/5 px-4 py-2 text-sm text-parchment placeholder:text-parchment/35 focus:border-echo/60 focus:outline-none"
+        />
+        {cloud && canRecord() ? (
+          <button
+            type="button"
+            data-talk-mic={recording ? "on" : "off"}
+            aria-label={tr(lang, "talk.hold")}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              void talkStart();
+            }}
+            onPointerUp={() => void talkStop()}
+            onPointerLeave={() => void talkStop()}
+            disabled={pending}
+            className={`rounded-full px-3 py-2 text-sm ${recording ? "bg-ember text-ink" : "border border-parchment/20 text-parchment/70"} disabled:opacity-40`}
+          >
+            {recording ? tr(lang, "talk.listening") : tr(lang, "talk.hold")}
+          </button>
+        ) : null}
+        <button type="submit" disabled={pending || !draft.trim()} className="rounded-full bg-parchment px-4 py-2 text-sm font-medium text-ink disabled:opacity-40">
+          {tr(lang, "talk.say")}
+        </button>
+      </form>
+      {/* What happens to what is said, in one line; the whole of it a tap away (C68). Every promise
+          the long paragraph made is still made, word for word, behind "How this works". */}
+      <div className="px-5 pb-3 text-[11px] leading-snug text-parchment/40">
+        <p>
+          {tr(lang, "talk.private")}{" "}
+          <button type="button" data-talk-how aria-expanded={how} onClick={() => setHow((h) => !h)} className="underline decoration-parchment/25 hover:text-parchment">
+            {tr(lang, "talk.how")}
+          </button>
+        </p>
+        {how ? (
+          <p data-talk-how-open className="mt-1.5 text-[10.5px] text-parchment/45">
+            {tr(lang, "talk.detail", { name: first })}
+            {cloud ? ` ${tr(lang, "talk.detailCloud")}` : ""}
+            {cloud && canRecord() ? ` ${tr(lang, "talk.detailMic")}` : ""}{" "}
+            {cloud ? (
+              <button type="button" data-voice-withdraw onClick={withdraw} className="underline decoration-parchment/30 hover:text-parchment">
+                {tr(lang, "talk.stopCloud")}
+              </button>
+            ) : cloud === false ? (
+              <button type="button" data-voice-ask onClick={() => setAsking(true)} className="underline decoration-parchment/30 hover:text-parchment">
+                {tr(lang, "talk.useCloud")}
+              </button>
+            ) : null}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}

@@ -22,7 +22,8 @@
     "census:planet": "node --import tsx scripts/census-planet.ts",
     "preview:planet": "node --import tsx scripts/preview-planet.ts",
     "preview:globe": "node --import tsx scripts/preview-globe.ts",
-    "seed:registry": "node --import tsx scripts/seed-registry.ts"
+    "seed:registry": "node --import tsx scripts/seed-registry.ts",
+    "index:villages": "node --import tsx scripts/index-villages.ts"
   },
   "dependencies": {
     "h3-js": "^4.5.0",

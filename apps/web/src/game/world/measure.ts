@@ -47,7 +47,7 @@ import {
   type TelemetryType,
 } from "@echo/shared";
 
-import { ensureIdentity, identityToken, peekUserId, resolveUserId } from "../../lib/identity";
+import { ensureIdentity, identityHeaders, peekUserId, resolveUserId } from "../../lib/identity";
 import { LocomotionSampler, TelemetryCollector } from "../telemetry";
 import { ACTION_AXIS_MAP, type ActionRow } from "./actionMap";
 
@@ -224,6 +224,8 @@ export interface MeasureChain {
   armed(): boolean;
   /** Feed the mover's TILE position every frame. Before accept this is a no-op: not even sampled. */
   feedPosition(x: number, y: number, now?: number): void;
+  /** The positions fed from now on are in another frame (C57): end the path here. */
+  breakPath(): void;
   emitAction(action: string, opts?: EmitActionOptions): Promise<ActionResult>;
   /** The last LOG_SIZE events, oldest first. A copy. */
   log(): MeasureLogEntry[];
@@ -245,21 +247,11 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
   const sessionId = opts.sessionId ?? newSessionId();
   const doFetch: typeof fetch = opts.fetchImpl ?? ((input, init) => fetch(input, init));
 
-  /**
-   * The signature that says which subject these writes belong to (SOC-2.E).
-   *
-   * The BODY still carries `userId` / `actor_id` and the persona read still uses `?uid=` — the
-   * shapes are unchanged, and `chain.test.mts` pins them. What changes is that the server now
-   * derives the subject from this header and treats the body field as a claim to check against it.
-   * An unsigned visit sends no header and is refused with `identity_required`, which is the point:
-   * quietly writing under an unverifiable id is the behaviour being removed.
-   */
-  function identityHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    const token = identityToken();
-    if (token) headers.authorization = `Bearer ${token}`;
-    return headers;
-  }
+  // The signature that says which subject these writes belong to (SOC-2.E) now comes from
+  // `lib/identity.ts`, because this closure was the only place in the tree that knew how to send it
+  // — so `/play` and `/flow4` wrote under no signature at all and were refused the moment their
+  // routes were gated (L5). Two behaviours came with the move: a `?u=` override deliberately sends
+  // NO token, and the body still carries `userId` / `actor_id` exactly as `chain.test.mts` pins it.
   const clock = opts.now ?? Date.now;
 
   let collector: TelemetryCollector | null = null;
@@ -356,14 +348,25 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
     const at = clock();
     let next: Posterior;
     try {
+      // The read is signed like the sends are, so it waits for the same settled subject; read under a
+      // provisional id it was refused (403) on every first arm, and only the next re-read got through.
+      await identitySettled.catch(() => undefined);
       const r = await doFetch(`/api/agent/persona?uid=${encodeURIComponent(userId)}`, { headers: identityHeaders() });
       next = posteriorFromSnapshot((await r.json()) as PersonaRouteResponse, at);
     } catch (err) {
       next = { mu: zeros(), var: null, version: null, mocked: true, reason: `network_failed: ${(err as Error).message}`, source: "seed", at };
     }
     inFlight = false;
-    // An event may have answered while the read was in flight; the event is newer and wins.
-    if (disposed || posterior?.source === "event") return;
+    if (disposed) return;
+    // An event may have answered while the read was in flight, and then whichever is NEWER wins, by the
+    // engine's own version. This was `posterior?.source === "event"`, which held for the rest of the
+    // session once any act had answered, so after the first act the walking re-reads were thrown away
+    // and the meter stopped moving with the body. C45 makes acts frequent, which made that permanent.
+    const current = posterior;
+    if (current?.source === "event") {
+      if (next.mocked && !current.mocked) return; // a failed read never replaces a real answer
+      if (!current.mocked && (next.version === null || current.version === null || next.version <= current.version)) return;
+    }
     posterior = next;
     notify();
   }
@@ -439,6 +442,9 @@ export function createMeasureChain(opts: MeasureChainOptions = {}): MeasureChain
 
     feedPosition(x, y, now = clock()) {
       sampler?.feed(x, y, now);
+    },
+    breakPath() {
+      sampler?.breakPath();
     },
 
     async emitAction(action, o = {}) {

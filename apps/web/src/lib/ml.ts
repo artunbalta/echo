@@ -65,6 +65,24 @@ async function call<T>(path: string, init: RequestInit, fallback: T): Promise<T>
       );
       return withReason(fallback, "ml_auth_mismatch");
     }
+    if (res.status === 503) {
+      // THE SERVICE IS UP AND REFUSING ON PURPOSE, which is not the same as unreachable. echo-ml
+      // now fails closed when ML_SERVICE_TOKEN is unset rather than falling back to a literal
+      // committed in this repository, and it answers `ml_token_unconfigured`. Without this branch
+      // that arrives as `ml_forward_failed` — the same label a network outage gets — and an
+      // operator who never set the token would read "the ML service is down" and go looking in the
+      // wrong place. Keyed on the BODY, not the status, because 503 is also what a platform returns
+      // for a cold or evicted instance and that really is `ml_forward_failed`.
+      const detail = await res.clone().json().then((b: { detail?: string }) => b?.detail).catch(() => undefined);
+      if (detail === "ml_token_unconfigured") {
+        console.error(
+          `[ml] ${path} was REFUSED (503): echo-ml has no ML_SERVICE_TOKEN. It no longer falls back to ` +
+            `the published dev literal, so an unset variable is a refusal rather than an open door. Set ` +
+            `the SAME secret on echo-ml, echo-realtime and Vercel (render.yaml marks all three sync:false).`,
+        );
+        return withReason(fallback, "ml_token_unconfigured");
+      }
+    }
     if (!res.ok) throw new Error(`ml ${path} ${res.status}`);
     return (await res.json()) as T;
   } catch (err) {
@@ -132,7 +150,7 @@ export function observeEvent(body: {
   context?: Record<string, unknown>;
   action?: string;
   telemetry?: Record<string, unknown>;
-}): Promise<{ ok: boolean; mocked?: boolean }> {
+}): Promise<{ ok: boolean; mocked?: boolean } & Moved> {
   return call(
     "/observe",
     { method: "POST", body: JSON.stringify({ context: {}, action: "", telemetry: {}, ...body }) },
@@ -145,7 +163,7 @@ export function telemetryEvent(body: {
   userId: string;
   sessionId?: string;
   event: { type: string; payload?: Record<string, unknown> };
-}): Promise<{ ok: boolean; mocked?: boolean }> {
+}): Promise<{ ok: boolean; mocked?: boolean } & Moved> {
   return call("/telemetry", { method: "POST", body: JSON.stringify(body) }, { ok: true, mocked: true });
 }
 
@@ -157,6 +175,8 @@ export interface SituationPick {
   selected: string | null;
   cap: number;
   uncertainty01?: number;
+  /** Every candidate by expected information gain, best first (C63 sets out the next where the first will not fit). */
+  ranking?: { candidate: string; info_gain: number; p: number }[];
   mocked?: boolean;
 }
 
@@ -174,7 +194,7 @@ export function selectSituation(body: {
   );
 }
 
-export interface BehavioralObserveResult {
+export interface BehavioralObserveResult extends Moved {
   ok?: boolean;
   mocked?: boolean;
   /** When mocked, WHY: "ml_service_url_unset" (env missing in this runtime) | "ml_forward_failed"
@@ -186,6 +206,18 @@ export interface BehavioralObserveResult {
   persona?: { mu: number[]; Sigma?: number[][]; version?: number };
   delta_mu?: number;
   cond_persona?: { mu: number[] };
+  /** What the engine read the act as: the telemetry features it used. */
+  telemetry_used?: Record<string, unknown>;
+}
+
+/**
+ * An update's own move, which the engine reports since the mirror (DECISIONS C61): μ after minus
+ * before on each axis, and the versions it moved between. Absent from an engine older than that.
+ */
+export interface Moved {
+  delta?: number[];
+  version_before?: number;
+  version?: number;
 }
 
 /**

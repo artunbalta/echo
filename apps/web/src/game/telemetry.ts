@@ -111,6 +111,15 @@ export class LocomotionSampler {
     }
   }
 
+  /**
+   * The ground has changed frames under the walker (C57: a raft crossed into the next parcel's world,
+   * whose tiles are counted from another centre). The path so far is dropped, so no window spans the
+   * jump; the ground already counted as visited stays counted.
+   */
+  breakPath() {
+    this.samples = [];
+  }
+
   /** New day → novelty resets with the world (yesterday's ground can be novel again). */
   resetDay() {
     this.samples = [];

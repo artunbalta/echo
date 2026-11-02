@@ -491,6 +491,12 @@ export interface SkyLayer extends WorldLayer {
   sunDirection(out?: THREE.Vector3): THREE.Vector3;
   /** Unit vector TO the key light, which is the moon after dark. */
   keyDirection(out?: THREE.Vector3): THREE.Vector3;
+  /**
+   * The weather over the hour (C48): cloud greys the sky and dims the sun, fog pulls the air in,
+   * and a flash is lightning. Each is 0…1. The hour's own colours are computed first and these only
+   * lean on them, so night is still night under a cloud.
+   */
+  setWeather(w: { cloud: number; fog: number; flash?: number }): void;
 }
 
 export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
@@ -509,6 +515,8 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
   let key: THREE.DirectionalLight | null = null;
   let fill: THREE.HemisphereLight | null = null;
   let fog: THREE.Fog | null = null;
+  const weather = { cloud: 0, fog: 0, flash: 0 };
+  const overcast = new THREE.Color();
 
   const uniforms = {
     uZenith: { value: new THREE.Color() },
@@ -526,6 +534,21 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
    */
   const apply = () => {
     skyState(time, current);
+    // Weather leans on the hour (C48): an overcast sky is the hour's colours drawn toward their own
+    // grey, and the sun behind it is dimmer; lightning is a moment of white.
+    if (weather.cloud > 0 || weather.flash > 0) {
+      const lum = (c: THREE.Color) => 0.3 * c.r + 0.59 * c.g + 0.11 * c.b;
+      for (const c of [current.zenith, current.horizon]) {
+        const l = lum(c) * 0.92;
+        overcast.setRGB(l, l, l * 1.04);
+        c.lerp(overcast, Math.min(0.8, weather.cloud * 0.8));
+        if (weather.flash > 0) c.lerp(overcast.setRGB(0.92, 0.94, 1), weather.flash * 0.7);
+      }
+      current.keyIntensity *= 1 - 0.65 * weather.cloud;
+      current.fillIntensity *= 1 - 0.2 * weather.cloud;
+      current.keyIntensity += weather.flash * 2.5;
+      current.glow *= 1 - weather.cloud;
+    }
 
     uniforms.uZenith.value.copy(current.zenith);
     uniforms.uHorizon.value.copy(current.horizon);
@@ -545,7 +568,12 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
       fill.intensity = current.fillIntensity;
     }
     // The invariant the whole layer exists to keep: fog IS the sky's horizon stop.
-    if (fog) fog.color.copy(current.horizon);
+    if (fog) {
+      fog.color.copy(current.horizon);
+      // Fog weather pulls the air in toward the body (C48); clear air leaves the band where it was.
+      fog.near = Math.max(6, fogNear * (1 - 0.92 * weather.fog));
+      fog.far = Math.max(45, fogFar * (1 - 0.9 * weather.fog));
+    }
     // Duck-typed rather than `instanceof`, the way three tests its own objects: a scene handed in
     // from a different module record of three would fail the constructor check and silently stop
     // getting its clear colour.
@@ -680,6 +708,12 @@ export function skyLayer(options: SkyLayerOptions = {}): SkyLayer {
       rate = cyclesPerSecond;
     },
     state: () => current,
+    setWeather(w) {
+      weather.cloud = Math.max(0, Math.min(1, w.cloud));
+      weather.fog = Math.max(0, Math.min(1, w.fog));
+      weather.flash = Math.max(0, Math.min(1, w.flash ?? 0));
+      apply();
+    },
     sunDirection: (out = new THREE.Vector3()) => out.copy(current.sun),
     keyDirection: (out = new THREE.Vector3()) => out.copy(current.keyFrom),
   };

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getPersona, type PersonaSnapshot } from "@/lib/agent";
+import { IDENTITY_TOKEN_KEY, identityHeaders } from "@/lib/identity";
 
 interface Consent {
   world: boolean;
@@ -47,7 +48,7 @@ export default function Account() {
     try {
       const res = await fetch("/api/account/delete", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: identityHeaders(),
         body: JSON.stringify({ userId: uid }),
       });
       const body = (await res.json().catch(() => ({}))) as { supabaseTablesFailed?: string[] };
@@ -60,7 +61,13 @@ export default function Account() {
       setConfirming(false);
       return;
     }
-    ["echo.userId", "echo.name", "echo.consent", "echo.character"].forEach((k) => localStorage.removeItem(k));
+    // THE TOKEN GOES WITH THE ID. This list predates C39 and kept removing four keys while leaving
+    // `echo.identityToken` — a signature for a subject that no longer exists anywhere. The next
+    // visit minted a fresh anonymous id under the dead signature and every write was refused with
+    // identity_mismatch, permanently, because the mint short-circuited on "I have both keys".
+    // `tokenMatchesSubject` now heals a browser already in that state; this stops creating new ones,
+    // and leaving a credential behind after "erase everything" was never right on its own terms.
+    ["echo.userId", "echo.name", "echo.consent", "echo.character", IDENTITY_TOKEN_KEY].forEach((k) => localStorage.removeItem(k));
     setDeleted(true);
     setTimeout(() => router.push("/"), 1800);
   }

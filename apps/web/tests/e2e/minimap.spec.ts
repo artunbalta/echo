@@ -54,6 +54,8 @@ async function ready(page: Page, href: string) {
   await page.addInitScript(installProbe);
   await page.goto(href);
   await page.waitForSelector('[data-phase="ready"]', { timeout: 120_000 });
+  // The map is folded until asked for (DECISIONS C68), so the test asks, as a person would.
+  await page.locator("[data-hud-map][aria-pressed='false']").click();
   await page.waitForSelector('[data-minimap="ready"]', { timeout: 60_000 });
 }
 

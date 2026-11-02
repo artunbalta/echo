@@ -55,19 +55,36 @@
  * when this route was terrain and a player, so it is the route's input that wants a guard, not this
  * list, but nobody should discover it from a spinner.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { CROSSING, cellAtLocal, outsideBy, type Home, type LifeChange, type Look, type WorldEffect } from "@echo/planet";
 
 import ConsentCard from "@/components/world/ConsentCard";
 import TouchControls from "@/components/world/TouchControls";
 import Inspector, { useMeasureChain, type ReactionReading } from "@/components/world/Inspector";
-import Minimap from "@/components/world/Minimap";
 import RecognitionMeter from "@/components/world/RecognitionMeter";
+import Mirror from "@/components/world/Mirror";
+import Director from "@/components/world/Director";
+import DemoOverlay, { type DemoSettings } from "@/components/demo/DemoOverlay";
+import PilotOverlay, { type PilotSettings } from "@/components/pilot/PilotOverlay";
+import EchoAway from "@/components/world/EchoAway";
+import EchoMeeting from "@/components/world/EchoMeeting";
+import EchoPairs from "@/components/world/EchoPairs";
+import ReportPanel from "@/components/world/ReportPanel";
+import Interact from "@/components/world/Interact";
+import Gatherings from "@/components/world/Gatherings";
+import VillagerTalk from "@/components/world/VillagerTalk";
 import WorldCanvas from "@/components/world/WorldCanvas";
+import WorldHud from "@/components/world/WorldHud";
 import { createMeasureChain, type MeasureChain } from "@/game/world/measure";
 import { parcelLayers, sliceOptionsFor } from "@/game/world/parcelWorld";
 import { createTouchControls } from "@/game/world/touchInput";
 import { useCoarsePointer } from "@/lib/pointerKind";
+import type { InteractLayer } from "@/game/world/interactLayer";
 import type { PlayerLayer } from "@/game/world/playerLayer";
+import { carryHandoff } from "@/game/world/crossTo";
+import type { HomeLayer } from "@/game/world/homeLayer";
+import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { WalkLayer } from "@/game/world/walkLayer";
@@ -81,14 +98,23 @@ export interface ParcelCanvasProps {
   radiusKm: number;
   /** Ring count of the built disk; 1 is the cell and its six neighbours. */
   k?: number;
+  /** The world's commons cells, which a settled parcel needs to build its village (DECISIONS C41). */
+  commons?: readonly string[];
   /**
    * The furniture this cell is allowed to stand, as the SERVER resolved it. Null is an ordinary
    * parcel and is the only answer any cell but the demo cell can get, whatever the URL asked for.
    */
   stations?: StationSet | null;
+  /** A demo visitor's five minutes (C72): the director at a demo's pace, the clock, their voice, the meeting. */
+  demo?: DemoSettings | null;
+  /**
+   * A pilot visit (C75): the pilot's six at the pilot's pace, the clock, and nothing that shows how the
+   * echo reads you while you play (no meter, no mirror, no inspector, no meetings).
+   */
+  pilot?: PilotSettings | null;
 }
 
-export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCanvasProps) {
+export default function ParcelCanvas({ stations = null, demo = null, pilot = null, ...manifest }: ParcelCanvasProps) {
   // One chain for the life of the page. It arms itself if this browser has already consented.
   //
   // It is deliberately never disposed. Disposal is the right thing on a real unmount, and it is
@@ -145,12 +171,176 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
     [chain, touch, stations, onReaction],
   );
 
+  // The village's changes (C44), fetched BEFORE the world is built so the browser generates the same
+  // people the talk route does. One small request; a parcel with no commons has no village and does
+  // not wait, and a request that fails or takes too long builds the seed's village, as the route would.
+  const hasVillage = Boolean(manifest.commons);
+  const [changes, setChanges] = useState<readonly LifeChange[] | null>(hasVillage ? null : []);
+  // The marks acts have left (C45), from the same request: drawn by the interact layer once it exists.
+  const marks = useRef<readonly WorldEffect[]>([]);
+  useEffect(() => {
+    if (!hasVillage) return;
+    let live = true;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 2500);
+    fetch(`/api/village/changes?cell=${encodeURIComponent(manifest.cell)}`, { signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { changes?: LifeChange[]; effects?: WorldEffect[] } | null) => {
+        if (!live) return;
+        marks.current = Array.isArray(d?.effects) ? d.effects : [];
+        setChanges(Array.isArray(d?.changes) ? d.changes : []);
+      })
+      .catch(() => {
+        if (live) setChanges([]);
+      })
+      .finally(() => clearTimeout(timer));
+    return () => {
+      live = false;
+      ctl.abort();
+      clearTimeout(timer);
+    };
+  }, [manifest.cell, hasVillage]);
+
+  // ── crossing to the next parcel by raft (C57) ─────────────────────────────────────
+  // The parcel the person is in now. It starts as the page's and moves when a raft crosses; the
+  // world canvas keeps the page's, so it never rebuilds — the crossing hands it a successor instead.
+  const [here, setHere] = useState(manifest.cell);
+  /** Whose shore it is, once a raft has brought the person to one that is not the page's. */
+  const [hereName, setHereName] = useState<string | null>(null);
+  const [shore, setShore] = useState(false);
+  const adopt = useRef<((next: PlanetWorld) => void) | null>(null);
+  useEffect(() => {
+    type Job = { cell: string; next: PlanetWorld | null; dropped: boolean };
+    let job: Job | null = null;
+    let live = true;
+    const drop = () => {
+      if (!job) return;
+      job.dropped = true;
+      job.next?.dispose();
+      job = null;
+    };
+    const prepare = async (j: Job, from: PlanetWorld) => {
+      // The next parcel's village as conversations have changed it, and its marks, as on a first visit.
+      let changesThere: LifeChange[] = [];
+      let marksThere: WorldEffect[] = [];
+      try {
+        const r = await fetch(`/api/village/changes?cell=${encodeURIComponent(j.cell)}`);
+        const d = r.ok ? ((await r.json()) as { changes?: LifeChange[]; effects?: WorldEffect[] }) : null;
+        changesThere = Array.isArray(d?.changes) ? d.changes : [];
+        marksThere = Array.isArray(d?.effects) ? d.effects : [];
+      } catch {
+        // The seed's village: what a first visit would see if the store were down.
+      }
+      if (j.dropped || !live) return;
+      const next = from.successor({ cell: j.cell, changes: changesThere });
+      j.next = next;
+      for (const layer of parcelLayers({ chain, touch })) next.addLayer(layer);
+      try {
+        await next.start();
+      } catch {
+        if (job === j) drop();
+        return;
+      }
+      if (j.dropped || !live || job !== j || world.current !== from) {
+        if (job === j) drop();
+        else next.dispose();
+        return;
+      }
+      // The body, the raft, its speed and the eye behind it, carried into the next frame.
+      const fromPlayer = from.context().layer<PlayerLayer>("player");
+      const toPlayer = next.context().layer<PlayerLayer>("player");
+      const carried = fromPlayer && toPlayer ? carryHandoff(fromPlayer.handOff(), from.frame, next.frame) : null;
+      if (!carried || !toPlayer || !fromPlayer?.onRaft()) {
+        drop();
+        return;
+      }
+      toPlayer.adopt(carried);
+      next.context().layer<InteractLayer>("interact")?.setMarks(marksThere);
+      job = null;
+      // In one task: the old world gives up the renderer and goes, the new one starts drawing.
+      from.handOver(next);
+      from.dispose();
+      chain.breakPath();
+      next.wake();
+      adopt.current?.(next);
+      setHere(j.cell);
+      setHereName(next.region.village?.settlement.name ?? null);
+      setShore(true);
+      try {
+        window.history.replaceState(window.history.state, "", `/parcel/${j.cell}${window.location.search}`);
+      } catch {
+        // The address is a convenience; the crossing has happened either way.
+      }
+    };
+    const watch = setInterval(() => {
+      const from = world.current;
+      if (!from || from.phase !== "ready") return;
+      const ctx = from.context();
+      const player = ctx.layer<PlayerLayer>("player");
+      if (!player) return;
+      const at = player.position();
+      const [xm, ym] = ctx.frame.toLocalM(at.x, at.y);
+      // Only the stranger's own raft crosses, and only once it is well past the line.
+      const want = player.onRaft() && outsideBy(ctx.frame.patch, xm, ym) >= CROSSING.intoM ? cellAtLocal(ctx.frame.patch, xm, ym) : null;
+      if (job && job.cell !== want) drop();
+      if (!want || job) return;
+      job = { cell: want, next: null, dropped: false };
+      void prepare(job, from);
+    }, 400);
+    return () => {
+      live = false;
+      clearInterval(watch);
+      drop();
+    };
+  }, [chain, touch]);
+
+  // ── your own land and house (C59) ─────────────────────────────────────────────────
+  // Whose land this is and what stands on it, asked of the home route for the parcel the person is
+  // on now, and handed to whichever world is showing it. Before the consent card is answered there
+  // is no identity to ask with, so it asks again once there is.
+  const homeState = useRef<{ cell: string; home: Home | null; owner: boolean; look: Look | null } | null>(null);
+  const [owned, setOwned] = useState(false);
+  const applyHome = useCallback((w: PlanetWorld | null) => {
+    const st = homeState.current;
+    if (!w || !st || w.region.cell !== st.cell) return;
+    w.context().layer<HomeLayer>("home")?.setHome({ home: st.home, owner: st.owner });
+    if (st.look) w.context().layer<PlayerLayer>("player")?.setLook(st.look);
+  }, []);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        if (consent !== "unset") await ensureIdentity();
+        const r = await fetch(`/api/home?cell=${encodeURIComponent(here)}`, { headers: consent !== "unset" ? identityHeaders() : {} });
+        const d = r.ok ? ((await r.json()) as { owner?: boolean; home?: Home | null; look?: Look | null }) : null;
+        if (!live || !d) return;
+        homeState.current = { cell: here, home: d.home ?? null, owner: Boolean(d.owner), look: d.look ?? null };
+        setOwned(Boolean(d.owner));
+        applyHome(world.current);
+      } catch {
+        // No house to show; the land is still the land.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [here, consent, applyHome]);
+
+  if (changes === null) return <div className="relative h-full w-full" data-phase="changes" />;
+
   return (
     <WorldCanvas
       {...manifest}
+      changes={changes}
       layers={layers}
-      onWorld={(w) => {
+      onWorld={(w, adoptNext) => {
+        const first = world.current === null;
         world.current = w;
+        adopt.current = adoptNext;
+        // The page's own marks go on the page's own world; a crossed-into world brought its own.
+        if (first) w?.context().layer<InteractLayer>("interact")?.setMarks(marks.current);
+        if (first && w) setHereName(w.region.village?.settlement.name ?? null);
+        applyHome(w);
       }}
       className="relative h-full w-full"
     >
@@ -159,70 +349,83 @@ export default function ParcelCanvas({ stations = null, ...manifest }: ParcelCan
           absent attribute cannot tell a parcel with no stations apart from a HUD that has not
           rendered yet, and the thing worth testing is precisely that a refused parameter left
           this saying "none". */}
-      {/* On a narrow screen this moves OUT of the bottom-left corner, because that corner is where
-          a left thumb goes and a 366 px card there is 94% of the width. It stacks into the top-left
-          column instead, under the meter, and the whole card is `max-sm:` — a WIDTH question, which
-          CSS can answer on its own, and deliberately not the coarse-pointer question, which decides
-          something else (whether the controls exist at all) and is asked in JavaScript. */}
-      <div
-        data-stations={stations ?? "none"}
-        className="pointer-events-none absolute bottom-6 left-6 rounded-2xl border border-white/15 bg-[#192a20]/75 px-5 py-4 text-xs text-[#f4f2e4]/80 backdrop-blur-xl max-sm:bottom-auto max-sm:left-3 max-sm:top-[5.5rem] max-sm:w-[58vw] max-sm:rounded-xl max-sm:px-3 max-sm:py-2"
-      >
-        <p className="font-serif text-xl text-[#e4edcd] max-sm:text-base">Your corner of the world</p>
-        <p className="mt-1 text-[10px] tracking-widest text-white/40">{manifest.cell}</p>
-        {/* The legend has to be true on the device reading it. It said Shift and Space to people
-            holding a phone, which is the one instruction on the route. */}
-        <p className="mt-2 text-[#f4e9d0]/45 max-sm:text-[10px] max-sm:leading-relaxed">
-          {coarse
-            ? "Stick · Walk　 Push far · Run　 Drag · Look　 Pinch · Zoom"
-            : "W A S D · Walk　 Shift · Run　 Space · Jump　 Drag · Look"}
-        </p>
-        <p className="mt-1 text-[#f4e9d0]/30 max-sm:text-[10px]">
-          {coarse ? "` opens the inspector, and so does the button" : "` opens the inspector"}
-        </p>
-      </div>
+      <span hidden data-stations={stations ?? "none"} />
+
+      {/* The place, the meter, the news, the map, the menu and the way back (C68): one HUD where
+          there were five cards. */}
+      <WorldHud
+        world={() => world.current}
+        name={hereName}
+        owned={owned}
+        shore={shore}
+        cell={here}
+        coarse={coarse}
+        consent={consent}
+        inspecting={inspecting}
+        onToggleInspector={() => setInspecting((v) => !v)}
+        study={!!pilot}
+        meter={
+          // Handed the same chain state the inspector gets, so the glance and the panel cannot
+          // disagree; what it may say about it is decided in recognitionReading.ts. None in a pilot visit.
+          pilot ? null : <RecognitionMeter posterior={posterior} log={log} consent={consent} onInspect={() => setInspecting((v) => !v)} />
+        }
+      />
 
       {/* The beat's line, and nothing that names what to look for: the slice is judged on whether
           a person notices the consequence unprompted. */}
       {beat ? (
-        <p className="pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2 font-pixel text-sm text-[#f4e9d0]/80 max-sm:bottom-[13rem] max-sm:w-[80vw] max-sm:text-center [text-shadow:0_1px_12px_rgba(18,12,25,0.9)]">
+        <p className="hud-shadow hud-in pointer-events-none absolute bottom-28 left-1/2 -translate-x-1/2 font-serif text-[15px] text-parchment/85 max-sm:bottom-[13rem] max-sm:w-[80vw] max-sm:text-center">
           {beat}
         </p>
       ) : null}
 
-      {/* Where you are in your parcel and where the parcel is on the planet. It reads the world
-          out of the same ref the walk tally does, so it can never be handed a world this mount is
-          not showing. */}
-      <Minimap world={() => world.current} />
-
       <ConsentCard consent={consent} onAccept={() => chain.accept()} onDecline={() => chain.decline()} />
 
-      {/* The one thing a person can read without knowing a key exists. It is handed the same chain
-          state the inspector gets, so the glance and the panel cannot disagree; what it may say
-          about it is decided in recognitionReading.ts. */}
-      <RecognitionMeter posterior={posterior} log={log} consent={consent} />
+      {/* Talking to a villager, where the cell has a village (C42). It reads the villagers layer out of
+          the same ref the minimap does, so a parcel with no village simply never shows it. */}
+      <VillagerTalk world={() => world.current} cell={here} consent={consent} coarse={coarse} />
+
+      {/* Everything within reach, and the act (C45): one prompt, the registry's verbs, the echo and
+          the village told. It opens the conversation above with `T`. */}
+      <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} />
+      <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
+      {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
+      <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={pilot ? "pilot" : demo ? "demo" : "world"} />
+      {pilot ? (
+        <PilotOverlay pilot={pilot} />
+      ) : (
+        <>
+          {/* What your echo did while you were away, and where it waits (C64). */}
+          <EchoAway world={() => world.current} cell={here} consent={consent} />
+          {/* Your echo and a friend's, met while you were both away (C71); and whom yours may meet. */}
+          <EchoMeeting world={() => world.current} cell={here} consent={consent} guide={!!demo} />
+          {demo ? <DemoOverlay demo={demo} /> : null}
+          <EchoPairs consent={consent} />
+          {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
+          <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
+        </>
+      )}
+      <ReportPanel cell={here} />
 
       {/* Exactly one of these two is ever passed, and which one IS the mode: reactions where there
-          are stations to react, the walk tally where there are none. */}
-      <Inspector
-        posterior={posterior}
-        log={log}
-        consent={consent}
-        onRevoke={() => chain.revoke()}
-        reactions={stations ? reactions : undefined}
-        walk={stations ? undefined : walk}
-        open={inspecting}
-        onOpenChange={setInspecting}
-      />
+          are stations to react, the walk tally where there are none. Not in a pilot visit (C75). */}
+      {pilot ? null : (
+        <Inspector
+          posterior={posterior}
+          log={log}
+          consent={consent}
+          onRevoke={() => chain.revoke()}
+          reactions={stations ? reactions : undefined}
+          walk={stations ? undefined : walk}
+          open={inspecting}
+          onOpenChange={setInspecting}
+        />
+      )}
 
       {/* Last, so it paints over the HUD it shares a screen with, and only where there is a thumb to
           use it. The consent card is answered first: see the header. */}
       {coarse && consent !== "unset" ? (
-        <TouchControls
-          handle={touch}
-          inspecting={inspecting}
-          onToggleInspector={() => setInspecting((v) => !v)}
-        />
+        <TouchControls handle={touch} />
       ) : null}
     </WorldCanvas>
   );

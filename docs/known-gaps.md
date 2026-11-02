@@ -1163,6 +1163,13 @@ posteriors is circular by construction: those posteriors were produced BY the co
   "no TTL, no expiry column, no pruning job" is now true of five more tables. This makes the rows
   unreadable by the public; it does not make them go away.
 - **Status:** CLOSED. `db/migrations/0015_rls_on_0001.sql`.
+- **CORRECTED 2026-09-14, and the correction is in the title.** *Sixteen* was the number of tables
+  0015 CHANGED, not the number that needed changing. This entry reasoned "all sixteen, not the four
+  I touched — the four would have been arbitrary", which was the right instinct applied to the wrong
+  set: it scoped itself to what `0001` created and never re-counted the folder. MEASURED on
+  `b22c3d4`: **20 of 30 public tables had RLS.** Ten did not, including `connection_analyses`, whose
+  `transcript_json` holds the full `[{who,text}]` exchange. This flag was closed at 61%. The
+  remainder, and the gate that stops a third round of the same arithmetic, are `⚑29`.
 
 ## ⚑ 26. Erasure said "your data is gone" three different ways it could not know (2026-09-09)
 
@@ -1247,7 +1254,9 @@ which says "the same someone" without saying who, and NPC ids ride a separate sy
 NPC's id is not a credential.
 
 All three routes named above derive their subject from an HMAC signature instead of reading it out of
-the request — 16 of 19 id-bearing routes do, the exceptions being `auth/sync` (which verifies a
+the request — 16 of 19 id-bearing routes do, **and that sentence is the one `⚑28` is about: 16 counts
+ROUTE FILES containing `subjectOf`, and one file exports two verbs with one guard.** The exceptions
+being `auth/sync` (which verifies a
 Supabase token and always did), `identity/session` (which accepts no id) and `narrate` (which declares
 a `userId` it never reads). The room join is verified by `WorldRoom.onAuth` using the **same function**
 the routes use, imported from `@echo/shared/identity` rather than restated, because a policy written
@@ -1256,3 +1265,1135 @@ twice is a policy that drifts.
 **What is NOT closed by this, and is stated in `C39` rather than left to be discovered:** rollout
 orphans every existing anonymous echo, because the minter refuses to sign an id handed to it. That is
 the same loss as clearing site data — but once to everyone, rather than one person at a time.
+
+---
+
+## ⚑ 28. C39 guarded the route FILES; one file has two verbs, and no client ever sent the signature (2026-09-14)
+
+**`POST /api/island/state` never called `subjectOf`.** `route.ts:51-59` derived the GET's subject and
+loaded under `caller.subject`; the POST at `:67-87` read `userId` out of the body and handed it to
+`saveIslandState` at `:83`. So the island day state — a person's crop, raft, scarcity and tie warmth,
+and on a configured deployment a durable Supabase row — **was read-refused and write-open at the same
+time.** Anyone holding a user id could overwrite it while its owner could not read it back.
+
+**WHY THE RECORD SAID OTHERWISE, AND IT IS AN ARITHMETIC SHAPE, NOT A LIE.** `C39` and `⚑27` both say
+"16 of 19 id-bearing routes are guarded". MEASURED: `grep -rl subjectOf apps/web/src/app/api` returns
+exactly 16 files and 19 route files are id-bearing, so the sentence was true throughout. **The unit is
+the file.** `island/state` is the only **id-bearing** route in the tree that exports two verbs — `waitlist/route.ts` exports POST and GET too, and carries no id at all (MEASURED: zero hits for `userId|uid|ownerId|user_id`), which is why it cannot have this defect, so it is the only
+place where a file could be counted as guarded while a handler was not. A count over files cannot see
+inside one.
+
+**THE SECOND HALF IS LARGER: MOST BROWSER CALL SITES SENT NO SIGNATURE AT ALL.** **30 of 33 browser fetch expressions to guarded routes sent no signature** — 27 sending `content-type` alone and 3 sending no headers at all. (Across 23 of 26 distinct *(file, route)* pairs; the first published figure here was "23 of 31", which took its numerator from the pair count and its denominator from neither — an L6 slip inside the entry about a count that could not fail. Both units are stated now, because the fix is counted in expressions and the defect reads naturally in pairs.) MEASURED on
+`b22c3d4` by enumerating every `fetch` in `apps/web/src` that targets a route containing `subjectOf`.
+`identityHeaders()` existed — as a closure inside `createMeasureChain` (`measure.ts:257`), reachable
+by the three routes the parcel chain calls and by nothing else. Everything outside that chain — the
+whole day loop, `/flow0`, `/flow1`, `/flow4`, `/flow5`, `/claim`, `/account`, and every one of
+`lib/agent.ts`'s five calls — sent `content-type` and nothing else, so **every one of those routes had
+been answering 403 to its only caller since C39 shipped**, silently: each call site swallows its own
+failure (`.catch(() => {})`, `if (res.ok)`), which is what the swallow is for. A header policy living
+in one component's closure is a policy three other components do not have (L5).
+
+**AND `/play` NEVER MINTED A TOKEN, so the shared world was dead on the canonical path.**
+`WorldClient.tsx` joined with `token: identityToken()`, which only READS `localStorage`.
+`ensureIdentity` — the only thing that mints — was called from exactly one place in the tree,
+`measure.ts:393`, the parcel measure chain. The canonical route to the world is landing → `/onboard`
+→ `/play`, and `/onboard` does not require sign-in: `page.tsx:67` calls `resolveUserId()`, which
+stamps an id with **no signature**. So in production `WorldRoom.onAuth` threw `identity_no-identity`,
+`WorldClient.tsx:1486-1493` caught it, set offline and started the solo world. **The failure mode was
+not an error anyone would see. It was an empty ocean.** A player was told nothing; the world simply
+looked unpopulated. **AND THE OUTAGE WAS TOTAL, not partial.** The first version of this entry said
+"only a browser that had signed in through `AuthModal` could join at all", which describes an EMPTY
+POPULATION: `AuthModal.tsx` is imported by nothing — `app/page.tsx:41` says so in as many words, "NO
+AUTH. The header's Log in, the hero's two auth buttons and `AuthModal` are all gone (§6)". So the one
+path in the tree that called `storeIdentity` with `/api/auth/sync`'s token was unreachable, and
+**nothing in the shipped product minted a token for the shared world at all.** The sentence sized a
+total outage as a partial one, which is the same failure as the count above: a claim about coverage
+written from a grep rather than from a call graph.
+
+**A FOURTH THING, FOUND WHILE FIXING THE THIRD.** `/account`'s erase removed four localStorage keys
+and not `echo.identityToken`. `resolveUserId` then minted a fresh anonymous id beside last life's
+signature, and `ensureIdentity` short-circuited on `existing && identityToken()` — **both keys
+present, so no mint** — leaving every write refused with `identity_mismatch` permanently, because the
+only thing that could have re-minted was the thing that returned early. No reload healed it.
+
+**Acted on, and the gate is the point.**
+
+- The POST derives its subject and writes under `caller.subject`, not the asserted string — the
+  fourth test is the one that separates a guard from a fix, because a guard that then writes wherever
+  the caller pointed is decoration.
+- `apps/web/tests/islandState.test.mts` drives the REAL route handler, not a copy of its branch.
+  **It was checked that it fails when the defect returns: 3 fail / 1 pass with the guard removed and
+  the asserted string restored, 4 pass with the fix.** The one that stays green is the one that
+  should — "the legitimate caller is not the casualty" is true either way, and it is a regression
+  guard rather than a gate.
+- `identityHeaders()` moved to `lib/identity.ts` and all 30 bare expressions go through it. It carries
+  one rule the closure did not need: **a `?u=` override sends NO token.** `subjectFor` checks the
+  token branch before the relaxation, so a browser profile that had ever held a token would present
+  it beside `?u=alice` and be refused — which would break the two-tab harness `verify-3d-render.md`
+  depends on, and `?u=` is the only mechanism in the tree that yields two identities in one profile.
+  The Colyseus join asks `outboundIdentityToken()` for the same reason through a different transport.
+- `/play` awaits the mint **before** `world.init`, so the subject is settled before any world
+  callback exists and `uid` is set exactly once — setting it twice would re-run `useDay`'s load
+  effect under a new id and reset a returning player to day 0.
+- The mint is memoized on a module-level in-flight promise. `next.config.mjs` sets
+  `reactStrictMode: true`, so the effect that calls it is double-invoked in dev, and nothing was
+  memoized: two callers both failed the early return, both POSTed, and `identity/session` minted two
+  different subjects. The last response won `localStorage` while the other caller kept the id it was
+  handed — one subject, the other's token, `identity_mismatch`.
+- The early return now requires that the stored token actually covers the stored id
+  (`tokenMatchesSubject`, `packages/shared/src/identityFormat.ts`), so a browser already in the
+  erased state heals itself on the next visit rather than staying refused forever. The erase list
+  also drops the token now, which was never right on its own terms: leaving a credential behind after
+  "erase everything" is its own answer.
+
+**Status:** CLOSED for the server half and for the two surfaces that matter; **PARTIAL on the client,
+deliberately, and the remainder is named below.** The first version of this entry said CLOSED flatly,
+which was the same mistake it was opened about — plumbing counted as behaviour. **Routing a call site
+through `identityHeaders()` does not make it send a signature; it makes it send one IF THE BROWSER HAS
+ONE.** `ensureIdentity` has three callers: `arm()`, `/play` and `/claim`. So on a cold browser
+`/flow0`, `/flow1`, `/flow4`, `/flow5` and `/account` still send nothing and are still refused.
+
+**That remainder is a decision, not an oversight.** For the four flow pages, minting is exactly what
+C39 REMOVED: `Flow0Client` is the file the second minter was deleted from, and adding one back under
+a different name would be the same act before the same question. They run under `?u=` and the
+relaxation, which is what the harnesses use; in production they write unsigned and are refused.
+`/account` is sharper and worse: a browser with no token cannot prove the subject whose data it is
+asking to erase, so "delete everything" is refused for precisely the people who never signed in.
+**Both are open. Neither is closed by this entry, and the fix for either is a consent question about
+where that surface asks — not a line of plumbing.**
+
+**UPDATE 2026-09-14 — `/onboard` MINTS NOW, which was the largest piece of this remainder** and is
+closed under `⚑30`, because guarding the two paid routes required it. The consent rule is satisfied by
+the step order rather than by an argument: `Step` is `"consent" | "select" | "selfie" | "reveal"`, the
+initial state is `"consent"`, and the only exit is the Continue button — so `resolveUserId` was
+ALREADY stamping a durable key there, after the answer. Minting a signed id at the same point changes
+what is stamped, not when. With it, the "every brand-new player is stamped unsigned and replaced on
+their first `/play`" property above is gone, and with it the island relocation and the leaked slot for
+new players. **An existing player whose island was assigned under an unsigned id still relocates
+once** — the mint moved earlier, it did not become retroactive. `ensureIdentity` now has four callers:
+`arm()`, `/play`, `/claim`, `/onboard`. The flow pages and `/account` are still open, unchanged.
+
+The consent rule `identity.ts` states is unchanged and now has three callers rather than one: `/play`
+is behind a render gate that will not mount `WorldClient` until `echo.character` exists, and
+`/onboard` writes `echo.consent` before it writes that; `/claim` asks no consent question a stamped
+key would answer early and already promises the identifier is permanent, which is the case SOC-2.B
+makes for it in its own words. It is not the mistake C39 removed — `Flow0Client` was a SECOND MINTER
+of a different form (`"u_" + Math.random()`), writing pre-consent.
+
+**TWO COSTS THIS ENTRY DID NOT NAME WHEN IT WAS WRITTEN, both found by review.**
+
+*The re-mint moves your island and leaks a slot.* A browser holding an unsigned id X gets a signed
+Y, and `/api/island/assign` then assigns under Y: `archipelago.ts:191-194` returns an existing
+assignment only for a matching userId, `0005_island_slots.sql:12` puts a UNIQUE index on
+`slot_index`, and `island-registry.ts`'s `remove()` is never called on this path. So X's row holds
+its slot forever and the player's island relocates. C39 disclosed the orphaning of evidence; it did
+not disclose that the island moves.
+
+*And it is not "once to everyone at rollout", which is how `identity/session/route.ts:16-17` and C39
+both describe it.* `onboard/page.tsx:66-67` calls `resolveUserId()` during character creation and
+`:147` then pushes to `/play`, so **every brand-new player is stamped with an unsigned id and has it
+replaced on their first visit to the world — permanently, as a standing property of the flow.** It
+costs nothing today because nothing durable is written under the first id, but the record describes
+a migration where the code has an invariant. The honest fix is for `/onboard` to mint, since it is
+the surface that asks the consent question; that is a change to the onboarding flow and is not taken
+here.
+
+**What this does NOT close:** `harness/f4/f4_capture.py` sends no Authorization header either, so the
+F4 acceptance harness has been failing its first GET since that route was gated and reporting it as
+`[INFRA] could not reach the no-flag server`. It is a harness, not a product surface, and it is not in
+any gate list — but it is the same defect and it is still open.
+
+---
+
+## ⚑ 29. RLS was closed on a count of sixteen; the real number was twenty-six (2026-09-14)
+
+**`⚑25` closed at 61%.** MEASURED on `b22c3d4`: **20 of 30 public tables had row level security.**
+0015 enabled it for the sixteen tables `0001_init.sql` created and never re-counted the folder, so the
+ten created by `0002`, `0003`, `0004`, `0006` and `0009` were never in scope. `0015:8-10` states the
+exposure in its own words — with RLS disabled, PostgREST serves a table to anyone holding the anon
+key, **which ships in the browser bundle by definition** — and `lib/config.ts:4` is that key.
+
+**Four of the ten are live, and one of them is the reason this is not housekeeping.**
+`connection_analyses` (`0002:5`) carries `user_id` and `transcript_json`, the full `[{who,text}]`
+exchange — the same sensitivity class as `messages.text`, which `lib/retention.ts:44-48` marks with a
+⚠️. The others: `island_validation` (`0003:6`), `islands` (`0004:6`, `owner_user_id`) and
+`island_state` (`0006:7`), which is also `⚑28`'s table. The remaining six are `0009`'s planet
+registry, which has no writers until SOC-2.A because `lib/planet.ts:99` hardcodes `backend: "memory"`
+— RLS before the first row is free, and this folder is forward-only.
+
+**MEASURED, on PostgreSQL 16.15, against a database the runner built from this folder.** Granting
+`anon` the table privileges Supabase grants, and inserting one row:
+
+| | anon reads | anon deletes |
+|---|---|---|
+| with `0017` | **0 rows** | — |
+| with RLS disabled in the same transaction | **1 row, and the transcript text with it** | **1 row it does not own** |
+
+**THE MIGRATION IS GUARDED PER TABLE, AND THAT IS NOT DEFENSIVENESS.** `scripts/migrate.mjs:130-143`
+runs a whole file in ONE transaction, so one missing relation aborts all of it and records nothing. A
+database migrated by hand and adopted with `--baseline` has `0009` **recorded as applied and not
+run** — the expected production shape, because the planet registry has never been deployed. MEASURED
+end to end through the real runner: a bare `alter table world_manifest …` fails such a database with
+`relation "world_manifest" does not exist`, **the four live tables get nothing**, and every later
+`--apply` fails identically because `0009` will never run. The operator is handed an error naming a
+parcel table with no personal data while the transcript table stays open — SOCIETY-PLAN §3 item 8's
+species exactly. With the guard: **24 of 24 on that database, the four live tables covered**, and the
+six absent ones skipped with a notice. On a fully migrated database: **30 of 30, zero policies.**
+
+**THE ELEVENTH TABLE IS A GATE, NOT A MIGRATION.** This invariant has now been broken twice by one
+mechanism — a migration covers what it can see, later migrations add tables, nobody re-counts — so
+`.github/workflows/ci.yml` asserts it against the schema the runner just built: every public table has
+`rowsecurity`, and `pg_policies` is empty. **Verified to fire in both directions:** green at 30 of 30,
+red on a table created without RLS, red on a policy added. A loop over `pg_tables` inside the
+migration would have covered the eleventh table too, and was rejected — it would silently enable RLS
+on tables nobody has looked at, in a forward-only folder, which is the opposite of the per-table
+decision 0015 documented.
+
+**Status:** CLOSED. `db/migrations/0017_rls_on_0002_0009.sql` plus the CI gate.
+
+**What this does NOT close, and it is owed to C35:** `connection_analyses` and `island_validation` are
+in NEITHER of `lib/retention.ts`'s lists, and that file says in its own words that "a table in neither
+list is a table nobody has decided about". C35 classified thirteen identity-keyed tables and did not
+see these two. Making rows unreadable by the public does not decide how long they live — and
+`connection_analyses` holds the transcripts `messages` is already on a clock for.
+
+---
+
+## ⚑ 30. Two routes spent real money for anybody who asked, and one of them fetched a URL of their choosing (2026-09-14)
+
+**`POST /api/vision` and `POST /api/portrait` had no gate of any kind.** MEASURED: zero `subjectOf`
+in either file, no input cap in either, and the repo's only rate limiter is the waitlist's — whose
+own comment says why it exists, *"Rate limiting matters more here than it looks: the selfie path
+spends real image-generation money"*, about this exact path. `/api/vision` forwards a caller-supplied
+base64 image to `api.anthropic.com`; `/api/portrait` sends a caller-supplied prompt to Fal or
+Higgsfield. MEASURED before the fix: a 5 MB base64 selfie was forwarded verbatim as a **5,243,524-byte
+request body**, from a request that proved nothing about who sent it.
+
+**THE WORST OF IT WAS NOT THE MONEY.** `/api/portrait` read `selfieUrl` out of the body and handed it
+to `generatePortrait`, which sets `input.image_url = req.selfieUrl` (`lib/art/fal.ts`) or
+`InputImage.fromUrl(req.selfieUrl)` (`lib/art/higgsfield.ts`). So an unauthenticated caller could make
+**this project's paid image-generation account fetch an arbitrary URL of their choosing** and
+generate from it, on this project's credentials. MEASURED: the field had **no sender**.
+`lib/character.ts`'s `fetchPortrait` posts `{ attributes }` and nothing else, and every other
+`selfieUrl` in the tree belongs to the waitlist portrait pipeline, which is server-side and uploads to
+fal storage itself. A dead parameter, wired straight through to a paid backend.
+
+**WHY IT COULD NOT BE CLOSED UNTIL NOW, and what closed it.** Guarding these two needs the caller to
+hold a signature, and the caller is onboarding — which was `⚑28`'s named remainder: `/onboard` called
+`resolveUserId()`, stamping a durable id with no signature. The step order settles the consent
+question rather than arguing it: `Step` is `"consent" | "select" | "selfie" | "reveal"`, the initial
+state is `"consent"`, and the only exit is the Continue button — so every paid call already happened
+*after* the answer, and `resolveUserId` was already stamping a durable key there. Minting a **signed**
+id at the same point changes *what* is stamped, not *when*. The selfie path is additionally gated on
+`consent.biometric` (`onboard/page.tsx:235` disables the button), so `/api/vision` is unreachable
+without explicit biometric consent.
+
+**Acted on.**
+
+- Both routes derive a subject. This is the tree's **first `subjectOf(req)` with no asserted id** —
+  every other call site passes one — which answers with the token's own subject and refuses a caller
+  with no token. Stated as a new pattern rather than left to be inferred.
+- `MAX_SELFIE_CHARS` 512 KB and `MAX_ATTRIBUTE_CHARS` 4 KB, both refused with 413 **before** any
+  provider call. The product's own capture is a 384×384 JPEG at quality 0.9 — an order of magnitude
+  under the cap.
+- `selfieUrl` is **gone from `PortraitRequest` and from both providers**, not filtered at the route.
+  That is `⚑27`'s move for `ownerId`: the passthrough cannot come back without a type change, so a
+  later author adding it out of symmetry has nothing to add it to.
+- `/onboard` mints, closing `⚑28`'s largest remainder. The mint is fired when the consent question is
+  answered and awaited where it is needed, so its round trip overlaps with choosing a character
+  instead of sitting in front of the first paid call.
+- `lib/character.ts` sends `identityHeaders()` — the other half of `⚑28`, on this path.
+- `apps/web/tests/paidRoutes.test.mts`, seven tests, driving the REAL handlers with `globalThis.fetch`
+  replaced by a recorder. **The outbound assertion is the one that matters:** a route can answer 403
+  and still have called the provider, and `/api/vision` degrades to a mock on any error, so a test
+  that only read the status would pass on a route that refuses *after* spending. MEASURED, each
+  defect turning exactly one test red: guard removed → `an unsigned caller cannot spend…` (6 pass /
+  1 fail) · cap removed → `an oversized selfie is refused BEFORE the provider…` (6/1) · portrait
+  guard removed → `an unsigned caller cannot spend the project's image-generation budget` (6/1).
+
+**Writing that suite reproduced the trap it warns about.** `vision/route.ts` reads
+`ANTHROPIC_API_KEY` into a module-level `KEY` at load, so setting it in `before()` — after the import
+— left the handler answering a mock and never reaching the forward. The guard tests were green and
+the outbound assertions were vacuous. The only reason it was caught is that the "legitimate caller is
+not the casualty" test asserts a forward DID happen, and it went red. A regression guard caught a
+hole in the gates beside it.
+
+**Status:** CLOSED, in two passes. The second one is below, and it also carries the corrections
+review made to the first.
+
+**THE GUARD IS NOT A COST CONTROL AND MUST NOT BE READ AS ONE.** `/api/identity/session` mints for
+anyone who asks, so a determined caller mints a token and spends anyway. What the guard buys is that
+the spend is ATTRIBUTABLE and that a casual unauthenticated script is refused; the caps bound a single
+call. **Neither bounds a loop, and that is what the second pass added.**
+
+**THE LIMIT, AND THE POSTURE IS THE DECISION.** `0018_rate_limit.sql` generalises 0007's limiter with
+a BUCKET column, and `lib/rateLimit.ts` is the one place `hashIp`, `clientIp` and the window
+arithmetic live — they were route-private, and copying them would have meant two IP-hashing policies
+with two salts (L5). The bucket is the whole point: `waitlist_rate`'s key is `(ip_hash, window_start)`
+alone, so the moment a second caller used it a burst on `/api/vision` would consume the waitlist's own
+window and tell a real person the list was full. MEASURED against PostgreSQL 16.15 through the real
+runner: same bucket+ip+window counts 1 → 2; the SAME ip and window in another bucket answers 1, not 3;
+another ip answers 1; the next window is back to 1; **forty concurrent calls produce exactly 40**; and
+as `anon`, with the grants Supabase gives, the counter reads 0 rows. Coverage after it: **31 of 31
+tables with RLS, 0 policies.**
+
+**`onUnavailable` is per caller, and the two callers choose opposite answers — the user's call.** The
+waitlist keeps `"allow"`, whose reason still stands and is now declared rather than implied: if the
+counter is unavailable a real person must still be able to join. The paid routes take `"deny"`,
+because "the counter is unavailable" and "there is no limit" are the same sentence when every call
+spends. 429 for over-limit, **503 for a counter that is down** — 429 would tell the caller to slow
+down, which is a lie about what happened and would have them retry into the same wall.
+
+**AND THE ORDER OF THE CHECKS IS LOAD-BEARING, which the first version got wrong.** Placed before the
+no-provider short circuits, a deny-on-unavailable limiter closed the ZERO-KEY LOCAL RUN: with no
+Supabase there is no counter, so `/api/vision` answered 503 even on the path that would only ever
+have returned a mock. A deployment with nothing to spend has nothing to fail closed about. The
+limiter is now reached only past `if (!KEY)` on vision and only inside `if (process.env.ART_PROVIDER)`
+on portrait, and "works with no keys" is exactly as it was. **MEASURED: five tests caught the
+inversion**, which is the second time in this workstream that a test caught a hole in the fix rather
+than in the original defect.
+
+**Also owed, and named rather than bundled:** `COST_DAILY_USD_BUDGET` (`services/ml/echo_ml/cost.py`)
+enforces nothing — `over_budget` has exactly one hit in the tree, its own assignment — and the meter
+never sees `/api/vision`, `/api/portrait`, the TTS providers or `apps/realtime`'s direct Anthropic
+call. A ceiling nobody reads is not a budget.
+
+**And the six `/api/venue/*` routes are untouched here, deliberately.** `/venue` is a nine-line
+redirect to `/play` — the entry point was retired in `b406d49` — but **the API routes under it were
+not**, and `/api/venue/dialogue/simulate` bills eleven Claude calls per request with an unbounded
+`profile` stringified into every system prompt. Gate it, delete it, or keep it: that is a product call
+and it is the user's, not a defect to be quietly patched.
+
+*CORRECTED, and it was wrong in a way that mattered to that decision.* This paragraph first said "the
+four `/api/venue/*` paid routes" and then "the six API routes" three words later — `find` returns
+**six** — and asserted that the subsystem "appears in none of the four planning documents
+(`grep -ric venue`: 0, 0, 0, 0)". MEASURED: SOCIETY-PLAN 0, DECISIONS 0, NEW-AGENT 0, and
+**`docs/BUILD-PLAN.md` 4** — which `NEW-AGENT.md` names as inherited-unchanged, and whose `:98`
+tables the brand-stand demo as an "**Optional funding wedge — Phase 4**" with `:547-548` calling it
+"a faster-revenue wedge that can fund" the rest. So it is planned work with a phase attached, not an
+orphan. Checking four documents and reporting "none of the four" was true of the set I looked at and
+false of the claim I made, which is the third published count in this workstream that did not
+reproduce.
+
+
+---
+
+## ⚑ 31. The venue API outlived the page it belonged to (2026-09-14)
+
+`b406d49` retired the THY brand-stand demo as an entry point — `app/venue/page.tsx` became a nine-line
+redirect to `/play`. **The six routes under `/api/venue/` were not retired with it.** They stayed
+reachable with no page in front of them, unauthenticated and unlimited, and three of them spend:
+`tts` at ElevenLabs or OpenAI, `dialogue/sales-turn` at Anthropic, and `dialogue/simulate` — which
+bills **eleven Claude calls per request** (`orchestrate.ts` loops six states producing six sales turns
+and five visitor turns, then calls `finalize`, which calls Claude again) and stringifies an unbounded
+caller-supplied `profile` into every one of those system prompts.
+
+**Decided: 410 Gone, not a guard and not a delete, and the reasoning is the point.**
+`docs/BUILD-PLAN.md:98` tables this demo as an "**Optional funding wedge — Phase 4**" and `:547-548`
+calls it "a faster-revenue wedge that can fund" the rest — so it is planned work with a phase
+attached, and deleting it throws that away. But it has no entry point today, so gating it would be
+securing a surface nobody can reach: investment in an inactive subsystem, while money stays spendable
+for as long as that investment takes. 410 says "this existed and is deliberately gone", stops the
+spend now, and costs one line to reverse. `lib/venue/*`, `game/venue/VenueScene.ts` and the
+`/dashboard` page are untouched and still compile. Each route's header says what it was and what
+bringing it back needs first: the treatment `⚑30` gave `/api/vision` and `/api/portrait`.
+
+**`/dashboard` was the live surface nobody accounted for.** It polls `/api/venue/research` **every two
+seconds** with `.catch(() => {})` and `r.json()` on whatever comes back — so against a 410 it would
+have set its state to the error body and hammered a dead endpoint forever, showing an empty dashboard
+with no explanation. It now stops on 410 and says what happened. The page is deliberately kept rather
+than retired: its code is the demo's, and `⚑30` is where the decision to keep it is recorded.
+
+**Status:** CLOSED. Six routes answer 410; nothing is deleted; the record says how to come back.
+
+**Not closed, and it belongs to whoever brings this back:** the routes were never in
+`SOCIETY-PLAN.md`, `DECISIONS.md` or the gate lists, and `/api/venue/dialogue/simulate`'s eleven-call
+fan-out was never costed anywhere. A surface that spends per request and appears in no gate is how
+this one survived a retirement.
+
+---
+
+## ⚑ 32. `census()` on a past day counts people who were not in the village yet (2026-10-17)
+
+`alive(p, day)` is `birthDay <= day < deathDay` (`society.ts:471`), and `census(s, day)` filters on
+it alone (`society.ts:878`). An incomer is born elsewhere years before they marry in
+(`society.ts:662-673`), and a founder before the founding day, so for those days they are *alive* and
+*not here* — and `census()` counts them as living in the village.
+
+**MEASURED** with a probe over 60 cells (`echo-capacity-1`, one fixed geography, horizon 0): of
+1,813 incomers alive five years before they arrived, **1,813** are in `census(s, thatDay).alive`.
+Founders show the same before the founding day: **720**.
+
+**Nothing shipped is wrong because of it.** Five of the six call sites — including
+`scripts/census-planet.ts:58-62`, which produces C33 — ask about day 0 of a settlement generated to
+day 0, and an incomer in that list has always arrived by then. The sixth, `society.test.ts:206-210`,
+generates to year 10 and asks about day 0, so it does overcount; it asserts an UPPER bound
+(`<= capacity * 2.2`), so the overcount makes it stricter and hides nothing.
+
+**Why it is recorded now:** `lib/life.ts` (C40) asks about the past constantly — who witnessed a fever
+forty years ago, who could teach a trade — and it uses `present()` (alive AND arrived) for exactly this
+reason. The two predicates now coexist, and the next caller to ask `census()` about a past day gets
+the wrong one without being told.
+
+**Status:** OPEN. The fix is one line in `census()` (filter on `present`), but it changes what
+`census()` returns for past days, and `society.test.ts:210`'s bound would then be measured against a
+different population. Take it as its own change, re-run that test, and say what moved.
+
+---
+
+## ⚑ 33. A person's `seedKey` doubles in length every generation, and every draw reads all of it (2026-10-17)
+
+`bearChildren` keys a child on both parents' full keys — `` `${mother.seedKey}+${father.seedKey}/kid/${i}` ``
+(`society.ts:595`) — so a key is roughly twice its parents' length, and `stream()` calls
+`hashString(key, n)` (`terrain.ts:245`), whose `hashSeed` walks the whole string on EVERY draw
+(`terrain.ts:108-115`).
+
+**MEASURED** over 60 sample cells at horizon 0 (`echo-capacity-1`, one geography, 3,141 people): the
+longest `seedKey` is **36,037 characters** and the mean is **2,089**. A person costs a dozen or so
+draws, each one a full pass over a key that size. What share of `settlementAt`'s time that is has
+**not** been measured; nor has the memory the keys hold (up to `MAX_PEOPLE` = 4,000 of them per
+settlement).
+
+`lib/life.ts` (C40) does not inherit it: it keys its streams on `Person.id`, and says why in its
+header.
+
+**THE DEADLINE, which is the reason this is an entry and not a note.** Compressing the key (hashing
+the parents' keys rather than concatenating them, say) is a small change, but it changes **every draw
+of every person on the planet** — names, lifespans, trades, who pairs with whom. Today that costs
+nothing that persists: C25 means zero rows, and the delta layer (SOC-6.C) does not exist. **The day
+SOC-6.C writes its first row keyed on a `Person.id`, it becomes unpayable**, because the same id would
+then name a different human being. It is the same species as the `bearChildren` horizon bug, with a
+date on it.
+
+**Status:** OPEN, and a decision for the user: compress it before SOC-6.C, or accept the cost
+permanently. Recommendation: before. Measure `settlementAt` with and without first, so the decision
+is made on a number.
+
+**Status (2026-10-18):** CLOSED by C43, before any row. A child is keyed on its parents' ids —
+`` `${mother.id}+${father.id}/kid/${i}` `` — and `Person.id` is `uidOf(seedKey)`, sixteen hex
+characters of the lineage, so a key is about forty characters in any generation and an id names the
+same human being whatever happens to anyone else. `society.test.ts` fails if a key passes eighty
+characters. It was done together with ⚑38, because each re-rolls the planet and doing them apart
+would have re-rolled it twice.
+
+---
+
+## ⚑ 34. The landing page downloads the planet's village index: 594 KB, 103 KB compressed (2026-10-17)
+
+`HeroPlanet` fetches `/planet/villages-<seed>.json` after the globe has drawn, to light every
+village (C41). It is 28,282 cells and their capacities: 594,391 bytes, 103,036 gzip -9. It never
+blocks the planet — a missing file is no lights — but it is the heaviest thing the landing fetches
+after the scripts, and it has **not been measured on a phone**, on a slow connection, or for the time
+`setVillages` spends placing 28,282 points (one `globeRadiusAt` each).
+
+**Status:** OPEN. Cheaper shapes exist and none is chosen: drop hamlets below a capacity, ship
+resolution-3 parents with counts, or a binary encoding of the h3 indices. Measure first.
+
+---
+
+## ⚑ 35. A village is drawn as it stood on the day the parcel was built, and its people walk through walls (2026-10-17)
+
+Three limits of C41's first village, written down rather than discovered:
+
+- **The houses are the build day's.** `PlanetWorld` builds the village once; a world day is twelve
+  real minutes, so a session that stays an hour sees five days of schedules on one day's houses: a
+  family that dissolves keeps its lit windows until a reload. The schedule itself does change daily.
+- **Nobody avoids anything.** Legs are straight lines: a villager can cross a house, a field or
+  another villager, and the player walks through villagers (houses do stop the player).
+- **Only start-resolution parcels have villages.** `settlementAt` keys on the cell id, so a
+  subdivided child would get a different village from the parent C33 counted. `villageAt` and
+  `/api/planet/village` refuse any other resolution until SOC-0.F says what a child's village is.
+
+**Status:** OPEN, all three. The first is a rebuild on a day change; the second is a path graph over
+the plan's lanes; the third is a decision.
+
+**Status (2026-10-18, C46):** the second is CLOSED. Every leg is routed round the houses, the well,
+the mine and the graveyard wall (`lib/nav.ts`). `nav.test.ts` samples every walked point of twelve
+villages' days and fails on one inside a wall, and the same days drawn straight cross houses on
+dozens of legs. Nobody walks through the stranger either. The first and third are still open.
+
+---
+
+## ⚑ 36. The frame has about ten draw calls of headroom left on a large village (2026-10-17)
+
+Measured with people, worst of twelve headings: Vakeel (74 people) **110 of 120 calls and 520k of
+600k triangles** at dusk; Drurkkuifell 110 / 447k; Konreef 92 / 302k (C41's table). The village itself
+is cheap — two calls — and the crowd is thirteen with its shadows whatever its size, so the cost is the
+ORDINARY parcel's (C28, C31) with a village on top. A bigger town, smoke, more props or the C38
+`buttress-tree` mid band each spend from the same ten.
+
+**Re-measured 2026-10-18 after C43's re-roll:** the biggest village is now Kamgull, 84 people —
+**112 calls / 526k triangles**, worst of 12 headings at dusk and at morning. Eight calls of headroom.
+**And after C48:** weather adds one call while it rains or snows; a stormy midday on `8414d53ffffffff`
+read **115 of 120**. About five calls of headroom on a big village in bad weather.
+
+**Status:** OPEN. The levers on record: SOC-4.C's person impostor (fewer crowd calls at distance),
+thinning the scatter inside a settled cell (realistic, and cuts scatter calls), and C38's mid band
+for more classes. None is free; pick with a measurement.
+
+---
+
+## ⚑ 37. Talking to a villager is closed wherever migration 0018 has not been applied, and remembers nobody (2026-10-18)
+
+`/api/village/talk` (C42) uses the shared limiter with `onUnavailable: "deny"`. On this machine the
+configured Supabase answers the `rate_limit_hit` rpc with an error — `0018_rate_limit.sql` has not
+been applied there — so the route answers **503 `rate_limiter_unavailable`** for every real call, as
+`/api/vision` and `/api/portrait` do. That is the fail-closed posture working, not a bug in it; but it
+means the feature, and the two paid routes, are dark on any environment whose database is behind, and
+**which migrations production has is still unanswerable** (SOCIETY-PLAN §6 question 5).
+
+Two further limits, written down rather than found later:
+- **No memory.** Each conversation starts from nothing: the villager does not know you were there
+  yesterday. That is SOC-6.C's delta layer and SOC-6.F's memory store, and it needs a signed subject
+  and an erasure path before a single row is written.
+- **The server does not check proximity.** Any living villager can be spoken to by id from anywhere.
+  It changes nothing in the world (L3) and is rate-limited, so it is a cost question, not a state one.
+
+**Status:** OPEN. Applying 0018 is an operator action on a database this repository does not own a
+connection to; it was not done here.
+
+
+**Status (2026-10-18, C44):** the two further limits are closed. Villagers remember strangers
+(`villager_memories`), and a conversation begins only beside the villager (`talk/begin`, 25 m, against
+the closed form). The first limit still stands, and C44 widens it: 0019 must be applied as well as
+0018, or memory and decisions are dark too. What is left is ⚑39.
+
+---
+
+## ⚑ 38. The society's random stream was one number and its shifts (2026-10-18)
+
+`stream(key)` was `() => hashString(key, n++)`. `hashString` is FNV-1a with the salt XORed into the
+state and multiplied through, and no final mixing, so `(H ⊕ n)·p⁴ mod 2³²` is draw 0 plus a small
+integer times one constant (≈ 0.6868) modulo 1. **Every draw a person ever made was a shift of their
+first.** Found while explaining one villager's numbers to the user, not by any test: his first six
+draws were an arithmetic progression.
+
+**MEASURED, before → after the fix (C43):**
+
+| | before | after |
+|---|---|---|
+| distinct gaps between a stream's first two draws, 20,000 keys | **2** | 20,000 |
+| distinct gaps between two siblings' first draws, 20,000 families | **1** | 20,000 |
+| sd of the three-uniform bell (lifespans), against 1/6 | **0.135** | 0.1666 |
+| founders' temperament sd per axis, dial 0.4 (7,946 → 7,984 founders) | **0.32–0.35** | 0.394–0.402 |
+| strongest correlation between two founder axes | **0.52** (dominance–pace) | −0.029 |
+| mean adult lifespan, women / men | **70.0 / 69.1** | 67.4 / 67.4 |
+| mean founding date of a settled valley, window mean 180 | **218 years** | 181 |
+
+The last row is the one with consequences beyond a person: the roll that settles a cell and the roll
+that dates it were two draws of the same stream, so settled cells were systematically old, which is
+why C33's census had 2.81 M graves and the re-rolled planet has 2.36 M.
+
+**Why nothing caught it.** The tests measured rates and L2, never independence; the temperament test
+compared founders' spread with the last generation's, and both were shrunk alike. Three tests in
+`society.test.ts` and two in `life.test.ts` now pin independence, and all five fail on the old stream
+(injected and checked).
+
+**What was NOT changed:** `hashString` itself. Terrain, scene, assets and walkable read it, and
+changing it would move the whole planet's ground. Only the society side (`society`, `life`,
+`schedule`, `village`) moved to `stream` and `hash01`. Whether `hashString`'s own callers draw
+consecutive salts anywhere this matters has **not** been audited.
+
+**Status:** CLOSED for the society (C43). OPEN for the audit of `hashString`'s other callers.
+
+---
+
+## ⚑ 39. What C44 does not do, and what it trusts (2026-10-18)
+
+- **The stranger's position is their browser's word.** `talk/begin` checks it against the closed
+  form, so nobody talks to someone asleep, at sea or gone, but a crafted client can compute where a
+  villager stands and claim to be there. The rate limit is still the cost guard.
+- **Death is not changeable.** No change touches a drawn lifespan, so "lives not fixed in advance"
+  holds for what people do, where they go and who is born after a decision, not for when anyone dies.
+  A hazard model (lifespan as a threshold over circumstances a change can alter) would make it
+  changeable. It is not built, and it would re-roll every death on the planet.
+- **No matchmaking, no return.** Nobody can be talked into a marriage, and a leaver is gone: they
+  are not living in some other village of the planet. Each is a further event kind.
+- **Griefing is bounded, not prevented.** One leaving per village per 30 world days (6 real hours),
+  and leaving needs a second meeting, so one persistent stranger can still empty a village slowly.
+  There is no reverting tool beyond a database row.
+- **Decisions are rare, and that is measured on five conversations only** (C44): one decision in
+  five. Whether real players find villagers too stubborn is unmeasured.
+- **The village a page shows is fetched once.** A change made by someone else while you are on the
+  parcel arrives on your next visit. Your own changes are folded in at once (`PlanetWorld.revillage`).
+  The houses are the build day's either way (⚑35).
+- **0019 is applied nowhere.** Locally the store runs as `VILLAGE_STORE=memory`, and production needs
+  the migration before any of this is more than talk.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+---
+
+## ⚑ 40. What C45 does not do yet, and what it trusts (2026-10-18)
+
+- **Nothing here has moved a real posterior yet.** The ML service was offline for every browser run,
+  so the acts reached `/api/observe/behavioral` and came back `mocked`. Each named label's handler is
+  checked by a test to exist; what these acts actually do to μ and Σ is unmeasured. That needs an
+  individuation run in the embodied build's style: two contrasting players, two posteriors, an L2
+  distance.
+- **Many acts are unrouted, on purpose.** Trespass, theft, trampling, respect at a grave and play
+  have no feature whose definition they match (C30: the property-respect handlers route to
+  `consistency`, an exact zero column). They move the posterior through the label embedding and the
+  privacy bucket only, until the one-time re-anchor (C29) decides.
+- **The stranger's position is their browser's word**, as in ⚑39. Reach is checked against it, and
+  who saw the act is computed by the server's clock. A browser whose sky is frozen sees a different
+  audience from the server's witnesses (the measurement's `audience_size` is the browser's).
+- **Taking is not having.** What you carry lives in the page. It is gone on reload, and a gift is
+  trusted to have been carried. There is no inventory store. *CLOSED by C47: the pack is the
+  server's (`player_items`), a pick-up needs room in it, and a gift is checked to be in it.*
+- **The boat is per-viewer.** Others see the family's boat at its mooring while you row it. Nothing
+  is synchronised in real time (C27's shared unit is the parcel, and this is a presentation).
+- **No violence toward people.** There is no verb that hurts a villager. That is deliberate in v1:
+  it is the one category whose consequence (C26) this world cannot yet carry.
+- **Grievance is family-deep and month-long, and those are dials.** Whether villagers forgive too
+  fast or know too little is unmeasured with real players.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 41. What C50 does not do yet, and what it trusts (2026-10-18)
+
+- **Asked when, not asked or not.** Helping when asked and helping unprompted reach ingest.py as the
+  same label (`give_gift`, `help_at_cost`). They are different evidence — responsiveness against
+  initiative — and the protected ML boundary (C7) is why the request is not a feature yet.
+- **Villagers rarely bring it up unprompted in conversation.** It was 0 of 2 when asked about their
+  day, and 2 of 2 when help was offered. The bubble asks; the conversation waits to be asked. Whether
+  that is the right balance is unmeasured with real players.
+- **"Asked once" is this page's memory.** A villager who asked for a shell asks again after a
+  reload. It is not per stranger, and not stored.
+- **A gift at a door meets one need**, the first household member's whose need it is, in the order
+  the village lists them. A household where two people want the same thing is not tested.
+- **The need is in English templates**, as the chatter is; Turkish is feature 20. The model says it in
+  the stranger's language.
+- **Migration 0022 is applied nowhere**, like 0019–0021 (⚑37).
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 42. What C52 does not do yet, and what it trusts (2026-10-18)
+
+- **Weddings are rare in the present.** Senstrand pairs nobody in 3.3 world years, and Kamgull one
+  couple. That is the society's demography (C40). Whether the planet's marriage rate is right is
+  unmeasured.
+- **A village is walked in real time and lived in a compressed one.** A world day is twelve
+  minutes, and a walk across the village is up to two. So a burial an hour long by the village's
+  clock is a real minute and a half, and the evening after a burial can be over before the mourners
+  reach the green. The schedule copes, and the scale itself is C41's.
+- **No coffin, no flowers, no music.** A burial is people in rings with their heads bowed. Sound is
+  feature 10.
+- **The grave is the build day's (⚑35).** Someone who died after the page was built is buried at a
+  slot their grave is not yet drawn at, until a reload.
+- **The stranger's position is their browser's word**, as in ⚑39/⚑40. The server checks it is
+  within reach at the hour, not that it was there for two-fifths of the gathering.
+- **The labels are unrouted.** `mourns`, `joins_group` and `stays_solo` reach ingest.py by the label
+  embedding only (C7); I7's "consoles_survivor" and "visits_grave" later are not read.
+- **Phones do not see the news card** (`max-sm:hidden`); feature 20.
+- **Migration**: none needed. Deeds of verb `attend` use 0020's `village_deeds` unchanged.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 43. What C53 does not do yet, and what it trusts (2026-10-18)
+
+- **Two writes, two cells, no transaction.** A move is a row in each village. If the second write
+  fails, the person has left and arrived nowhere. That is C44's world, not a broken one, but it is
+  not what was decided.
+- **Coming home is for the unmarried.** Someone who married where they went cannot go home in v1:
+  their partner, and children born there, would have to come too, as people the home village has
+  never had. A person who came home cannot leave again (`already-leaving`).
+- **The house a returner comes home to stands in between.** `closeHouseholds` counts it lived in
+  from the day they left until they come back, even if nobody was in it.
+- **A newcomer family's house is the build day's (⚑35).** They have a plot in the plan, and until a
+  reload the drawing is the one before they came.
+- **Introductions read the stranger's last forty conversations** and load each village they were
+  in. That is a cost per conversation, paid only from the second meeting.
+- **Who speaks first goes.** The visitor and the one who moves are always the one who sent word
+  first. Whether the man, the woman, or the smaller village's should go is not modelled.
+- **Weddings are between a man and a woman**, because the generator's pairing is (C40). Nothing in
+  C53 requires it, and nothing in C53 changes it.
+- **The other village does not hear of a refusal.** Word sent and never answered stays waiting for
+  sixty days, and then is forgotten.
+- **Migration 0023 is applied nowhere** (⚑37).
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 44. What C54 does not do yet, and what it trusts (2026-10-18)
+
+- **An invitation is the page's.** It lasts the world day in this browser and is gone on a reload.
+  It is not stored, and the server does not check it: walking in through a door you were asked
+  through changes nothing shared, so nothing has to.
+- **Entering a forced house with the family home is not a deed of its own.** Forcing the door
+  already is (C45, trespass, weight 3). What the family, against the back wall, think of the
+  stranger standing in their room is not modelled beyond that.
+- **One room.** A two-storey house's upstairs is not drawn; everyone sleeps downstairs.
+- **The cut takes off everything of the village inside the house's box** above 1.45 m, including a
+  neighbour's eaves that reach into it.
+- **Sleepers can be walked through.** Beds are solid; a body in one is the bed.
+- **The doorway is a hole whatever the door's state.** A door you were asked through is drawn
+  open, not as a door standing open on its hinges.
+- **The labels are unrouted** (C7): `enter_invited`, `enter_forced`, `explore_house`.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 45. What C55 does not do yet, and what it trusts (2026-10-18)
+
+- **No talking to the dog.** D11 is "pet talk" in the catalogue: what a person says to a pet, as a
+  valence. Here it is what they do for it. The panel could carry a turn to a dog as a valence and
+  never its text; it does not yet.
+- **A dog follows you only in its own village**, and only on this page. It does not come along to
+  another parcel, and its following is not stored — the bond is, as deeds.
+- **The bond is the stranger's deeds, so it is erased with them** (C45's erasure), and a dog's own
+  memory of you is nothing more.
+- **Goats only where a herder lives.** Senstrand, a fishing village, has none. Whether pasture ground
+  should bring a herd without a herder is not decided.
+- **Birds do not land and fish do not flee.** Both are presentation: a flock wheels, a school circles.
+- **An owned dog that has taken to the stranger leaves its person to follow them.** Its person says
+  nothing about it.
+- **The animals are outside the frame budget's old headroom (⚑36):** +2 calls, +1 shadow, everywhere.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+
+## ⚑ 46. What C56 does not do yet, and what it trusts (2026-10-18)
+
+- **Nobody has listened to it.** Every check above is a level on a meter or a count of sounds. Whether
+  the gull sounds like a gull, the anvil like an anvil, or the murmur like people rather than a
+  bandpassed hiss is a judgement for a human ear. It is the first thing to do with this feature.
+- **Only the stranger's own feet are heard.** Villagers walk silently, and their talk is a murmur,
+  not voices (voice is feature 14).
+- **A house between the stranger and a smith does not muffle the anvil.** Distance is the only
+  thing between a sound and the ear; there is no echo off walls and no reverb in a room.
+- **Any water below sea level is "the sea"**, a lake included. It is found on a ring of twelve
+  directions every 10 m, so it can be up to 10 m off.
+- **Rain indoors is the rain outside, muffled**, not rain drumming on a roof. The hearth crackles in
+  any lived house at any hour.
+- **Snow underfoot only while it is snowing.** Lying snow is not tracked, and nor are paths, fields
+  and stone underfoot: all of them are "grass".
+- **Thunder's delay is random** (0.4–2 s), not the strike's distance.
+- **Mute is this browser's**, not the account's.
+- **Not tried on a phone.** iOS's silent switch silences WebAudio. What the graph costs on a phone
+  (one-shots make a few nodes each, about ten a second) is not measured; that is feature 20's.
+- **The levels were set on one desktop browser in one village at noon.** There is no loudness
+  matching across devices or headphones.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 47. What C57 does not do yet, and what it trusts (2026-10-18)
+
+- **A crossing stutters.** While the next world builds, three frames run 0.15–0.3 s. The terrain
+  (`buildRegionScene`, 309 ms) and the scatter (468 ms) are synchronous. It happens mid-water, with no
+  loading screen, but it is felt. A chunked build or a worker is the fix, and it belongs with feature
+  20.
+- **Only by raft.** On foot the region's edge still stops you, and a borrowed village boat cannot
+  cross.
+- **One village per world.** The next parcel's village appears when you cross into that parcel, not
+  before. The fog at about 420 m hides most of that; a village close to the line can still be seen
+  arriving.
+- **The sail draws from any quarter.** The weather has no wind direction.
+- **The wind can change at the line.** Weather follows each parcel's geography; it was measured going
+  from 0.41 to 0.34 at the crossing.
+- **Most coasts have no other village on them.** Senstrand's sea has none within 12 km. A raft from
+  there finds empty shores, and it is the census, not the raft, that says so.
+- **`dest_occupants` is the parcel's residents,** not who is on the beach.
+- **The cues are the client's to send** (⚑10), with the server's numbers in them.
+  `crossing_latency` (VIII.11, the first sail-out of a life) is not measured. `distance_m` is metres,
+  where the old `distance` was slot spacings; ingest.py reads neither.
+- **Two worlds are held in memory during a crossing.** It has not been tried on a phone.
+- **The raft is the stranger's alone.** Nobody else sees it, and it is not left on the beach as a
+  thing: it goes back into the pack.
+- **A reload after a crossing** puts you at the new parcel's arrival point, not on its beach.
+- **"From the direction of"** names the village the raft set out from, even if it went the long way
+  round.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 48. What C58 does not do yet, and what it trusts (2026-10-18)
+
+- **A market moves one way.** The partner's people never come, and the partner does not know it is
+  anyone's partner: Dragcrachadit's villagers never mention Senstrand's traders.
+- **The traders walk.** They go out by land toward the partner even across water, and nothing they
+  carry is drawn.
+- **Only the player is stopped by the stall.** Villagers walk through it, and it can stand where
+  someone's evening spot on the green is.
+- **No village is richer for trading** (SOC-7.C, developed vs undeveloped). Houses and lives are
+  unchanged by it.
+- **The stranger chooses only what to offer.** The route takes `asked`, but the panel always asks
+  for whatever the villager can spare.
+- **One trade a villager a day.** The goods at the stall never run out, and there are no seasons in
+  them.
+- **A return for help is a thing.** Labour returned as labour, such as building your house, waits
+  for feature 13.
+- **`barter` and `ask_return` are unrouted.** They move the posterior only through the label
+  embedding. G12's other side, free-riding, is not measured.
+- **Pressing is remembered by the page.** A reload and the same ask again is not pressing.
+- **Nothing checks that a villager never names a price.** The facts say there is no money, and the
+  real-model checks found no price.
+- **The partner is found without the neighbours' conversations** (C44 changes), so that the browser
+  and the server find the same one.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 49. What C59 does not do yet, and what it trusts (2026-10-18)
+
+- **Nobody can visit.** A visitor sees your house but cannot knock or go in: there are no verbs on
+  someone else's house.
+- **One house a stranger, where it was staked.** It cannot be moved or taken down. Erasure removes it.
+- **The parcel registry is in memory** unless `DATABASE_URL` is set. A restart can reassign parcels,
+  while houses are kept in the store under the cell they stand on. A house can outlive its owner's
+  claim to the land: it stays visible, and nobody can change it.
+- **Villagers do not know your walls are walls.** The site keeps clear of the village's paths, but
+  someone wandering could still walk through a house.
+- **Only a shirt.** No hair, no trousers. J1's other side, never customising at all
+  (`keeps_default`), is not sent.
+- **J5's thresholds are a choice.** 0.65 and 0.4 are not calibrated against anything. One thing set
+  down is no arrangement, and the room is read only on stepping out.
+- **Labour returned as labour** (villagers helping to build) is still not done. Helpers would have to
+  live in the parcel's village, and most parcels have none.
+- **Nothing happens in your house at night.** No hearth, no sleep, no light.
+- **Not tried on a phone.** Placing things by touch is untested.
+- **Playable parcels only.** The landing preview does not show houses.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 50. What C60 does not do yet, and what it trusts (2026-10-18)
+
+- **Tried only in Chrome, with a fake microphone.** Not tried in Safari (the unlocked audio element is
+  written for it), Firefox, or on a phone, where holding to speak is a touch on the button.
+- **The voices are only as good as the account's list.**
+  - No old women's voices, and one old man's.
+  - Mostly American and British English, in a world without either.
+  - Children speak in young adults' voices, a little faster.
+  - Voices added from ElevenLabs' library are picked up within the hour.
+- **A voice is not stored per villager.** It is worked out from the list each time. A voice added
+  takes only those it wins, but a thin age crossing three voices regroups that age.
+- **ElevenLabs' own keeping of what is sent is under its terms.** The panel says nothing of your voice
+  is kept *here*, which is true. Zero-retention is an ElevenLabs enterprise setting, not used.
+- **A reply can be spoken only within ten minutes** of being said. There is no replay.
+- **No silence detection.** What was held is what is sent, pauses and all.
+- **The hear route reads a body sent without a length** before measuring it. The platform's own body
+  limit is what bounds that.
+- **The cache of spoken lines is per server instance**, in memory.
+- **The echo hears nothing of voice.** That is on purpose, and it stays that way unless the consent
+  card is changed to ask.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 51. What C61 does not do yet, and what it trusts (2026-10-19)
+
+- **The engine must be redeployed** with C61's report fields. Until then, nothing new is recorded and
+  everything shows as "not in this record". Migration 0027 must be applied too; until then, rows
+  live in each server's memory.
+- **Walking biased every echo towards fast and playful.** Every window did it, whatever it held:
+  pace +0.14 to +0.29, intellect −0.06 to −0.15 on a fresh echo. Explained and fixed by C73. Each
+  window "measured" all 66 features, the 64 it never saw as average, the empty text's embedding among
+  them. What replaced it is ⚑62.
+- **No forgetting one act.** The posterior is a running filter, and an update cannot be taken out
+  of it. Only "erase everything" exists.
+- **The mirror reads the latest 1000 rows.** Older moves are counted, not itemised.
+- **`/play` (WorldClient) and the island flows write no record.** What they move shows as "not in
+  this record".
+- **Folding walks in memory is per server instance.** Several instances each start their own walk
+  rows. The table's function is atomic.
+- **The conditional posteriors are not shown**, only the pooled one and 'when others can see you'.
+- **The words are the engine's poles** (`AXIS_POLES`). On some axes they are not what the measure
+  reads: pace is "unhurried / fast" while its anchor is saving for later.
+- **Not tried on a phone.** There the mirror opens from the meter, not from `Y`.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 52. What C62 does not do yet (2026-10-19)
+
+- **The owner is named by setting, not proven by sign-in.** An echo subject is a browser's anonymous
+  identity. Another browser of the owner's needs its id added too, and a cleared browser needs the
+  new one.
+- **The owner's lines are spoken only with ElevenLabs on.** No local fallback in their own voice exists.
+- **Not tried on a phone or in Safari**, like C60.
+
+**Status:** OPEN.
+
+## ⚑ 53. What C63 does not do yet, and what it trusts (2026-10-19)
+
+- **Four situations.** The catalogue's other strong probes are not set out yet: a wager offered, a
+  queue, a fair split, a promise. Each needs a villager to play a part, which the schedule does not
+  yet allow.
+- **The axis vectors are the doc's priors**, not learned. The two island ones are copied, the other
+  two written by hand.
+- **"Out of sight" is the world's 30 m**, the same as everywhere else (C45). On an open beach a
+  villager at 40 m could plainly see.
+- **Nobody notices the pouch.** Taking a villager's pouch is not a deed: the owner does not miss it,
+  and nobody talks.
+- **Hands and pack.** Taking from the pouch needs empty hands, like any pick-up, and goes into the
+  pack.
+- **No phone check.**
+- **Only on the engine's word.** With ML down or unset, nothing is ever set out (by design), and
+  every test of it ran against a local engine.
+- **Twenty minutes and two hours are choices**, not measurements.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 54. What C64 does not do yet, and what it trusts (2026-10-19)
+
+- **Nobody else sees your echo.** Its body waits only for you. Another player in that village does
+  not meet it: there is no presence between players in the new world.
+- **It only talks.** It does not act, gather, trade, build or help, and nothing it does is
+  measured, by design. An echo that did things would need its own say in the world, not yours.
+- **Its words come from little of you.** In the new world the engine keeps action labels, not
+  speech, so the small model has traits and acts to go on and no words of yours. It speaks like a
+  polite newcomer more than like you.
+- **Fresh buckets are at "copilot", so a new echo holds back every line** until you have answered
+  enough of them. That is the old copilot's rule. Nine or so agreeing answers earn a bucket.
+- **The villagers take it for you.** Their notes and meeting counts change, and "Forget me" erases
+  them as for any meeting. They are never told it was an echo.
+- **Measured from the page, not proved.** A page left open in a background tab is "here". A closed
+  laptop is "away" from its last heartbeat (at most two minutes off).
+- **One outing at a time, made when you come back**, which takes up to about 45 s while you play.
+  Two tabs opening together could each fill the same absence: same id, so one is kept, but the
+  model calls may be made twice.
+- **Cost** is bounded but real: up to six small-model turns of four drafts each, and up to six
+  villager replies, at most once every three hours per person.
+- **Not tried on a phone.**
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 55. What C66 does not do yet, and what it trusts (2026-10-19)
+
+- **Nothing changes until 2026-10-20 00:00 UTC**, by the user's choice. If this ships later,
+  `fromDay` must move to the ship day: a world day already seen must not change.
+- **A saved life bears no extra children.** Children are drawn when a pair forms. A woman who lives
+  longer for a stranger's healer has no more children than she would have had.
+- **A life saved in one village, lived in another, loses it.** Someone who moves (C53) is weighed
+  again in their new village with only that village's changes.
+- **The healer is a villager's trade, not a person who comes.** "Fetch the healer" does not move the
+  healer through the village. Many villages have none, and only herbs will do there.
+- **The ill cannot be talked to or visited in bed** beyond what C54 already allows; they are simply
+  not out.
+- **A death is never foretold beyond its warning**: one to two weeks of illness, one evening for the
+  sea. Most deaths are seen by nobody but the village.
+- **Rare, as deaths are**: in Senstrand about one a world year (three real days). Most visits see
+  none.
+- **The sea is not tied to the weather** (C48). The wrong sky is the fisher's own day, not the
+  cell's storm, so a "wrong sky" can fall on a fine day.
+- **The village index** (`villages-echo-capacity-1.json`) is unchanged; it does not depend on deaths
+  after the switch.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 56. What C67 does not do yet, and what it trusts (2026-10-21)
+
+- **A bar keys on an anonymous identity.** A stranger can clear their browser, or erase, and come
+  back as someone new. Strangers have no sign-in, so there is nothing stronger to bar.
+- **Withdrawing a wedding still to come** can, in rare cases, change who was free to marry in the
+  days between its being agreed and today: the generator keeps the promised pair apart. Measured
+  unchanged in the test village. Not ruled out.
+- **History stands.** A village emptied by a griefer's talk stays emptied. Their families went
+  somewhere, other strangers saw them go, and they could come back only by the world's own means.
+- **Snapshots name the stranger they caught.** A report's snapshot keeps the subjects in it after
+  those strangers erase. It is moderation's record, kept with the report.
+- **No player-facing notice that a report was acted on**, and no appeal.
+- **Moderators are named by setting** (`ECHO_MODERATORS`), like the owner's voice (C62).
+- **Offensive houses can only be taken down whole.** Colours cannot be reset one by one.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 57. What C68 does not do yet (2026-10-21)
+
+- **Not measured on a phone.** The lighter shadow map is reasoned, not measured: the frame has still
+  never been timed on real phone hardware (C23's admission stands). The browser runs were a desktop
+  GPU in a phone-sized window.
+- **The inspector is unchanged.** It is a measurement panel, opened on purpose, and still reads like
+  one: monospace, numbers and route codes. That is its job; it is the one panel that was not
+  simplified.
+- **The pack's crafting list and the thing names in prompts** keep their old styling below the
+  header.
+- **The landing's lower sections keep their pixel cards and pixel headings.** Only the sentences and
+  form fields moved to sans, and the legend book is untouched.
+- **The controls are said once per browser.** A person who missed them finds them in the menu, under
+  "Controls".
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 58. What C69 does not translate (2026-10-21)
+
+- **What the world says stays English:**
+  - the villagers' news (`comingOn` words, from the society module);
+  - the lines an act answers with ("You leave the herbs at the door…");
+  - thing names ("a well", "Hul's house");
+  - occupations;
+  - a talk's greeting.
+  Translating these means Turkish templates in `@echo/planet`, where the words are made, with names
+  inflected for Turkish suffixes.
+- **The mirror, the inspector, the echo's full report, the moderators' page and the landing** are
+  English.
+- **The landing's pixel face has no Turkish letters loaded** (`Pixelify_Sans`, latin subset). It does
+  not matter while the landing is English.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 59. The in-process store does not enforce the database's rules (2026-10-21)
+
+Every web test of a village, a mark, a deed or a report runs on `VILLAGE_STORE=memory`. That store
+keeps rows in a map, enforces no `check`, no `not null`, no key and no type, and builds no index.
+A write the database would refuse passes every test.
+
+C70 found two defects that way, on the first real Postgres. The CI gate now covers those two facts,
+not the class:
+
+- **Any other value the code writes that a check refuses** would still pass every test and fail
+  only in production.
+- **What closes it:** run the store's own methods against the migrated CI database, or make the
+  memory store enforce the same checks. Both are bigger than the fix that found the gap.
+
+**Status:** OPEN.
+
+## ⚑ 60. What C71 does not do yet (2026-10-21)
+
+- **Only people who paired.** There is no meeting between strangers, and no suggestion of whom to
+  pair with.
+- **Voices only by setting.** A person's own voice exists only when bound in `ECHO_VOICES` (or as the
+  owner's). Nothing in the app makes one. Without it, the page uses two browser voices.
+- **The friend's body is a stock one**, the same for them every time, not the look they dyed (C59).
+- **Word stays with the witnesses.** It does not spread to families the next day, as a deed does
+  (C45).
+- **Untrained echoes only rehearse.** A meeting is said aloud only once each person has trained their
+  echo: about 8 answers in a bucket, with agreement of 0.8 or more and calibration error of 0.1 or
+  less.
+- **The engine's register.** In the real run, the sociable echo's drafts came out as slang ("Hell yeah,
+  let's do it!"). That is the engine's writing (C7). It is worth reading before showing anyone.
+- **The store's meeting calls are untested through PostgREST.** The `.or()` with a quoted timestamp
+  and the upsert that ignores duplicates were checked only as the equivalent SQL on Postgres.
+- **Nothing happens if nobody comes back.** Meetings are filled lazily, and the friend learns of one
+  on their next visit; there is no notification.
+- **Night meetings in development.** With the dev knob `ECHO_AWAY_MS` shorter than a world day, a
+  meeting can fall at night. Real absences always hold daylight.
+- **Moderation does not reach meetings.** A meeting changes no shared state, so the only harm is one
+  echo's words to the other person, and those passed that echo's own gate.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 61. What C72 does not do yet (2026-10-22)
+
+- **A full erase needs the tables.** It says "Gone" only on a database with 0033 and 0034 applied, and
+  with the engine reachable. Until then it honestly says not everything could be erased.
+- **The owner's echo must already be trained.** About ten "that's me" answers in its buckets, or it
+  too will only rehearse. In a local engine without `ECHO_ML_PERSIST`, that training is lost when the
+  engine restarts.
+- **The owner's voice needs its own setting.** The host's lines are in the owner's own voice only with
+  `ELEVENLABS_OWNER_VOICE_ID` and `ECHO_OWNER_SUBJECTS`; otherwise they use a browser voice.
+- **A five-minute echo says little of its own.** The visitor's lines are what it would have said;
+  that is the point, but it is not yet "you".
+- **Voices are capped by the plan.** The account has 10 voice slots and the owner uses one, so at most
+  nine visitors can have a voice at once until the sweep frees them.
+- **No warning if the microphone is quiet**, beyond a recording too short to use.
+- **The meeting can be at night.** The meeting's time is inside the five minutes, which is less than
+  a world day.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 62. What C73 does not do yet (2026-10-28)
+
+- **Walking now moves the mean too far.** C73 removed the false "average" that held every axis near 0.
+  Sixty walking windows from a fresh echo now give openness +0.88, energy +1.00 (clipped), warmth
+  −0.45 and formality +0.42. They leave honest uncertainty behind them: energy sd 0.73. Two causes,
+  both older than C73:
+  - The synthetic W loads the two walking features almost alike, with a small Ψ (0.018, 0.023), so
+    the model explains the small difference between them by inflating energy, an axis neither loads
+    much.
+  - Each window counts as an independent measurement, though a session's walking is one way of
+    walking, measured sixty times.
+
+  **Fixed by C74**, with the owner's approval: one session's walking counts as one measurement, each
+  window carrying 1/60 of it. On the same walk through the engine, the result is the same whether a
+  session sends 60, 150 or 400 windows: openness +0.29, affect +0.15, energy +0.04, openness sd
+  0.82. ⚑63 has what that leaves.
+- **Cues that now move nothing.** These only ever moved the posterior through their own names:
+  - `take_marked_path`, "carried only by the action embedding" by design;
+  - `conform_custom` and `travel_near`, whose only feature is the dead `consistency` column (⚑23);
+  - the E1 `first_contact` social event, which carries no telemetry at all.
+
+  The walkthroughs pin them silent. Each needs a measured signal, or ⚑23's re-anchor.
+- **W is still the synthetic one.** C73 makes the update honest about what it measured; it does not
+  make the measurement right. That is the calibration study's job.
+- **The meter fills slowly now**, in `/you` too. A walk alone takes it to about 7% since C74, where it
+  said 98%; acts and choices are what fill it. That is the honest number, and the five-minute demo
+  shows it.
+
+**Status:** the first item CLOSED by C74; the rest OPEN, written down rather than discovered.
+
+## ⚑ 63. What C74 does not do yet (2026-11-02)
+
+- **The session lives in the engine's memory**, like the walking record itself. A restart starts a new
+  session, which allows one more measurement's worth of walking.
+- **A session is a pause, not a visit.** It ends after 30 minutes without a walking window. The
+  client's `sessionId` is not used.
+- **The first ten minutes speak for the session.** Each window is 1/60 of a measurement, so a session's
+  first 60 windows carry its walk, and later ones are recorded but move nothing. A two-minute walk is
+  about a fifth of a measurement. The 60 comes from one self-trial, not from data.
+- **Sessions still add up.** Thirty sessions are thirty measurements, so the synthetic W's habit of
+  explaining the two walking features' difference through energy comes back slowly over weeks of
+  walking. The real fix is re-fitting W on real people; this only sets the pace.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 64. What C75 does not do yet (2026-11-02)
+
+- **Trust moves nothing.** `lend_raft` and `keep_raft` are recorded, but no ingest route reads them
+  and W has no trust direction. Reading them is an engine change (C7): a feature, and W re-fit on the
+  pilot's own data.
+- **Ingest reads cues by prefix.** `cue.startswith("F1")` takes F10–F13 for save-or-spend, and
+  `startswith("H1")` takes H10 onwards for the queue. Nothing shipped sends those cues today; the next
+  one that does is read as something it is not. Engine (C7).
+- **Drinking at the well is read as an approach.** The A branch sets `approach` for every A-channel
+  event, so the unrouted A5 `drink_water` moves warmth. Older than C75; left as it is.
+- **Raw records are swept after 90 days** (`behavioral_events`, `player_stagings`, `echo_ledger`).
+  Export the pilot before then. The pilot's own tables are kept.
+- **One browser per person.** A friend who comes back on another browser or device is a new person;
+  there is no way to carry them over.
+- **What the pack allows.** A friend who gave away or traded all their bread before meeting the
+  stranger, or lost the raft, does not meet that one this visit. The top-up is at a visit's start.
+- **The shore two wait for the shore.** Someone who never goes down to the sea does not meet the
+  fisher or the borrower.
+- **Friends do not see each other** (⚑54). They share the village's lasting state (needs met, marks,
+  word of what strangers did), not each other.
+- **The echo kept by the engine** is kept only with `ECHO_ML_PERSIST=1`; otherwise it is lost on a
+  restart. The raw events are kept regardless, so every echo can be rebuilt by replaying them.
+- **No analysis yet.** The export is raw JSON; the analysis script is still to write. *Closed by C77:
+  `research/pilot/analyze.py`.*
+- **On the first visit** the controls hint and the pack line overlap at the bottom of the screen for a
+  few seconds. Older than C75.
+- **No ethics approval.** This is a pilot among friends, with consent, nicknames and erasure. A
+  published study will need an ethics review.
+
+**Status:** OPEN, all of it, written down rather than discovered.
+
+## ⚑ 65. What C76–C77 do not do yet (2026-11-02)
+
+- **The two-layer echo lives in `research/` only.** The engine's echo still has one layer and its
+  synthetic W (C7). Moving the second layer into the engine is a C7 change and the owner's call: one
+  person-specific number per feature in the state, and W re-fit on the pilot's own data.
+- **Copying the last choice is as good as the two-layer echo**, not worse, in simulation. Without
+  pooling it was ahead (median difference −.058 at 16 people); partial pooling of the six choices'
+  stability (C79) brought the echo level with it (.342 against .338 at 16 people). Binary choices leave
+  little room to beat copying; the echo's gain over it is its fallback to traits and, with more people,
+  calibrated probabilities.
+- **Its probabilities are not calibrated at pilot size.** The choice it names is good. Scored by the
+  ranked probability score, its advantage over one layer is weaker (power .35 against .57 at 16
+  people), because its variance split is estimated on a dozen people.
+- **The engine weighs an act as a message of no words.** `observe` multiplies every behavioural act's
+  noise by `reliability_noise_scale("", …)` = 7, a heuristic for short chat messages. Removing it alone
+  barely changes the engine echo's predictions (skill −0.02 → +0.01 in simulation); the one layer and
+  the synthetic W are what hold it back. Engine (C7).
+- **Trust is still unrouted** (⚑64). The research echoes read the lending choice itself; the engine
+  cannot.
+- **The simulation is assumptions, not data.** They are set to published ranges: trait–act
+  correlations near .3, retest .5–.7, self-insight .8, friends' insight .45–.72, and a pull toward
+  the admirable in what people say. The pilot replaces them.
+- **The pilot's power.** The central test (two layers > one) has about 0.65 at 16 people with
+  two visits and reaches .8 near 40; with three visits (C78) it has 0.82 at 20. Echo against
+  friends is an estimate at any size a circle of friends can reach.
+- **The draft's references** were checked against bibliographic records on 2026-11-02. Park et al. is cited
+  by its first title; its revision has another. Cite the version read.
+- **The exact path is slow**: about 9 s per person through the engine's endpoints (87 s for 10).
+  This is fine for a pilot; the library path, held to it bit for bit, is for simulation.
+- **Walking in the real client** is up to one window per 1.5 s, where the simulation uses 40–140 a
+  visit. The research echoes read a visit's mean and the engine caps a session at one measurement
+  (C74), so neither depends on the count.
+- **Ratings need migration 0036** on a Supabase store: without it, saving a rating fails (C76).
+
+**Status:** OPEN, all of it, written down rather than discovered.

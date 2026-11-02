@@ -27,3 +27,51 @@ export * from "./demo-cell.js";
 export * from "./worldclock.js";
 export * from "./society.js";
 export * from "./geography.js";
+// Life events and temperament, read off the society substrate (C40).
+export * from "./life.js";
+// The village on the ground: plots, dock, fields, graves (C41).
+export * from "./village.js";
+export * from "./villageAt.js";
+// Everyone's day, as a closed form of the hour (C41).
+export * from "./schedule.js";
+// What conversations change about a life, and what a villager wants (C44).
+export * from "./changes.js";
+export * from "./goals.js";
+// Everything a person can do to anything, the village's things, and who knows what you did (C45).
+export * from "./affordances.js";
+export * from "./things.js";
+export * from "./deeds.js";
+// What a stranger carries and makes (C47), and how villagers walk round things (C46).
+export * from "./items.js";
+export * from "./nav.js";
+// The weather and the year (C48).
+export * from "./weather.js";
+// Who is close to whom, and what they say (C49).
+export * from "./social.js";
+// What a villager would ask a stranger for (C50).
+export * from "./needs.js";
+// A village's burials, weddings and new children, on the day (C52).
+export * from "./events.js";
+// Between villages: going, coming home, marrying someone from elsewhere (C53).
+export * from "./moves.js";
+// Inside a house (C54).
+export * from "./interiors.js";
+// Goats, hens, dogs, birds and fish (C55).
+export * from "./animals.js";
+// From one parcel to the next across the water, and the travel stand in parcels (C57).
+export * from "./crossing.js";
+// A stranger come in from the sea, and who knows it (C57).
+export * from "./landings.js";
+// Villages trading with each other, a market every sixth day (C58).
+export * from "./markets.js";
+// Barter and labour for labour, with no price (C58).
+export * from "./trade.js";
+// A stranger's own house on their own land (C59).
+export * from "./homes.js";
+// What the director sets out for a stranger, and where (C63).
+export * from "./director.js";
+// The pilot village (C75): the six paradigms' order, the tide's turn, a lent raft.
+export * from "./pilot.js";
+// How people die from now on, and what a stranger can do about it (C66).
+export * from "./mortality.js";
+export * from "./fates.js";

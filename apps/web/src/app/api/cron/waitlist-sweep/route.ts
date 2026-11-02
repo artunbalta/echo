@@ -4,6 +4,8 @@ import { hasFal, submitPortrait, fetchResult, extract } from "@/lib/fal-portrait
 import { finishPortraitJob, LEASE_SECONDS, MAX_ATTEMPTS } from "@/lib/waitlist-portrait";
 import { sendWaitlistEmail } from "@/lib/waitlist-email";
 import { sweepRawRetention } from "@/lib/retention";
+import { sweepDemoVisits, sweepDemoVoices } from "@/lib/demo";
+import { villageStore } from "@/lib/villageStore";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -72,6 +74,12 @@ export async function GET(req: Request) {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
+  // Demo visitors' own voices past their day (C72), deleted at ElevenLabs. Every demo request sweeps
+  // too; this is the floor for a demo nobody opens again. It cannot throw.
+  const store = villageStore();
+  const voicesDeleted = store ? await sweepDemoVoices(store) : 0;
+  const visitsErased = store ? await sweepDemoVisits(store) : 0;
+  if (voicesDeleted || visitsErased) console.log(`[cron] demo: ${voicesDeleted} voice(s) and ${visitsErased} visit(s) past their day erased`);
 
   const admin = adminClient();
   if (!admin) return NextResponse.json({ ok: true, skipped: "no supabase", retention });

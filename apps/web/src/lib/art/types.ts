@@ -7,9 +7,21 @@ import type { CharacterAttributes } from "@echo/shared";
 
 export interface PortraitRequest {
   attributes: CharacterAttributes;
-  /** Optional source selfie as a data URL / https URL for img2img conditioning. */
-  selfieUrl?: string;
-  /** Canonical pixel-art style anchor (ART_STYLE_REFERENCE). */
+  /**
+   * Canonical pixel-art style anchor (ART_STYLE_REFERENCE). SERVER-SIDE, from the environment —
+   * this is the only image URL a portrait job may be conditioned on.
+   *
+   * THERE USED TO BE A `selfieUrl` HERE and it is deliberately gone rather than validated.
+   * `api/portrait/route.ts` read it straight out of an unauthenticated request body and the
+   * providers handed it to the paid backend — `input.image_url = req.selfieUrl` in `fal.ts`,
+   * `InputImage.fromUrl(req.selfieUrl)` in `higgsfield.ts` — so any caller could make this
+   * project's image-generation account fetch a URL of their choosing and generate from it, on this
+   * project's credentials. MEASURED: it had no sender. `lib/character.ts` posts `{ attributes }`,
+   * and every other `selfieUrl` in the tree belongs to the waitlist pipeline, which is server-side
+   * and uploads to fal storage itself. Removing it from the TYPE rather than filtering it at the
+   * route is `⚑27`'s move for `ownerId`: the passthrough cannot come back without a type change,
+   * so a later author adding it out of symmetry has nothing to add it to.
+   */
   styleReferenceUrl?: string;
 }
 

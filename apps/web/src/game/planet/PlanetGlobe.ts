@@ -173,6 +173,7 @@ export class PlanetGlobe {
   private readonly calibration: Calibration;
 
   private owned: THREE.Mesh | null = null;
+  private villages: THREE.Points | null = null;
   private mine: THREE.Group | null = null;
   private frame = 0;
   private spin = 0;
@@ -209,7 +210,9 @@ export class PlanetGlobe {
     host.appendChild(this.renderer.domElement);
     this.renderer.domElement.style.display = "block";
 
-    this.scene.background = new THREE.Color("#101c19");
+    // The page's own ink (C68), so the hero and every section under it are one ground: it was a
+    // dark green here, and the landing turned from green to violet as it scrolled.
+    this.scene.background = new THREE.Color("#1c1326");
     this.scene.add(this.planet);
     this.camera.position.set(0, 0.22, this.idleDistance);
 
@@ -233,7 +236,7 @@ export class PlanetGlobe {
     // hemisphere costs 0.6 -> 1.6 and drags the whole planet to 73.48, back toward washed.
     //
     // The residual 0.22% is not lightable: at rim 2.6 it is still 0.15%, because those are the
-    // antialiased silhouette pixels blending into the page's own #120c19 ground.
+    // antialiased silhouette pixels blending into the page's own ink ground.
     this.scene.add(new THREE.HemisphereLight(0xcfc0e8, 0x241733, 0.6));
     const key = new THREE.DirectionalLight(0xfff4e0, 1.6);
     key.position.set(3, 2.4, 4);
@@ -328,6 +331,69 @@ export class PlanetGlobe {
       new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.05 }),
     );
     this.planet.add(this.owned);
+  }
+
+  /**
+   * The planet's villages, as lights (DECISIONS C41): one point at the centre of every settled cell,
+   * warmer and brighter the more people its ground can hold.
+   *
+   * POINTS, NOT PARCELS, and the count is why. `setClaimed` extrudes a hexagon per cell and caps at
+   * twelve hundred because "a million hexagons is not a picture"; there are some twenty-seven thousand
+   * villages, and a light is what a village looks like from this far up anyway. One draw call for all
+   * of them, a fixed few pixels each, hidden behind the planet's limb by the depth buffer like
+   * everything else on it. Seated with `globeRadiusAt` plus the hover patch's own lift, so a light
+   * stands on the ground it names and not on the highest peak's sphere.
+   */
+  setVillages(cells: readonly string[], capacity: readonly number[]): void {
+    if (this.villages) {
+      this.planet.remove(this.villages);
+      this.villages.geometry.dispose();
+      (this.villages.material as THREE.Material).dispose();
+      this.villages = null;
+    }
+    if (cells.length === 0) return;
+    const positions = new Float32Array(cells.length * 3);
+    const colours = new Float32Array(cells.length * 3);
+    const sizes = new Float32Array(cells.length);
+    const ember = new THREE.Color(0xd08a40);
+    const lantern = new THREE.Color(0xffc05a);
+    const colour = new THREE.Color();
+    cells.forEach((cell, i) => {
+      const { direction } = cellCentre(cell);
+      const r = globeRadiusAt(this.field, this.calibration, direction) + MARKER_LIFT;
+      positions[i * 3] = direction[0] * r;
+      positions[i * 3 + 1] = direction[1] * r;
+      positions[i * 3 + 2] = direction[2] * r;
+      // A hamlet is a small ember; a town on a trade route is a lantern three pixels across. Tuned by
+      // eye against two screenshots, both wrong: every village at the same bright 2.6 px buried the
+      // continents under twenty-eight thousand of them, and a dark 0.9 px ember lost them entirely.
+      const t = Math.pow(Math.min(1, (capacity[i] ?? 0) / 140), 1.4);
+      colour.copy(ember).lerp(lantern, t);
+      colours[i * 3] = colour.r;
+      colours[i * 3 + 1] = colour.g;
+      colours[i * 3 + 2] = colour.b;
+      sizes[i] = 1.3 + 2.0 * t;
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+    geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+    geometry.computeBoundingSphere();
+    this.villages = new THREE.Points(
+      geometry,
+      new THREE.ShaderMaterial({
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        uniforms: { pixelRatio: { value: this.renderer.getPixelRatio() } },
+        vertexShader: `attribute float size; uniform float pixelRatio; varying vec3 vColour;
+          void main() { vColour = color; gl_PointSize = size * pixelRatio; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `varying vec3 vColour;
+          void main() { float r = length(gl_PointCoord - 0.5); if (r > 0.5) discard; gl_FragColor = vec4(vColour, smoothstep(0.5, 0.15, r) * 0.85); }`,
+      }),
+    );
+    this.villages.name = "globe:villages";
+    this.planet.add(this.villages);
   }
 
   /**
@@ -686,6 +752,10 @@ export class PlanetGlobe {
 
   dispose(): void {
     this.disposed = true;
+    // Points are not in the traversal below, which disposes meshes and outlines only.
+    this.villages?.geometry.dispose();
+    (this.villages?.material as THREE.Material | undefined)?.dispose();
+    this.villages = null;
     cancelAnimationFrame(this.frame);
     window.removeEventListener("resize", this.resize);
     this.observer?.disconnect();

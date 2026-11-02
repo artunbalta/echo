@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { ThreeWorld } from "@/game/ThreeWorld";
 import { generateArchipelago } from "@/game/tilemap";
 import { Flow5Probes, type ProbeKind } from "@/game/activities/flow5Probes";
-import { resolveUserId } from "@/lib/identity";
+import { identityHeaders, resolveUserId } from "@/lib/identity";
 import { type EntitySnapshot, type BehavioralEvent } from "@echo/shared";
 
 export default function Flow5Client() {
@@ -36,7 +36,7 @@ export default function Flow5Client() {
   const postEvents = useCallback((events: BehavioralEvent[]) => {
     if (!events.length) return;
     void fetch("/api/observe/behavioral", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ events }),
+      method: "POST", headers: identityHeaders(), body: JSON.stringify({ events }),
     }).catch(() => { /* best-effort; never block the player */ });
   }, []);
 
@@ -55,7 +55,7 @@ export default function Flow5Client() {
       let seed = 7;
       try {
         const r = await fetch("/api/island/assign", {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId }),
+          method: "POST", headers: identityHeaders(), body: JSON.stringify({ userId }),
         });
         const placement = (await r.json()) as { seed?: number };
         if (typeof placement.seed === "number") seed = placement.seed;
@@ -136,20 +136,20 @@ export default function Flow5Client() {
   }, [postEvents]);
 
   return (
-    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-[#f4e9d0]">
+    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0a12] text-parchment">
       <div ref={mountRef} className="absolute inset-0" />
       {whisper && (
-        <div className="pointer-events-none absolute left-1/2 top-10 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-[#f4e9d0]/80">
+        <div className="pointer-events-none absolute left-1/2 top-10 w-[min(90vw,560px)] -translate-x-1/2 text-center text-sm italic text-parchment/80">
           {whisper}
         </div>
       )}
       {prompt && (
-        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-[#a06cd5]/30 bg-black/50 px-4 py-1.5 text-xs text-[#f4e9d0]/85 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 rounded-full border border-echo/30 bg-black/50 px-4 py-1.5 text-xs text-parchment/85 backdrop-blur">
           {prompt}
         </div>
       )}
       {!prompt && (
-        <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-[#f4e9d0]/55 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-black/30 px-4 py-1.5 text-xs text-parchment/55 backdrop-blur">
           walk with WASD / arrows
         </div>
       )}

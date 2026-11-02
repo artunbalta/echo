@@ -43,6 +43,7 @@
 import { AXIS_POLES, PERSONA_AXIS_KEYS, describeAxes, vectorToAxes } from "@echo/shared";
 
 import { LOG_SIZE, type ConsentState, type MeasureLogEntry, type Posterior } from "../../game/world/measure";
+import { t, type Lang } from "../../lib/i18n";
 
 /**
  * Sigma's diagonal before any evidence: services/ml/echo_ml/config.py:12, `prior_var = 1.0`. It is
@@ -134,22 +135,27 @@ export function namedAxes(posterior: Posterior): string[] {
   return describeAxes(vectorToAxes(posterior.mu.map((mu, i) => (Number.isFinite(v[i]) && v[i] <= ASSERT_VAR_MAX ? mu : 0))));
 }
 
-/** The one line under the bar. It is here rather than in the JSX so a guard can read it. */
-export function headline(r: RecognitionReading): string {
+/**
+ * The one line the meter says, on hover or tap. It is here rather than in the JSX so a guard can read
+ * it. Plain words (C68): an offline service is "cannot hear you", not the route's reason code; the
+ * code is the inspector's to show, which already names it beside the posterior.
+ */
+export function headline(r: RecognitionReading, lang: Lang = "en"): string {
   switch (r.kind) {
     case "off":
-      return r.consent === "declined" ? "off · you said no, and nothing is read" : "off · nothing is read until you say yes";
+      return t(lang, r.consent === "declined" ? "meter.offDeclined" : "meter.offUnset");
     case "waiting":
-      return "reading what it already knows";
+      return t(lang, "meter.waiting");
     case "offline":
-      return `demo values · ${r.reason}`;
+      return t(lang, "meter.offline");
     case "no_variance":
-      return "no covariance came back, so there is no certainty to draw";
+      return t(lang, "meter.noVariance");
     case "measured": {
-      const pct = `${Math.round(r.certainty01 * 100)}% sure`;
-      const names = r.named.length ? `names ${r.named.length} of ${PERSONA_AXIS_KEYS.length}` : "names nothing of you yet";
-      const n = `${r.windows}${r.windowsAtLeast ? "+" : ""}`;
-      return `${pct} · ${names} · ${n} ${r.windows === 1 && !r.windowsAtLeast ? "window" : "windows"}`;
+      const n = Math.round(r.certainty01 * 100);
+      const pct = lang === "tr" ? `%${n} ${t(lang, "meter.sure")}` : `${n}% ${t(lang, "meter.sure")}`;
+      const names = r.named.length ? t(lang, "meter.names", { n: r.named.length, of: PERSONA_AXIS_KEYS.length }) : t(lang, "meter.namesNone");
+      const count = `${r.windows}${r.windowsAtLeast ? "+" : ""}`;
+      return `${pct} · ${names} · ${count} ${t(lang, r.windows === 1 && !r.windowsAtLeast ? "meter.window" : "meter.windows")}`;
     }
   }
 }

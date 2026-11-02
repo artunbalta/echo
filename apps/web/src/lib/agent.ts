@@ -3,6 +3,8 @@
  * hold the ML token). Every agent utterance can show "why it said that"; every human
  * approve/edit/reject becomes a high-signal label feeding §9.3/§9.4/§9.5/§9.7.
  */
+import { identityHeaders } from "@/lib/identity";
+
 export interface AgentTurn {
   action: string;
   decision: "auto" | "ask" | "copilot";
@@ -44,7 +46,7 @@ export async function proposeReply(
 ): Promise<AgentTurn> {
   const res = await fetch("/api/agent/turn", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: identityHeaders(),
     body: JSON.stringify({ userId, context, userMessage, bucket, stakes }),
   });
   return res.json();
@@ -62,13 +64,15 @@ export async function sendFeedback(body: {
 }): Promise<void> {
   await fetch("/api/agent/feedback", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: identityHeaders(),
     body: JSON.stringify(body),
   });
 }
 
 export async function getPersona(userId: string): Promise<PersonaSnapshot> {
-  const res = await fetch(`/api/agent/persona?uid=${encodeURIComponent(userId)}`);
+  // `?uid=` is a CLAIM the route checks against the signature, not the thing that selects the row —
+  // this is the read ⚑27 was opened about, so it has been refused without a header since C39.
+  const res = await fetch(`/api/agent/persona?uid=${encodeURIComponent(userId)}`, { headers: identityHeaders() });
   return res.json();
 }
 
@@ -82,7 +86,7 @@ export async function approveMeeting(body: {
 }): Promise<void> {
   await fetch("/api/agent/meeting-outcome", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: identityHeaders(),
     body: JSON.stringify(body),
   });
 }
@@ -105,7 +109,7 @@ export async function requestConnectionAnalysis(
   try {
     const res = await fetch("/api/connections/analyze", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: identityHeaders(),
       body: JSON.stringify({ userId, sessionId, people }),
     });
     const data = (await res.json()) as { analyses?: ConnectionAnalysis[] };

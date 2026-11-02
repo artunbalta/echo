@@ -36,6 +36,14 @@ export const RAW_RETENTION_DAYS = 90;
 export const RAW_TABLES: readonly { table: string; column: string }[] = [
   // The durable record of every measurement the landing world sends to the engine (0011).
   { table: "behavioral_events", column: "created_at" },
+  // What each of those did to the echo, for the mirror (0027, C61). A record of acts, so raw: a row
+  // that ages off is shown as "not in this record" rather than vanishing from the account.
+  { table: "echo_ledger", column: "at" },
+  // What the director set out for someone, and how they answered it (0028, C63).
+  { table: "player_stagings", column: "created_at" },
+  // When someone was last here, and what their echo did while they were away (0029, C64).
+  { table: "player_presence", column: "last_seen_at" },
+  { table: "echo_outings", column: "made_at" },
   // The older telemetry envelope, same shape, different route (0001).
   { table: "telemetry_events", column: "ts" },
   // Who approached whom, and when (0001).
@@ -48,6 +56,13 @@ export const RAW_TABLES: readonly { table: string; column: string }[] = [
   { table: "messages", column: "ts" },
   // Generated narration about a session, which quotes it (0001).
   { table: "narrations", column: "ts" },
+  // What two echoes said to each other while their people were away (0033, C71): a record of what
+  // someone's echo did, so raw, as an outing is. Codes are single use and a day long; swept with them.
+  { table: "echo_meetings", column: "made_at" },
+  { table: "echo_invites", column: "created_at" },
+  // A demo visit (0034, C72). Its cloned voice is gone within a day by its own sweep; the row, a record
+  // of someone being shown the world, goes on this clock.
+  { table: "demo_visits", column: "started_at" },
 ];
 
 /**

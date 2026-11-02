@@ -15,11 +15,11 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useReducedMotion, type GlobePhase } from "@/components/planet/motion";
-import { resolveUserId } from "@/lib/identity";
+import { ensureIdentity, identityHeaders, resolveUserId } from "@/lib/identity";
 
 const GlobeCanvas = dynamic(() => import("@/components/planet/GlobeCanvas"), {
   ssr: false,
-  loading: () => <div className="h-full w-full bg-[#120c19]" />,
+  loading: () => <div className="h-full w-full bg-ink-deep" />,
 });
 
 interface Status {
@@ -108,15 +108,22 @@ export function ClaimClient() {
     setBusy(true);
     setError(null);
     try {
+      // The SIGNED id, awaited before the claim is sent. `resolveUserId` mints a local id with no
+      // signature, and `/api/planet/claim` has derived its subject from one since C39 — so this page
+      // has been answering `identity_required` to every claim on a cold browser, while the button
+      // still read "Claim it". Routing the fetch through `identityHeaders()` does not fix that:
+      // a header builder can only send a token that exists (⚑28). THIS is the mint that makes it
+      // exist, and this page is where lib/identity.ts already says one belongs — it asks no consent
+      // question a stamped key would answer early, and it already promises the identifier is
+      // permanent. A failed mint falls back to the local id and the route refuses, which is the
+      // honest outcome rather than a claim recorded under something nobody can prove.
+      const ownerId = (await ensureIdentity()) || resolveUserId();
       const response = await fetch("/api/planet/claim", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: identityHeaders(),
         // The NAME is what to call them; the OWNER ID is who they are (SOC-2.B). Sending only the
-        // name made two people called Sam one owner. `resolveUserId` mints on first use, which is
-        // correct here and only here: this page already promises "that identifier is permanent",
-        // and unlike the parcel routes it asks no consent question that a stamped key would answer
-        // early — see lib/identity.ts, which reserves minting for exactly this kind of act.
-        body: JSON.stringify({ name: name.trim(), ownerId: resolveUserId() }),
+        // name made two people called Sam one owner.
+        body: JSON.stringify({ name: name.trim(), ownerId }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -147,7 +154,7 @@ export function ClaimClient() {
   }, [status]);
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-[#120c19] text-[#f4e9d0]">
+    <main className="relative h-screen w-screen overflow-hidden bg-ink-deep text-parchment">
       <div className="absolute inset-0">
         {world ? (
           <GlobeCanvas
@@ -165,20 +172,20 @@ export function ClaimClient() {
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 sm:p-10">
         <header className="pointer-events-auto max-w-xl">
           <h1 className="font-pixel text-xl tracking-wide sm:text-2xl">A planet with room on it</h1>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-[#f4e9d0]/70">
+          <p className="mt-2 max-w-md text-sm leading-relaxed text-parchment/70">
             One sphere, divided into parcels. Every parcel has exactly one owner, permanently.
           </p>
         </header>
 
         {!parcel ? (
-          <section className="pointer-events-auto w-full max-w-md rounded-lg border border-[#a06cd5]/30 bg-[#1c1326]/85 p-5 backdrop-blur-sm">
+          <section className="pointer-events-auto w-full max-w-md rounded-lg border border-echo/30 bg-ink/85 p-5 backdrop-blur-sm">
             {sentence ? (
-              <p className="font-pixel text-sm leading-relaxed text-[#a06cd5]">{sentence}</p>
+              <p className="font-pixel text-sm leading-relaxed text-echo">{sentence}</p>
             ) : (
-              <p className="font-pixel text-sm text-[#f4e9d0]/50">Reading the registry</p>
+              <p className="font-pixel text-sm text-parchment/50">Reading the registry</p>
             )}
 
-            <label className="mt-5 block text-xs uppercase tracking-widest text-[#f4e9d0]/50" htmlFor="name">
+            <label className="mt-5 block text-xs uppercase tracking-widest text-parchment/50" htmlFor="name">
               Your name
             </label>
             <input
@@ -189,7 +196,7 @@ export function ClaimClient() {
                 if (event.key === "Enter") void submit();
               }}
               autoComplete="off"
-              className="mt-2 w-full rounded border border-[#f4e9d0]/20 bg-[#120c19] px-3 py-2 text-[#f4e9d0] outline-none focus:border-[#a06cd5]"
+              className="mt-2 w-full rounded border border-parchment/20 bg-ink-deep px-3 py-2 text-parchment outline-none focus:border-echo"
               placeholder="Who is arriving"
             />
 
@@ -197,12 +204,12 @@ export function ClaimClient() {
               type="button"
               onClick={() => void submit()}
               disabled={busy || name.trim().length < 2}
-              className="mt-4 w-full rounded bg-[#a06cd5] px-4 py-2.5 font-pixel text-sm text-[#120c19] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="mt-4 w-full rounded bg-echo px-4 py-2.5 font-pixel text-sm text-ink-deep transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {busy ? "Claiming your parcel" : "Claim your parcel"}
             </button>
 
-            <p className="mt-3 text-xs leading-relaxed text-[#f4e9d0]/45">
+            <p className="mt-3 text-xs leading-relaxed text-parchment/45">
               Your parcel is chosen at random from what is left. You cannot pick, and it is yours
               from the moment it is drawn.
             </p>
@@ -231,8 +238,8 @@ function ParcelPanel({
       : `${Math.round(parcel.areaKm2 * 1e6).toLocaleString()} m²`;
 
   return (
-    <section className="pointer-events-auto w-full max-w-md rounded-lg border border-[#a06cd5]/30 bg-[#1c1326]/90 p-5 backdrop-blur-sm">
-      <p className="font-pixel text-sm text-[#a06cd5]">Parcel claimed</p>
+    <section className="pointer-events-auto w-full max-w-md rounded-lg border border-echo/30 bg-ink/90 p-5 backdrop-blur-sm">
+      <p className="font-pixel text-sm text-echo">Parcel claimed</p>
       <h2 className="mt-1 font-pixel text-lg">{BIOME_LABEL[parcel.biome] ?? parcel.biome}</h2>
 
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -244,16 +251,16 @@ function ParcelPanel({
         <Row label="Owners before you" value={status ? `${(status.parcelsSold - 1).toLocaleString()}` : "counting"} />
       </dl>
 
-      <p className="mt-4 break-all font-mono text-[11px] leading-relaxed text-[#f4e9d0]/50">
+      <p className="mt-4 break-all font-mono text-[11px] leading-relaxed text-parchment/50">
         {parcel.h3Index}
       </p>
-      <p className="text-[11px] text-[#f4e9d0]/40">
+      <p className="text-[11px] text-parchment/40">
         That identifier is permanent. It names this parcel for as long as the planet exists.
       </p>
 
       <a
         href={`/parcel/${parcel.h3Index}`}
-        className={`mt-4 block rounded bg-[#f4e9d0] px-4 py-2.5 text-center font-pixel text-sm text-[#120c19] transition-opacity hover:opacity-90 ${
+        className={`mt-4 block rounded bg-parchment px-4 py-2.5 text-center font-pixel text-sm text-ink-deep transition-opacity hover:opacity-90 ${
           phase === "arrived" ? "opacity-100" : "pointer-events-none opacity-40"
         }`}
       >
@@ -266,7 +273,7 @@ function ParcelPanel({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <dt className="text-[#f4e9d0]/45">{label}</dt>
+      <dt className="text-parchment/45">{label}</dt>
       <dd className="text-right tabular-nums">{value}</dd>
     </>
   );
