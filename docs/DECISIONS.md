@@ -5293,3 +5293,44 @@ only the medians caught 2 of 8; floats are the test.
 - the draft as a page: https://claude.ai/artifact/WEU3sbbnrTd3SdZqCAt7Gi.
 
 What it leaves is ⚑65.
+
+## C78 — a third visit, on the owner's switch
+
+What it answers: the power run (C77) put the central test, two layers against one, at .58 with 16
+friends and .66 with 20. It reaches .8 only near 40, more than a circle of friends. The cheaper lever
+is time rather than people. Asked to come three times, the same friends give the echo a second look,
+and the study gets twice the choices to predict. The third visit is predicted from the first two.
+
+**What the simulation says** (`research/pilot/visits.py`, 200 groups per size, `runs/power-3visits.json`):
+
+| Test | 16 friends: 2 → 3 visits | 20 friends: 2 → 3 visits |
+|---|---|---|
+| two layers > one | .58 → .64 | .66 → .815 |
+| the echo > the bar | .63 → .745 | .695 → .87 |
+
+So 20 friends with three visits reach the conventional .8 for the central test.
+
+**The switch.**
+- `ECHO_PILOT_VISITS=3` asks each friend for three visits. Anything else, or nothing, is two, exactly as
+  before.
+- Each next visit opens a day after the last began. It used to count from the first; with two visits
+  that is the same moment.
+- The status reports the number (`sessions`). The flow says "come back twice more, a day apart", "your
+  third visit", "visit 3 of 3" and "all three visits are done", in English and Turkish.
+- Nothing else changes. The six, the pack's top-up at each visit's start, the ratings and the export
+  are the same; the analysis already predicts each visit from all before it (C77).
+- **It is the owner's choice, made before the first friend's first visit**, since it changes what
+  friends are asked for. It goes into the pre-registration either way.
+
+**Tests.** `apps/web/tests/pilot.test.mts`:
+- three visits only when switched on, each a day after the last began, then done;
+- anything but "3" is two;
+- the third visit's words exist in both languages.
+
+Three planted faults, each caught: the day counted from the first visit, the switch ignored, and any
+value switching it on.
+
+**Checks.**
+- Web 494/494, tsc clean.
+- In a browser at phone width, in Turkish, with the switch on: the intro says "birer gün arayla iki kez
+  daha" and the status reports three.

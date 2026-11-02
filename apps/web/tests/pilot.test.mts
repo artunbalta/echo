@@ -92,6 +92,7 @@ beforeEach(() => {
   process.env.ECHO_PILOT_CODE = CODE;
   process.env.ECHO_PILOT_ADMIN = ADMIN;
   delete process.env.ECHO_PILOT_CELL;
+  delete process.env.ECHO_PILOT_VISITS;
   process.env.ML_SERVICE_URL = "https://ml.test";
   process.env.ML_SERVICE_TOKEN = "t";
 });
@@ -133,7 +134,7 @@ test("C75: off unless switched on, with a code at least four long", async () => 
   process.env.ECHO_PILOT_CODE = "abc";
   assert.equal(pilotConfig(), null, "on with a code anyone could guess");
   process.env.ECHO_PILOT_CODE = CODE;
-  assert.deepEqual(pilotConfig(), { cell: CELL, code: CODE });
+  assert.deepEqual(pilotConfig(), { cell: CELL, code: CODE, visits: 2 });
   const page = readFileSync(new URL("../src/app/pilot/page.tsx", import.meta.url), "utf8");
   assert.match(page, /if \(!cfg\) notFound\(\)/);
 });
@@ -365,6 +366,39 @@ test("C75: an erasure takes the person out of the pilot, and every rating either
   assert.deepEqual(await villageStore()!.pilotRatings(), []);
   const erase = readFileSync(new URL("../src/app/api/account/delete/route.ts", import.meta.url), "utf8");
   for (const row of ['["pilot_people", "subject"]', '["pilot_ratings", "rater"]', '["pilot_ratings", "ratee"]']) assert.ok(erase.includes(row), row);
+});
+
+test("C78: a third visit only when the owner switches it on, each a day after the last began", async () => {
+  process.env.ECHO_PILOT_VISITS = "3";
+  await join(A, "Deniz");
+  assert.equal((await look(A)).sessions, 3);
+  for (const n of [1, 2, 3]) {
+    const res = await pilot(A, "start");
+    assert.equal(res.status, 200, `visit ${n}`);
+    assert.equal(((await res.json()) as { session: { n: number } }).session.n, n);
+    assert.equal((await pilot(A, "end")).status, 200);
+    if (n < 3) {
+      // The next visit counts its day from the start of the last one, not the first.
+      now += PILOT.betweenMs - HOUR;
+      assert.equal(((await (await pilot(A, "start")).json()) as { error: string }).error, "too_soon", `visit ${n + 1} came early`);
+      now += HOUR;
+    }
+  }
+  now += PILOT.betweenMs;
+  assert.equal(((await (await pilot(A, "start")).json()) as { error: string }).error, "done");
+  // Anything but "3" is no switch: two visits, as ever.
+  for (const v of ["", "2", "4", "three"]) {
+    process.env.ECHO_PILOT_VISITS = v;
+    assert.equal(pilotConfig()!.visits, 2, JSON.stringify(v));
+  }
+});
+
+test("C78: the third visit's words are there in both languages", () => {
+  const src = readFileSync(new URL("../src/lib/i18n.ts", import.meta.url), "utf8");
+  for (const key of ["pilot.intro3", "pilot.readyThird", "pilot.tooSoonThird", "pilot.allDone3", "pilot.comeBackThird"]) {
+    assert.equal(src.split(`"${key}":`).length - 1, 2, `${key} in English and Turkish`);
+  }
+  assert.ok(src.includes('"pilot.visit": "visit {n} of {total}"') && src.includes('"pilot.visit": "ziyaret {n}/{total}"'));
 });
 
 test("C75: everything the pilot's six say or offer has its Turkish", () => {

@@ -77,13 +77,17 @@ export interface PilotNotice {
   vars: Record<string, string | number>;
 }
 
-/** The pilot's settings, or null when it is not switched on. */
-export function pilotConfig(): { cell: string; code: string } | null {
+/**
+ * The pilot's settings, or null when it is not switched on. `visits` is two, or three with
+ * `ECHO_PILOT_VISITS=3` (C78): the third visit is the study's power lever, for the owner to choose.
+ */
+export function pilotConfig(): { cell: string; code: string; visits: number } | null {
   if (process.env.ECHO_PILOT !== "1") return null;
   const code = (process.env.ECHO_PILOT_CODE ?? "").trim();
   if (code.length < 4) return null;
   const cell = CELL.test(process.env.ECHO_PILOT_CELL ?? "") ? process.env.ECHO_PILOT_CELL! : PILOT_DEFAULT_CELL;
-  return { cell, code };
+  const visits = process.env.ECHO_PILOT_VISITS === "3" ? 3 : PILOT.sessions;
+  return { cell, code, visits };
 }
 
 /** Whether a request carries the export token. Constant-time, and false whenever there is no long enough token set. */
@@ -148,13 +152,13 @@ export function openSession(p: PilotPerson, now: number): PilotSession | null {
   return now - Date.parse(last.startedAt) < PILOT.sessionMs + 10 * 60 * 1000 ? last : null;
 }
 
-/** Whether a visit may begin now: the next one, or why not. */
-export function canStart(p: PilotPerson, now: number): { ok: true; n: number } | { ok: false; why: "open" | "done" | "too_soon"; at?: string } {
+/** Whether a visit may begin now: the next one, a day after the last began, or why not. */
+export function canStart(p: PilotPerson, now: number, visits: number = PILOT.sessions): { ok: true; n: number } | { ok: false; why: "open" | "done" | "too_soon"; at?: string } {
   if (openSession(p, now)) return { ok: false, why: "open" };
-  if (p.sessions.length >= PILOT.sessions) return { ok: false, why: "done" };
-  const first = p.sessions[0];
-  if (first) {
-    const at = Date.parse(first.startedAt) + PILOT.betweenMs;
+  if (p.sessions.length >= visits) return { ok: false, why: "done" };
+  const last = p.sessions[p.sessions.length - 1];
+  if (last) {
+    const at = Date.parse(last.startedAt) + PILOT.betweenMs;
     if (now < at) return { ok: false, why: "too_soon", at: new Date(at).toISOString() };
   }
   return { ok: true, n: p.sessions.length + 1 };

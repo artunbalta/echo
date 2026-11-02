@@ -124,9 +124,10 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
   }, []);
 
   const play = useCallback(
-    (session: Session, sessionMs: number) => {
+    (session: Session, sessionMs: number, total: number) => {
       setVisit({
         n: session.n,
+        total,
         startedAt: session.startedAt,
         sessionMs,
         onEnd: () => {
@@ -145,7 +146,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
       const data = await load();
       if (!data) return setStep("unavailable");
       if (!data.me) return setStep("intro");
-      if (data.me.open) return play(data.me.open, data.sessionMs);
+      if (data.me.open) return play(data.me.open, data.sessionMs, data.sessions);
       setStep("ready");
     })();
   }, [load, play]);
@@ -190,7 +191,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
         await load();
         return;
       }
-      play(data.session, info?.sessionMs ?? 25 * 60 * 1000);
+      play(data.session, info?.sessionMs ?? 25 * 60 * 1000, info?.sessions ?? 2);
     } catch {
       setError(t(lang, "pilot.errOther"));
     } finally {
@@ -252,7 +253,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
     return page(
       <>
         <h1 className="font-serif text-4xl leading-tight">{t(lang, "pilot.title")}</h1>
-        <p className="mt-4 text-[15px] leading-relaxed text-parchment/75">{t(lang, "pilot.intro")}</p>
+        <p className="mt-4 text-[15px] leading-relaxed text-parchment/75">{t(lang, (info?.sessions ?? 2) === 3 ? "pilot.intro3" : "pilot.intro")}</p>
         <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, "pilot.kept")}</p>
         <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, "pilot.sameBrowser")}</p>
         <label className="mt-6 block text-xs text-parchment/55">
@@ -377,7 +378,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
         <h2 className="font-serif text-3xl">{t(lang, "pilot.hello", { name: me.nickname })}</h2>
         {start.ok ? (
           <>
-            <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, start.n === 1 ? "pilot.readyFirst" : "pilot.readySecond")}</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, start.n === 1 ? "pilot.readyFirst" : start.n === 2 ? "pilot.readySecond" : "pilot.readyThird")}</p>
             <div className="mt-6 flex items-center gap-4">
               <button type="button" data-pilot-begin disabled={busy} onClick={() => void begin()} className={button}>
                 {t(lang, "pilot.begin", { n: start.n })}
@@ -387,12 +388,12 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
           </>
         ) : start.why === "too_soon" ? (
           <>
-            <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, "pilot.tooSoon", { at: start.at ? new Date(start.at).toLocaleString(lang === "tr" ? "tr-TR" : "en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }) : "" })}</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, me.sessions.length + 1 === 3 ? "pilot.tooSoonThird" : "pilot.tooSoon", { at: start.at ? new Date(start.at).toLocaleString(lang === "tr" ? "tr-TR" : "en-GB", { weekday: "long", hour: "2-digit", minute: "2-digit" }) : "" })}</p>
             <div className="mt-6">{rateLink}</div>
           </>
         ) : (
           <>
-            <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, "pilot.allDone")}</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, (info?.sessions ?? 2) === 3 ? "pilot.allDone3" : "pilot.allDone")}</p>
             <div className="mt-6">{rateLink}</div>
           </>
         )}
@@ -500,7 +501,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
     <>
       <h2 className="font-serif text-3xl">{t(lang, "pilot.thanks")}</h2>
       <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">
-        {next && !next.ok && next.why === "done" ? t(lang, "pilot.allDone") : t(lang, "pilot.comeBack")}
+        {next && !next.ok && next.why === "done" ? t(lang, (info?.sessions ?? 2) === 3 ? "pilot.allDone3" : "pilot.allDone") : t(lang, me && me.sessions.length === 2 ? "pilot.comeBackThird" : "pilot.comeBack")}
       </p>
       <div className="mt-6 flex items-center gap-4">
         {rateLink}

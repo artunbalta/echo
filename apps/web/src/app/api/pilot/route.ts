@@ -53,7 +53,7 @@ export async function GET(req: Request) {
   if (new URL(req.url).searchParams.get("op") === "export") return exportAll(req, cfg.cell);
 
   const caller = subjectOf(req);
-  const base = { on: true, cell: cfg.cell, sessionMs: PILOT.sessionMs, sessions: PILOT.sessions };
+  const base = { on: true, cell: cfg.cell, sessionMs: PILOT.sessionMs, sessions: cfg.visits };
   if (!caller.ok) return NextResponse.json({ ...base, me: null, group: [] });
   const now = Date.now();
   let person = await store.pilotPersonOf(caller.subject);
@@ -70,7 +70,7 @@ export async function GET(req: Request) {
   const mine = new Set(ratings.filter((r) => r.rater === person!.subject).map((r) => r.ratee));
   return NextResponse.json({
     ...base,
-    me: { nickname: person.nickname, sessions: person.sessions, open: openSession(person, now), start: canStart(person, now) },
+    me: { nickname: person.nickname, sessions: person.sessions, open: openSession(person, now), start: canStart(person, now, cfg.visits) },
     group: people.filter((p) => p.subject !== person!.subject).map((p) => ({ nickname: p.nickname, rated: mine.has(p.subject) })),
     notices,
     ...(pack ? { pack } : {}),
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
   if (op === "start") {
     const open = openSession(person, now);
     if (open) return NextResponse.json({ session: open, cell: cfg.cell });
-    const may = canStart(person, now);
+    const may = canStart(person, now, cfg.visits);
     if (!may.ok) return NextResponse.json({ error: may.why, at: may.at ?? null }, { status: 409 });
     const held = await store.packOf(me);
     if (held === null) return bad("unreadable", 503);

@@ -16,6 +16,8 @@ import { identityHeaders } from "@/lib/identity";
 
 export interface PilotSettings {
   n: number;
+  /** How many visits there are in all (two, or three when the owner chose it, C78). */
+  total?: number;
   startedAt: string;
   sessionMs: number;
   onEnd: () => void;
@@ -95,7 +97,7 @@ export default function PilotOverlay({ pilot }: { pilot: PilotSettings }) {
     <>
       <div data-pilot-clock className="hud-pop hud-in pointer-events-auto absolute left-1/2 top-4 z-30 flex -translate-x-1/2 items-center gap-3 py-1.5 pl-4 pr-1.5 text-[13px] text-parchment max-sm:top-[4.25rem]">
         <span className="font-mono tabular-nums text-parchment/80">{clock(left)}</span>
-        <span className="text-parchment/55 max-sm:hidden">{t(lang, "pilot.visit", { n: pilot.n })}</span>
+        <span className="text-parchment/55 max-sm:hidden">{t(lang, "pilot.visit", { n: pilot.n, total: pilot.total ?? 2 })}</span>
         <button
           type="button"
           data-pilot-end
