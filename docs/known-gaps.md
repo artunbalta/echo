@@ -2381,7 +2381,8 @@ not the class:
   the admirable in what people say. The pilot replaces them.
 - **The pilot's power.** The central test (two layers > one) has about .58 at 16 people and reaches .8
   near 40. Echo against friends is an estimate at any size a circle of friends can reach.
-- **The draft's references are to verify** before submission, one by one.
+- **The draft's references** were checked against bibliographic records on 2026-11-02. Park et al. is cited
+  by its first title; its revision has another. Cite the version read.
 - **The exact path is slow**: about 9 s per person through the engine's endpoints (87 s for 10).
   This is fine for a pilot; the library path, held to it bit for bit, is for simulation.
 - **Walking in the real client** is up to one window per 1.5 s, where the simulation uses 40–140 a

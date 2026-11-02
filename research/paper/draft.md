@@ -53,7 +53,9 @@ compress a person into a few trait dimensions and condition a predictor on them.
 
 Both are evaluated mostly on self-report. They are asked to reproduce a questionnaire answer, or a
 choice in an economic game played on a survey platform, and the person's own consistency is the
-yardstick.
+yardstick. In the revised version of Park et al., on incentivized economic games no agent beat a
+baseline given only demographics. The authors call this a boundary case. Words predict what people
+say; whether watching predicts what they do is open.
 
 Psychology has asked a related question for decades, with people rather than machines as the
 predictors:
@@ -63,9 +65,12 @@ predictors:
 - **Predicting behaviour.** Self-ratings and friends' ratings each predict daily behaviour, and each
   adds to the other (Vazire & Mehl, 2008).
 - **Predicting generosity.** People overestimate their own generosity, yet predict others' quite well
-  (Epley & Dunning, 2000).
+  (Epley & Dunning, 2000). In one study, students said they would give about half of a $5 fee to
+  charity and expected others to give $1.80. Given the chance, they gave $1.53 on average.
 - **Computers against people.** A model given enough of a person's digital footprint can judge their
-  personality more accurately than their friends can (Youyou, Kosinski & Stillwell, 2015).
+  personality more accurately than their friends can (Youyou, Kosinski & Stillwell, 2015). From
+  Facebook Likes it outdid a work colleague after about 10 Likes, a friend after 70, a family member
+  after 150 and a spouse after 300.
 
 Two questions sit between these literatures and are, as far as we know, unanswered:
 
@@ -330,8 +335,9 @@ central test a fair chance, while the confirmatory study needs about
 
 **Two variants set aside, reported rather than dropped.**
 
-- **Scoring by probabilities.** Scored by the ranked probability score (a proper score on the models' own
-  probabilities), the central test had less power at 16 people: .35 against .57, in 60 groups. With so
+- **Scoring by probabilities.** Scored by the ranked probability score (Epstein, 1969; a proper score on
+  the models' own probabilities), the central test had less power at 16 people: .35 against .57, in 60
+  groups. With so
   few people the two-layer echo's probabilities are not yet calibrated, though the choice it names is.
 - **Predicting each visit from the other.** Predicting each visit from the other, rather than only the
   second from the first, raised power from .57 to .60. Both directions rest on the same pairs of
@@ -378,7 +384,7 @@ If the pilot agrees with the simulation, three claims follow.
 - **Pilot size.** The pilot's n supports the central test, but not fine comparisons between
   witnesses.
 
-## References (to verify before submission)
+## References (checked against bibliographic records, 2026-11-02)
 
 - Berg, J., Dickhaut, J., & McCabe, K. (1995). Trust, reciprocity, and social history. *Games and Economic Behavior, 10*(1), 122–142.
 - Epley, N., & Dunning, D. (2000). Feeling "holier than thou": Are self-serving assessments produced by errors in self- or social prediction? *Journal of Personality and Social Psychology, 79*(6), 861–875.
@@ -389,7 +395,8 @@ If the pilot agrees with the simulation, three claims follow.
 - Holt, C. A., & Laury, S. K. (2002). Risk aversion and incentive effects. *American Economic Review, 92*(5), 1644–1655.
 - Mischel, W. (1968). *Personality and Assessment.* Wiley.
 - Mõttus, R., Kandler, C., Bleidorn, W., Riemann, R., & McCrae, R. R. (2017). Personality traits below facets: The consensual validity, longitudinal stability, heritability, and utility of personality nuances. *Journal of Personality and Social Psychology, 112*(3), 474–490.
-- Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109.
+- Epstein, E. S. (1969). A scoring system for probability forecasts of ranked categories. *Journal of Applied Meteorology, 8*, 985–987.
+- Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109. (Revised as "LLM agents grounded in self-reports enable general-purpose simulation of individuals"; cite the version read.)
 - Steyer, R., Schmitt, M., & Eid, M. (1999). Latent state–trait theory and research in personality and individual differences. *European Journal of Personality, 13*(5), 389–408.
 - Vazire, S. (2010). Who knows what about a person? The self–other knowledge asymmetry (SOKA) model. *Journal of Personality and Social Psychology, 98*(2), 281–300.
 - Vazire, S., & Mehl, M. R. (2008). Knowing me, knowing you: The accuracy and unique predictive validity of self-ratings and other-ratings of daily behavior. *Journal of Personality and Social Psychology, 95*(5), 1202–1216.

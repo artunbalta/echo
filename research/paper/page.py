@@ -70,7 +70,7 @@ def main() -> int:
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <style>{CSS}</style>
 <main class="page">
-<div class="status">Working draft. The design, theory and simulation are done; the pilot's data are not yet in, so every result below is simulated. References are to verify before submission.</div>
+<div class="status">Working draft. The design, theory and simulation are done; the pilot's data are not yet in, so every result below is simulated.</div>
 {body}
 </main>
 """
