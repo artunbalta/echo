@@ -57,12 +57,17 @@ export interface PilotPerson {
   settled: Record<string, "returned" | "lost" | "harvested">;
 }
 
-/** How one friend places another: how well they know them, and the eight axes (null: would rather not say). */
+/**
+ * How one friend sees another: how well they know them, the eight axes (null: would rather not say), and
+ * what they think the friend would do in each of the six (null: would rather not say). The last is the
+ * study's third witness (C76): the person's own words, their friends' words, and the world.
+ */
 export interface PilotRating {
   rater: string;
   ratee: string;
   know: 0 | 1 | 2 | 3;
   axes: number[] | null;
+  predicted: PilotStated | null;
   at: string;
 }
 
@@ -118,17 +123,22 @@ export function validStated(x: unknown): PilotStated | null {
   return { give: s.give as PilotStated["give"], lend: s.lend, bet: s.bet as PilotStated["bet"], seed: s.seed, path: s.path, greet: s.greet };
 }
 
-/** A friend's rating, as sent: how well they know them (0–3) and, unless they would rather not say, the eight axes. */
-export function validRating(x: unknown): { ratee: string; know: PilotRating["know"]; axes: number[] | null } | null {
+/**
+ * A friend's rating, as sent: how well they know them (0–3) and, unless they would rather not say, the
+ * eight axes and what the friend would do in each of the six.
+ */
+export function validRating(x: unknown): { ratee: string; know: PilotRating["know"]; axes: number[] | null; predicted: PilotStated | null } | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
   if (typeof r.ratee !== "string" || !r.ratee || r.ratee.length > 80) return null;
   if (![0, 1, 2, 3].includes(r.know as number)) return null;
-  const axes = r.axes === null ? null : validAxes(r.axes);
-  if (r.axes !== null && !axes) return null;
-  // Someone they do not know at all is not rated on anything.
-  if (r.know === 0 && axes) return null;
-  return { ratee: r.ratee, know: r.know as PilotRating["know"], axes };
+  const axes = r.axes === null || r.axes === undefined ? null : validAxes(r.axes);
+  if (r.axes !== null && r.axes !== undefined && !axes) return null;
+  const predicted = r.predicted === null || r.predicted === undefined ? null : validStated(r.predicted);
+  if (r.predicted !== null && r.predicted !== undefined && !predicted) return null;
+  // Someone they do not know at all is not rated, or guessed at, on anything.
+  if (r.know === 0 && (axes || predicted)) return null;
+  return { ratee: r.ratee, know: r.know as PilotRating["know"], axes, predicted };
 }
 
 /** The visit still going on: begun, not ended, and not past its time (with ten minutes' grace for a reload). */

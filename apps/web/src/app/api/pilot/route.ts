@@ -10,7 +10,8 @@
  *   they say they would do in each of the six. All of it before the first visit, never after.
  * - `POST ?op=start`: a visit begins (two, a day apart). The pack is topped up to three loaves and a raft.
  * - `POST ?op=end`: the visit is over.
- * - `POST ?op=rate` `{ ratee, know, axes }`: how they place a friend, by the friend's nickname.
+ * - `POST ?op=rate` `{ ratee, know, axes, predicted }`: how they place a friend, by the friend's nickname,
+ *   and what they think the friend would do in each of the six (C76).
  * - `GET ?op=export` with `x-pilot-admin`: everything, for the owner's analysis.
  */
 import { NextResponse } from "next/server";
@@ -150,7 +151,7 @@ export async function POST(req: Request) {
     const ratee = people.find((p) => p.nickname.toLowerCase() === r.ratee.toLowerCase());
     if (!ratee) return bad("no_such_friend", 404);
     if (ratee.subject === me) return bad("not_yourself");
-    if (!(await store.savePilotRating({ rater: me, ratee: ratee.subject, know: r.know, axes: r.axes, at: new Date(now).toISOString() }))) return bad("not_recorded", 503);
+    if (!(await store.savePilotRating({ rater: me, ratee: ratee.subject, know: r.know, axes: r.axes, predicted: r.predicted, at: new Date(now).toISOString() }))) return bad("not_recorded", 503);
     return NextResponse.json({ ok: true });
   }
 

@@ -427,11 +427,12 @@ const pilotFromRow = (r: PilotRow): PilotPerson => ({
   sessions: r.sessions ?? [],
   settled: r.settled ?? {},
 });
-const pilotRatingFromRow = (r: { rater: string; ratee: string; know: number; axes: number[] | null; created_at: string }): PilotRating => ({
+const pilotRatingFromRow = (r: { rater: string; ratee: string; know: number; axes: number[] | null; predicted?: PilotRating["predicted"]; created_at: string }): PilotRating => ({
   rater: r.rater,
   ratee: r.ratee,
   know: r.know as PilotRating["know"],
   axes: r.axes,
+  predicted: r.predicted ?? null,
   at: new Date(r.created_at).toISOString(),
 });
 const demoFromRow = (r: DemoRow): DemoVisit => ({ subject: r.subject, host: r.host, name: r.name, startedAt: new Date(r.started_at).toISOString(), voiceId: r.voice_id, voiceUntil: iso(r.voice_until), voiceDeletedAt: iso(r.voice_deleted_at) });
@@ -877,12 +878,12 @@ function supabaseStore(): VillageStore | null {
       return (data as PilotRow[]).map(pilotFromRow);
     },
     async savePilotRating(r) {
-      const { error } = await admin.from("pilot_ratings").upsert({ rater: r.rater, ratee: r.ratee, know: r.know, axes: r.axes, created_at: r.at }, { onConflict: "rater,ratee" });
+      const { error } = await admin.from("pilot_ratings").upsert({ rater: r.rater, ratee: r.ratee, know: r.know, axes: r.axes, predicted: r.predicted, created_at: r.at }, { onConflict: "rater,ratee" });
       if (error) return warn("savePilotRating", error.message), false;
       return true;
     },
     async pilotRatings() {
-      const { data, error } = await admin.from("pilot_ratings").select("rater, ratee, know, axes, created_at").limit(5000);
+      const { data, error } = await admin.from("pilot_ratings").select("rater, ratee, know, axes, predicted, created_at").limit(5000);
       if (error) return warn("pilotRatings", error.message), null;
       return (data as Parameters<typeof pilotRatingFromRow>[0][]).map(pilotRatingFromRow);
     },

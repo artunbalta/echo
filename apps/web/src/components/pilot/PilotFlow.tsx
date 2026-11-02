@@ -109,7 +109,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [visit, setVisit] = useState<PilotSettings | null>(null);
-  const [rating, setRating] = useState<{ ratee: string; know: 0 | 1 | 2 | 3 | null; axes: (number | null)[] } | null>(null);
+  const [rating, setRating] = useState<{ ratee: string; know: 0 | 1 | 2 | 3 | null; axes: (number | null)[]; predicted: Stated; noIdea: boolean } | null>(null);
 
   const load = useCallback(async (): Promise<Info | null> => {
     try {
@@ -204,10 +204,12 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
     setError(null);
     try {
       const axes = rating.know === 0 ? null : rating.axes;
+      // What they think the friend would do (C76): none for someone they do not know, or with no idea.
+      const predicted = rating.know === 0 || rating.noIdea ? null : rating.predicted;
       const res = await fetch("/api/pilot?op=rate", {
         method: "POST",
         headers: identityHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ ratee: rating.ratee, know: rating.know, axes }),
+        body: JSON.stringify({ ratee: rating.ratee, know: rating.know, axes, predicted }),
       });
       if (!res.ok) {
         setError(t(lang, "pilot.errOther"));
@@ -294,53 +296,61 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
       </>,
     );
 
-  if (step === "stated") {
-    const set = <K extends keyof Stated>(k: K) => (v: Exclude<Stated[K], null>) => setStated((s) => ({ ...s, [k]: v }));
+  /** The six, asked of oneself (`q*`) or of a friend by name (`fq*`, C76). */
+  const sixQuestions = (value: Stated, onChange: (next: Stated) => void, about: string | null) => {
+    const set = <K extends keyof Stated>(k: K) => (v: Exclude<Stated[K], null>) => onChange({ ...value, [k]: v });
+    const q = (own: Key, theirs: Key) => (about === null ? t(lang, own) : t(lang, theirs, { name: about }));
     const yesNo = [
       { value: true, label: t(lang, "pilot.yes") },
       { value: false, label: t(lang, "pilot.no") },
     ];
+    return (
+      <>
+        <Choice id="give" question={q("pilot.qGive", "pilot.fqGive")} value={value.give} onChange={set("give")} options={([0, 1, 2, 3] as const).map((n) => ({ value: n, label: String(n) }))} />
+        <Choice id="lend" question={q("pilot.qLend", "pilot.fqLend")} value={value.lend} onChange={set("lend")} options={yesNo} />
+        <Choice
+          id="bet"
+          question={q("pilot.qBet", "pilot.fqBet")}
+          value={value.bet}
+          onChange={set("bet")}
+          options={[
+            { value: "bet-safe" as const, label: t(lang, "pilot.betSafe") },
+            { value: "bet-even" as const, label: t(lang, "pilot.betEven") },
+            { value: "bet-long" as const, label: t(lang, "pilot.betLong") },
+            { value: "none" as const, label: t(lang, "pilot.betNone") },
+          ]}
+        />
+        <Choice
+          id="seed"
+          question={q("pilot.qSeed", "pilot.fqSeed")}
+          value={value.seed}
+          onChange={set("seed")}
+          options={[
+            { value: "now" as const, label: t(lang, "pilot.seedNow") },
+            { value: "plant" as const, label: t(lang, "pilot.seedPlant") },
+          ]}
+        />
+        <Choice
+          id="path"
+          question={q("pilot.qPath", "pilot.fqPath")}
+          value={value.path}
+          onChange={set("path")}
+          options={[
+            { value: "marked" as const, label: t(lang, "pilot.pathMarked") },
+            { value: "unmarked" as const, label: t(lang, "pilot.pathUnmarked") },
+          ]}
+        />
+        <Choice id="greet" question={q("pilot.qGreet", "pilot.fqGreet")} value={value.greet} onChange={set("greet")} options={yesNo} />
+      </>
+    );
+  };
+
+  if (step === "stated") {
     return page(
       <>
         <h2 className="font-serif text-2xl">{t(lang, "pilot.statedTitle")}</h2>
         <p className="mt-2 text-[13px] text-parchment/60">{t(lang, "pilot.statedBody")}</p>
-        <div className="mt-4">
-          <Choice id="give" question={t(lang, "pilot.qGive")} value={stated.give} onChange={set("give")} options={([0, 1, 2, 3] as const).map((n) => ({ value: n, label: String(n) }))} />
-          <Choice id="lend" question={t(lang, "pilot.qLend")} value={stated.lend} onChange={set("lend")} options={yesNo} />
-          <Choice
-            id="bet"
-            question={t(lang, "pilot.qBet")}
-            value={stated.bet}
-            onChange={set("bet")}
-            options={[
-              { value: "bet-safe" as const, label: t(lang, "pilot.betSafe") },
-              { value: "bet-even" as const, label: t(lang, "pilot.betEven") },
-              { value: "bet-long" as const, label: t(lang, "pilot.betLong") },
-              { value: "none" as const, label: t(lang, "pilot.betNone") },
-            ]}
-          />
-          <Choice
-            id="seed"
-            question={t(lang, "pilot.qSeed")}
-            value={stated.seed}
-            onChange={set("seed")}
-            options={[
-              { value: "now" as const, label: t(lang, "pilot.seedNow") },
-              { value: "plant" as const, label: t(lang, "pilot.seedPlant") },
-            ]}
-          />
-          <Choice
-            id="path"
-            question={t(lang, "pilot.qPath")}
-            value={stated.path}
-            onChange={set("path")}
-            options={[
-              { value: "marked" as const, label: t(lang, "pilot.pathMarked") },
-              { value: "unmarked" as const, label: t(lang, "pilot.pathUnmarked") },
-            ]}
-          />
-          <Choice id="greet" question={t(lang, "pilot.qGreet")} value={stated.greet} onChange={set("greet")} options={yesNo} />
-        </div>
+        <div className="mt-4">{sixQuestions(stated, setStated, null)}</div>
         <div className="mt-6 flex items-center gap-4">
           <button type="button" data-pilot-join disabled={busy || Object.values(stated).some((v) => v === null)} onClick={() => void join()} className={button}>
             {busy ? t(lang, "pilot.joining") : t(lang, "pilot.join")}
@@ -412,18 +422,34 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
             ))}
           </div>
           {rating.know !== null && rating.know > 0 ? (
-            <div className="mt-4">
-              <p className="text-[13px] text-parchment/60">{t(lang, "pilot.rateBody", { name: rating.ratee })}</p>
-              {PERSONA_AXIS_KEYS.map((axis, i) => (
-                <Scale key={axis} axis={axis} lang={lang} value={rating.axes[i] ?? null} onChange={(v) => setRating({ ...rating, axes: rating.axes.map((x, j) => (j === i ? v : x)) })} />
-              ))}
-            </div>
+            <>
+              <div className="mt-4">
+                <p className="text-[13px] text-parchment/60">{t(lang, "pilot.rateBody", { name: rating.ratee })}</p>
+                {PERSONA_AXIS_KEYS.map((axis, i) => (
+                  <Scale key={axis} axis={axis} lang={lang} value={rating.axes[i] ?? null} onChange={(v) => setRating({ ...rating, axes: rating.axes.map((x, j) => (j === i ? v : x)) })} />
+                ))}
+              </div>
+              <div data-pilot-predict className="mt-6">
+                <h3 className="font-serif text-xl">{t(lang, "pilot.predTitle", { name: rating.ratee })}</h3>
+                <p className="mt-1 text-[13px] text-parchment/60">{t(lang, "pilot.predBody", { name: rating.ratee })}</p>
+                <label className="mt-3 flex items-center gap-2 text-[13px] text-parchment/75">
+                  <input data-pilot-no-idea type="checkbox" checked={rating.noIdea} onChange={(e) => setRating({ ...rating, noIdea: e.target.checked })} />
+                  <span>{t(lang, "pilot.predSkip")}</span>
+                </label>
+                {rating.noIdea ? null : <div className="mt-2">{sixQuestions(rating.predicted, (predicted) => setRating({ ...rating, predicted }), rating.ratee)}</div>}
+              </div>
+            </>
           ) : null}
           <div className="mt-6 flex items-center gap-4">
             <button
               type="button"
               data-pilot-rate-save
-              disabled={busy || rating.know === null || (rating.know > 0 && rating.axes.some((x) => x === null))}
+              disabled={
+                busy ||
+                rating.know === null ||
+                (rating.know > 0 && rating.axes.some((x) => x === null)) ||
+                (rating.know > 0 && !rating.noIdea && Object.values(rating.predicted).some((v) => v === null))
+              }
               onClick={() => void saveRating()}
               className={button}
             >
@@ -445,7 +471,12 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
             {group.map((g) => (
               <li key={g.nickname} className="flex items-center justify-between py-2.5">
                 <span className="text-[15px]">{g.nickname}</span>
-                <button type="button" data-pilot-rate={g.nickname} onClick={() => setRating({ ratee: g.nickname, know: null, axes: PERSONA_AXIS_KEYS.map(() => null) })} className={quiet}>
+                <button
+                  type="button"
+                  data-pilot-rate={g.nickname}
+                  onClick={() => setRating({ ratee: g.nickname, know: null, axes: PERSONA_AXIS_KEYS.map(() => null), predicted: { give: null, lend: null, bet: null, seed: null, path: null, greet: null }, noIdea: false })}
+                  className={quiet}
+                >
                   {g.rated ? t(lang, "pilot.rated") : t(lang, "pilot.rateOne")}
                 </button>
               </li>

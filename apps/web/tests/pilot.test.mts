@@ -325,9 +325,16 @@ test("C75: friends rate friends by the name they know, not themselves, and someo
   assert.equal((await rate(A, { ratee: "Ece", know: 2, axes: null })).status, 200, "would rather not place them");
   const ratings = (await villageStore()!.pilotRatings())!;
   assert.equal(ratings.length, 1, "a second rating of the same friend was not written over the first");
-  assert.deepEqual([ratings[0]!.rater, ratings[0]!.ratee, ratings[0]!.know, ratings[0]!.axes], [A, B, 2, null]);
+  assert.deepEqual([ratings[0]!.rater, ratings[0]!.ratee, ratings[0]!.know, ratings[0]!.axes, ratings[0]!.predicted], [A, B, 2, null, null]);
+  // C76: what they think the friend would do, in the same six; none for someone they do not know.
+  const guess = { give: 3, lend: false, bet: "bet-long", seed: "now", path: "marked", greet: true };
+  assert.equal((await rate(B, { ratee: "Deniz", know: 0, axes: null, predicted: guess })).status, 400, "guessed at someone they do not know");
+  assert.equal((await rate(B, { ratee: "Deniz", know: 2, axes: SELF, predicted: { ...guess, bet: "everything" } })).status, 400);
+  assert.equal((await rate(B, { ratee: "Deniz", know: 2, axes: SELF, predicted: guess })).status, 200);
+  const theirs = (await villageStore()!.pilotRatings())!.find((r) => r.rater === B)!;
+  assert.deepEqual(theirs.predicted, guess);
   assert.deepEqual((await look(A)).group, [{ nickname: "Ece", rated: true }]);
-  assert.deepEqual((await look(B)).group, [{ nickname: "Deniz", rated: false }]);
+  assert.deepEqual((await look(B)).group, [{ nickname: "Deniz", rated: true }]);
 });
 
 test("C75: the export is the owner's alone, and it is everything: people, ratings, the six as set out, events, each echo", async () => {

@@ -5101,3 +5101,37 @@ database and records the runner's checksum.
 - walked up to it;
 - ending the visit;
 - the friends page.
+
+## C76 — friends guess what friends would do
+
+What the owner asked for: a validation fit for a paper, built from what the pilot already has, with
+positive findings rather than a list of what could not be found. A study of who knows a person best
+needs a third witness beside the person's own words and the world. In the self–other knowledge
+literature (Vazire 2010) that witness is the person's friends.
+
+**What a rating asks now.**
+- After the axes, a rating asks "what would {name} do?" for each of the six:
+  - the same questions as the person's own, by the friend's nickname (`pilot.fq*`);
+  - in Turkish the name stays unsuffixed: "Üç ekmeği var… {name} kaç ekmek verir?".
+- "No idea" is allowed.
+- Someone the rater does not know (0) is never guessed at: `validRating` refuses a guess with
+  `know: 0`, as it refuses axes.
+- The guess has the shape of the person's own (`PilotStated`). It is stored in
+  `pilot_ratings.predicted` (jsonb, migration 0036), and null where there is no guess.
+
+**The record.** The export carries the guess with each rating. The erasure is unchanged: it takes the
+person's ratings either way, guesses included.
+
+**Migration.**
+- `0036_pilot_predictions.sql` adds the column.
+- `~/Desktop/apply_0036.sql` is the one-file form, with the runner's checksum a49a1a79….
+  - It refuses if 0036 is recorded already, and if 0035 is not.
+  - Dry run on a local Postgres 16 brought to 0035 by the runner: it applies, the runner then reports
+    0 pending and no drift, a second run refuses, and run against 0034 it refuses and records nothing.
+- The supabase store writes and reads the column. **Ratings fail to save on a database without 0036**:
+  apply 0035 and 0036 before the pilot.
+
+**Tests.** `apps/web/tests/pilot.test.mts`, ratings:
+- a guess at someone not known is refused;
+- a malformed guess is refused;
+- a guess is stored and read back whole.
