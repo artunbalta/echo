@@ -145,7 +145,8 @@ greeting. Walking past is an answer too.
 
 1. **Before playing.** Each friend gives a nickname and consents. They place themselves on the echo's
    eight axes (1–7) and say what they would do in each of the six.
-2. **Two visits.** Each visit lasts 25 minutes, and the visits are at least 20 hours apart.
+2. **Two visits, or three.** Each visit lasts 25 minutes, and each opens at least 20 hours after the
+   last began. A third visit is the owner's choice, made before the first visit (§5.2 gives what it buys).
 3. **How the six are set out.** The village sets out the six one at a time, in an order counterbalanced
    across people:
    - the first comes 20 seconds after arrival;
@@ -417,6 +418,7 @@ next step.
 
 - Berg, J., Dickhaut, J., & McCabe, K. (1995). Trust, reciprocity, and social history. *Games and Economic Behavior, 10*(1), 122–142.
 - Epley, N., & Dunning, D. (2000). Feeling "holier than thou": Are self-serving assessments produced by errors in self- or social prediction? *Journal of Personality and Social Psychology, 79*(6), 861–875.
+- Epstein, E. S. (1969). A scoring system for probability forecasts of ranked categories. *Journal of Applied Meteorology, 8*, 985–987.
 - Epstein, S. (1979). The stability of behavior: I. On predicting most of the people much of the time. *Journal of Personality and Social Psychology, 37*(7), 1097–1126.
 - Forsythe, R., Horowitz, J. L., Savin, N. E., & Sefton, M. (1994). Fairness in simple bargaining experiments. *Games and Economic Behavior, 6*(3), 347–369.
 - Frederick, S., Loewenstein, G., & O'Donoghue, T. (2002). Time discounting and time preference: A critical review. *Journal of Economic Literature, 40*(2), 351–401.
@@ -424,7 +426,6 @@ next step.
 - Holt, C. A., & Laury, S. K. (2002). Risk aversion and incentive effects. *American Economic Review, 92*(5), 1644–1655.
 - Mischel, W. (1968). *Personality and Assessment.* Wiley.
 - Mõttus, R., Kandler, C., Bleidorn, W., Riemann, R., & McCrae, R. R. (2017). Personality traits below facets: The consensual validity, longitudinal stability, heritability, and utility of personality nuances. *Journal of Personality and Social Psychology, 112*(3), 474–490.
-- Epstein, E. S. (1969). A scoring system for probability forecasts of ranked categories. *Journal of Applied Meteorology, 8*, 985–987.
 - Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109. (Revised as "LLM agents grounded in self-reports enable general-purpose simulation of individuals"; cite the version read.)
 - Steyer, R., Schmitt, M., & Eid, M. (1999). Latent state–trait theory and research in personality and individual differences. *European Journal of Personality, 13*(5), 389–408.
 - Vazire, S. (2010). Who knows what about a person? The self–other knowledge asymmetry (SOKA) model. *Journal of Personality and Social Psychology, 98*(2), 281–300.
