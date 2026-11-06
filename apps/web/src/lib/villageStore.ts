@@ -19,6 +19,7 @@ import { adminClient } from "@/lib/supabaseAdmin";
 import type { DemoVisit, EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
 import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
 import type { PilotPerson, PilotRating } from "@/lib/pilot";
+import { STUDY, circlesOn, type PilotCircle } from "@/lib/pilotCircles";
 
 export interface VillagerMemory {
   /** In the villager's words. */
@@ -125,14 +126,18 @@ export interface VillageStore {
   // ── the pilot village (C75) ──
   /** A pilot person: null for none, undefined when unreadable. */
   pilotPersonOf(subject: string): Promise<PilotPerson | null | undefined>;
-  /** Write one. False when it was not written, including a nickname someone else in the group has. */
+  /** Write one. False when it was not written, including a nickname someone else in their circle has. */
   savePilotPerson(p: PilotPerson): Promise<boolean>;
-  /** Everyone in the pilot, oldest first. Null: unreadable. */
-  pilotPeople(): Promise<PilotPerson[] | null>;
-  /** One friend's rating of another, written over any earlier one of theirs. */
-  savePilotRating(r: PilotRating): Promise<boolean>;
-  /** Every rating. Null: unreadable. */
-  pilotRatings(): Promise<PilotRating[] | null>;
+  /** Everyone in one circle ("study" for the owner's study, C83), oldest first. Null: unreadable. */
+  pilotPeople(circle: string): Promise<PilotPerson[] | null>;
+  /** One friend's rating of another in the same circle, written over any earlier one of theirs. */
+  savePilotRating(r: PilotRating, circle: string): Promise<boolean>;
+  /** Every rating in one circle. Null: unreadable. */
+  pilotRatings(circle: string): Promise<PilotRating[] | null>;
+  /** A circle (C83) by id, or by the hash of its code: null for none, undefined when unreadable. */
+  pilotCircle(by: { id: string } | { codeHash: string }): Promise<PilotCircle | null | undefined>;
+  /** Write a new circle. False when not written, including a code hash or id already taken. */
+  savePilotCircle(c: PilotCircle): Promise<boolean>;
   /**
    * Everything of one person this store holds, gone (§13): in the in-process store, every map, with the
    * world's history kept and made nameless (C44, C45). Against Supabase it does nothing, because
@@ -408,6 +413,9 @@ interface DemoRow {
 const DEMO_COLUMNS = "subject, host, name, started_at, voice_id, voice_until, voice_deleted_at";
 interface PilotRow {
   subject: string;
+  /** Only read with circles on (migration 0037). */
+  circle?: string;
+  research_at?: string | null;
   nickname: string;
   joined_at: string;
   consent_at: string;
@@ -417,15 +425,36 @@ interface PilotRow {
   settled: PilotPerson["settled"] | null;
 }
 const PILOT_COLUMNS = "subject, nickname, joined_at, consent_at, self_axes, stated, sessions, settled";
+// With circles off the store reads the tables as they were before 0037, so the study runs either way.
+const pilotColumns = () => (circlesOn() ? `${PILOT_COLUMNS}, circle, research_at` : PILOT_COLUMNS);
 const pilotFromRow = (r: PilotRow): PilotPerson => ({
   subject: r.subject,
+  circle: r.circle ?? STUDY,
   nickname: r.nickname,
   joinedAt: new Date(r.joined_at).toISOString(),
   consentAt: new Date(r.consent_at).toISOString(),
+  // In the study the one yes is to the research; elsewhere research is a yes of its own.
+  researchAt: r.circle && r.circle !== STUDY ? iso(r.research_at ?? null) : new Date(r.consent_at).toISOString(),
   self: r.self_axes,
   stated: r.stated,
   sessions: r.sessions ?? [],
   settled: r.settled ?? {},
+});
+interface CircleRow {
+  id: string;
+  code_hash: string;
+  created_by: string | null;
+  created_at: string;
+  visits: number;
+  research: boolean;
+}
+const circleFromRow = (r: CircleRow): PilotCircle => ({
+  id: r.id,
+  codeHash: r.code_hash,
+  createdBy: r.created_by,
+  createdAt: new Date(r.created_at).toISOString(),
+  visits: r.visits === 2 ? 2 : 3,
+  research: r.research,
 });
 const pilotRatingFromRow = (r: { rater: string; ratee: string; know: number; axes: number[] | null; predicted?: PilotRating["predicted"]; created_at: string }): PilotRating => ({
   rater: r.rater,
@@ -860,32 +889,56 @@ function supabaseStore(): VillageStore | null {
       return true;
     },
     async pilotPersonOf(subject) {
-      const { data, error } = await admin.from("pilot_people").select(PILOT_COLUMNS).eq("subject", subject).maybeSingle();
+      const { data, error } = await admin.from("pilot_people").select(pilotColumns()).eq("subject", subject).maybeSingle();
       if (error) return warn("pilotPersonOf", error.message), undefined;
-      return data ? pilotFromRow(data as PilotRow) : null;
+      return data ? pilotFromRow(data as unknown as PilotRow) : null;
     },
     async savePilotPerson(p) {
-      const { error } = await admin.from("pilot_people").upsert(
-        { subject: p.subject, nickname: p.nickname, joined_at: p.joinedAt, consent_at: p.consentAt, self_axes: p.self, stated: p.stated, sessions: p.sessions, settled: p.settled },
-        { onConflict: "subject" },
-      );
+      const row = { subject: p.subject, nickname: p.nickname, joined_at: p.joinedAt, consent_at: p.consentAt, self_axes: p.self, stated: p.stated, sessions: p.sessions, settled: p.settled };
+      if (!circlesOn() && p.circle !== STUDY) return false;
+      const values = (circlesOn() ? { ...row, circle: p.circle, research_at: p.researchAt } : row) as typeof row;
+      const { error } = await admin.from("pilot_people").upsert(values, { onConflict: "subject" });
       if (error) return warn("savePilotPerson", error.message), false;
       return true;
     },
-    async pilotPeople() {
-      const { data, error } = await admin.from("pilot_people").select(PILOT_COLUMNS).order("joined_at", { ascending: true }).limit(500);
+    async pilotPeople(circle) {
+      if (!circlesOn() && circle !== STUDY) return [];
+      let q = admin.from("pilot_people").select(pilotColumns());
+      if (circlesOn()) q = q.eq("circle", circle);
+      const { data, error } = await q.order("joined_at", { ascending: true }).limit(500);
       if (error) return warn("pilotPeople", error.message), null;
-      return (data as PilotRow[]).map(pilotFromRow);
+      return (data as unknown as PilotRow[]).map(pilotFromRow);
     },
-    async savePilotRating(r) {
-      const { error } = await admin.from("pilot_ratings").upsert({ rater: r.rater, ratee: r.ratee, know: r.know, axes: r.axes, predicted: r.predicted, created_at: r.at }, { onConflict: "rater,ratee" });
+    async savePilotRating(r, circle) {
+      const row = { rater: r.rater, ratee: r.ratee, know: r.know, axes: r.axes, predicted: r.predicted, created_at: r.at };
+      if (!circlesOn() && circle !== STUDY) return false;
+      const values = (circlesOn() ? { ...row, circle } : row) as typeof row;
+      const { error } = await admin.from("pilot_ratings").upsert(values, { onConflict: "rater,ratee" });
       if (error) return warn("savePilotRating", error.message), false;
       return true;
     },
-    async pilotRatings() {
-      const { data, error } = await admin.from("pilot_ratings").select("rater, ratee, know, axes, predicted, created_at").limit(5000);
+    async pilotRatings(circle) {
+      if (!circlesOn() && circle !== STUDY) return [];
+      let q = admin.from("pilot_ratings").select("rater, ratee, know, axes, predicted, created_at");
+      if (circlesOn()) q = q.eq("circle", circle);
+      const { data, error } = await q.limit(5000);
       if (error) return warn("pilotRatings", error.message), null;
       return (data as Parameters<typeof pilotRatingFromRow>[0][]).map(pilotRatingFromRow);
+    },
+    async pilotCircle(by) {
+      if (!circlesOn()) return null;
+      const q = admin.from("pilot_circles").select("id, code_hash, created_by, created_at, visits, research");
+      const { data, error } = await ("id" in by ? q.eq("id", by.id) : q.eq("code_hash", by.codeHash)).maybeSingle();
+      if (error) return warn("pilotCircle", error.message), undefined;
+      return data ? circleFromRow(data as CircleRow) : null;
+    },
+    async savePilotCircle(c) {
+      if (!circlesOn()) return false;
+      const { error } = await admin
+        .from("pilot_circles")
+        .insert({ id: c.id, code_hash: c.codeHash, created_by: c.createdBy, created_at: c.createdAt, visits: c.visits, research: c.research });
+      if (error) return warn("savePilotCircle", error.message), false;
+      return true;
     },
     async forgetSubject() {
       return true;
@@ -949,8 +1002,9 @@ interface MemoryState {
   meetings?: Map<string, EchoMeeting>;
   demos?: Map<string, DemoVisit>;
   pilot?: Map<string, PilotPerson>;
-  /** By `${rater}|${ratee}`. */
-  pilotRatings?: Map<string, PilotRating>;
+  /** By `${rater}|${ratee}`, with the circle the rating was made in. */
+  pilotRatings?: Map<string, PilotRating & { circle: string }>;
+  circles?: Map<string, PilotCircle>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -1221,20 +1275,32 @@ function memoryStore(): VillageStore {
       return p ? structuredClone(p) : null;
     },
     async savePilotPerson(p) {
-      // The table's unique index on lower(nickname), as the in-process store keeps it.
-      for (const q of memory.pilot?.values() ?? []) if (q.subject !== p.subject && q.nickname.toLowerCase() === p.nickname.toLowerCase()) return false;
+      // The table's unique index on (circle, lower(nickname)), as the in-process store keeps it.
+      for (const q of memory.pilot?.values() ?? []) if (q.subject !== p.subject && q.circle === p.circle && q.nickname.toLowerCase() === p.nickname.toLowerCase()) return false;
       (memory.pilot ??= new Map()).set(p.subject, structuredClone(p));
       return true;
     },
-    async pilotPeople() {
-      return [...(memory.pilot?.values() ?? [])].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt)).map((p) => structuredClone(p));
+    async pilotPeople(circle) {
+      return [...(memory.pilot?.values() ?? [])]
+        .filter((p) => p.circle === circle)
+        .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt))
+        .map((p) => structuredClone(p));
     },
-    async savePilotRating(r) {
-      (memory.pilotRatings ??= new Map()).set(`${r.rater}|${r.ratee}`, structuredClone(r));
+    async savePilotRating(r, circle) {
+      (memory.pilotRatings ??= new Map()).set(`${r.rater}|${r.ratee}`, { ...structuredClone(r), circle });
       return true;
     },
-    async pilotRatings() {
-      return [...(memory.pilotRatings?.values() ?? [])].map((r) => structuredClone(r));
+    async pilotRatings(circle) {
+      return [...(memory.pilotRatings?.values() ?? [])].filter((r) => r.circle === circle).map(({ circle: _, ...r }) => structuredClone(r));
+    },
+    async pilotCircle(by) {
+      const c = "id" in by ? memory.circles?.get(by.id) : [...(memory.circles?.values() ?? [])].find((x) => x.codeHash === by.codeHash);
+      return c ? { ...c } : null;
+    },
+    async savePilotCircle(c) {
+      for (const x of memory.circles?.values() ?? []) if (x.id === c.id || x.codeHash === c.codeHash) return false;
+      (memory.circles ??= new Map()).set(c.id, { ...c });
+      return true;
     },
     async forgetSubject(subject) {
       const mine = (k: string) => k.startsWith(`${subject}|`);
@@ -1242,7 +1308,9 @@ function memoryStore(): VillageStore {
       for (const map of [memory.deeds, memory.landings] as (Map<string, unknown> | undefined)[]) for (const k of [...(map?.keys() ?? [])]) if (mine(k)) map!.delete(k);
       for (const map of [memory.packs, memory.homes, memory.looks, memory.presence, memory.bars, memory.demos, memory.pilot] as (Map<string, unknown> | undefined)[]) map?.delete(subject);
       // C75: what they said of their friends, and what their friends said of them.
-      for (const [k, r] of [...(memory.pilotRatings ?? new Map<string, PilotRating>())]) if (r.rater === subject || r.ratee === subject) memory.pilotRatings!.delete(k);
+      for (const [k, r] of [...(memory.pilotRatings ?? new Map<string, PilotRating & { circle: string }>())]) if (r.rater === subject || r.ratee === subject) memory.pilotRatings!.delete(k);
+      // C83: a circle they started stays for its friends, no longer theirs.
+      for (const c of memory.circles?.values() ?? []) if (c.createdBy === subject) c.createdBy = null;
       memory.stagings?.delete(subject);
       memory.outings?.delete(subject);
       for (const [code, i] of [...(memory.invites ?? new Map<string, EchoInvite>())]) if (i.subject === subject) memory.invites!.delete(code);
@@ -1316,5 +1384,6 @@ export function resetMemoryStore(): void {
   memory.demos?.clear();
   memory.pilot?.clear();
   memory.pilotRatings?.clear();
+  memory.circles?.clear();
   memory.next = 1;
 }

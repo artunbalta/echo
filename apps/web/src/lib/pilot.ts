@@ -5,7 +5,8 @@
  * their friends say of them.
  *
  * OFF UNLESS SWITCHED ON. `ECHO_PILOT=1` with `ECHO_PILOT_CODE` (at least four characters, the code the
- * owner gives their friends). Without both there is no `/pilot` page and `/api/pilot` answers 404.
+ * owner gives their friends), or with circles (`ECHO_CIRCLES=1`, `lib/pilotCircles.ts`, C83). Without
+ * either there is no `/pilot` page and `/api/pilot` answers 404.
  * `ECHO_PILOT_CELL` picks the village (Senstrand by default), and `ECHO_PILOT_ADMIN` (at least twelve
  * characters) is the token the export asks for.
  *
@@ -21,6 +22,7 @@ import { timingSafeEqual } from "node:crypto";
 import { PERSONA_AXIS_KEYS } from "@echo/shared";
 import { PILOT, PILOT_SITUATIONS, TIDE, add, loanComesBack, type Pack } from "@echo/planet";
 
+import { STUDY, circlesOn } from "@/lib/pilotCircles";
 import type { VillageStore } from "@/lib/villageStore";
 
 const CELL = /^[0-9a-f]{15}$/;
@@ -46,9 +48,14 @@ export interface PilotStated {
 
 export interface PilotPerson {
   subject: string;
+  /** The circle they joined (C83): "study" for the owner's registered study. */
+  circle: string;
   nickname: string;
   joinedAt: string;
+  /** Their yes to taking part: in the study, a research consent; in any other circle, a yes to play. */
   consentAt: string;
+  /** Their yes to research, if they gave one: the same moment as `consentAt` in the study, optional elsewhere. */
+  researchAt: string | null;
   /** Where they place themselves, 1–7, in `PERSONA_AXIS_KEYS` order. */
   self: number[];
   stated: PilotStated;
@@ -78,17 +85,23 @@ export interface PilotNotice {
 }
 
 /**
- * The pilot's settings, or null when it is not switched on. `visits` is two, or three with
- * `ECHO_PILOT_VISITS=3` (C78): the third visit is the study's power lever, for the owner to choose.
+ * The pilot's settings, or null when it is not switched on. `visits` is the study's: two, or three with
+ * `ECHO_PILOT_VISITS=3` (C78), the study's power lever, for the owner to choose. `code` is empty when
+ * there is no study, only circles (C83).
  */
-export function pilotConfig(): { cell: string; code: string; visits: number } | null {
+export function pilotConfig(): { cell: string; code: string; visits: number; circles: boolean } | null {
   if (process.env.ECHO_PILOT !== "1") return null;
-  const code = (process.env.ECHO_PILOT_CODE ?? "").trim();
-  if (code.length < 4) return null;
+  const raw = (process.env.ECHO_PILOT_CODE ?? "").trim();
+  const code = raw.length >= 4 ? raw : "";
+  const circles = circlesOn();
+  if (!code && !circles) return null;
   const cell = CELL.test(process.env.ECHO_PILOT_CELL ?? "") ? process.env.ECHO_PILOT_CELL! : PILOT_DEFAULT_CELL;
   const visits = process.env.ECHO_PILOT_VISITS === "3" ? 3 : PILOT.sessions;
-  return { cell, code, visits };
+  return { cell, code, visits, circles };
 }
+
+/** Whether a person is in the owner's registered study, rather than a circle of their own (C83). */
+export const inStudy = (p: Pick<PilotPerson, "circle">): boolean => p.circle === STUDY;
 
 /** Whether a request carries the export token. Constant-time, and false whenever there is no long enough token set. */
 export function pilotAdmin(req: Request): boolean {
@@ -98,9 +111,9 @@ export function pilotAdmin(req: Request): boolean {
   return timingSafeEqual(Buffer.from(got), Buffer.from(want));
 }
 
-/** Whether the code someone typed is the group's. Case and spaces at the ends do not matter. */
+/** Whether the code someone typed is the group's. Case and spaces at the ends do not matter. Never a match without a code. */
 export function codeMatches(typed: unknown, code: string): boolean {
-  return typeof typed === "string" && typed.trim().toLowerCase() === code.trim().toLowerCase();
+  return code.trim().length >= 4 && typeof typed === "string" && typed.trim().toLowerCase() === code.trim().toLowerCase();
 }
 
 /** A nickname: what friends call them, 1–24 characters, one line. */

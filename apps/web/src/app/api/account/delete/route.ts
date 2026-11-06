@@ -99,7 +99,12 @@ const USER_NAMED: [string, string][] = [
   ["world_effects", "subject"],
   // C67. What moderators did stays answerable; whom it was done to does not outlive the erasure.
   ["moderation_actions", "subject"],
+  // C83. A circle they started stays for the friends in it, and stops being theirs.
+  ["pilot_circles", "created_by"],
 ];
+// Tables that are not there until their migration is applied (0037 for circles): absent, nothing of the
+// person's can be in them, so a 404 is not a failure.
+const NOT_YET: ReadonlySet<string> = new Set(["pilot_circles"]);
 
 /** One table's rows for one person, deleted by REST: true, or why not. */
 async function supabaseDeleteRow(table: string, col: string, uid: string): Promise<true | string> {
@@ -157,6 +162,7 @@ async function supabaseDelete(uid: string, later: ReadonlySet<string> = new Set(
         body: JSON.stringify({ [col]: null }),
       });
       if (res.ok) wiped.push(`${table} (${col} cleared)`);
+      else if (res.status === 404 && NOT_YET.has(table)) wiped.push(`${table} (not there)`);
       else failed.push(`${table} ${res.status}`);
     } catch (err) {
       failed.push(`${table} ${(err as Error).message}`);

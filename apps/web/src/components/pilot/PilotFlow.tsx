@@ -13,8 +13,13 @@
  *
  * A first join is a fresh person: whatever identity this browser had is set aside, so the pilot's echo
  * learns from the pilot alone. A returning one is recognised by the same browser.
+ *
+ * Circles (C83), when on: the code says what it opens (the study, or a circle of friends and how many
+ * visits) before anyone agrees to anything; a circle asks a yes to play and, apart, an optional yes to
+ * research. Anyone can start a circle and send its link (`/pilot?code=…`), on the way in or after their
+ * own last visit.
  */
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { PERSONA_AXIS_KEYS } from "@echo/shared";
 
 import ParcelCanvas, { type ParcelCanvasProps } from "@/components/planet/ParcelCanvas";
@@ -36,7 +41,10 @@ interface Info {
   cell: string;
   sessionMs: number;
   sessions: number;
-  me: { nickname: string; sessions: Session[]; open: Session | null; start: { ok: true; n: number } | { ok: false; why: "open" | "done" | "too_soon"; at?: string } } | null;
+  /** Whether circles are on (C83), and whether there is a study at all. */
+  circles?: boolean;
+  study?: boolean;
+  me: { nickname: string; inStudy?: boolean; sessions: Session[]; open: Session | null; start: { ok: true; n: number } | { ok: false; why: "open" | "done" | "too_soon"; at?: string } } | null;
   group: { nickname: string; rated: boolean }[];
 }
 
@@ -115,6 +123,14 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
   const [visit, setVisit] = useState<PilotSettings | null>(null);
   const [rating, setRating] = useState<{ ratee: string; know: 0 | 1 | 2 | 3 | null; axes: (number | null)[]; predicted: Stated; noIdea: boolean } | null>(null);
   const [debrief, setDebrief] = useState<Debrief | null>(null);
+  // What the typed code opens (C83): undefined while unknown, null for nothing; `failed` if it could not be asked.
+  const [opens, setOpens] = useState<{ kind: "study" | "circle"; visits: number } | null | undefined>(undefined);
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [research, setResearch] = useState(false);
+  const [made, setMade] = useState<{ code: string; link: string; after: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
+  // A circle started on the way in already set up this browser's fresh identity: joining keeps it.
+  const fresh = useRef(false);
 
   const load = useCallback(async (): Promise<Info | null> => {
     try {
@@ -156,18 +172,82 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
     })();
   }, [load, play]);
 
+  // A code in the link (`/pilot?code=…`) fills the field.
+  useEffect(() => {
+    const fromLink = new URLSearchParams(window.location.search).get("code");
+    if (fromLink) setCode(fromLink);
+  }, []);
+
+  // What the code opens, asked a moment after typing stops.
+  useEffect(() => {
+    setOpens(undefined);
+    setCheckFailed(false);
+    if (code.replace(/[^a-z0-9]/gi, "").length < 4) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/pilot?op=code&code=${encodeURIComponent(code)}`);
+          if (!res.ok) return setCheckFailed(true);
+          const data = (await res.json()) as { kind: "study" | "circle" | null; visits?: number };
+          setOpens(data.kind ? { kind: data.kind, visits: data.visits ?? 2 } : null);
+        } catch {
+          setCheckFailed(true);
+        }
+      })();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [code]);
+
+  const freshPerson = async () => {
+    // A fresh person for the pilot, and their yes to being watched in it.
+    for (const k of ["echo.userId", "echo.identityToken"]) localStorage.removeItem(k);
+    localStorage.setItem("echo.consent", JSON.stringify({ telemetry: true }));
+    await ensureIdentity();
+  };
+
+  /** A new circle and its link; `after` when its starter has played their own already. */
+  const startCircle = async (after: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (!after && !fresh.current) {
+        await freshPerson();
+        fresh.current = true;
+      } else {
+        await ensureIdentity();
+      }
+      const res = await fetch("/api/pilot?op=circle", { method: "POST", headers: identityHeaders({ "content-type": "application/json" }), body: JSON.stringify({ visits: 3 }) });
+      const data = (await res.json().catch(() => ({}))) as { code?: string };
+      if (!res.ok || !data.code) return setError(t(lang, "pilot.errOther"));
+      setMade({ code: data.code, link: `${window.location.origin}/pilot?code=${data.code}`, after });
+      setCopied(false);
+      if (!after) setCode(data.code);
+    } catch {
+      setError(t(lang, "pilot.errOther"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!made) return;
+    try {
+      await navigator.clipboard.writeText(made.link);
+      setCopied(true);
+    } catch {
+      // The link is on the page to copy by hand.
+    }
+  };
+
   const join = async () => {
     setBusy(true);
     setError(null);
     try {
-      // A fresh person for the pilot, and their yes to being watched in it.
-      for (const k of ["echo.userId", "echo.identityToken"]) localStorage.removeItem(k);
-      localStorage.setItem("echo.consent", JSON.stringify({ telemetry: true }));
-      await ensureIdentity();
+      if (!fresh.current) await freshPerson();
       const res = await fetch("/api/pilot?op=join", {
         method: "POST",
         headers: identityHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ code, nickname, consent, self, stated }),
+        body: JSON.stringify({ code, nickname, consent, self, stated, research: opens?.kind === "circle" ? research : undefined }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -268,32 +348,73 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
   if (step === "loading") return page(<p className="text-parchment/50">…</p>);
   if (step === "unavailable") return page(<p className="text-parchment/70">{t(lang, "pilot.unavailable")}</p>);
 
-  if (step === "intro")
+  /** A circle's code and link, made just now, to send. */
+  const madeBox = made ? (
+    <div data-pilot-circle-made className="mt-5 rounded-lg border border-parchment/20 px-4 py-3">
+      <p className="text-[13px] leading-relaxed text-parchment/80">{made.after ? t(lang, "pilot.circle.madeAfter") : t(lang, "pilot.circle.made", { code: made.code })}</p>
+      <p data-pilot-circle-link className="mt-2 break-all font-mono text-[13px] text-parchment">
+        {made.link}
+      </p>
+      <button type="button" data-pilot-circle-copy onClick={() => void copyLink()} className={`${quiet} mt-2`}>
+        {copied ? t(lang, "pilot.circle.copied") : t(lang, "pilot.circle.copy")}
+      </button>
+    </div>
+  ) : null;
+
+  if (step === "intro") {
+    const circle = opens?.kind === "circle";
+    const typed = code.replace(/[^a-z0-9]/gi, "").length >= 4;
     return page(
       <>
-        <h1 className="font-serif text-4xl leading-tight">{t(lang, "pilot.title")}</h1>
-        <p className="mt-4 text-[15px] leading-relaxed text-parchment/75">{t(lang, (info?.sessions ?? 2) === 3 ? "pilot.intro3" : "pilot.intro")}</p>
-        <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, "pilot.kept")}</p>
+        <h1 className="font-serif text-4xl leading-tight">{t(lang, circle ? "pilot.circle.title" : "pilot.title")}</h1>
+        <p className="mt-4 text-[15px] leading-relaxed text-parchment/75">
+          {circle ? t(lang, "pilot.circle.intro", { visits: opens!.visits }) : t(lang, (info?.sessions ?? 2) === 3 ? "pilot.intro3" : "pilot.intro")}
+        </p>
+        <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, circle ? "pilot.circle.kept" : "pilot.kept")}</p>
         <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, "pilot.sameBrowser")}</p>
         <label className="mt-6 block text-xs text-parchment/55">
           {t(lang, "pilot.code")}
           <input data-pilot-code value={code} onChange={(e) => setCode(e.target.value)} className="mt-1 block w-full rounded-lg bg-white/10 px-3 py-2 text-[15px] text-parchment outline-none focus:bg-white/15" />
         </label>
+        {typed && info?.circles ? (
+          <p data-pilot-code-opens={opens === undefined ? "" : (opens?.kind ?? "none")} className="mt-1.5 text-[12px] text-parchment/55">
+            {opens === undefined ? "\u00a0" : opens === null ? t(lang, "pilot.circle.unknown") : opens.kind === "circle" ? t(lang, "pilot.circle.which", { visits: opens.visits }) : t(lang, "pilot.circle.whichStudy")}
+          </p>
+        ) : null}
+        {madeBox}
         <label className="mt-4 block text-xs text-parchment/55">
           {t(lang, "pilot.nickname")}
           <input data-pilot-nickname maxLength={24} value={nickname} onChange={(e) => setNickname(e.target.value)} className="mt-1 block w-full rounded-lg bg-white/10 px-3 py-2 text-[15px] text-parchment outline-none focus:bg-white/15" />
         </label>
         <label className="mt-5 flex items-start gap-3 text-[13px] leading-relaxed text-parchment/80">
           <input data-pilot-consent type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-1" />
-          <span>{t(lang, "pilot.consent")}</span>
+          <span>{t(lang, circle ? "pilot.circle.consent" : "pilot.consent")}</span>
         </label>
-        <div className="mt-6">
-          <button type="button" data-pilot-next disabled={!consent || code.trim().length < 4 || !nickname.trim()} onClick={() => setStep("self")} className={button}>
+        {circle ? (
+          <label className="mt-3 flex items-start gap-3 text-[13px] leading-relaxed text-parchment/70">
+            <input data-pilot-research type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="mt-1" />
+            <span>{t(lang, "pilot.circle.research")}</span>
+          </label>
+        ) : null}
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            data-pilot-next
+            disabled={!consent || !typed || !nickname.trim() || (opens === undefined && !checkFailed) || opens === null}
+            onClick={() => setStep("self")}
+            className={button}
+          >
             {t(lang, "pilot.next")}
           </button>
+          {info?.circles && !made ? (
+            <button type="button" data-pilot-circle-start disabled={busy} onClick={() => void startCircle(false)} className={quiet}>
+              {t(lang, "pilot.circle.start")}
+            </button>
+          ) : null}
         </div>
       </>,
     );
+  }
 
   if (step === "self")
     return page(
@@ -421,6 +542,12 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
               ) : null}
               {rateLink}
             </div>
+            {info?.circles && !made ? (
+              <button type="button" data-pilot-circle-again disabled={busy} onClick={() => void startCircle(true)} className={`${quiet} mt-6`}>
+                {t(lang, "pilot.circle.again")}
+              </button>
+            ) : null}
+            {madeBox}
           </>
         )}
       </>,
