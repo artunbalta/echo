@@ -155,9 +155,10 @@ def build() -> dict[str, tuple[str, str]]:
         people = [panel[n]["people"] for n in names if n in panel]
         who = f"everyone with more than {k} visits ({min(people):,}–{max(people):,} browsers per contrast; exploratory)" if k else "the registered panel"
         figs["looks_mm"] = (
-            F.looks_measured(curves, note="The looks curve, measured on the Moral Machine"),
+            F.looks_measured(curves, note="The looks curve, measured on the Moral Machine", apart=("humans over pets",)),
             f"The looks curve, measured (Moral Machine): {who}. "
-            f"Dots: the echo's skill on a held-out visit after n other visits, with 95% intervals over people, one curve per kind of dilemma. "
+            f"Dots: the echo's skill on a held-out visit after n other visits, with 95% intervals over people, one curve per kind of dilemma; "
+            f"humans over pets above, on its own scale, and the five contrasts of character below. "
             f"Dashes: the theory's nρ̂² / (nρ̂ + 1 − ρ̂), from ρ̂ fitted on pairs of visits only. "
             f"{inside} of {points} predicted points lie inside their measured interval; r = {pooled['corr']:.5f}, mean gap {pooled['mad']:.4f}.",
         )
