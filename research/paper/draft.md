@@ -256,6 +256,10 @@ below the crowd. The gaps run from −0.036 for the most favourable
 The registered test, which scores a twin's missing answers as the crowd's, gives
 −0.023 [−0.026, −0.020].
 
+The persona itself has nothing to add to accuracy. A gradient-boosted model of the persona that aims at
+the metric's own optimum, the conditional median, scores 0.7614. That is the
+crowd's 0.7614 to the fourth decimal. The twins fall below even that.
+
 <!-- figure:individuals -->
 
 **H2. A regression knows individuals better than the twins, on the twins' own information.** The ridge
@@ -358,6 +362,8 @@ them. No pool comes near at any size the persona holds:
   - the twin 0.735 (r .116);
   - the retest 0.821;
   - the echo 0.825.
+- **A boosted median model in place of ridge** (registered): it scores 0.761,
+  which is the crowd's accuracy, with r = .095.
 - **Deviations from the registration** are reported in `research/deeds/README.md`:
   - The release has 13 distinct twin specifications, not the 11 counted.
   - Partially covering twins are also scored on the people they answered.

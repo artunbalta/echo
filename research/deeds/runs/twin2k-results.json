@@ -1250,6 +1250,69 @@
     },
     "normalised": 0.926390078208946
    },
+   "persona_hgb": {
+    "accuracy": 0.7614181799704008,
+    "r": 0.09533660204675036,
+    "task_accuracy": {
+     "Allais": 0.6151603498542274,
+     "WTA/WTP-Thaler": 0.8326854551344347,
+     "absolute vs. relative savings": 0.6817298347910593,
+     "anchoring and adjustment": 0.7950815246733614,
+     "base rate": 0.8347862001943634,
+     "conjunction problem (Linda)": 0.8288953676708779,
+     "denominator neglect": 0.620505344995141,
+     "false consensus": 0.8219774052478134,
+     "framing problem": 0.8057337220602527,
+     "less is more": 0.7738824101069,
+     "myside": 0.8139941690962099,
+     "non-separability of risks and benefits": 0.8269254130223518,
+     "omission": 0.7523485584710075,
+     "outcome bias": 0.8546323291221251,
+     "pricing": 0.5412779397473275,
+     "prob matching vs. max": 0.7654163631949502,
+     "sunk cost fallacy": 0.7813411078717201
+    },
+    "task_r": {
+     "Allais": 0.04327367035669675,
+     "WTA/WTP-Thaler": 0.05691792925814323,
+     "absolute vs. relative savings": -0.0030880456920619223,
+     "anchoring and adjustment": 0.16859554167643304,
+     "base rate": 0.02241997097947831,
+     "conjunction problem (Linda)": 0.022843087197795722,
+     "denominator neglect": -0.005038089687016701,
+     "false consensus": 0.35741220093781095,
+     "framing problem": 0.023785762131125914,
+     "less is more": 0.15356623170043282,
+     "myside": 0.22394445752859693,
+     "non-separability of risks and benefits": 0.13329515449862417,
+     "omission": 0.2186586104785515,
+     "outcome bias": 0.04636665567623445,
+     "pricing": 0.0503638649076245,
+     "prob matching vs. max": -0.0019274377843744887,
+     "sunk cost fallacy": 0.10933267063066085
+    },
+    "r_score": 0.10803851781375448,
+    "task_r_score": {
+     "Allais": 0.04661582523254761,
+     "WTA/WTP-Thaler": 0.054981832085218785,
+     "absolute vs. relative savings": -0.0006794667027576423,
+     "anchoring and adjustment": 0.19351467990945426,
+     "base rate": 0.02617187135156021,
+     "conjunction problem (Linda)": 0.046055971852295687,
+     "denominator neglect": -0.00503808968701669,
+     "false consensus": 0.37042252852836655,
+     "framing problem": 0.027212789947478548,
+     "less is more": 0.2055112073654347,
+     "myside": 0.3026851410246557,
+     "non-separability of risks and benefits": 0.15710326926481671,
+     "omission": 0.21955131368676167,
+     "outcome bias": 0.03564816856215074,
+     "pricing": 0.04807541443518551,
+     "prob matching vs. max": -0.000983610499072288,
+     "sunk cost fallacy": 0.109805956476746
+    },
+    "normalised": 0.9316073341343873
+   },
    "self": {
     "accuracy": 0.7655545424519015,
     "r": 0.10978570631338204,
@@ -1801,6 +1864,11 @@
      "r": 0.13390563276944867,
      "normalised": 0.925318201526963
     },
+    "persona_hgb": {
+     "accuracy": 0.7593142209264658,
+     "r": 0.09075791831989519,
+     "normalised": 0.930797608568314
+    },
     "self": {
      "accuracy": 0.7644042253806285,
      "r": 0.11349397936731229,
@@ -1942,6 +2010,11 @@
      "accuracy": 0.736842121681124,
      "r": 0.15135450675615933,
      "normalised": 0.8979361675774475
+    },
+    "persona_hgb": {
+     "accuracy": 0.7512944246481661,
+     "r": 0.10956572794528797,
+     "normalised": 0.9155481432735249
     },
     "self": {
      "accuracy": 0.7550309001907642,
