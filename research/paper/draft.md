@@ -37,7 +37,7 @@ retested tasks.
   outscores the retest: 0.822 against 0.817, as registered.
 - **Its simplest form lands on the theory.** Exploratory, it scores 0.827,
   the theory's one-look optimum (0.827). The knowable ceiling is
-  0.869.
+  0.869 (0.866–0.871).
 
 **Study 2: the Basel–Berlin Risk Study.** The behaviour here is incentivised and retested six months
 later.
@@ -304,18 +304,23 @@ The echo laid on the released twins' average, instead of the regression, scores
 
 <!-- figure:looks -->
 
-**What is knowable.** The latent model puts the knowable ceiling at 0.869, and the
-Bayes-optimal echo at 0.847 after three looks and 0.859 after
-eight. In the personal knowledge index:
+**What is knowable.** The latent model puts the knowable ceiling at 0.869
+(95% interval 0.866–0.871), and the Bayes-optimal echo
+at 0.847 after three looks and 0.859 after eight. The interval
+comes from 200 bootstrap draws of people. Each draw refits every column's answer
+shares and ρ, and rescores the witnesses on the same people. In the personal knowledge index:
 
-| Witness | Share of the knowable it knows |
-|---|---|
-| The headline twin | −35% |
-| The person's own retest | 52% |
-| The registered echo | 56% |
-| The transition echo | 62% |
-| Three looks (model) | 81% |
-| Eight looks (model) | 91% |
+| Witness | Share of the knowable it knows | 95% interval |
+|---|---|---|
+| The headline twin | −35% | −38% to −32% |
+| The person's own retest | 52% | 50% to 54% |
+| The registered echo | 56% | 55% to 58% |
+| The transition echo | 62% | 60% to 63% |
+| Three looks (model) | 81% | model |
+| Eight looks (model) | 91% | model |
+
+The intervals do not overlap: the registered echo knows more than the retest, and the transition echo
+more than both.
 
 **Prediction 2, per task.** Copying the earlier answer beats the crowd where the task is more than
 half steady (ρ > ½) and not below. This holds on 15 of 17 tasks,
@@ -565,7 +570,9 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
   survey choices too.
 - **The retest sample.** Study 2's behaviour is incentivised, but its retest sample is small.
 - **The ceiling model.** The knowable ceiling comes from an ordered latent model. It is a model-based
-  estimate, though one that reproduced the observed one-look echo to the third decimal.
+  estimate, though one that reproduced the observed one-look echo to the third decimal. Its interval
+  over people is narrow (0.866–0.871), but that
+  interval does not cover the choice of model.
 - **The LLM twins.** We scored the twins as released, and better prompting may raise them. The persona
   bound says by how little, if the persona is all they read.
 - **Study 3** is a pilot among friends.

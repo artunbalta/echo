@@ -37,7 +37,7 @@ retested tasks.
   outscores the retest: {{f:t1.echo.acc:.3f}} against {{f:t1.again.acc:.3f}}, as registered.
 - **Its simplest form lands on the theory.** Exploratory, it scores {{f:t1.echo_transition.acc:.3f}},
   the theory's one-look optimum ({{f:t1.model.looks1:.3f}}). The knowable ceiling is
-  {{f:t1.model.ceiling:.3f}}.
+  {{f:t1.model.ceiling:.3f}} ({{f:t1.model.ceiling.lo:.3f}}–{{f:t1.model.ceiling.hi:.3f}}).
 
 **Study 2: the Basel–Berlin Risk Study.** The behaviour here is incentivised and retested six months
 later.
@@ -304,18 +304,23 @@ The echo laid on the released twins' average, instead of the regression, scores
 
 <!-- figure:looks -->
 
-**What is knowable.** The latent model puts the knowable ceiling at {{f:t1.model.ceiling:.3f}}, and the
-Bayes-optimal echo at {{f:t1.model.looks3:.3f}} after three looks and {{f:t1.model.looks8:.3f}} after
-eight. In the personal knowledge index:
+**What is knowable.** The latent model puts the knowable ceiling at {{f:t1.model.ceiling:.3f}}
+(95% interval {{f:t1.model.ceiling.lo:.3f}}–{{f:t1.model.ceiling.hi:.3f}}), and the Bayes-optimal echo
+at {{f:t1.model.looks3:.3f}} after three looks and {{f:t1.model.looks8:.3f}} after eight. The interval
+comes from {{f:t1.boot.draws:d}} bootstrap draws of people. Each draw refits every column's answer
+shares and ρ, and rescores the witnesses on the same people. In the personal knowledge index:
 
-| Witness | Share of the knowable it knows |
-|---|---|
-| The headline twin | {{f:t1.know.llm_headline:%}} |
-| The person's own retest | {{f:t1.know.again:%}} |
-| The registered echo | {{f:t1.know.echo:%}} |
-| The transition echo | {{f:t1.know.echo_transition:%}} |
-| Three looks (model) | {{f:t1.know.looks3:%}} |
-| Eight looks (model) | {{f:t1.know.looks8:%}} |
+| Witness | Share of the knowable it knows | 95% interval |
+|---|---|---|
+| The headline twin | {{f:t1.know.llm_headline:%}} | {{f:t1.know.llm_headline.lo:%}} to {{f:t1.know.llm_headline.hi:%}} |
+| The person's own retest | {{f:t1.know.again:%}} | {{f:t1.know.again.lo:%}} to {{f:t1.know.again.hi:%}} |
+| The registered echo | {{f:t1.know.echo:%}} | {{f:t1.know.echo.lo:%}} to {{f:t1.know.echo.hi:%}} |
+| The transition echo | {{f:t1.know.echo_transition:%}} | {{f:t1.know.echo_transition.lo:%}} to {{f:t1.know.echo_transition.hi:%}} |
+| Three looks (model) | {{f:t1.know.looks3:%}} | model |
+| Eight looks (model) | {{f:t1.know.looks8:%}} | model |
+
+The intervals do not overlap: the registered echo knows more than the retest, and the transition echo
+more than both.
 
 **Prediction 2, per task.** Copying the earlier answer beats the crowd where the task is more than
 half steady (ρ > ½) and not below. This holds on {{f:t1.half.agree:d}} of {{f:t1.half.of:d}} tasks,
@@ -565,7 +570,9 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
   survey choices too.
 - **The retest sample.** Study 2's behaviour is incentivised, but its retest sample is small.
 - **The ceiling model.** The knowable ceiling comes from an ordered latent model. It is a model-based
-  estimate, though one that reproduced the observed one-look echo to the third decimal.
+  estimate, though one that reproduced the observed one-look echo to the third decimal. Its interval
+  over people is narrow ({{f:t1.model.ceiling.lo:.3f}}–{{f:t1.model.ceiling.hi:.3f}}), but that
+  interval does not cover the choice of model.
 - **The LLM twins.** We scored the twins as released, and better prompting may raise them. The persona
   bound says by how little, if the persona is all they read.
 - **Study 3** is a pilot among friends.
