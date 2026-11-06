@@ -663,6 +663,35 @@ another gender or education.
 The theory does not need ρ to be the same in every panel or every group. It needs ρ to be measured
 where it is applied, and that is what the debrief and the pilot do.
 
+**Again against elsewhere.** This check is exploratory. A visit's choice on one contrast can be read from
+three things:
+
+- **again:** the same contrast in another visit;
+- **elsewhere:** the five other contrasts in that other visit;
+- **same visit:** the five other contrasts in the target's own visit.
+
+| Contrast | Again | Elsewhere | Same visit |
+|---|---|---|---|
+| more lives | {{f:t4.e.util.again:.3f}} | {{f:t4.e.util.elsewhere:.3f}} | {{f:t4.e.util.same_visit:.3f}} |
+| men over women | {{f:t4.e.gender.again:.3f}} | {{f:t4.e.gender.elsewhere:.3f}} | {{f:t4.e.gender.same_visit:.3f}} |
+| fit over large | {{f:t4.e.fitness.again:.3f}} | {{f:t4.e.fitness.elsewhere:.3f}} | {{f:t4.e.fitness.same_visit:.3f}} |
+| young over old | {{f:t4.e.age.again:.3f}} | {{f:t4.e.age.elsewhere:.3f}} | {{f:t4.e.age.same_visit:.3f}} |
+| high status over low | {{f:t4.e.status.again:.3f}} | {{f:t4.e.status.elsewhere:.3f}} | {{f:t4.e.status.same_visit:.3f}} |
+| humans over pets | {{f:t4.e.species.again:.3f}} | {{f:t4.e.species.elsewhere:.3f}} | {{f:t4.e.species.same_visit:.3f}} |
+
+- **Where people differ in the situation, the situation is what knows them.** For humans against pets,
+  again knows {{f:t4.e.species.again:.3f}}, elsewhere {{f:t4.e.species.elsewhere:.3f}}, and the same visit's other
+  choices {{f:t4.e.species.same_visit:.3f}}.
+- **Where they barely differ, what little there is to know is general and passing.** For the five
+  contrasts of character (ρ̂ near .1):
+  - Elsewhere knows a good part of what again knows ({{f:t4.e.weak.elsewhere.min:.3f}}–{{f:t4.e.weak.elsewhere.max:.3f}}
+    against {{f:t4.e.weak.again.min:.3f}}–{{f:t4.e.weak.again.max:.3f}}), and as much for more lives.
+  - The same visit's other choices know most in four of the five. They share the visit's state, as M4
+    found.
+
+The thesis holds where it has something to hold: watching again in the situation of interest matters
+in proportion to how much people differ in it.
+
 <!-- figure:looks_mm -->
 
 ## 5. Study 3: the village (pre-registered pilot)

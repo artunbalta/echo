@@ -663,6 +663,35 @@ another gender or education.
 The theory does not need ρ to be the same in every panel or every group. It needs ρ to be measured
 where it is applied, and that is what the debrief and the pilot do.
 
+**Again against elsewhere.** This check is exploratory. A visit's choice on one contrast can be read from
+three things:
+
+- **again:** the same contrast in another visit;
+- **elsewhere:** the five other contrasts in that other visit;
+- **same visit:** the five other contrasts in the target's own visit.
+
+| Contrast | Again | Elsewhere | Same visit |
+|---|---|---|---|
+| more lives | 0.013 | 0.014 | 0.060 |
+| men over women | 0.011 | 0.002 | 0.008 |
+| fit over large | 0.007 | 0.003 | 0.013 |
+| young over old | 0.025 | 0.014 | 0.062 |
+| high status over low | 0.013 | 0.010 | 0.047 |
+| humans over pets | 0.158 | 0.014 | 0.045 |
+
+- **Where people differ in the situation, the situation is what knows them.** For humans against pets,
+  again knows 0.158, elsewhere 0.014, and the same visit's other
+  choices 0.045.
+- **Where they barely differ, what little there is to know is general and passing.** For the five
+  contrasts of character (ρ̂ near .1):
+  - Elsewhere knows a good part of what again knows (0.002–0.014
+    against 0.007–0.025), and as much for more lives.
+  - The same visit's other choices know most in four of the five. They share the visit's state, as M4
+    found.
+
+The thesis holds where it has something to hold: watching again in the situation of interest matters
+in proportion to how much people differ in it.
+
 <!-- figure:looks_mm -->
 
 ## 5. Study 3: the village (pre-registered pilot)

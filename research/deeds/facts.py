@@ -275,6 +275,18 @@ def main():
             ratios = [G["within"][n] / G["across"][n] for n in slug]
             f[f"t4.p.{key}.ratio_min"], f[f"t4.p.{key}.ratio_max"] = min(ratios), max(ratios)
         shutil.copy(people_path, RUNS / "mm-people.json")
+    elsewhere_path = OUT / "mm" / "elsewhere.json"
+    if elsewhere_path.exists():
+        # Exploratory (not registered): again (same contrast, another visit) against elsewhere (the other contrasts).
+        ew = json.loads(elsewhere_path.read_text())
+        slug = {"Utilitarian": "util", "Gender": "gender", "Fitness": "fitness", "Age": "age", "Social Status": "status", "Species": "species"}
+        for name, sl in slug.items():
+            for w in ("again", "elsewhere", "same_visit"):
+                f[f"t4.e.{sl}.{w}"] = ew[name][w]
+        weak = [n for n in slug if n != "Species"]
+        for w in ("again", "elsewhere", "same_visit"):
+            f[f"t4.e.weak.{w}.min"], f[f"t4.e.weak.{w}.max"] = min(ew[n][w] for n in weak), max(ew[n][w] for n in weak)
+        shutil.copy(elsewhere_path, RUNS / "mm-elsewhere.json")
     audit_path = OUT / "audit" / "audit.json"
     if audit_path.exists():
         shutil.copy(audit_path, RUNS / "twin2k-audit.json")
