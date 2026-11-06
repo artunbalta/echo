@@ -58,10 +58,20 @@ studies we registered before running them.
 3. **Across 138 behavioural measures** (Self-Regulation Ontology): what people say about themselves
    predicts nothing about what they do (.005 of variance), and what they do predicts nothing about what
    they say. The echo beats copying on 135 of 138.
+4. **On two million people seen again and again** (the Moral Machine, *Nature* 2018; 31.5 million
+   dilemmas):
+   - **The value of each visit, measured.** From pairs of visits alone, our theory predicts how much
+     better a person is known after two and three visits. All 18 predicted points land inside their 95%
+     intervals: for humans against pets, .097 → .148 → .178, against .096 → .147 → .178.
+   - **The two laws, at scale.** Copying a past visit scores 2ρ − 1 and one look ρ², to the third
+     decimal, in 6 of 6 contrasts.
+   - **One visit beats the whole survey.** It knows more than age, gender, education, income, politics,
+     religion and country together, in 6 of 6.
 
 **Why the information is missing from words.** A persona carries a few percent of what can be known
 about a person in a given situation. One earlier observation of them *in that situation* carries about
-half of it, and three carry about four fifths.
+half of it, and three carry about four fifths. On the Moral Machine the curve of each new visit is
+no longer a model: it is measured, and it lands on the theory.
 
 So the scarce input is **repeated observation in the situation you care about.** Panels ask once, and
 interviews ask once. A world people come back to collects it at no marginal cost, with consent, as
@@ -174,10 +184,11 @@ produce consented, repeated choices per person at a cost below bought panel samp
 
 1. **Weeks 0–2: the pilot.** Deploy, then 20 friends with three visits each, pre-registered. Measure
    return rates and the echo's skill.
-2. **Week 2: a preprint** of Studies 1–2b. Send the audit method to five twin companies and five
+2. **Week 2: a preprint** of Studies 1–2c. Send the audit method to five twin companies and five
    research labs.
-3. **Weeks 3–8: circles.** Anyone can start a "who knows you best" group. Target 1,000 players.
-   Measure invites per player and repeat visits.
+3. **Weeks 3–8: circles.** Anyone can start a "who knows you best" group. It is built and tested on a
+   branch (C83) and waits for the founder's yes. Target 1,000 players. Measure invites per player and
+   repeat visits.
 4. **Weeks 4–12: first revenue.** Two paid twin audits and one paid echo study. **[founder: who]**
 
 ## Founder questions
