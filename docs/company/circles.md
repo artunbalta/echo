@@ -1,7 +1,37 @@
-# Circles: "who knows you best" for anyone (proposal; not built)
+# Circles: "who knows you best" for anyone
 
-*2026-11-06. This needs the owner's yes. It needs a migration, and it changes who the pilot village is
-for. It is the product's loop. The research says why (C81), and the debrief (C80) is its moment.*
+*2026-11-06. Built on branch `feat/circles` (C83), not merged and not deployed: it waits for the owner's yes.
+It changes who the pilot village is for, and it needs migration 0037 (`~/Desktop/apply_0037.sql`). It is the
+product's loop. The research says why (C81, C82), and the debrief (C80) is its moment.*
+
+## Switching it on
+
+1. Merge `feat/circles` (it is based on `feat/who-knows-you-best`).
+2. Apply `apply_0037.sql` in the Supabase SQL editor, after `apply_0036.sql`. It is harmless before the code,
+   and the code is harmless before it: with circles off, nothing reads the new columns.
+3. Set `ECHO_CIRCLES=1` beside `ECHO_PILOT=1`. `ECHO_PILOT_CODE` can stay (the study goes on as its own circle)
+   or go (circles alone).
+4. Anyone opening `/pilot` can then press "No code? Start a circle for your friends", and send the link it gives.
+
+## What is built, and what is not
+
+- **Built.** All of it is in `apps/web/tests/circles.test.mts` (7 tests) beside the pilot's own (still green):
+  - starting a circle, with an 8-character code from 31 letters and digits; the store keeps only its SHA-256;
+  - joining by link or code, with the page saying what a code opens before anyone agrees to anything;
+  - a yes to play (and to being 18 or older), and, apart from it, an optional yes to research;
+  - nicknames unique per circle;
+  - the group, ratings and the debrief's crowd, each inside the circle;
+  - a circle's own number of visits (3 by default);
+  - a debrief that needs no switch outside the study;
+  - the owner's export, the study's alone;
+  - an erasure that leaves a circle for its friends and clears who started it;
+  - rate limits: five new circles a day per address, and sixty code checks per ten minutes;
+  - starting a circle for other friends from one's own finished circle.
+- **Not built.**
+  - Reporting a nickname through the moderation path.
+  - The funnel's numbers (below), beyond what the tables already hold.
+  - A per-circle research export (no circle is a research circle today).
+  - A share card for the debrief.
 
 ## What
 
