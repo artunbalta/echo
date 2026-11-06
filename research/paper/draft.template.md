@@ -166,6 +166,16 @@ Three predictions follow.
 3. **The retest is not the ceiling.** The echo after one look scores at least ρ², which exceeds 2ρ − 1
    for every ρ < 1. More looks approach ρ.
 
+**The same arithmetic in forecasting.** Two of these forms are old in another field.
+
+- In forecast verification, copying is *persistence*. Its skill against climatology is 2ρ − 1.
+- The echo after one look, without a persona, is the best linear blend of persistence and climatology.
+  Its skill is ρ² (Murphy, 1992).
+
+What is new here is the persona prior and the knowable ceiling for discrete answers. So is the
+evidence that the field of digital twins has been scoring itself against persistence while calling it
+a ceiling.
+
 **Accuracy and the knowable ceiling.** For answers on a discrete scale and the field's accuracy metric
 (1 − |guess − answer| / range), we use an ordered latent model of the same form:
 
@@ -576,6 +586,7 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
 - Kelley, T. L. (1927). *Interpretation of Educational Measurements.* World Book.
 - Mischel, W. (1968). *Personality and Assessment.* Wiley.
 - Mischel, W., & Shoda, Y. (1995). A cognitive-affective system theory of personality. *Psychological Review, 102*(2), 246–268.
+- Murphy, A. H. (1992). Climatology, persistence, and their linear combination as standards of reference in skill scores. *Weather and Forecasting, 7*(4), 692–698. https://doi.org/10.1175/1520-0434(1992)007<0692:CPATLC>2.0.CO;2
 - Ouellette, J. A., & Wood, W. (1998). Habit and intention in everyday life: The multiple processes by which past behavior predicts future behavior. *Psychological Bulletin, 124*(1), 54–74. https://doi.org/10.1037/0033-2909.124.1.54
 - Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109.
 - Peng, T., Gui, G., Brucks, M., Merlau, D. J., Fan, G. J., Ben Sliman, M., Johnson, E. J., et al. (2026). Digital twins as funhouse mirrors: Five key distortions. arXiv:2509.19088.
