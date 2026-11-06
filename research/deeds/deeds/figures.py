@@ -223,3 +223,44 @@ def laws(points: list[dict], note: str = "") -> str:
         out.append(f'<circle cx="{x(p["rho"]):.1f}" cy="{y(p["echo"]):.1f}" r="3.2" style="fill:var(--accent);opacity:.85"/>')
     out.append("</svg>")
     return "".join(out)
+
+
+def looks_measured(curves: list[dict], note: str = "") -> str:
+    """
+    Skill against the number of looks, one curve per kind of choice. Dots: measured on held-out looks, with 95%
+    intervals. Dashes: the theory's nρ̂² / (nρ̂ + 1 − ρ̂), from ρ̂ fitted on pairs of looks alone.
+    Each curve: {"label", "n", "observed", "lo", "hi", "predicted"}.
+    """
+    W, H, left, right, top, bottom_pad = 820, 420, 70, 200, 24, 48
+    nmax = max(max(c["n"]) for c in curves)
+    top_value = max(max(c["hi"] or c["observed"]) for c in curves)
+    lo, hi = 0.0, math.ceil(top_value * 20 + 0.5) / 20
+    xs = lambda n: left + (W - left - right) * (n - 1) / max(nmax - 1, 1)  # noqa: E731
+    y = lambda v: top + (H - top - bottom_pad) * (hi - min(max(v, lo), hi)) / (hi - lo)  # noqa: E731
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(note)}" class="chart">']
+    for t in _ticks(lo, hi, 0.05 if hi > 0.2 else 0.02):
+        out.append(f'<line x1="{left}" x2="{W - right}" y1="{y(t):.1f}" y2="{y(t):.1f}" class="grid{" zero" if abs(t) < 1e-9 else ""}"/>')
+        out.append(f'<text x="{left - 8}" y="{y(t) + 4:.1f}" class="tick" text-anchor="end">{fmt(t, 2)}</text>')
+    step = 1 if nmax <= 10 else (2 if nmax <= 20 else 5)
+    for n in [1] + list(range(step, nmax + 1, step)):
+        out.append(f'<text x="{xs(n):.1f}" y="{H - bottom_pad + 18}" class="tick" text-anchor="middle">{n}</text>')
+    out.append(f'<text x="{(left + W - right) / 2:.1f}" y="{H - 8}" class="refl" text-anchor="middle">earlier visits the echo has seen (looks)</text>')
+    out.append(f'<text x="{left + 6}" y="{y(0) - 6:.1f}" class="refl">0 = the crowd</text>')
+    ends = []
+    for c in curves:
+        d = " ".join(f'{"M" if i == 0 else "L"}{xs(n):.1f},{y(v):.1f}' for i, (n, v) in enumerate(zip(c["n"], c["predicted"])))
+        out.append(f'<path d="{d}" style="fill:none;stroke:var(--oracle);stroke-width:2;stroke-dasharray:6 5"/>')
+        for i, n in enumerate(c["n"]):
+            if c.get("lo") and c.get("hi"):
+                out.append(f'<line x1="{xs(n):.1f}" x2="{xs(n):.1f}" y1="{y(c["lo"][i]):.1f}" y2="{y(c["hi"][i]):.1f}" style="stroke:var(--accent);stroke-width:1.5"/>')
+            out.append(f'<circle cx="{xs(n):.1f}" cy="{y(c["observed"][i]):.1f}" r="3.2" style="fill:var(--accent)"/>')
+        ends.append((y(c["observed"][-1]), f'{c["label"]} {fmt(c["observed"][-1])}', "--accent"))
+    ends.sort()
+    placed = []
+    for yy, text, color in ends:
+        yy = max(yy, placed[-1] + 14) if placed else yy
+        placed.append(yy)
+        out.append(f'<text x="{W - right + 8}" y="{yy + 4:.1f}" class="refl" style="fill:var({color})">{esc(text)}</text>')
+    out.append(f'<text x="{W - right + 8}" y="{H - bottom_pad - 4}" class="refl" style="fill:var(--oracle)">dashes: theory from pairs</text>')
+    out.append("</svg>")
+    return "".join(out)

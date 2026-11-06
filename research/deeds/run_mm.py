@@ -58,7 +58,7 @@ def cells(rows: pd.DataFrame) -> list[np.ndarray]:
     s, n, df = (rows[k].to_numpy(np.int64) for k in ("signal", "nchar", "diff"))
     assert ((i | p | b) <= 1).all() and (s <= 2).all() and (n <= 5).all() and (df <= 4).all() and (s | n | df).min() >= 0
     coarse = ((d * 2 + i) * 2 + p) * 2 + b
-    return [((coarse * 3 + s) * 6 + n) * 5 + df, coarse, d]
+    return [(((coarse * 3 + s) * 6 + n) * 5 + df).astype(np.int32), coarse.astype(np.int32), d.astype(np.int32)]
 
 
 class Crowd:
@@ -187,7 +187,11 @@ def persona_matrix(people: pd.DataFrame) -> np.ndarray:
 
 
 def analyse(rows: pd.DataFrame, people: pd.DataFrame | None, draws: int = 20, boot: int = 500, seed: int = 0,
-            min_panel: int = MIN_PANEL, min_cell: int = MIN_CELL) -> dict:
+            min_panel: int = MIN_PANEL, min_cell: int = MIN_CELL, fixed_k: int | None = None, only_m1: bool = False) -> dict:
+    """
+    The registered analysis. Exploratory, not registered: `fixed_k` sets every panel's K instead of the rule
+    (people with more than K looks), and `only_m1` skips M2–M4.
+    """
     rows = rows.sort_values(["dim", "session"], kind="stable").reset_index(drop=True)
     uniq, user_index = np.unique(rows["user"].to_numpy(), return_inverse=True)
     v = visits_of(rows, user_index)
@@ -213,7 +217,7 @@ def analyse(rows: pd.DataFrame, people: pd.DataFrame | None, draws: int = 20, bo
     plan = {}
     for d in range(len(DIMS)):
         dsel = v.dim == d
-        k = panel_k(v, dsel, min_panel)
+        k = fixed_k if fixed_k is not None else panel_k(v, dsel, min_panel)
         plan[d] = {"K": k, "panel": with_looks(v, dsel, k + 1) if k else None, "two": with_looks(v, dsel, 2), "one": dsel}
     rhos: dict = {d: {"M1": [], "M2": [], "M3": [], "f1": [], "f2": [], "f3": [], "stack": []} for d in range(len(DIMS))}
 
@@ -241,6 +245,8 @@ def analyse(rows: pd.DataFrame, people: pd.DataFrame | None, draws: int = 20, bo
                         led.add(f"M1:{d}", people_, (target[:, None] - kap * mean) ** 2, target ** 2, f)
                     rhos[d]["M1"].append(rho)
                     rhos[d]["f1"].append(f)
+            if only_m1:
+                continue
             # M2: copying and one look, everyone with two or more looks.
             m = P["two"] & train
             rho2 = float(np.clip(pair_rho(r[m], v.user[m], rng), 1e-6, 1 - 1e-6))
@@ -336,6 +342,8 @@ def analyse(rows: pd.DataFrame, people: pd.DataFrame | None, draws: int = 20, bo
             m1[name] = {"K": K, "people": int(len(led.parts[f"M1:{d}"][0])), "rho": rho, "rho_by_fold": rhos[d]["M1"],
                         "n": list(range(1, K + 1)), "observed": res["value"], "lo": res.get("lo"), "hi": res.get("hi"),
                         "predicted": predicted.tolist()}
+        if only_m1:
+            continue
         wf = led.fold_weights(f"M2:copy:{d}", rhos[d]["f2"])
         r2 = np.array(rhos[d]["M2"])
         rho2 = float(wf @ r2)
@@ -368,7 +376,8 @@ def analyse(rows: pd.DataFrame, people: pd.DataFrame | None, draws: int = 20, bo
         m3["holds"] = bool(all(m3[DIMS[d]]["persona"]["value"] < m3[DIMS[d]]["echo1"]["value"] for d in m3_dims)
                            and (not boot or m3["mean_gap"]["lo"] > 0))
     out.update({"M1": m1, "M2": m2, "M3": m3, "M4": m4,
-                "M2_holds": bool(all(m2[k]["holds"] for k in m2)), "draws": draws, "boot": boot})
+                "M2_holds": bool(m2) and bool(all(m2[k]["holds"] for k in m2)), "draws": draws, "boot": boot,
+                "exploratory": {"fixed_k": fixed_k, "only_m1": only_m1} if (fixed_k is not None or only_m1) else None})
     return out
 
 
@@ -376,12 +385,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--draws", type=int, default=20)
     ap.add_argument("--boot", type=int, default=500)
+    ap.add_argument("--k", type=int, default=None, help="exploratory: every panel's K (people with more than K looks)")
+    ap.add_argument("--m1-only", action="store_true", help="exploratory: the looks curve alone")
     args = ap.parse_args()
-    rows = pd.read_parquet(MM / "dilemmas.parquet")
-    people = pd.read_parquet(MM / "survey_people.parquet")
-    res = analyse(rows, people, draws=args.draws, boot=args.boot)
+    # Only what the analysis reads, and no second copy held here (the machine is shared).
+    cols = ["user", "session", "dim", "saved", "country", "intervention", "pedped", "barrier", "signal", "nchar", "diff"]
+    res = analyse(pd.read_parquet(MM / "dilemmas.parquet", columns=cols), pd.read_parquet(MM / "survey_people.parquet"),
+                  draws=args.draws, boot=args.boot, fixed_k=args.k, only_m1=args.m1_only)
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "results.json").write_text(json.dumps(res, indent=1))
+    name = "results.json" if args.k is None and not args.m1_only else f"exploratory_k{args.k}.json"
+    (OUT / name).write_text(json.dumps(res, indent=1))
     print(json.dumps({k: res[k] for k in ("counts", "M2_holds")}, indent=1))
     if "pooled" in res["M1"]:
         print("M1 pooled:", res["M1"]["pooled"])

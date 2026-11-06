@@ -186,6 +186,50 @@ def main():
         for k, key in (("again", "again"), ("echo", "echo"), ("echo_transition", "echo_transition"), ("llm_headline", f"llm:{HEADLINE}")):
             f[f"t1.know.{k}.lo"], f[f"t1.know.{k}.hi"] = boot["knows"][key]["lo"], boot["knows"][key]["hi"]
         shutil.copy(boot_path, RUNS / "twin2k-ceiling-boot.json")
+    mm_path = OUT / "mm" / "results.json"
+    if mm_path.exists():
+        mm = json.loads(mm_path.read_text())
+        c = mm["counts"]
+        f["t4.dilemmas"], f["t4.people"], f["t4.sessions"] = c["dilemmas"], c["people"], c["sessions"]
+        f["t4.survey"], f["t4.survey_matched"] = c.get("survey_takers", 0), c.get("survey_takers_matched", 0)
+        slug = {"Utilitarian": "util", "Gender": "gender", "Fitness": "fitness", "Age": "age", "Social Status": "status", "Species": "species"}
+        m1, m2, m3, m4 = mm["M1"], mm["M2"], mm["M3"], mm["M4"]
+        if "pooled" in m1:
+            for k in ("corr", "mad", "mad_n2plus", "max_abs"):
+                f[f"t4.m1.{k}"] = m1["pooled"][k]
+            f["t4.m1.holds"] = m1["pooled"]["holds"]
+        for name, sl in slug.items():
+            if name in m1:
+                d = m1[name]
+                f[f"t4.m1.{sl}.k"], f[f"t4.m1.{sl}.people"], f[f"t4.m1.{sl}.rho"] = d["K"], d["people"], d["rho"]
+                f[f"t4.m1.{sl}.obs1"], f[f"t4.m1.{sl}.obsK"] = d["observed"][0], d["observed"][-1]
+                f[f"t4.m1.{sl}.pred1"], f[f"t4.m1.{sl}.predK"] = d["predicted"][0], d["predicted"][-1]
+                for n in (2, 3, 5, 10):
+                    if n <= d["K"]:
+                        f[f"t4.m1.{sl}.obs{n}"], f[f"t4.m1.{sl}.pred{n}"] = d["observed"][n - 1], d["predicted"][n - 1]
+                if d.get("lo"):
+                    f[f"t4.m1.{sl}.obsK.lo"], f[f"t4.m1.{sl}.obsK.hi"] = d["lo"][-1], d["hi"][-1]
+            d = m2[name]
+            f[f"t4.m2.{sl}.people"], f[f"t4.m2.{sl}.rho"] = d["people"], d["rho"]
+            f[f"t4.m2.{sl}.copy"], f[f"t4.m2.{sl}.theory"] = d["copy"]["value"], d["theory_copy"]
+            f[f"t4.m2.{sl}.raw"], f[f"t4.m2.{sl}.echo1"] = d["raw_copy"]["value"], d["echo1"]["value"]
+            f[f"t4.m2.{sl}.echo1_theory"] = d["theory_echo1"]
+            d = m4[name]
+            f[f"t4.m4.{sl}.within"], f[f"t4.m4.{sl}.across"] = d["within"]["value"], d["across"]["value"]
+            f[f"t4.m4.{sl}.n80"], f[f"t4.m4.{sl}.country"] = d["looks_for_80"], d["country"]["value"]
+            if d.get("looks_for_80_panel") is not None:
+                f[f"t4.m4.{sl}.n80_panel"] = d["looks_for_80_panel"]
+            if name in m3:
+                d = m3[name]
+                f[f"t4.m3.{sl}.people"], f[f"t4.m3.{sl}.rho"] = d["people"], d["rho"]
+                for k in ("persona", "echo1", "both"):
+                    f[f"t4.m3.{sl}.{k}"] = d[k]["value"]
+        f["t4.m2.holds"] = sum(m2[n]["holds"] for n in slug)
+        if "mean_gap" in m3:
+            f["t4.m3.gap"], f["t4.m3.gap.lo"], f["t4.m3.gap.hi"] = m3["mean_gap"]["value"], m3["mean_gap"].get("lo"), m3["mean_gap"].get("hi")
+            f["t4.m3.holds"] = m3["holds"]
+            f["t4.m3.beats"] = sum(m3[n]["persona"]["value"] < m3[n]["echo1"]["value"] for n in slug if n in m3)
+        shutil.copy(mm_path, RUNS / "mm-results.json")
     audit_path = OUT / "audit" / "audit.json"
     if audit_path.exists():
         shutil.copy(audit_path, RUNS / "twin2k-audit.json")

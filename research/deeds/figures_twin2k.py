@@ -31,6 +31,7 @@ SOURCES = {
     "exchange": ("twin2k-exchange.json", OUT / "twin2k" / "exchange.json"),
     "bbrs": ("bbrs-results.json", OUT / "bbrs" / "results.json"),
     "sro": ("sro-results.json", OUT / "sro" / "results.json"),
+    "mm": ("mm-results.json", OUT / "mm" / "results.json"),
 }
 
 
@@ -132,6 +133,19 @@ def build() -> dict[str, tuple[str, str]]:
             f"The laws across the range (Self-Regulation Ontology: {s['variables']} behavioural measures from 37 tasks and forms, 150 people retested after about four months). "
             f"Amber: copying a person's earlier score; it is below the crowd on {s['S1']['copy_negative_when_low']} of the {s['S1']['low_rho']} measures less than half steady. "
             f"Teal: the same one observation read by the echo; it beats copying on {s['S2']['echo_np_beats_copy']} of {s['variables']} and tracks ρ² (r = {s['S2']['corr_echo_np_rho2']:.2f}).",
+        )
+
+    mm = _load("mm")
+    if mm and mm["M1"].get("pooled"):
+        names = {"Utilitarian": "more lives", "Gender": "gender", "Fitness": "fitness", "Age": "age", "Social Status": "status", "Species": "humans over pets"}
+        curves = [{"label": names[k], **{x: mm["M1"][k][x] for x in ("n", "observed", "lo", "hi", "predicted")}} for k in names if k in mm["M1"]]
+        pooled = mm["M1"]["pooled"]
+        figs["looks_mm"] = (
+            F.looks_measured(curves, note="The looks curve, measured on the Moral Machine"),
+            f"The looks curve, measured (Moral Machine: the same people seen in up to {max(c['n'][-1] for c in curves) + 1} visits). "
+            f"Dots: the echo's skill on a held-out visit after n other visits, with 95% intervals over people; one curve per kind of dilemma. "
+            f"Dashes: the theory's nρ̂² / (nρ̂ + 1 − ρ̂), from ρ̂ fitted on pairs of visits only. "
+            f"Across all points r = {pooled['corr']:.3f}, mean gap {pooled['mad']:.4f}.",
         )
 
     if exch:
