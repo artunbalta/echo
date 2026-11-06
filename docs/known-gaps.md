@@ -2412,8 +2412,9 @@ not the class:
   without them (registration §2).
 - **The twin audit is a command-line tool** (`research/deeds/audit.py`): a concierge product with no
   web upload.
-- **Circles are a proposal** (`docs/company/circles.md`). They need a migration (0037) and the
-  owner's yes.
+- **Circles are built on `feat/circles` (C83)**, not merged. They wait for the owner's yes, migration
+  0037 and `ECHO_CIRCLES=1`. Not built: nickname reports, funnel numbers, a per-circle research export
+  and a share card.
 - **Study 1's choices are hypothetical survey answers.** Studies 2 and 2b carry the laws to
   incentivised and task behaviour. Transfer from the world to choices outside it is not yet measured.
 

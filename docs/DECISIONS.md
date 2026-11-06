@@ -5581,3 +5581,42 @@ other people.
 - **How knowable a person is depends on the situation** (ρ .08 to .40 here). A product promising "three
   visits" must pick situations where ρ is not tiny. The pilot's simulation assumed retest reliabilities
   of .5–.7 for its six, from the literature; the pilot will measure them.
+
+## C83 — circles: "who knows you best" for any group of friends (built on `feat/circles`, awaiting the owner's yes)
+
+What it answers: the debrief (C80) is the moment people keep. Until now only the owner's study could
+reach it, because the pilot is one group with one code. The market map's warning is that friend-guessing
+loops die without a cadence. The study's evidence (C81, C82) says the cadence is the method: the same
+situations again, a visit apart. Circles let anyone start a group, so the loop can run without the owner
+in it. The proposal was `docs/company/circles.md`; this is it built, on a branch, because it changes
+who the pilot village is for and needs migration 0037.
+
+- **A circle** (`lib/pilotCircles.ts`) has an id and a code to give friends. The code is 8 characters
+  from 31 letters and digits without look-alikes, and the store keeps only its SHA-256. A circle also has
+  a number of visits (3 by default), who started it, and `research` (false for all today).
+- **The study is the circle "study."** Its code, visits and debrief switch are the owner's
+  (`ECHO_PILOT_CODE`, `ECHO_PILOT_VISITS`, `ECHO_PILOT_REVEAL`), and it alone is in the export.
+- **Everything stays inside the circle:** nicknames (unique per circle), the group a person rates,
+  ratings, and the debrief's crowd. A circle's debrief needs no switch, since a circle is not the study.
+- **Consent.**
+  - Joining a circle asks a yes to play, with an age statement (18 or older).
+  - A yes to research is separate and optional (`research_at`).
+  - In the study the one yes covers both, as before.
+- **Off unless switched on** (`ECHO_CIRCLES=1`, beside `ECHO_PILOT=1`). Off, the Supabase store reads
+  and writes exactly the columns it did before 0037, so the study runs whether or not 0037 is applied.
+  The code is safe before the migration, and the migration is safe before the code.
+- **Limits.** Five new circles a day per address, and sixty code checks per ten minutes. The join page
+  asks what a code opens before anyone agrees to anything.
+- **Erasure.** A circle stays for its friends, and the person who started it is cleared from it
+  (`pilot_circles.created_by` is nulled; a missing table before 0037 is not a failure).
+- **Migration 0037.** It was dry-run on a copy at 0036 with a study in it: it applies, the study's
+  people become circle "study" with their research yes filled, a second run refuses, and the ledger
+  matches. The one-file SQL is `~/Desktop/apply_0037.sql`.
+- **Tests.** `apps/web/tests/circles.test.mts` has 7 tests. The pilot's own tests pass, and the whole
+  suite is 507/507.
+
+**Not built:** reporting a nickname, the funnel's numbers beyond the tables, a per-circle research
+export, and a share card.
+
+**The owner's call.** Merge `feat/circles`, apply 0037 after 0036, and set `ECHO_CIRCLES=1`, or delete
+the branch and the file. Nothing is merged, pushed or applied.
