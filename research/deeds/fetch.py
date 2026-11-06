@@ -1,7 +1,9 @@
-"""Fetch the public data the study runs on, into research/deeds/data/ (not committed).
+"""Fetch the public data the studies run on, into research/deeds/data/ (not committed).
 
-Twin-2K-500 (Toubia et al. 2025, CC-BY-4.0) and its mega-study, from HuggingFace. The persona texts
-(full_persona/, wave_split/) are skipped by default: the study reads the answers, not the prompts.
+- Study 1: Twin-2K-500 (Toubia et al. 2025, CC-BY-4.0) and its mega-study, from HuggingFace. The persona
+  texts (full_persona/, wave_split/) are skipped by default: the study reads the answers, not the prompts.
+- Study 2: the Basel–Berlin Risk Study (Frey et al. 2017, CC BY 4.0, OSF rce7g): the seven risk tasks
+  and the questionnaire scores, main sample and both retests, per person.
 
     /opt/anaconda3/bin/python3.13 research/deeds/fetch.py [--personas]
 """
@@ -37,7 +39,35 @@ def fetch(repo, item):
     return f"got   {dest.relative_to(DATA)} ({item.get('size', 0) / 1e6:.1f} MB)"
 
 
+# Basel–Berlin Risk Study: local name → OSF download (listed from osf.io/rce7g on 2026-11-06).
+BBRS = {
+    "main__bart__bart": "2nxy7", "main__cct__cct_overt": "qyg7d", "main__dfd__dfd_perpers": "yjk8x", "main__dfe__dfe_perpers": "e5y3w",
+    "main__lotteries__lotteriesOvert": "eq9jh", "main__mpl__mplBehavior": "bg6dq", "main__mt__mt": "8we7c", "quest_scores": "tckbj",
+    "retest_berlin__bart__bart": "tec3g", "retest_berlin__cct__cct_overt": "k826r", "retest_berlin__dfd__dfd_perpers": "yfn74",
+    "retest_berlin__dfe__dfe_perpers": "mbzwe", "retest_berlin__lotteries__lotteriesOvert": "yzhmv", "retest_berlin__mpl__mplBehavior": "exgq9",
+    "retest_berlin__mt__mt": "2nzte", "retest_berlin__quest__quest_scores": "a72nk",
+    "retest_basel__bart__bart": "2r3c6", "retest_basel__cct__cct_overt": "wghqc", "retest_basel__dfd__dfd_perpers": "se3gm",
+    "retest_basel__dfe__dfe_perpers": "q6t3v", "retest_basel__lotteries__lotteriesOvert": "s87w6", "retest_basel__mpl__mplBehavior": "52vza",
+    "retest_basel__mt__mt": "krs7d", "retest_basel__quest__quest_scores": "5bdae",
+}
+
+
+def fetch_bbrs():
+    out = DATA / "bbrs"
+    out.mkdir(parents=True, exist_ok=True)
+    for name, key in BBRS.items():
+        dest = out / f"{name}.csv"
+        if dest.exists() and dest.stat().st_size > 0:
+            print(f"have  bbrs/{name}.csv")
+            continue
+        req = urllib.request.Request(f"https://osf.io/download/{key}/", headers={"User-Agent": "echo-research/1.0"})
+        with urllib.request.urlopen(req) as r:
+            dest.write_bytes(r.read())
+        print(f"got   bbrs/{name}.csv")
+
+
 def main():
+    fetch_bbrs()
     personas = "--personas" in sys.argv
     jobs = []
     for repo in REPOS:
