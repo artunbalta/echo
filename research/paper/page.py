@@ -17,6 +17,9 @@ sys.path.insert(0, str(HERE.parent / "pilot"))
 
 from echo_pilot import report as R  # noqa: E402  (pure Python: no engine, no numpy)
 
+sys.path.insert(0, str(HERE.parent / "deeds"))
+import figures_twin2k  # noqa: E402  (Studies 1 and 2, from research/deeds/runs)
+
 CSS = """
 /* A preprint: one measure of serif text, tables and formulae set quietly, the draft's status kept in view. */
 :root {
@@ -124,6 +127,7 @@ def figures() -> dict[str, tuple[str, str]]:
         ("gap_give", "say–do gap, giving", "--retest"),
     ]
     return {
+        **figures_twin2k.build(),
         "theory": (R.theory_chart(0.18, 0.45), "Skill (1 − MSE/var) at predicting the next choice of a kind after n looks, at the split the simulation assumes for giving (h² = .18, ν = .45): the closed forms of §4. The amber dot is copying the last choice."),
         "again": (R.dot_chart(R._witness_rows(again, R.ORDER), refs(again), note="Skill when the situation comes again"), f"When the situation comes again: each witness's skill over the bar, the second visit predicted from the first. Medians across {n_label}; whiskers span the middle half of groups. Dashed lines: copying the first visit, the traits known exactly, the person known exactly."),
         "curve": (R.curve_chart(c["minutes"], series, lines, marks), f"The minutes it takes: the echoes' skill from the first t minutes of the first visit, against the levels of the friends, the person's own words, their other visit and exact trait knowledge. Medians across {n_label}; the band spans the middle half of groups."),
@@ -161,7 +165,7 @@ def main() -> int:
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <style>{CSS}</style>
 <main class="page">
-<div class="status">Working draft. The design, theory and simulation are done; the pilot's data are not yet in, so every result below is simulated.</div>
+<div class="status">Working draft. Studies 1 and 2 are pre-registered analyses of public data. Study 3's pilot data are not yet in, so its results are simulated.</div>
 {body}
 </main>
 """

@@ -22,17 +22,32 @@ SPEC_SHORT = {
 }
 
 
-def _load(path: pathlib.Path):
-    return json.loads(path.read_text()) if path.exists() else None
+RUNS = HERE / "runs"
+# The committed copies first (research/deeds/facts.py writes them), so the paper builds from the repository.
+SOURCES = {
+    "results": ("twin2k-results.json", OUT / "twin2k" / "results.json"),
+    "fair": ("twin2k-llm-on-covered.json", OUT / "twin2k" / "llm_on_covered.json"),
+    "ceiling": ("twin2k-ceiling.json", OUT / "twin2k" / "ceiling.json"),
+    "exchange": ("twin2k-exchange.json", OUT / "twin2k" / "exchange.json"),
+    "bbrs": ("bbrs-results.json", OUT / "bbrs" / "results.json"),
+}
+
+
+def _load(name: str):
+    committed, fresh = SOURCES[name]
+    for path in (RUNS / committed, fresh):
+        if path.exists():
+            return json.loads(path.read_text())
+    return None
 
 
 def build() -> dict[str, tuple[str, str]]:
-    res = _load(OUT / "twin2k" / "results.json")["forward"]
+    res = _load("results")["forward"]
     w = res["witnesses"]
-    fair = _load(OUT / "twin2k" / "llm_on_covered.json")["forward"]["specs"]
-    ceil = _load(OUT / "twin2k" / "ceiling.json")
-    bbrs = _load(OUT / "bbrs" / "results.json")
-    exch = _load(OUT / "twin2k" / "exchange.json")
+    fair = _load("fair")["forward"]["specs"]
+    ceil = _load("ceiling")
+    bbrs = _load("bbrs")
+    exch = _load("exchange")
     figs: dict[str, tuple[str, str]] = {}
 
     persona_specs = {k: v for k, v in fair.items() if not k.startswith("Demographics")}
@@ -40,7 +55,7 @@ def build() -> dict[str, tuple[str, str]]:
     headline = fair["Text Persona - GPT4.1-mini"]["acc_llm"]
     reg = w.get("persona_hgb", w["words"])
     reg_label = "Regression, same persona (boosted median)" if "persona_hgb" in w else "Regression on their self-descriptions"
-    looks = {int(k): v for k, v in ceil["overall"].items() if k.startswith("looks_") for k in [k.split("_")[1]]} if False else {int(k.split("_")[1]): v for k, v in ceil["overall"].items() if k.startswith("looks_")}
+    looks = {int(k.split("_")[1]): v for k, v in ceil["overall"].items() if k.startswith("looks_")}
     rows = [
         {"label": "LLM twins, 12 persona specs (best shown)", "values": [twin_accs[0], *twin_accs[1:]], "range": (min(twin_accs), max(twin_accs)), "color": F.COL["twin"]},
         {"label": "… the headline twin (GPT-4.1-mini, text)", "values": [headline], "color": F.COL["twin"]},

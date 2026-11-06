@@ -3,8 +3,19 @@
     services/ml/.venv/bin/python research/paper/build.py
 
 Reads research/pilot/runs/study-16.json (the many-group study) and research/pilot/runs/power.json (the power
-run), fills the {{placeholders}} of `draft.template.md` and `preregistration.template.md`, and writes
-`draft.md` and `preregistration.md`. An unknown placeholder fails.
+run) for Study 3, and research/deeds/runs/facts.json for Studies 1 and 2. It fills the {{placeholders}} of
+`draft.template.md` and `preregistration.template.md`, and writes `draft.md` and `preregistration.md`.
+An unknown placeholder fails.
+
+A Study 1–2 placeholder is {{f:key:format}}. The formats are:
+- `,d` and `d`: integers;
+- `.3f`, `+.3f`: decimals, signed or not;
+- `%`: a percentage;
+- `r2`, `r3`: a correlation without its leading zero;
+- `p`: a p-value;
+- `pts`: a difference in accuracy points;
+- `s`: as written.
+Minus signs are typographic throughout.
 """
 import json
 import re
@@ -27,7 +38,33 @@ def pct(x) -> str:
     return "–" if x is None else f"{round(100 * x)}%"
 
 
+def fact(facts: dict, spec: str) -> str:
+    key, _, fmt = spec.partition(":")
+    if key not in facts:
+        raise KeyError(f"f:{key} (run research/deeds/facts.py)")
+    x = facts[key]
+    minus = lambda t: t.replace("-", "−")  # noqa: E731
+    if fmt == "s":
+        return str(x)
+    if fmt == ",d":
+        return f"{int(round(x)):,}"
+    if fmt == "d":
+        return str(int(round(x)))
+    if fmt == "%":
+        return minus(f"{round(100 * x)}%")
+    if fmt in ("r2", "r3"):
+        t = f"{x:.{fmt[1]}f}"
+        return minus(t.replace("0.", ".", 1))
+    if fmt == "p":
+        return "< .001" if x < 0.001 else f"{x:.3f}".replace("0.", ".", 1)
+    if fmt == "pts":
+        return f"{abs(x) * 100:.1f}"
+    return minus(format(x, fmt))
+
+
 def main() -> int:
+    facts_path = HERE.parent / "deeds" / "runs" / "facts.json"
+    facts = json.loads(facts_path.read_text()) if facts_path.exists() else {}
     study = json.loads((PILOT / "runs" / "study-16.json").read_text())
     power = json.loads((PILOT / "runs" / "power.json").read_text())
     power3_path = PILOT / "runs" / "power-3visits.json"
@@ -46,6 +83,8 @@ def main() -> int:
         parts = key.split(":")
         if key == "date":
             return date.today().isoformat()
+        if key.startswith("f:"):
+            return fact(facts, key[2:])
         if key == "reps":
             return str(study["reps"])
         if key == "n":

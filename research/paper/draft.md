@@ -1,448 +1,521 @@
-# Who Knows You Best? Self, Friends, and a World That Watched
+# Who Knows You Best? The Crowd, the Persona, and One Look at What You Did
 
-*Draft, 2026-11-02. Artun Balta. Simulation study and pre-registered design; the pilot's data are not yet in.
-Every number below is filled in from the analysis code's own output (`research/paper/build.py`).*
+*Draft, 2026-11-06. Artun Balta. Studies 1 and 2 are pre-registered secondary analyses of public data;
+Study 3 is a pre-registered pilot whose data are not yet in. Every number below is filled in from the
+analysis code's own output (`research/paper/build.py`); none is typed by hand.*
 
 ## Abstract
 
-Models that predict what a particular person will do (digital twins, persona models, generative-agent
-simulations of individuals) are now judged by how closely they reproduce the person's own answers. We ask
-an older question in a new setting: who predicts a person's next choice best? The candidates are the
-person, their friends, or a world that has watched them. We embed six classic paradigms in a
-multiplayer game world as things that simply happen on a walk, with the world's own stakes and no money:
+Digital twins are models meant to predict what a particular person will do. They are judged by how
+often they reproduce people's answers, normalised by how often people reproduce themselves (test–retest).
+We argue that this yardstick hides the question that matters, whether a twin knows the individual. We
+give a theory of what can be known about a person's next choice and of who can know it.
 
-- giving to a hungry stranger (dictator);
-- lending a raft (trust);
-- a bet on the tide (risk);
-- planting a seed or eating it (delay);
-- an overgrown path (exploration);
-- a stranger by a fire (approach).
+**The theory.** A choice is the crowd's typical answer, plus what a persona can predict, plus the
+person's own steady way with that situation, plus the day. In closed form, the theory makes three
+predictions:
 
-Groups of friends play twice, a day apart. Before they play, each person says what they would do, and
-each friend guesses for the others. An *echo*, a Bayesian persona model, learns from what they do.
+- A persona, however rich and however cleverly read, caps knowledge of a situation at its own small
+  share.
+- Copying a person's earlier choice loses to knowing nobody whenever the choice is less than half
+  steady.
+- The retest is not a ceiling. Reading one earlier choice against the crowd beats it, and the
+  knowable ceiling lies higher still.
 
-We show analytically that echoes built on trait axes alone predict a kind of choice little better than
-the "personality coefficient" allows until they have watched it many times. Whatever is steady about a
-choice but unexplained by traits looks to them like noise, so they under-react to a person's own
-repeated behaviour. We propose a **two-layer echo** that adds one
-person-specific layer per kind of choice to the same Kalman update.
+**Study 1: Twin-2K-500**, pre-registered. There are 2,058 US adults and 17
+retested tasks.
 
-In simulations grounded in published effect sizes (120 groups of 16):
+- **The crowd beats every twin.** The crowd's median answer, which knows nobody, is more accurate than
+  every one of 13 released LLM twins, by 3.6 to
+  8.2 points on the benchmark's own metric.
+- **A regression knows individuals better than the twins.** Ridge regression on the same 500-question
+  persona puts people in order about twice as well as the twins (r = .14 against
+  .07).
+- **One look knows them better still.** One earlier answer to the same question reaches r =
+  .49, on all 17 tasks.
+- **The echo beats the retest.** A two-layer echo that reads that one answer against the crowd
+  outscores the retest: 0.822 against 0.817, as registered.
+- **Its simplest form lands on the theory.** Exploratory, it scores 0.827,
+  the theory's one-look optimum (0.827). The knowable ceiling is
+  0.869.
 
-- **The second visit, predicted from one visit.** The two-layer echo reaches a skill of +0.34
-  over the group's base rate. The one-layer echo reaches +0.03, friends +0.26,
-  and the person's own words +0.26. Copying the first visit, which the second layer makes
-  possible and one layer cannot, scores +0.34.
-- **Against perfect trait knowledge.** The two-layer echo beats what exact knowledge of the person's
-  eight traits would give (+0.22).
-- **How fast.** It matches the friends after a median of 7 minutes of play.
-- **Situations the echo has never seen.** No model beats the person's own words and their friends'
-  guesses (+0.26 and +0.23, against +0.00).
+**Study 2: the Basel–Berlin Risk Study.** The behaviour here is incentivised and retested six months
+later.
 
-We pre-register these comparisons for a pilot among friends. The central test has power
-65% at 16 people, and reaches .8 at about 40.
-The world, the analysis and the tests that guarantee no witness sees what it predicts will be released
-with the paper.
+- **Copying loses to the crowd.** Copying a person's earlier behaviour is worse than knowing nobody on
+  all 5 tasks that are less than half steady. Mean skill is
+  −0.22, as 2ρ − 1 says (r = .99 across tasks).
+- **Self-reports barely register:** +0.02.
+- **The echo is the best witness.** The same one observation, read by the echo, scores
+  +0.17.
+
+On this evidence, knowing a person means watching them in the situation of interest, again. Asking
+them about themselves, and knowing what they did elsewhere, adds little. **Study 3** describes a
+multiplayer world built to watch people again, and a pre-registered study of friends in it.
 
 ## 1. Introduction
 
-A growing family of systems tries to predict what a specific person will do. Generative-agent
-simulations of individuals are one example. Park et al. (2024) built agents from two-hour interviews with
-1,052 people. Those agents replicated the people's answers to the General Social Survey 85% as accurately
-as the people replicated their own answers two weeks later. Persona models are another example: they
-compress a person into a few trait dimensions and condition a predictor on them.
+**Digital twins and their yardstick.** A fast-growing family of systems tries to predict what a
+specific person will do.
 
-Both are evaluated mostly on self-report. They are asked to reproduce a questionnaire answer, or a
-choice in an economic game played on a survey platform, and the person's own consistency is the
-yardstick. In the revised version of Park et al., on incentivized economic games no agent beat a
-baseline given only demographics. The authors call this a boundary case. Words predict what people
-say; whether watching predicts what they do is open.
+- Generative-agent simulations of individuals built agents from two-hour interviews with 1,052 people
+  (Park et al., 2024). The agents matched people's answers to the General Social Survey 85% as often as
+  the people matched their own answers two weeks later.
+- Twin-2K-500 (Toubia et al., 2025) released 2,058 people's answers to some 500 questions, and twins
+  built from them. Those twins scored 71.7% accuracy on held-out tasks, "87.7% of the human test–retest
+  accuracy".
+- Companies now sell such twins to replace or extend survey panels.
 
-Psychology has asked a related question for decades, with people rather than machines as the
-predictors:
+The field's yardstick is the ratio of a twin's accuracy to the person's retest accuracy. It treats the
+retest as the ceiling.
 
-- **Who knows what about a person?** The self–other knowledge asymmetry model (Vazire, 2010) holds that
-  the self knows internal states best and close others know observable, evaluative traits better.
-- **Predicting behaviour.** Self-ratings and friends' ratings each predict daily behaviour, and each
-  adds to the other (Vazire & Mehl, 2008).
-- **Predicting generosity.** People overestimate their own generosity, yet predict others' quite well
-  (Epley & Dunning, 2000). In one study, students said they would give about half of a $5 fee to
-  charity and expected others to give $1.80. Given the chance, they gave $1.53 on average.
-- **Computers against people.** A model given enough of a person's digital footprint can judge their
-  personality more accurately than their friends can (Youyou, Kosinski & Stillwell, 2015). From
-  Facebook Likes it outdid a work colleague after about 10 Likes, a friend after 70, a family member
-  after 150 and a spouse after 300.
+**What the yardstick hides.** It hides two things:
 
-Two questions sit between these literatures and are, as far as we know, unanswered:
+1. **A twin can be accurate without knowing anyone.** Accuracy rewards predicting the typical answer,
+   and most people give it. The right first baseline is therefore not random guessing, the one
+   usually reported. It is the crowd: guess, for everyone, what most people answer.
+2. **The retest is not a ceiling.** It is one noisy answer guessing another, and its noise counts
+   against it. Someone who knew a person exactly, but not the day, would beat it.
 
-1. When a machine has *watched* someone act, rather than read their words, does it predict their next
-   choice better than they and their friends do?
-2. How long must it watch?
+**What is already known.** Recent work has begun to show that LLM twins carry little individual
+signal:
 
-We answer both in a setting built for the purpose. ECHO is a procedural planet with villages in which
-each player's actions train an echo, a Bayesian model of them. We set six classic paradigms in its world.
-They appear as ordinary encounters with ordinary stakes, and friends play them twice. Before playing,
-everyone says what they would do and guesses what their friends would do. The echo keeps its own guess.
+- Across 164 new outcomes, twins correlated with their humans at r ≈ .20. That is barely above twins
+  given only demographics, and no better than gradient boosting trained on a couple of hundred
+  respondents (Peng et al., 2026).
+- On Twin-2K-500's behavioural contrasts, the residual correlation was near zero (Wang, Hunt, Tang &
+  Joseph, 2026).
+- In incentivised economic games, interview twins correlated with their humans at r = −.05 to .11 per
+  game (Park et al., 2024, supplementary materials).
 
-The design's choices are deliberate:
+**What is not.** What has not been asked is *what information* would let a model know the individual.
+Nor has it been asked *how much* of what is knowable each source carries:
 
-- **Same choices.** Every witness predicts the same choices, so comparisons are paired.
-- **Two settings.** The *again* setting tests memory: the same situation, a day later. The *elsewhere*
-  setting tests generalisation: a situation never seen.
-- **Exchange rate.** A learning curve gives the minutes of play that buy what a friendship knows.
+- what people say about themselves;
+- what they chose in other situations;
+- what they did in this situation before.
 
-The main contribution is a model result that the design exposes. Persona models are usually one-layer:
-traits, plus noise. Single acts are only weakly predicted by traits; trait–behaviour correlations sit
-near .3, the "personality coefficient" (Mischel, 1968). Yet single acts are far more stable over time
-than traits explain (Epstein, 1979). The steady remainder is specific to the kind of act: in personality
-psychology, the nuances below the Big Five (Mõttus et al., 2017), and in measurement theory, the
-specific variance of a latent state–trait model (Steyer, Schmitt & Eid, 1999).
+**Psychology's long answer.** Psychology has studied the question with people as the predictors.
 
-A one-layer echo has nowhere to keep that remainder. We show it under-reacts to what it sees. When it
-does catch up, it does so by bending the person's traits to fit one kind of choice, which moves every
-other prediction too.
+- **Weak consistency, strong aggregates.** Single acts are weakly consistent across situations
+  (Mischel, 1968). Aggregates are strongly stable (Epstein, 1979; Fleeson, 2001).
+- **If-then signatures.** People have stable signatures of their own in particular kinds of situation
+  (Mischel & Shoda, 1995).
+- **Past behaviour.** Past behaviour in a situation predicts future behaviour there (Ouellette & Wood,
+  1998), better than intentions do (Sheeran, 2002).
+- **The reliability paradox.** Behavioural tasks correlate weakly with self-reports of the same
+  construct (Dang, King & Inzlicht, 2020). They are also less reliable than the self-reports (Hedge,
+  Powell & Sumner, 2018; Frey et al., 2017).
+- **Machines from traces.** Computers given enough of a person's digital traces judge their
+  personality better than their friends do (Youyou, Kosinski & Stillwell, 2015).
 
-Adding one person-specific layer per kind of choice fixes this. It runs under the same Bayesian update,
-on a stacked state.
+**This paper.** We bring these together.
 
-Our contributions:
+- **§2, a theory.** It decomposes a single choice and gives every witness's skill in closed form. It
+  makes three predictions, and it defines a *knowable ceiling* above the retest and a *personal
+  knowledge index*: the share of the knowable, beyond the crowd, that a witness knows.
+- **§3, Study 1.** A pre-registered test on Twin-2K-500, the field's public benchmark, using the
+  authors' own metric and the released twins' own predictions.
+- **§4, Study 2.** A pre-registered replication on incentivised behaviour.
+- **§5, Study 3.** The design, simulation and pre-registration of a study in ECHO, a multiplayer world
+  that brings people back to the same situations. A world that watches is the instrument the first
+  two studies call for.
 
-1. **Design.** Six paradigms embedded in a game world with intrinsic stakes. Self, friends and machine
-   witnesses on identical choices, in two settings, with a learning curve.
-2. **Theory.** Closed-form skill for one- and two-layer echoes after n observations. The one-layer
-   ceiling, the under-reaction, and when one look beats perfect trait knowledge (whenever
-   (h² + ν)² > h²). We also note that a person's retest agreement is a yardstick, not a ceiling.
-3. **Model.** The two-layer echo, fitted by variance components on the group, with no peeking.
-4. **Simulation and power** grounded in published ranges, and an open pipeline whose tests guarantee
-   that no witness sees what it predicts.
-5. **A pre-registered pilot** that needs no money: friends, a world, two evenings.
+## 2. Theory: what can be known about a person's next choice
 
-## 2. The village
+Take one kind of situation and standardise its answer. Person *i*'s answer on occasion *t* is
 
-### 2.1 Six paradigms as encounters
+  y_it = A_i + U_i + e_it.
+
+The three terms are:
+
+- **A_i**: what a persona predicts. The persona is everything the person says about themselves, who
+  they are, and what they chose in other situations. Its share of variance is π.
+- **U_i**: the person's own steady way with *this* situation, which no persona carries. Its share is
+  ρ − π.
+- **e_it**: the day, with share 1 − ρ.
+
+ρ is the retest reliability of a single answer. The witnesses differ in what they know about *i*. Each
+is scored by its skill, 1 − MSE / var(y):
+
+| Witness | Knows | Skill |
+|---|---|---|
+| The crowd | nothing about *i* | 0 |
+| A persona twin, however clever ("elsewhere") | A_i | π |
+| Copying the person's last answer (the retest) | one earlier y | 2ρ − 1 |
+| Two-layer echo after n looks, starting from the persona | A_i and n earlier y's | π + n(ρ − π)² / (n(ρ − π) + 1 − ρ) |
+| Knowing the person exactly, not the day (the ceiling) | A_i + U_i | ρ |
+
+Three predictions follow.
+
+1. **The persona bound.** Without looks, no model of the persona can know more than π, whether it is a
+   regression or a language model. For single choices, trait–act correlations near .3 put π near .1
+   (Mischel, 1968), while single-choice reliabilities ρ of .4–.8 are common. Most of what is knowable
+   about a choice is therefore *not in the persona*.
+2. **Copying loses to the crowd below half.** The retest's skill, 2ρ − 1, is negative whenever ρ < ½. A
+   person's own earlier answer, taken at face value, is then a worse guess than the crowd's.
+3. **The retest is not the ceiling.** The echo after one look scores at least ρ², which exceeds 2ρ − 1
+   for every ρ < 1. More looks approach ρ.
+
+**Accuracy and the knowable ceiling.** For answers on a discrete scale and the field's accuracy metric
+(1 − |guess − answer| / range), we use an ordered latent model of the same form:
+
+- A column's answer is its share-matched threshold of a latent T + e.
+- ρ is fitted so that the model reproduces the column's observed retest accuracy.
+- The model then gives three quantities:
+  - the crowd's accuracy;
+  - the **knowable ceiling**: guessing the median of the person's own answers given T;
+  - the Bayes-optimal echo after n looks.
+
+The categorical intuition is simple. A person who says yes with probability *p* agrees with themselves
+with probability p² + (1 − p)², but someone who knew *p* would be right with probability
+max(p, 1 − p).
+
+The **personal knowledge index** of a witness is
+
+  (accuracy − crowd) / (ceiling − crowd).
+
+It is the share of what is knowable about the person, beyond the crowd, that the witness knows.
+
+**Looks needed.** With no persona, an echo knows a share q of the knowable after
+
+  n = q / (1 − q) · (1 − ρ) / ρ
+
+looks: the odds of q times the day's share over the person's own. At ρ = .6 that is three looks for
+80%. These are the pilot's two-layer closed forms (§5), generalised to an echo that starts from a
+persona. Tests hold them to a Monte Carlo of their model (`research/deeds/tests/test_theory.py`).
+
+## 3. Study 1: Twin-2K-500 (pre-registered)
+
+### 3.1 Data and design
+
+Twin-2K-500 (Toubia et al., 2025) surveyed 2,058 US adults in four waves.
+
+- **Waves 1–3: the persona.** These waves built the persona:
+  - demographics;
+  - some 280 self-description items: the Big Five, values, needs, symptoms, spending style;
+  - cognitive tests;
+  - economic choices: ultimatum, dictator and trust games, and risk and time price lists, all
+    hypothetical.
+- **Waves 1–3, outside the persona.** The same waves also included 17 tasks outside the
+  persona: heuristics-and-biases experiments, 40 purchase decisions, and policy views with estimates
+  of others' views.
+- **Wave 4.** Two weeks after wave 3, the same 17 tasks were repeated: 122
+  scored columns.
+- **The twins.** The release includes, per person, the wave-4 answers of the authors' LLM twins. There
+  are 13 specifications: GPT-4.1, GPT-4.1-mini, Gemini 2.5 Flash and a fine-tuned
+  GPT-4.1-mini, in text, JSON and summary personas, plus one given demographics only. Each was given
+  the persona and not the tasks' earlier answers.
+
+**Registration.** We registered the analysis before fitting any model (`research/deeds/PREREG.md`).
+The registration discloses what we had seen: the released evaluation sheets, which already showed the
+twins' low per-task correlations.
+
+**Primary setting: forward.** Wave 4 is the truth; every witness uses waves 1–3 only. The authors' own
+direction, with the truth in waves 1–3, gives the same picture (§3.4).
+
+**Scoring.** We reproduce the authors' metric to the digit: retest 0.8173 (their
+0.8172) and their headline twin 0.7171 (0.7172) in their direction. Beside accuracy we report
+**individual-level r**: Pearson r across people, per column, averaged within and then over tasks. It
+asks whether a witness puts those who answer higher above those who answer lower. A constant witness
+scores 0.
+
+**The witnesses.** Each is fitted by 10-fold cross-validation over people. A person's guess never
+depends on their own truth; a test plants six such leaks and catches all six.
+
+- **The crowd.** The median of other people's answers.
+- **The twins.** As released.
+- **Ridge regressions** on each kind of persona information and on all of it ("persona"). One variant
+  adds the person's waves 1–3 answers to the *other* sixteen tasks.
+- **Again.** The person's own earlier answer to the same column.
+- **The two-layer echo.** a + b·m + c·x, fitted on other people. Here x is the earlier answer and m
+  the persona regression, nested so that m is out of fold for the people the weights are fitted on.
+
+### 3.2 Results
+
+<!-- figure:ladder -->
+
+**H1. Accuracy does not show personalisation: the crowd beats every twin.** The crowd's median answer
+scores 0.761. By the field's yardstick that is 93% of the retest. The
+headline twin scores 0.724 (89%).
+
+Scored on the people each twin answered, every one of the 13 specifications is
+below the crowd. The gaps run from −0.036 for the most favourable
+(JSON Persona (Predicted Output) - GPT4.1; 95% CI −0.039 to −0.032) to
+−0.082.
+
+The registered test, which scores a twin's missing answers as the crowd's, gives
+−0.023 [−0.026, −0.020].
+
+<!-- figure:individuals -->
+
+**H2. A regression knows individuals better than the twins, on the twins' own information.** The ridge
+on the persona reaches r = .137 (.194 as a continuous score).
+Against it:
+
+- the headline twin reaches .074;
+- the best of the persona twins reaches .085;
+- the twins' average, as a score, reaches .113.
+
+The regression wins on 13–16 of
+17 tasks against each twin (registered sign test against the most favourable, Holm-adjusted
+p = .006).
+
+**H3. The same situation, once, outweighs everything else.** The person's own earlier answer to the same
+question reaches r = .486. Everything in the persona together with their earlier answers
+to the other sixteen tasks reaches .151 (.208 as a
+score). The single answer is ahead on 17 of 17 tasks.
+
+**H4. The retest is not a ceiling.** The registered two-layer echo scores 0.8218 against
+the retest's 0.8173: Δ = +0.0045, 95% CI [+0.0031,
++0.0060], normalised accuracy 1.006.
+
+An exploratory echo needs no persona and no linear stacker. It learns, from other people, what the
+crowd answered the second time given what it answered the first. It scores
+0.8275. That is the ordered latent model's one-look optimum,
+0.8270, predicted before it was computed.
+
+The echo laid on the released twins' average, instead of the regression, scores
+0.8225. So the second layer upgrades any twin.
+
+<!-- figure:looks -->
+
+**What is knowable.** The latent model puts the knowable ceiling at 0.869, and the
+Bayes-optimal echo at 0.847 after three looks and 0.859 after
+eight. In the personal knowledge index:
+
+| Witness | Share of the knowable it knows |
+|---|---|
+| The headline twin | −35% |
+| The person's own retest | 52% |
+| The registered echo | 56% |
+| The transition echo | 62% |
+| Three looks (model) | 81% |
+| Eight looks (model) | 91% |
+
+**Prediction 2, per task.** Copying the earlier answer beats the crowd where the task is more than
+half steady (ρ > ½) and not below. This holds on 15 of 17 tasks,
+and the two misses sit at ρ ≈ .49 with gaps of a few thousandths. Across tasks, retest-minus-crowd
+correlates with ρ at r = .79.
+
+- On the framing problem the crowd (0.806) beats the person's own retest
+  (0.803).
+- On probability matching it does so by more (0.764 against
+  0.744).
+- On pricing, the most steady task (ρ = 0.87), the crowd knows little
+  (0.564) and the person almost everything (ceiling 0.879).
+
+**H5 (exploratory). Words and deeds elsewhere.**
+
+- Self-descriptions and demographics ("words") reach r = .122.
+- Economic choices and cognitive tests ("deeds", other situations) reach .074.
+- The difference, deeds minus words, is −0.059 to −0.037.
+
+So deeds *elsewhere* are no better than words here; several targets are attitudes, which words carry.
+The contrast that matters is not words against deeds but **elsewhere against again**.
+
+**H6 (descriptive).** The closed form π + (ρ − π)² / (1 − π) predicts the echo's r² per column with
+correlation 0.999 and mean absolute error 0.009. Because π is small, this
+check is weakly discriminating; Study 2's copy-against-echo contrast is the sharper test.
+
+### 3.3 The exchange rate
+
+<!-- figure:exchange -->
+
+How many questions from each pool does it take to know the person as well as one earlier answer to
+the same question? We drew k items at random from each pool, 20 times per k, and fitted the ridge on
+them. No pool comes near at any size the persona holds:
+
+- self-descriptions reach r = .157 with 256 items;
+- the other tasks' answers reach .108 with 64;
+- one earlier answer to the same question reaches .486.
+
+### 3.4 Robustness
+
+- **The authors' direction** (truth in waves 1–3; the retest from wave 4):
+  - the crowd scores 0.755 (92% of the retest);
+  - the headline twin scores 0.717 (88%);
+  - the transition echo scores 0.822, against the retest's
+    0.817.
+  - The registered persona echo does not beat the retest there: Δ = +0.0005,
+    p = .206.
+- **Without the anchoring tasks**, whose free numbers the metric bins into deciles:
+  - the crowd 0.760;
+  - the twin 0.727;
+  - the retest 0.816;
+  - the echo 0.821.
+- **Within-subject tasks only:**
+  - the crowd 0.747;
+  - the twin 0.735 (r .116);
+  - the retest 0.821;
+  - the echo 0.825.
+- **Deviations from the registration** are reported in `research/deeds/README.md`:
+  - The release has 13 distinct twin specifications, not the 11 counted.
+  - Partially covering twins are also scored on the people they answered.
+  - The transition echo and the per-task ρ > ½ test are exploratory.
+
+## 4. Study 2: incentivised behaviour (Basel–Berlin Risk Study, pre-registered)
+
+Twin-2K-500's choices are hypothetical. The Basel–Berlin Risk Study (Frey et al., 2017) measured risk
+taking with seven behavioural tasks, six of them incentivised, plus self-reported risk, impulsivity and
+sensation-seeking scales. Of its 1,507 participants, 169–171 came back about six
+months later.
+
+**The witnesses.** The target is a person's standing on a task at the retest. The witnesses guess it
+from session 1:
+
+- **words**: all self-report scales;
+- **elsewhere**: the six other tasks;
+- **persona**: both of those;
+- **copy**: the person's own earlier standing;
+- **echo**: the two-layer echo.
+
+The words and elsewhere models are trained on the main-sample people who did not return, so they
+never see a retest person. The echo's weights are fitted on the other retest people. The analysis was
+registered (`PREREG-BBRS.md`) before any model was fitted.
+
+<!-- figure:incentivised -->
+
+**Results.** The tasks' retest r runs from 0.00 to 0.65.
+
+- **B1: copying loses to the crowd below half.** It does on all 5 tasks below
+  ρ = ½, and its skill tracks 2ρ − 1 (r = .99, mean absolute deviation
+  0.047). Mean skill of copying is −0.221. On decisions from
+  description (ρ = 0.27), copying scores −0.46.
+- **B2: the echo never loses to the crowd and always beats copying.** It beats copying on
+  7 of 7 tasks, and is above zero on
+  6. The exception is decisions from experience, a task with no retest
+  reliability at all (ρ = 0.004), where the echo scores
+  −0.033.
+- **B3: words know little.** Mean skill of words is +0.016, of other tasks
+  +0.018, and of both +0.028. The echo's is
+  +0.166. The words themselves are reliable (retest r 0.67–0.84).
+  They are reliable about words, not about deeds.
+- **B4: the observed echo against the theory.** It sits −0.033 below the
+  theory's population optimum on average. That is the price of fitting three weights on about 170
+  people.
+
+## 5. Study 3: the village (pre-registered pilot)
+
+Studies 1 and 2 say that knowing a person takes watching them again, in the situation of interest. ECHO
+is a procedural multiplayer world built to do that: it brings people back to the same kinds of
+situation, and each player's actions train an *echo* of them. The pilot sets six classic paradigms in
+its world, as ordinary encounters with the world's own stakes:
 
 | Paradigm | In the village | Choice, coded 0..1 |
 |---|---|---|
 | Dictator game (Forsythe et al., 1994) | A thin stranger by the path looks at your bread; you carry three loaves | loaves given: 0, ⅓, ⅔, 1 |
-| Trust game, first move (Berg, Dickhaut & McCabe, 1995) | Someone at the water, with nets and no boat, asks to borrow your raft; one time in four it does not come back | lent 1, kept 0 |
+| Trust game, first move (Berg, Dickhaut & McCabe, 1995) | Someone at the water asks to borrow your raft; one time in four it does not come back | lent 1, kept 0 |
 | Risk, mean held fixed (cf. Holt & Laury, 2002) | A fisher offers two fish now, or a bet on the tide: three or one, or four or none | safe 0, even 0.5, long 1 |
-| Delay discounting (Frederick, Loewenstein & O'Donoghue, 2002) | A farmer's child offers a handful of grain now, or a seed that is three handfuls tomorrow | planted 1, ate 0 |
+| Delay (Frederick, Loewenstein & O'Donoghue, 2002) | A farmer's child offers a handful of grain now, or a seed that is three handfuls tomorrow | planted 1, ate 0 |
 | Exploration (cf. Wilson et al., 2014) | An overgrown path leaves the marked way | followed 1, passed 0 |
 | Approach | A traveller sits alone by a small fire | went up 1, walked on 0 |
 
-Stakes are the world's own:
+**Procedure.** Friends join with a nickname and consent.
 
-- bread the player will want on the water;
-- a raft they cannot use while it is lent;
-- fish, which land in the pack;
-- a crop that is there a day later;
-- a village shared with their friends.
+1. **Before the first visit.** They place themselves on the echo's eight axes and say what they would
+   do in each of the six.
+2. **The visits.** They come two or three times, a day apart, for 25 minutes. The six are set out one
+   at a time, in an order counterbalanced across people.
+3. **After each visit.** Each rates the friends they know and guesses what those friends would do.
 
-Nobody is paid. A paradigm met is answered by acting: giving, lending, betting, planting, following,
-greeting. Walking past is an answer too.
+The witnesses are three: the person's words, the friends' median guess, and the two-layer echo. The
+echo is fitted by variance components on everyone but the person predicted, with each choice's
+stability partially pooled. It is predicted for the next visit from the visits before.
 
-### 2.2 Procedure
+**The debrief.** After a person's last visit, and only if the owner allows it, they see who knew them
+best. For each of the six, it shows:
 
-1. **Before playing.** Each friend gives a nickname and consents. They place themselves on the echo's
-   eight axes (1–7) and say what they would do in each of the six.
-2. **Two visits, or three.** Each visit lasts 25 minutes, and each opens at least 20 hours after the
-   last began. A third visit is the owner's choice, made before the first visit (§5.2 gives what it buys).
-3. **How the six are set out.** The village sets out the six one at a time, in an order counterbalanced
-   across people:
-   - the first comes 20 seconds after arrival;
-   - each next one comes 30 seconds after the last was answered;
-   - land encounters are 10–22 m away, shore encounters 14–40 m;
-   - one left standing for four minutes is *unmet*, which is missing data and never a zero.
-4. **After a visit.** Each friend rates the others they know: how well (0–3), the eight axes, and what
-   they think that person would do in each of the six. "No idea" is allowed.
+- their words;
+- their friends' median guess, when at least two friends guessed;
+- their echo's guess;
+- what they did;
+- what share of the knowable the echo now holds.
 
-### 2.3 What the echo sees
+That debrief is also the product's loop (web decision C80).
 
-The echo sees:
+**Simulation and power** (120 simulated groups of 16, grounded in published ranges). When the
+situation comes again:
 
-- the behavioural events of the six;
-- every other act in the world;
-- walking, read as the share of novel tiles and the tortuosity of the path;
-- the decision time of each act.
+- the two-layer echo reaches a skill of +0.34 over the base rate;
+- friends reach +0.26;
+- the person's own words reach +0.26;
+- a one-layer, trait-only echo reaches +0.03;
+- copying the first visit reaches +0.34.
 
-It never sees ratings of the person it predicts, and never their words.
+The echo matches the friends after a median of 7 minutes of play. In a situation never
+seen, words and friends (+0.26, +0.23) beat the echo
+(+0.00), as Study 1's elsewhere results lead one to expect.
 
-## 3. Witnesses
-
-Each witness gives one level per choice: the median of what it expects, which minimises absolute error.
-
-| Witness | Prediction |
-|---|---|
-| Self | the person's own stated choice |
-| Friends | the median of the friends' guesses |
-| Engine echo | ECHO's engine as built: 8 axes, a synthetic measurement model |
-| One-layer echo | 8 axes, measurement model fitted on the other people |
-| **Two-layer echo** | 8 axes plus a person-specific layer, fitted on the other people |
-| Questionnaire twin | the person's rated axes (own and friends') through the fitted model |
-| Group model | ridge regression of the choice on the person's other choices, fitted on others |
-| Pooled | the median of self, friends and the two-layer echo |
-
-### 3.1 The two-layer echo
-
-For person *i*, feature *j* (a coded choice, a walking measure, decision time) and visit *t*:
-
-  x_ijt = μ_j + w_jᵀ z_i + u_ij + ε_ijt,  z_i ~ N(0, I₈),  u_ij ~ N(0, τ_j²),  ε_ijt ~ N(0, σ_j²).
-
-The terms are:
-
-- **z_i**, the person's eight traits;
-- **u_ij**, their own steady tendency in feature *j* beyond those traits;
-- **ε_ijt**, the day.
-
-The echo's state is the stacked vector [z; u]. It is updated by the same linear-Gaussian Kalman step the
-engine uses (Joseph form), one observation at a time. An act's surprise is split between the layers in
-proportion to what each can explain. With τ = 0 the model is exactly a one-layer echo, so the ablation
-is exact.
-
-**Fitting.** Parameters are fitted on everyone but the person predicted, feature by feature, by
-variance components:
-
-- **The day.** σ_j² is half the mean squared difference between a person's two visits.
-- **The steady part.** The person's steady variance is the variance of people's means, less the day's
-  share (the one-way ANOVA estimator).
-- **The traits' share.** Of the steady part, the traits' share is what the *anchors* predict of people's
-  means out of sample. The anchors are the mean of each person's self-rating and their friends' mean
-  rating, standardised. The prediction is a ridge regression with its penalty chosen by
-  leave-one-person-out error. The share is capped at the steady variance.
-- **The loadings.** w_j is the ridge's direction, scaled so that w_jᵀw_j equals the traits' share.
-  Without this, eight slopes fitted on a dozen people absorb the person-specific variance.
-- **The person's own.** τ_j² is the steady variance the traits leave.
-- **Pooling.** Each choice's stability, τ_j²/(τ_j² + σ_j²), rests on a dozen pairs of visits. It is
-  shrunk toward the mean of the six by a prior worth ten pairs (partial pooling); its total residual
-  variance is kept. This was chosen on simulation, before any real data, under equal and unequal
-  stability alike (§5.2).
-
-A predicted choice is the median of the predictive distribution, cut at the midpoints between the
-paradigm's levels.
-
-## 4. Theory: what one layer cannot keep
-
-Standardise one kind of choice. Let:
-
-- h² = var(wᵀz), the traits' share;
-- ν = τ², the person's own steady share;
-- ε = 1 − h² − ν, the day's share;
-- ρ = h² + ν, the reliability.
-
-Skill is 1 − MSE/var(x). For predicting the next choice after n observations of the same kind:
-
-- **Traits known exactly:** h². This is the most any one-layer echo can reach without watching.
-- **Copying the last choice:** 2ρ − 1.
-- **Two layers, n looks:** nρ²/(nρ + ε). After one look this is ρ², and it rises to ρ.
-- **One layer, n looks:** 2cρ − c²(ρ + ε/n), where c = h²/(h² + (ν + ε)/n). The echo moves only a share
-  c of the way, because what is steady but untraited looks like noise to it.
-
-Three consequences follow.
-
-1. **One look beats perfect trait knowledge** whenever ρ² > h². With trait–act correlations near .3
-   (h² ≈ .1) and retest correlations of single choices of .5–.7 (ρ ≈ .6), it does so by a wide margin.
-2. **The one layer under-reacts.** At h² = 0.18 and ν = 0.45 (the simulation's
-   giving), one look gives 0.19 against 0.40. One layer needs
-   4 looks to catch up. It catches up only by moving z to fit this kind of choice, which
-   moves every other prediction with it.
-3. **Retest agreement is a yardstick, not a ceiling.** The person's own replication scores 2ρ − 1.
-   The best possible predictor scores ρ, and a calibrated two-layer echo scores ρ² ≥ 2ρ − 1 after one
-   look. Normalised accuracy above 100% is therefore possible in principle. The categorical analogue
-   is the same: knowing a person's answer probabilities p gives accuracy max p, more than their
-   replication rate Σp².
-
-The tests in `research/pilot/tests/test_theory.py` hold these forms to a Monte Carlo of the model.
-
-<!-- figure:theory -->
-
-## 5. Simulation study
-
-### 5.1 Generative model
-
-Simulated people have:
-
-- eight traits;
-- a stable tendency of their own in each paradigm (sd .6 in propensity units);
-- visit noise (sd .55).
-
-Choices are discretised from propensities at thresholds that give the paradigms' base rates. The
-trait loadings put trait–act correlations near .3, and the retest correlations of single choices at
-.5–.7.
-
-What people *say* comes from how they see themselves, which carries several things:
-
-- their traits, seen at .8;
-- half of their own tendencies;
-- a pull toward the admirable, strongest for giving.
-
-What friends *guess* comes from how they see the person, which also carries several things:
-
-- traits seen at .45–.72, by acquaintance;
-- some projection of the friend's own traits;
-- a little of the person's own tendencies.
-
-The simulation also includes:
-
-- walking that carries a little openness, energy and pace;
-- decision times that carry pace;
-- unmet encounters (7% on land, 15% at the shore);
-- 10% who never return.
-
-The simulated export has the same shape as the real one, and the analysis cannot tell them apart.
-
-### 5.2 Results (120 groups of 16; medians, [middle half of groups])
-
-**Again (second visit from first).**
-
-| Witness | Skill | Exact agreement |
-|---|---|---|
-| Two-layer echo | +0.34 [+0.20, +0.44] | 62% |
-| Pooled (self, friends, echo) | +0.36 [+0.23, +0.42] | 62% |
-| Own words | +0.26 [+0.14, +0.37] | 59% |
-| Friends | +0.26 [+0.15, +0.33] | 58% |
-| Group model | +0.07 [−0.06, +0.21] | 51% |
-| Questionnaire twin | −0.01 [−0.10, +0.09] | 48% |
-| One-layer echo | +0.03 [−0.04, +0.13] | 48% |
-| Engine echo, as built | −0.03 [−0.18, +0.08] | 46% |
-| *Own other visit (copying)* | +0.34 | 64% |
-| *Traits known exactly* | +0.22 | 58% |
-| *Person known exactly* | +0.57 | 74% |
-| *Base rate* | 0 | 47% |
-
-<!-- figure:again -->
-
-The two-layer echo's skill rises through the first visit as the six are met. It reaches the friends'
-level after a median of 7 minutes, which happens within the visit in
-73% of groups. It reaches the level of the person's own words after
-7 minutes.
+The central test (two layers against one) has power 65% at 16
+friends with two visits. It has 82% at 20 friends with three.
 
 <!-- figure:curve -->
 
-**Elsewhere (a paradigm never seen).** The person's own words score +0.26 and the friends
-+0.23. The two-layer echo scores +0.00, the one-layer echo
-+0.00, and the group model +0.00. Exact trait knowledge would score
-+0.24.
+**Registration.** `research/paper/preregistration.md`, to be filed before the first visit.
 
-What an echo learns of someone's traits from five other choices and their walking carries little to a
-sixth. People and their friends know the person's own ways directly.
+## 6. Discussion
 
-<!-- figure:elsewhere -->
+**For evaluating twins.** Report the crowd beside random guessing, and individual-level r beside
+accuracy.
 
-**Say and do.** The median group said 0.65 of its bread and gave 0.52. The
-friends' guesses ran +0.07 from what was given, the people's own words
-+0.14.
+- On the field's own benchmark, a guess that knows nobody scores 93% of the retest,
+  above every released twin.
+- "Normalised accuracy" against the retest compares a twin with a noisy witness, not with what is
+  knowable. A ceiling estimated from the same retest data puts the target higher
+  (0.869 against 0.817 here).
 
-**Power.** At 16 people:
+**For building twins.** The bottleneck is not the model; it is the information.
 
-| Test | Power at 16 | n for .8 |
-|---|---|---|
-| H1: two layers > one | 65% | 40 |
-| H2: two-layer echo > base rate | 65% | 40 |
-| Own words > base rate | 57% | >40 |
-| Friends > base rate | 52% | 40 |
-| H3: echo > friends | 18% | >40 |
-| H4: say–do gap, giving | 32% | >40 |
+- A 500-question persona carries a few percent of what is knowable about a person's next choice in a
+  situation. The persona bound caps every model that reads only it, language model or regression.
+- One earlier observation of the person in the same situation carries about half of it. A two-layer
+  echo reads that observation against the crowd, and three observations carry about four fifths.
+- The echo composes with any twin: laid on the released LLM twins it scores
+  0.823, from their 0.724.
 
-<!-- figure:power -->
+**For psychology.** The decomposition is old: aggregation, if-then signatures, latent state–trait
+models, Kelley's (1927) true-score estimate. What is new here is measuring it at scale against the
+systems now built to replace people in research, with every witness on the same answers, and placing
+a ceiling above the retest. The persona's poor showing elsewhere is the personality coefficient
+(Mischel, 1968) seen from the machine's side.
 
-A circle of friends is therefore a pilot in the proper sense. It estimates every effect and gives the
-central test a fair chance, while the confirmatory study needs about
-40 people.
-
-**A third visit is the cheaper lever.** Asked to come three times, with the third visit predicted from
-the first two, the same friends give the central test 67% at 16
-people and 82% at 20 (against 65%
-and 68% with two visits). The echo against the base rate rises to
-88% at 20. Twenty friends with three visits reach the conventional .8; the
-pilot village has the switch (web decision C78).
-
-**Pooling the stability, chosen here.** Partial pooling (§3.1) was chosen on simulation before any
-real data. In 60 groups of 16 with the stability the same for all six choices, it raised the echo's
-skill from +0.31 to +0.34. With the stability unequal
-(from .3 for the tide to .9 for bread), it raised it from +0.31 to
-+0.34. So the simulation's equal stability does not decide it. The runs above
-use it.
-
-**Two variants set aside, reported rather than dropped.**
-
-- **Scoring by probabilities.** Scored by the ranked probability score (Epstein, 1969; a proper score on
-  the models' own probabilities), the central test had less power at 16 people: .35 against .57, in 60
-  groups. With so
-  few people the two-layer echo's probabilities are not yet calibrated, though the choice it names is.
-- **Predicting each visit from the other.** Predicting each visit from the other, rather than only the
-  second from the first, raised power from .57 to .60. Both directions rest on the same pairs of
-  choices.
-
-## 6. Pre-registered pilot
-
-- **Sample.** Friends and family of the first author, unpaid. Target 16–20, with three visits each if
-  they agree to it (power above). Recruitment stops at 20, or after four weeks. This is a pilot. The confirmatory study (about 40
-  people) follows with an academic partner and an ethics review.
-- **Exclusions.** People with no second-visit choice are excluded from *again* only. Unmet encounters
-  are missing, never zero.
-- **Hypotheses.**
-  - **H1** (two layers > one layer, *again*, one-sided). The central test.
-  - **H2** (two-layer echo > base rate; crossing time of the friends' level, with a bootstrap interval).
-  - **H3** (echo, friends, own words, pooled: estimates with intervals, not tests).
-  - **H4** (say–do gap on giving, and own forecast further than friends', two-sided).
-  - **H5** (person-specific share > trait share, descriptive).
-- **Analysis.** The analysis is `research/pilot/analysis.py` at the commit named in the registration.
-  Inference is over people: bootstrap intervals, and exact sign-flip tests up to 16 people.
-- **Ethics.** The pilot needs a nickname and consent, not a name. Any person can erase themselves and
-  every rating of them. A published study needs an ethics review (known-gaps ⚑64).
-
-## 7. Discussion
-
-If the pilot agrees with the simulation, three claims follow.
-
-1. **Persona models need a second layer.** Trait-only models of people are capped low, and they
-   under-react to behaviour. A per-situation person-specific layer costs one number per kind of choice
-   and fits in the same update.
-2. **The world has an exchange rate.** A few minutes of watching someone act are worth what close
-   friends know, for situations the world has seen.
-3. **Words generalise; watching remembers.** For situations it has not seen, the person and their
-   friends still know best. That is an honest boundary for digital twins built from behaviour.
-
-**Copying is the special case.** Simply copying the person's first-visit choice scores
-+0.34, against the two-layer echo's +0.34. Copying is the special case the second
-layer makes available to a model of a person; a one-layer model cannot copy at all. What the echo has to
-learn is how far to trust what it saw, and it learns that from the group. Without pooling, fifteen
-people leave each choice's stability noisy, and the echo trailed copying by
-−0.06 (median over groups). Pooled, it trails by
-−0.01. With unequal stability it trails by
-−0.02 rather than −0.02.
-Binary choices give any model little room to do better than copy.
-
-What the second layer adds beyond copying is twofold. When there is nothing to copy (an encounter
-missed on the first visit), it falls back to the person's traits. With more people, its probabilities
-become calibrated.
+**Why a world.** If knowing someone takes watching them again in the situations one cares about, the
+instrument is a place people come back to. Such a place sets out comparable situations repeatedly, at
+no cost per observation, with the person's consent. Study 3 is the first test of such an instrument.
+It also gives the debrief, "who knew you best?", which is the reason a person would come back.
 
 **Limitations.**
 
-- **The sample.** Friends are not a random sample. They know each other, know the study, and may play
-  to be seen.
-- **The stakes.** The stakes are a game's, and the external validity of economic-game choices is itself
-  debated (Galizzi & Navarro-Martinez, 2019).
-- **The parameters.** The simulation's parameters are assumptions from published ranges, not
-  measurements. Its friends and selves are as insightful as we made them.
-- **Pilot size.** The pilot's n supports the central test, but not fine comparisons between
-  witnesses.
+- **The stakes.** Twin-2K-500's choices are hypothetical survey answers, and its "deeds elsewhere" are
+  survey choices too.
+- **The retest sample.** Study 2's behaviour is incentivised, but its retest sample is small.
+- **The ceiling model.** The knowable ceiling comes from an ordered latent model. It is a model-based
+  estimate, though one that reproduced the observed one-look echo to the third decimal.
+- **The LLM twins.** We scored the twins as released, and better prompting may raise them. The persona
+  bound says by how little, if the persona is all they read.
+- **Study 3** is a pilot among friends.
 
-## References (checked against bibliographic records, 2026-11-02)
+## References
 
+- Argyle, L. P., Busby, E. C., Fulda, N., Gubler, J. R., Rytting, C., & Wingate, D. (2023). Out of one, many: Using language models to simulate human samples. *Political Analysis, 31*(3), 337–351. https://doi.org/10.1017/pan.2023.2
 - Berg, J., Dickhaut, J., & McCabe, K. (1995). Trust, reciprocity, and social history. *Games and Economic Behavior, 10*(1), 122–142.
-- Epley, N., & Dunning, D. (2000). Feeling "holier than thou": Are self-serving assessments produced by errors in self- or social prediction? *Journal of Personality and Social Psychology, 79*(6), 861–875.
-- Epstein, E. S. (1969). A scoring system for probability forecasts of ranked categories. *Journal of Applied Meteorology, 8*, 985–987.
+- Dang, J., King, K. M., & Inzlicht, M. (2020). Why are self-report and behavioral measures weakly correlated? *Trends in Cognitive Sciences, 24*(4), 267–269. https://doi.org/10.1016/j.tics.2020.01.007
 - Epstein, S. (1979). The stability of behavior: I. On predicting most of the people much of the time. *Journal of Personality and Social Psychology, 37*(7), 1097–1126.
+- Fleeson, W. (2001). Toward a structure- and process-integrated view of personality: Traits as density distributions of states. *Journal of Personality and Social Psychology, 80*(6), 1011–1027.
 - Forsythe, R., Horowitz, J. L., Savin, N. E., & Sefton, M. (1994). Fairness in simple bargaining experiments. *Games and Economic Behavior, 6*(3), 347–369.
 - Frederick, S., Loewenstein, G., & O'Donoghue, T. (2002). Time discounting and time preference: A critical review. *Journal of Economic Literature, 40*(2), 351–401.
-- Galizzi, M. M., & Navarro-Martinez, D. (2019). On the external validity of social preference games: A systematic lab-field study. *Management Science, 65*(3), 976–1002.
+- Frey, R., Pedroni, A., Mata, R., Rieskamp, J., & Hertwig, R. (2017). Risk preference shares the psychometric structure of major psychological traits. *Science Advances, 3*(10), e1701381. https://doi.org/10.1126/sciadv.1701381
+- Hedge, C., Powell, G., & Sumner, P. (2018). The reliability paradox: Why robust cognitive tasks do not produce reliable individual differences. *Behavior Research Methods, 50*(3), 1166–1186. https://doi.org/10.3758/s13428-017-0935-1
 - Holt, C. A., & Laury, S. K. (2002). Risk aversion and incentive effects. *American Economic Review, 92*(5), 1644–1655.
+- Kelley, T. L. (1927). *Interpretation of Educational Measurements.* World Book.
 - Mischel, W. (1968). *Personality and Assessment.* Wiley.
-- Mõttus, R., Kandler, C., Bleidorn, W., Riemann, R., & McCrae, R. R. (2017). Personality traits below facets: The consensual validity, longitudinal stability, heritability, and utility of personality nuances. *Journal of Personality and Social Psychology, 112*(3), 474–490.
-- Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109. (Revised as "LLM agents grounded in self-reports enable general-purpose simulation of individuals"; cite the version read.)
-- Steyer, R., Schmitt, M., & Eid, M. (1999). Latent state–trait theory and research in personality and individual differences. *European Journal of Personality, 13*(5), 389–408.
-- Vazire, S. (2010). Who knows what about a person? The self–other knowledge asymmetry (SOKA) model. *Journal of Personality and Social Psychology, 98*(2), 281–300.
-- Vazire, S., & Mehl, M. R. (2008). Knowing me, knowing you: The accuracy and unique predictive validity of self-ratings and other-ratings of daily behavior. *Journal of Personality and Social Psychology, 95*(5), 1202–1216.
+- Mischel, W., & Shoda, Y. (1995). A cognitive-affective system theory of personality. *Psychological Review, 102*(2), 246–268.
+- Ouellette, J. A., & Wood, W. (1998). Habit and intention in everyday life: The multiple processes by which past behavior predicts future behavior. *Psychological Bulletin, 124*(1), 54–74. https://doi.org/10.1037/0033-2909.124.1.54
+- Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109.
+- Peng, T., Gui, G., Brucks, M., Merlau, D. J., Fan, G. J., Ben Sliman, M., Johnson, E. J., et al. (2026). Digital twins as funhouse mirrors: Five key distortions. arXiv:2509.19088.
+- Sheeran, P. (2002). Intention–behavior relations: A conceptual and empirical review. *European Review of Social Psychology, 12*(1), 1–36. https://doi.org/10.1080/14792772143000003
+- Toubia, O., Gui, G. Z., Peng, T., Merlau, D. J., Li, A., & Chen, H. (2025). Twin-2K-500: A data set for building digital twins of over 2,000 people based on their answers to over 500 questions. *Marketing Science, 44*(6), 1446–1455. https://doi.org/10.1287/mksc.2025.0262
+- Wang, Hunt, Tang, & Joseph (2026). When can LLM digital twins reduce human measurement? From behavioral fidelity to statistical substitutability. arXiv:2609.07987.
 - Wilson, R. C., Geana, A., White, J. M., Ludvig, E. A., & Cohen, J. D. (2014). Humans use directed and random exploration to solve the explore–exploit dilemma. *Journal of Experimental Psychology: General, 143*(6), 2074–2081.
-- Youyou, W., Kosinski, M., & Stillwell, D. (2015). Computer-based personality judgments are more accurate than those made by humans. *PNAS, 112*(4), 1036–1040.
+- Youyou, W., Kosinski, M., & Stillwell, D. (2015). Computer-based personality judgments are more accurate than those made by humans. *PNAS, 112*(4), 1036–1040. https://doi.org/10.1073/pnas.1418680112

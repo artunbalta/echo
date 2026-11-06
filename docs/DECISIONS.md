@@ -5459,3 +5459,68 @@ two cannot drift apart unnoticed.
 - tsc clean; pilot 16/16.
 - A dev-only preview at `/dev/pilot-reveal`, made-up answers, nothing in production. Looked at in
   English at desktop width, in Turkish, and at phone width.
+
+## C81 — what public data say: the crowd, the persona and one look
+
+What it answers: the pilot (C75–C80) is a promise about friends who have not yet played. Before any of
+them do, two public datasets can test the theory it rests on: what can be known about a person's next
+choice, and who knows it. Both analyses were pre-registered and committed before any model was fitted:
+`research/deeds/PREREG.md` (63757d0) and `PREREG-BBRS.md` (dfc8349). The code is `research/deeds/`.
+The paper is `research/paper/draft.md`, Studies 1 and 2.
+
+**Study 1: Twin-2K-500** (2,058 US adults; 17 tasks retested after two weeks; the authors' released
+LLM twins). The authors' metric and the released twins' own predictions were used, reproduced to the
+digit (retest 0.8173 against the paper's 0.8172).
+
+- **The crowd beats every twin.** The crowd's median answer knows nobody, yet it is more accurate
+  than all 13 released twin specifications, by 3.6–8.2 points. By the field's yardstick it scores 93%
+  of the retest; the headline twin scores 89%.
+- **A regression knows individuals better.** Ridge on the same persona knows individuals about twice
+  as well (r .14 against .07).
+- **One earlier answer to the same question knows them best:** r .49, on all 17 tasks.
+- **The two-layer echo beats the retest:** 0.822 against 0.817. In its simplest form, the crowd's own
+  transitions, it scores 0.827, the latent model's predicted one-look optimum. The knowable ceiling is
+  0.869.
+- **Copying beats the crowd only where a task is more than half steady.** That is the theory's
+  2ρ − 1, and it holds on 15 of 17 tasks.
+
+**Study 2: the Basel–Berlin Risk Study** (incentivised risk tasks; 170 people retested after six
+months).
+
+- **Copying loses to the crowd.** It does on all five tasks below ρ = ½, and its skill tracks 2ρ − 1
+  (r .99).
+- **The same observation, read by the echo, is the best witness** (+.17).
+- **Words barely register** (+.02), though they are themselves reliable (retest .67–.84).
+
+**What it changes for ECHO.**
+- **The thesis has evidence before the pilot.** Knowing a person takes watching them again in the
+  situation of interest. A persona does not get there, whether self-descriptions or other tasks, read
+  by a language model or a regression. That is what a world people come back to is for.
+- **The second layer (C77) is the part that matters.** It is what turns one look into knowledge rather
+  than noise. Engine change stays the owner's call (C7). The evidence for the proposal is now public
+  data, not only simulation.
+- **The debrief's echo ignores the self-rating** (C80). On this evidence the self-rating adds next to
+  nothing to a choice.
+- **The echo composes with LLM twins.** Laid on the released twins it scores 0.8225, from their 0.72.
+  So it can be sold as a layer on top of someone else's twin, not only as a twin.
+
+**Deviations from the registrations**, all reported in `research/deeds/README.md` and the paper:
+- **Specification count.** The release has 13 distinct twin specifications, not the 11 the
+  registration counted. All are used.
+- **Partial coverage.** Twins that answered only some people are also scored on those people. The
+  registered rule, which fills a silent twin with the crowd, favours them; the conclusion is the same
+  either way.
+- **Exploratory analyses.** The crowd-transition echo and the per-task ρ > ½ test are exploratory.
+- **The authors' own direction.** There the registered persona echo does not beat the retest
+  (+.0005, p .21). The transition echo does.
+- **Study 2's one miss.** The echo is above zero on six of seven tasks. The exception is a task with no
+  reliability at all (ρ = .004).
+
+**Guarantees.**
+- **Nothing sees what it predicts.** A person's own truth moves none of their guesses. Six planted
+  leaks are each caught, including two rounding leaks that the first version of the test missed: they
+  were inert in this data, and the test was sharpened until it caught them.
+- **The theory holds to its model.** The closed forms match a Monte Carlo, and the ordered latent
+  ceiling matches a simulation.
+- **The data.** `fetch.py` re-downloads both datasets; the Basel–Berlin files match the literature
+  agent's copies byte for byte.

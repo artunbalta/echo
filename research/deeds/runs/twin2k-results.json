@@ -1,0 +1,3917 @@
+{
+ "forward": {
+  "cells": 193464,
+  "people": 2058,
+  "silent_twin_share": {
+   "Demographics Only - GPT4.1-mini": 0.0,
+   "JSON Persona (Predicted Output) - GPT4.1": 0.008389157672745317,
+   "JSON Persona (Predicted Output) - GPT4.1-mini": 0.11958297150891121,
+   "JSON Persona - GPT4.1": 0.004129967332423603,
+   "JSON Persona - GPT4.1-mini": 0.5149019972708101,
+   "LLM Finetuning (500 training samples) - GPT4.1-mini": 0.24287722780465618,
+   "Persona Summary - GPT4.1-mini": 0.0,
+   "Persona Summary - JSON Persona - GPT4.1-mini": 0.0,
+   "Text Persona (Default Temperature) - GPT4.1-mini": 5.16892031592441e-05,
+   "Text Persona (Reasoning) - GPT4.1-mini": 0.0001033784063184882,
+   "Text Persona (Repeating Questions) - GPT4.1-mini": 5.16892031592441e-05,
+   "Text Persona - GPT4.1-mini": 0.0,
+   "Text Persona - Gemini-Flash2.5": 1.033784063184882e-05
+  },
+  "witnesses": {
+   "base": {
+    "accuracy": 0.7613740067455553,
+    "r": -0.0050057003731852606,
+    "task_accuracy": {
+     "Allais": 0.629251700680272,
+     "WTA/WTP-Thaler": 0.8350610085303962,
+     "absolute vs. relative savings": 0.717687074829932,
+     "anchoring and adjustment": 0.7855253212396069,
+     "base rate": 0.8335374149659864,
+     "conjunction problem (Linda)": 0.8272756721736314,
+     "denominator neglect": 0.6214771622934888,
+     "false consensus": 0.7930811467444121,
+     "framing problem": 0.8137026239067056,
+     "less is more": 0.7643262066731454,
+     "myside": 0.8024295432458698,
+     "non-separability of risks and benefits": 0.822805312601231,
+     "omission": 0.7324263038548753,
+     "outcome bias": 0.8600583090379008,
+     "pricing": 0.5590136054421768,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.7821428571428571
+    },
+    "task_r": {
+     "Allais": 0.0,
+     "WTA/WTP-Thaler": 0.0,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": -0.013082085142826902,
+     "base rate": -0.03346051544621513,
+     "conjunction problem (Linda)": -0.014016142914852614,
+     "denominator neglect": 0.0,
+     "false consensus": -0.009104917666682644,
+     "framing problem": 0.0,
+     "less is more": -0.0091786457979224,
+     "myside": 0.0,
+     "non-separability of risks and benefits": -0.006254599375649742,
+     "omission": 0.0,
+     "outcome bias": 0.0,
+     "pricing": 0.0,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.0
+    },
+    "r_score": -0.08833802650924388,
+    "task_r_score": {
+     "Allais": -0.10058377503914279,
+     "WTA/WTP-Thaler": -0.12482805216667177,
+     "absolute vs. relative savings": -0.06368494841091372,
+     "anchoring and adjustment": -0.10228965956022149,
+     "base rate": -0.0642425083446964,
+     "conjunction problem (Linda)": -0.09277010542869907,
+     "denominator neglect": -0.1005439870954192,
+     "false consensus": -0.05655245249537246,
+     "framing problem": -0.10139584136692631,
+     "less is more": -0.11248916937289793,
+     "myside": -0.08297451039201614,
+     "non-separability of risks and benefits": -0.068352144682684,
+     "omission": -0.05015187838548606,
+     "outcome bias": -0.12120961218073698,
+     "pricing": -0.06365273905338346,
+     "prob matching vs. max": -0.09845877857309254,
+     "sunk cost fallacy": -0.0975662881087858
+    },
+    "normalised": 0.9315532874865387
+   },
+   "again": {
+    "accuracy": 0.8173166441179647,
+    "r": 0.4856782377630939,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.891912320483749,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8421066839434186,
+     "base rate": 0.8345578231292516,
+     "conjunction problem (Linda)": 0.8240686750890832,
+     "denominator neglect": 0.7215743440233235,
+     "false consensus": 0.8607733236151603,
+     "framing problem": 0.8027210884353742,
+     "less is more": 0.8314949789439585,
+     "myside": 0.8456754130223518,
+     "non-separability of risks and benefits": 0.8632065921606737,
+     "omission": 0.8057985098801426,
+     "outcome bias": 0.8634596695821186,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.7441126487011411,
+     "sunk cost fallacy": 0.7884353741496599
+    },
+    "task_r": {
+     "Allais": 0.4455106065622185,
+     "WTA/WTP-Thaler": 0.6445456706092481,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5744768797170974,
+     "base rate": 0.31496738928594364,
+     "conjunction problem (Linda)": 0.38145059287218674,
+     "denominator neglect": 0.4029719593959553,
+     "false consensus": 0.6304316858090722,
+     "framing problem": 0.3325263476596334,
+     "less is more": 0.5892061107191053,
+     "myside": 0.5868488324942138,
+     "non-separability of risks and benefits": 0.5532148199927631,
+     "omission": 0.5775025135694402,
+     "outcome bias": 0.43409335676361727,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.23867481646931404,
+     "sunk cost fallacy": 0.3788436689849837
+    },
+    "normalised": 1.0
+   },
+   "llm:JSON Persona (Predicted Output) - GPT4.1": {
+    "accuracy": 0.7261061202258682,
+    "r": 0.08451737235551593,
+    "task_accuracy": {
+     "Allais": 0.5087463556851313,
+     "WTA/WTP-Thaler": 0.8045027534823453,
+     "absolute vs. relative savings": 0.7035957240038873,
+     "anchoring and adjustment": 0.7058093078501242,
+     "base rate": 0.8251020408163265,
+     "conjunction problem (Linda)": 0.7678328474246842,
+     "denominator neglect": 0.38241010689990285,
+     "false consensus": 0.7885466472303206,
+     "framing problem": 0.7442176870748298,
+     "less is more": 0.7678004535147392,
+     "myside": 0.8079689018464529,
+     "non-separability of risks and benefits": 0.8152636054421769,
+     "omission": 0.7105604146420473,
+     "outcome bias": 0.8509880142533204,
+     "pricing": 0.697558309037901,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.6993440233236152
+    },
+    "task_r": {
+     "Allais": -0.011592168594411494,
+     "WTA/WTP-Thaler": 0.0542249238008962,
+     "absolute vs. relative savings": -0.02447280279446655,
+     "anchoring and adjustment": 0.02964782980300328,
+     "base rate": 0.0014403773811551832,
+     "conjunction problem (Linda)": 0.0055674505068347285,
+     "denominator neglect": -0.01076180560038468,
+     "false consensus": 0.29161233868637504,
+     "framing problem": 0.033482063005592796,
+     "less is more": 0.1884550679586285,
+     "myside": 0.23868201288781987,
+     "non-separability of risks and benefits": 0.02836209190678629,
+     "omission": 0.17586783573510875,
+     "outcome bias": 0.05124855246884382,
+     "pricing": 0.39397233184089514,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.008940768948905964
+    },
+    "normalised": 0.8884024636614009
+   },
+   "llm:JSON Persona (Predicted Output) - GPT4.1-mini": {
+    "accuracy": 0.7023487236164307,
+    "r": 0.05630332106650746,
+    "task_accuracy": {
+     "Allais": 0.5170068027210885,
+     "WTA/WTP-Thaler": 0.7476514415289925,
+     "absolute vs. relative savings": 0.5165208940719145,
+     "anchoring and adjustment": 0.672956484180974,
+     "base rate": 0.8163994169096209,
+     "conjunction problem (Linda)": 0.7819889860706187,
+     "denominator neglect": 0.4446064139941691,
+     "false consensus": 0.7593491253644314,
+     "framing problem": 0.7248785228377065,
+     "less is more": 0.7537819889860706,
+     "myside": 0.7837706511175899,
+     "non-separability of risks and benefits": 0.804857061872368,
+     "omission": 0.6081956592160674,
+     "outcome bias": 0.8586815678652413,
+     "pricing": 0.615148202137998,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.770578231292517
+    },
+    "task_r": {
+     "Allais": 0.03186532081489069,
+     "WTA/WTP-Thaler": 0.034873220598293404,
+     "absolute vs. relative savings": 0.03948823434203766,
+     "anchoring and adjustment": -0.022992724962916017,
+     "base rate": -0.0013161064818267391,
+     "conjunction problem (Linda)": 0.003195927327254935,
+     "denominator neglect": -0.019054573970563832,
+     "false consensus": 0.2392015325485665,
+     "framing problem": -0.013464910774307323,
+     "less is more": 0.13674036010967092,
+     "myside": 0.10105976022127003,
+     "non-separability of risks and benefits": 0.018999854816463536,
+     "omission": 0.10509981291837128,
+     "outcome bias": 0.0031570117656760707,
+     "pricing": 0.26189314311308987,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.03841059574465588
+    },
+    "normalised": 0.8593349085340046
+   },
+   "llm:JSON Persona - GPT4.1": {
+    "accuracy": 0.7189055923956884,
+    "r": 0.08213821180064058,
+    "task_accuracy": {
+     "Allais": 0.5587949465500486,
+     "WTA/WTP-Thaler": 0.7953244789979484,
+     "absolute vs. relative savings": 0.6754130223517978,
+     "anchoring and adjustment": 0.7238149227945145,
+     "base rate": 0.8246355685131195,
+     "conjunction problem (Linda)": 0.7518302559118886,
+     "denominator neglect": 0.40864917395529643,
+     "false consensus": 0.7738887269193392,
+     "framing problem": 0.6807580174927114,
+     "less is more": 0.7266358924522189,
+     "myside": 0.7778425655976676,
+     "non-separability of risks and benefits": 0.7968598153547133,
+     "omission": 0.7369614512471655,
+     "outcome bias": 0.8244250080984775,
+     "pricing": 0.7165816326530612,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.6854227405247812
+    },
+    "task_r": {
+     "Allais": -0.009537861701492435,
+     "WTA/WTP-Thaler": 0.03470752151243724,
+     "absolute vs. relative savings": 0.02300474592644779,
+     "anchoring and adjustment": 0.022641693359610374,
+     "base rate": 0.01234797868342706,
+     "conjunction problem (Linda)": 0.014703033648581292,
+     "denominator neglect": -0.04023791840050127,
+     "false consensus": 0.27279268198496626,
+     "framing problem": -0.01582409326909656,
+     "less is more": 0.18792075701208713,
+     "myside": 0.20705645131196604,
+     "non-separability of risks and benefits": 0.038055023005095334,
+     "omission": 0.1864157498489627,
+     "outcome bias": 0.09100205157659977,
+     "pricing": 0.42291799602105107,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.05161620990925186
+    },
+    "normalised": 0.8795925025747152
+   },
+   "llm:JSON Persona - GPT4.1-mini": {
+    "accuracy": 0.7381885817819192,
+    "r": 0.043189369495471204,
+    "task_accuracy": {
+     "Allais": 0.5830903790087463,
+     "WTA/WTP-Thaler": 0.8095238095238095,
+     "absolute vs. relative savings": 0.6681243926141885,
+     "anchoring and adjustment": 0.7450059388834899,
+     "base rate": 0.8281535471331389,
+     "conjunction problem (Linda)": 0.7950113378684808,
+     "denominator neglect": 0.5014577259475219,
+     "false consensus": 0.7818590864917395,
+     "framing problem": 0.7724003887269193,
+     "less is more": 0.764172335600907,
+     "myside": 0.8004859086491739,
+     "non-separability of risks and benefits": 0.8169642857142857,
+     "omission": 0.6942014901198574,
+     "outcome bias": 0.8573048266925818,
+     "pricing": 0.6107507288629738,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.7571428571428571
+    },
+    "task_r": {
+     "Allais": 0.04067276772813948,
+     "WTA/WTP-Thaler": 0.04481230079225155,
+     "absolute vs. relative savings": 0.0006603461635547678,
+     "anchoring and adjustment": 0.020125979810896377,
+     "base rate": 0.024817801148407603,
+     "conjunction problem (Linda)": -0.027249668006395958,
+     "denominator neglect": -0.008199094591093907,
+     "false consensus": 0.16520574500127663,
+     "framing problem": -0.034630742610107575,
+     "less is more": 0.1118164374161627,
+     "myside": 0.07766126344459043,
+     "non-separability of risks and benefits": 0.011868953603518057,
+     "omission": 0.07574503751051948,
+     "outcome bias": 0.02182266820037916,
+     "pricing": 0.19092795909589114,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.018161526715020533
+    },
+    "normalised": 0.9031855488255237
+   },
+   "llm:LLM Finetuning (500 training samples) - GPT4.1-mini": {
+    "accuracy": 0.7132443501210008,
+    "r": 0.03116252749201968,
+    "task_accuracy": {
+     "Allais": 0.5335276967930029,
+     "WTA/WTP-Thaler": 0.7693553611920959,
+     "absolute vs. relative savings": 0.5369290573372206,
+     "anchoring and adjustment": 0.7703271784904439,
+     "base rate": 0.8181049562682216,
+     "conjunction problem (Linda)": 0.7468091998704244,
+     "denominator neglect": 0.6185617103984451,
+     "false consensus": 0.7707232750242954,
+     "framing problem": 0.7148688046647231,
+     "less is more": 0.7141966310333657,
+     "myside": 0.7666666666666666,
+     "non-separability of risks and benefits": 0.7613986070618723,
+     "omission": 0.7314544865565273,
+     "outcome bias": 0.8462099125364432,
+     "pricing": 0.52854713313897,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.7339164237123421
+    },
+    "task_r": {
+     "Allais": -0.0049112114065377995,
+     "WTA/WTP-Thaler": 0.0281705532379892,
+     "absolute vs. relative savings": -0.030109019264079703,
+     "anchoring and adjustment": 0.04086943174905294,
+     "base rate": -0.023864023292659513,
+     "conjunction problem (Linda)": 0.038373668890465125,
+     "denominator neglect": -0.015836271482135823,
+     "false consensus": 0.09895545780892745,
+     "framing problem": 0.00861559514874822,
+     "less is more": 0.08395001073147576,
+     "myside": 0.12959647064206045,
+     "non-separability of risks and benefits": 0.0107776621695649,
+     "omission": 0.12966331800607908,
+     "outcome bias": 0.018006146388253673,
+     "pricing": 0.04610031294185631,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.028595134904725674
+    },
+    "normalised": 0.8726658820104208
+   },
+   "llm:Persona Summary - GPT4.1-mini": {
+    "accuracy": 0.6828050537675387,
+    "r": 0.06877162766064353,
+    "task_accuracy": {
+     "Allais": 0.4757045675413022,
+     "WTA/WTP-Thaler": 0.766385919447144,
+     "absolute vs. relative savings": 0.6127308066083577,
+     "anchoring and adjustment": 0.6727675197062952,
+     "base rate": 0.633600583090379,
+     "conjunction problem (Linda)": 0.746938775510204,
+     "denominator neglect": 0.3843537414965986,
+     "false consensus": 0.7129101068999029,
+     "framing problem": 0.7322643343051507,
+     "less is more": 0.7073858114674441,
+     "myside": 0.7358600583090378,
+     "non-separability of risks and benefits": 0.7796707968901846,
+     "omission": 0.6909620991253644,
+     "outcome bias": 0.8590055069646907,
+     "pricing": 0.6272716229348883,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.7063168124392614
+    },
+    "task_r": {
+     "Allais": -0.008941382993878,
+     "WTA/WTP-Thaler": 0.11714984708311632,
+     "absolute vs. relative savings": -0.022464386991918744,
+     "anchoring and adjustment": 0.039848151730746184,
+     "base rate": 0.004706667940643131,
+     "conjunction problem (Linda)": 0.01326099483464333,
+     "denominator neglect": -0.004942879143685414,
+     "false consensus": 0.2494848934857487,
+     "framing problem": -0.0331416623616026,
+     "less is more": 0.09462522014556032,
+     "myside": 0.17164306708574215,
+     "non-separability of risks and benefits": 0.03300918512547574,
+     "omission": 0.15532810378930234,
+     "outcome bias": 0.042343064297319044,
+     "pricing": 0.2929452829160855,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.024263503287642155
+    },
+    "normalised": 0.8354229155634182
+   },
+   "llm:Persona Summary - JSON Persona - GPT4.1-mini": {
+    "accuracy": 0.6793397628892828,
+    "r": 0.04750797303629036,
+    "task_accuracy": {
+     "Allais": 0.4820213799805636,
+     "WTA/WTP-Thaler": 0.7302127200086383,
+     "absolute vs. relative savings": 0.5534499514091351,
+     "anchoring and adjustment": 0.6709588597343699,
+     "base rate": 0.7008260447035958,
+     "conjunction problem (Linda)": 0.7661807580174927,
+     "denominator neglect": 0.4577259475218659,
+     "false consensus": 0.7105072886297377,
+     "framing problem": 0.7280855199222547,
+     "less is more": 0.7346290897311305,
+     "myside": 0.7486880466472303,
+     "non-separability of risks and benefits": 0.7265042921930678,
+     "omission": 0.6684483317136378,
+     "outcome bias": 0.8598963394881762,
+     "pricing": 0.5415694849368319,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.7055150631681244
+    },
+    "task_r": {
+     "Allais": -0.018941429538158965,
+     "WTA/WTP-Thaler": 0.025507660316370005,
+     "absolute vs. relative savings": 0.01614958711223384,
+     "anchoring and adjustment": -0.0029876520894116863,
+     "base rate": -0.00636972219277748,
+     "conjunction problem (Linda)": 0.013860460582029317,
+     "denominator neglect": -0.035855972683027024,
+     "false consensus": 0.2377448146907195,
+     "framing problem": -0.004374511546965691,
+     "less is more": 0.12243260613644387,
+     "myside": 0.14618164840297077,
+     "non-separability of risks and benefits": 0.02417206318309127,
+     "omission": 0.0871938985343117,
+     "outcome bias": 0.025663383472959777,
+     "pricing": 0.1595369066588137,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.01772180057733328
+    },
+    "normalised": 0.8311830766916727
+   },
+   "llm:Text Persona (Default Temperature) - GPT4.1-mini": {
+    "accuracy": 0.718925192299142,
+    "r": 0.07111346572710664,
+    "task_accuracy": {
+     "Allais": 0.5068027210884354,
+     "WTA/WTP-Thaler": 0.7923010474030883,
+     "absolute vs. relative savings": 0.6540330417881438,
+     "anchoring and adjustment": 0.6758449411510636,
+     "base rate": 0.7884110787172012,
+     "conjunction problem (Linda)": 0.7738257207644963,
+     "denominator neglect": 0.564625850340136,
+     "false consensus": 0.7465204081632653,
+     "framing problem": 0.713508260447036,
+     "less is more": 0.7546161321671525,
+     "myside": 0.7731778425655977,
+     "non-separability of risks and benefits": 0.7966877227081309,
+     "omission": 0.714447683835439,
+     "outcome bias": 0.8599773242630386,
+     "pricing": 0.6626093294460642,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.68078231292517
+    },
+    "task_r": {
+     "Allais": -0.020334065728270165,
+     "WTA/WTP-Thaler": 0.03877018528590701,
+     "absolute vs. relative savings": 0.057208516977892546,
+     "anchoring and adjustment": 0.029955217402592615,
+     "base rate": -0.016525454088928263,
+     "conjunction problem (Linda)": 0.03100465486154531,
+     "denominator neglect": -0.0007407099014657686,
+     "false consensus": 0.28137976033460343,
+     "framing problem": -0.0004893432737190268,
+     "less is more": 0.1543314909103641,
+     "myside": 0.16800911287516646,
+     "non-separability of risks and benefits": 0.04130247348227922,
+     "omission": 0.12603373746160634,
+     "outcome bias": -0.0022819011225218037,
+     "pricing": 0.30554503427189794,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.015760207611862788
+    },
+    "normalised": 0.8796164833704014
+   },
+   "llm:Text Persona (Reasoning) - GPT4.1-mini": {
+    "accuracy": 0.7125070949014526,
+    "r": 0.07027420580485495,
+    "task_accuracy": {
+     "Allais": 0.5160349854227405,
+     "WTA/WTP-Thaler": 0.8109815354713314,
+     "absolute vs. relative savings": 0.641399416909621,
+     "anchoring and adjustment": 0.6807850124176655,
+     "base rate": 0.8019825072886297,
+     "conjunction problem (Linda)": 0.7622610949141562,
+     "denominator neglect": 0.4543245869776482,
+     "false consensus": 0.7644113216715258,
+     "framing problem": 0.7037900874635568,
+     "less is more": 0.7472546161321671,
+     "myside": 0.7686103012633625,
+     "non-separability of risks and benefits": 0.7829709264658244,
+     "omission": 0.7207644962747004,
+     "outcome bias": 0.8590055069646907,
+     "pricing": 0.6498177842565598,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.6846695821185618
+    },
+    "task_r": {
+     "Allais": 0.00535204955491163,
+     "WTA/WTP-Thaler": 0.02133263051389073,
+     "absolute vs. relative savings": 0.021434169233137283,
+     "anchoring and adjustment": 0.024585369708899796,
+     "base rate": -0.011213875620641243,
+     "conjunction problem (Linda)": 0.014349362803530172,
+     "denominator neglect": -0.01888300827381982,
+     "false consensus": 0.28938715940183507,
+     "framing problem": -0.002526844024026616,
+     "less is more": 0.13084563007615171,
+     "myside": 0.16495677761005628,
+     "non-separability of risks and benefits": 0.03176877325170552,
+     "omission": 0.1575340225719816,
+     "outcome bias": 0.02506135318767125,
+     "pricing": 0.32145263818043424,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.019225290506816584
+    },
+    "normalised": 0.8717638384452321
+   },
+   "llm:Text Persona (Repeating Questions) - GPT4.1-mini": {
+    "accuracy": 0.7111110825282494,
+    "r": 0.07726272212989946,
+    "task_accuracy": {
+     "Allais": 0.5145772594752187,
+     "WTA/WTP-Thaler": 0.8034229564841809,
+     "absolute vs. relative savings": 0.6316812439261419,
+     "anchoring and adjustment": 0.6903412158514199,
+     "base rate": 0.7796890184645286,
+     "conjunction problem (Linda)": 0.7790087463556852,
+     "denominator neglect": 0.3794946550048591,
+     "false consensus": 0.7633194849368319,
+     "framing problem": 0.7028182701652089,
+     "less is more": 0.7494978943958536,
+     "myside": 0.7854227405247813,
+     "non-separability of risks and benefits": 0.8020225947521866,
+     "omission": 0.7193067703271785,
+     "outcome bias": 0.8598963394881762,
+     "pricing": 0.671586491739553,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.6932458697764821
+    },
+    "task_r": {
+     "Allais": 0.013281909768863742,
+     "WTA/WTP-Thaler": 0.03534938191103027,
+     "absolute vs. relative savings": -0.010538696070418277,
+     "anchoring and adjustment": 0.006374775339357416,
+     "base rate": 0.03240678481534997,
+     "conjunction problem (Linda)": 0.02231988589437156,
+     "denominator neglect": -0.02906507431084665,
+     "false consensus": 0.297767703611013,
+     "framing problem": 0.004005674095157371,
+     "less is more": 0.17644829077459848,
+     "myside": 0.18816544591020054,
+     "non-separability of risks and benefits": 0.057839797215248664,
+     "omission": 0.15446140823638757,
+     "outcome bias": 0.037322159758723536,
+     "pricing": 0.3248926867778056,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.0024341424814480275
+    },
+    "normalised": 0.8700557949552946
+   },
+   "llm:Text Persona - GPT4.1-mini": {
+    "accuracy": 0.7237163865546218,
+    "r": 0.07373315914217614,
+    "task_accuracy": {
+     "Allais": 0.5092322643343051,
+     "WTA/WTP-Thaler": 0.7931648850016197,
+     "absolute vs. relative savings": 0.6637512147716229,
+     "anchoring and adjustment": 0.6730644638807903,
+     "base rate": 0.8038824101068999,
+     "conjunction problem (Linda)": 0.7802397149335925,
+     "denominator neglect": 0.5675413022351798,
+     "false consensus": 0.7458826530612246,
+     "framing problem": 0.7172983479105928,
+     "less is more": 0.7565921606737933,
+     "myside": 0.7757045675413022,
+     "non-separability of risks and benefits": 0.8052316164561063,
+     "omission": 0.7314544865565273,
+     "outcome bias": 0.8600583090379008,
+     "pricing": 0.668695335276968,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.6878279883381924
+    },
+    "task_r": {
+     "Allais": 0.0,
+     "WTA/WTP-Thaler": 0.07658259057244658,
+     "absolute vs. relative savings": 0.013805850273948077,
+     "anchoring and adjustment": 0.018644707154397533,
+     "base rate": 0.018481403504781772,
+     "conjunction problem (Linda)": 0.023498757259020193,
+     "denominator neglect": -0.04246485103479703,
+     "false consensus": 0.28115704454393364,
+     "framing problem": -0.026996840380517556,
+     "less is more": 0.1733664331952264,
+     "myside": 0.17036603856257576,
+     "non-separability of risks and benefits": 0.08108959301718466,
+     "omission": 0.12828411419632177,
+     "outcome bias": 0.02389461658088665,
+     "pricing": 0.31882997951810027,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.005075731546514487
+    },
+    "normalised": 0.8854785862530001
+   },
+   "llm:Text Persona - Gemini-Flash2.5": {
+    "accuracy": 0.6985485305233204,
+    "r": 0.07848916168261079,
+    "task_accuracy": {
+     "Allais": 0.5753158406219631,
+     "WTA/WTP-Thaler": 0.6411834575099882,
+     "absolute vs. relative savings": 0.5850340136054422,
+     "anchoring and adjustment": 0.7447359896339488,
+     "base rate": 0.8073858114674441,
+     "conjunction problem (Linda)": 0.7647230320699708,
+     "denominator neglect": 0.6117589893100097,
+     "false consensus": 0.7610325558794947,
+     "framing problem": 0.7049562682215743,
+     "less is more": 0.7197845804988662,
+     "myside": 0.7247813411078716,
+     "non-separability of risks and benefits": 0.7833049886621315,
+     "omission": 0.5333657272432784,
+     "outcome bias": 0.825801749271137,
+     "pricing": 0.6694363459669582,
+     "prob matching vs. max": 0.7638383102694829,
+     "sunk cost fallacy": 0.6607385811467443
+    },
+    "task_r": {
+     "Allais": 0.03221208671766881,
+     "WTA/WTP-Thaler": 0.008707035694644006,
+     "absolute vs. relative savings": 0.050853871095969325,
+     "anchoring and adjustment": 0.0337501578805116,
+     "base rate": 0.01626911208348902,
+     "conjunction problem (Linda)": 0.011735592469522634,
+     "denominator neglect": 0.04774250698481039,
+     "false consensus": 0.28230247995132884,
+     "framing problem": -0.008623870774380213,
+     "less is more": 0.13637819816904082,
+     "myside": 0.19020846883551568,
+     "non-separability of risks and benefits": 0.08313453507662927,
+     "omission": 0.022792938532572145,
+     "outcome bias": 0.028169476842180335,
+     "pricing": 0.37395866354130824,
+     "prob matching vs. max": 0.011456773725367766,
+     "sunk cost fallacy": 0.013267721778204589
+    },
+    "normalised": 0.8546853114403208
+   },
+   "llm_mean": {
+    "accuracy": 0.7296018026258123,
+    "r": 0.08683327398877654,
+    "task_accuracy": {
+     "Allais": 0.5092322643343051,
+     "WTA/WTP-Thaler": 0.7910592808551993,
+     "absolute vs. relative savings": 0.6802721088435374,
+     "anchoring and adjustment": 0.7129899578879171,
+     "base rate": 0.7996598639455782,
+     "conjunction problem (Linda)": 0.8010366051182378,
+     "denominator neglect": 0.39650145772594747,
+     "false consensus": 0.772974732750243,
+     "framing problem": 0.7741496598639456,
+     "less is more": 0.7645448655652738,
+     "myside": 0.7961127308066084,
+     "non-separability of risks and benefits": 0.8102121801101393,
+     "omission": 0.7262714609653386,
+     "outcome bias": 0.8604632329122125,
+     "pricing": 0.7054178814382897,
+     "prob matching vs. max": 0.7657198349113863,
+     "sunk cost fallacy": 0.7387755102040816
+    },
+    "task_r": {
+     "Allais": 0.0,
+     "WTA/WTP-Thaler": 0.06181033379007966,
+     "absolute vs. relative savings": 0.0013261229847380583,
+     "anchoring and adjustment": 0.04758456603304589,
+     "base rate": 0.0371561172451149,
+     "conjunction problem (Linda)": 0.022541657299191244,
+     "denominator neglect": -0.08381469456134814,
+     "false consensus": 0.3108411127323457,
+     "framing problem": -0.015432741032364585,
+     "less is more": 0.2011619227403957,
+     "myside": 0.2419368707622154,
+     "non-separability of risks and benefits": 0.06835942798065359,
+     "omission": 0.11720030263692748,
+     "outcome bias": 0.042244694766936354,
+     "pricing": 0.4174417598506688,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.005808204580600888
+    },
+    "r_score": 0.11320121724452459,
+    "task_r_score": {
+     "Allais": 0.01176961959843315,
+     "WTA/WTP-Thaler": 0.0762500897413016,
+     "absolute vs. relative savings": 0.028167704897833698,
+     "anchoring and adjustment": 0.0714822283816018,
+     "base rate": 0.03454773909830942,
+     "conjunction problem (Linda)": 0.04082157340594176,
+     "denominator neglect": -0.049404019108758364,
+     "false consensus": 0.32123605345128714,
+     "framing problem": -0.009642642745282528,
+     "less is more": 0.22672759686973784,
+     "myside": 0.2652022677255529,
+     "non-separability of risks and benefits": 0.09890891143416974,
+     "omission": 0.25898070231097853,
+     "outcome bias": 0.07000890485340584,
+     "pricing": 0.4605940580033234,
+     "prob matching vs. max": 0.0116914812983859,
+     "sunk cost fallacy": 0.007078423940695935
+    },
+    "normalised": 0.8926794870465254
+   },
+   "llm_demographics": {
+    "accuracy": 0.6851062694919238,
+    "r": 0.039328964275750056,
+    "task_accuracy": {
+     "Allais": 0.43440233236151604,
+     "WTA/WTP-Thaler": 0.7605550156570564,
+     "absolute vs. relative savings": 0.5573372206025267,
+     "anchoring and adjustment": 0.6728485044811575,
+     "base rate": 0.6862730806608357,
+     "conjunction problem (Linda)": 0.7775186264982183,
+     "denominator neglect": 0.38095238095238093,
+     "false consensus": 0.7243238581146745,
+     "framing problem": 0.7154518950437317,
+     "less is more": 0.7196631033365728,
+     "myside": 0.7666666666666666,
+     "non-separability of risks and benefits": 0.780045351473923,
+     "omission": 0.713961775186265,
+     "outcome bias": 0.8594914156138647,
+     "pricing": 0.5883746355685131,
+     "prob matching vs. max": 0.7657805292546734,
+     "sunk cost fallacy": 0.74533527696793
+    },
+    "task_r": {
+     "Allais": -0.01025155500260826,
+     "WTA/WTP-Thaler": 0.034043968706346385,
+     "absolute vs. relative savings": 0.011652449391911707,
+     "anchoring and adjustment": 0.004223717818249582,
+     "base rate": -0.00132528135027438,
+     "conjunction problem (Linda)": 0.015889314086456843,
+     "denominator neglect": -0.013572795460936931,
+     "false consensus": 0.2025277506231562,
+     "framing problem": -0.023164882178829945,
+     "less is more": 0.03483832773771792,
+     "myside": 0.061805485043221656,
+     "non-separability of risks and benefits": 0.006335828975369482,
+     "omission": 0.08957830066176337,
+     "outcome bias": 0.02122048027720925,
+     "pricing": 0.25014054753140136,
+     "prob matching vs. max": 0.0076279604186273355,
+     "sunk cost fallacy": -0.02297722459103066
+    },
+    "normalised": 0.8382384898465878
+   },
+   "choices": {
+    "accuracy": 0.7592643501845182,
+    "r": 0.029435491592093212,
+    "task_accuracy": {
+     "Allais": 0.6277939747327502,
+     "WTA/WTP-Thaler": 0.8330093942338841,
+     "absolute vs. relative savings": 0.718172983479106,
+     "anchoring and adjustment": 0.780315300723464,
+     "base rate": 0.8318415937803693,
+     "conjunction problem (Linda)": 0.830191124068675,
+     "denominator neglect": 0.6185617103984451,
+     "false consensus": 0.7917453838678328,
+     "framing problem": 0.8137998056365403,
+     "less is more": 0.760584710074506,
+     "myside": 0.8006802721088435,
+     "non-separability of risks and benefits": 0.8211856171039844,
+     "omission": 0.7238419177194688,
+     "outcome bias": 0.8544703595724004,
+     "pricing": 0.5644193391642371,
+     "prob matching vs. max": 0.7634134498664724,
+     "sunk cost fallacy": 0.7759475218658892
+    },
+    "task_r": {
+     "Allais": 0.047286459369346265,
+     "WTA/WTP-Thaler": 0.017313118718395484,
+     "absolute vs. relative savings": 0.024357147126745197,
+     "anchoring and adjustment": -0.012863965661606143,
+     "base rate": 0.014686787764099311,
+     "conjunction problem (Linda)": 0.033455161656632676,
+     "denominator neglect": 0.0679467961498037,
+     "false consensus": 0.05910822505213904,
+     "framing problem": 0.008373565153313915,
+     "less is more": 0.029174338182883945,
+     "myside": -0.04323018373572714,
+     "non-separability of risks and benefits": 0.03170770486300958,
+     "omission": 0.04230566050000706,
+     "outcome bias": 0.05221017090130638,
+     "pricing": 0.05141034325134923,
+     "prob matching vs. max": 0.00030597882514604,
+     "sunk cost fallacy": 0.07685604894874004
+    },
+    "r_score": 0.06344523798369353,
+    "task_r_score": {
+     "Allais": 0.16602667323037879,
+     "WTA/WTP-Thaler": 0.020475674997242652,
+     "absolute vs. relative savings": -0.005905196638022352,
+     "anchoring and adjustment": -0.014085619957726399,
+     "base rate": 0.01608005681292372,
+     "conjunction problem (Linda)": 0.03702165499682447,
+     "denominator neglect": 0.17871963508652752,
+     "false consensus": 0.08080165312104214,
+     "framing problem": 0.07012672830332746,
+     "less is more": 0.04235083713670895,
+     "myside": -0.007946083469306711,
+     "non-separability of risks and benefits": 0.06139921723138066,
+     "omission": 0.029063795151236655,
+     "outcome bias": 0.08046674797039159,
+     "pricing": 0.09050918540600703,
+     "prob matching vs. max": 0.14014342807796493,
+     "sunk cost fallacy": 0.09332065826588895
+    },
+    "normalised": 0.9289720889067473
+   },
+   "deeds": {
+    "accuracy": 0.7622891283497527,
+    "r": 0.07436819835396392,
+    "task_accuracy": {
+     "Allais": 0.629251700680272,
+     "WTA/WTP-Thaler": 0.8344131303314977,
+     "absolute vs. relative savings": 0.717687074829932,
+     "anchoring and adjustment": 0.7922200626282259,
+     "base rate": 0.8322886297376093,
+     "conjunction problem (Linda)": 0.8297052154195012,
+     "denominator neglect": 0.6384839650145773,
+     "false consensus": 0.7924455782312925,
+     "framing problem": 0.8139941690962099,
+     "less is more": 0.7610544217687075,
+     "myside": 0.8030126336248785,
+     "non-separability of risks and benefits": 0.8229470359572401,
+     "omission": 0.7267573696145124,
+     "outcome bias": 0.8529316488500163,
+     "pricing": 0.5689868804664723,
+     "prob matching vs. max": 0.7649915027919398,
+     "sunk cost fallacy": 0.7803449951409135
+    },
+    "task_r": {
+     "Allais": 0.06487052646979125,
+     "WTA/WTP-Thaler": 0.06397995609100232,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": 0.16679461205197382,
+     "base rate": 0.08401778735972937,
+     "conjunction problem (Linda)": 0.03497240283288446,
+     "denominator neglect": 0.15933453677504367,
+     "false consensus": 0.08877556413391038,
+     "framing problem": 0.044686985609010646,
+     "less is more": 0.046563796789147065,
+     "myside": 0.013746988013361244,
+     "non-separability of risks and benefits": 0.07615737078184341,
+     "omission": 0.07511280974430673,
+     "outcome bias": 0.0637900660654328,
+     "pricing": 0.07090412499817066,
+     "prob matching vs. max": 0.0362721641830428,
+     "sunk cost fallacy": 0.17427968011873596
+    },
+    "r_score": 0.124937957544767,
+    "task_r_score": {
+     "Allais": 0.1917821503987372,
+     "WTA/WTP-Thaler": 0.09377624577379316,
+     "absolute vs. relative savings": 0.0366702189884116,
+     "anchoring and adjustment": 0.18402072984671636,
+     "base rate": 0.08578472893514538,
+     "conjunction problem (Linda)": 0.0848071289373581,
+     "denominator neglect": 0.2734628548117187,
+     "false consensus": 0.11655846942420427,
+     "framing problem": 0.08721578799299323,
+     "less is more": 0.06495597022778214,
+     "myside": 0.04849209956534259,
+     "non-separability of risks and benefits": 0.13050614024584717,
+     "omission": 0.09954887250255745,
+     "outcome bias": 0.14135050481318115,
+     "pricing": 0.11000534725359094,
+     "prob matching vs. max": 0.20567188147959894,
+     "sunk cost fallacy": 0.16933614706406044
+    },
+    "normalised": 0.9326729534211349
+   },
+   "echo": {
+    "accuracy": 0.8218490586710875,
+    "r": 0.4474426363420503,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.8835978835978836,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8422686534931433,
+     "base rate": 0.8479494655004859,
+     "conjunction problem (Linda)": 0.8496598639455782,
+     "denominator neglect": 0.7191448007774539,
+     "false consensus": 0.8646389698736637,
+     "framing problem": 0.8193391642371235,
+     "less is more": 0.8215824425008098,
+     "myside": 0.8421768707482993,
+     "non-separability of risks and benefits": 0.8639354551344347,
+     "omission": 0.8049886621315192,
+     "outcome bias": 0.8668610301263362,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.7761592619567856,
+     "sunk cost fallacy": 0.7965014577259475
+    },
+    "task_r": {
+     "Allais": 0.4455106065622185,
+     "WTA/WTP-Thaler": 0.6235166877764584,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5632941425818649,
+     "base rate": 0.3092802505308946,
+     "conjunction problem (Linda)": 0.3251849891129616,
+     "denominator neglect": 0.39420156520758703,
+     "false consensus": 0.6326011949609205,
+     "framing problem": 0.22015051689204582,
+     "less is more": 0.5503527110484416,
+     "myside": 0.5412226257818737,
+     "non-separability of risks and benefits": 0.5217841329384337,
+     "omission": 0.5363155163475287,
+     "outcome bias": 0.3405860869197571,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.0671181836908124,
+     "sunk cost fallacy": 0.3641408163952523
+    },
+    "r_score": 0.4872960502933936,
+    "task_r_score": {
+     "Allais": 0.441812837160357,
+     "WTA/WTP-Thaler": 0.6396949510333069,
+     "absolute vs. relative savings": 0.496797657299937,
+     "anchoring and adjustment": 0.571561588054068,
+     "base rate": 0.3106609821629977,
+     "conjunction problem (Linda)": 0.3767781037333923,
+     "denominator neglect": 0.42909488738494006,
+     "false consensus": 0.647492480130602,
+     "framing problem": 0.32806775148349565,
+     "less is more": 0.5844720975457108,
+     "myside": 0.5885943700358223,
+     "non-separability of risks and benefits": 0.5625759518057203,
+     "omission": 0.6008152566942431,
+     "outcome bias": 0.42880481400620646,
+     "pricing": 0.6734643723080895,
+     "prob matching vs. max": 0.23033640609613698,
+     "sunk cost fallacy": 0.37300834805266436
+    },
+    "normalised": 1.005545481773486
+   },
+   "echo_persona": {
+    "accuracy": 0.823106501330691,
+    "r": 0.45804674751119334,
+    "task_accuracy": {
+     "Allais": 0.7376093294460642,
+     "WTA/WTP-Thaler": 0.8844077313465069,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8432674657164453,
+     "base rate": 0.8494363459669583,
+     "conjunction problem (Linda)": 0.8501781665046971,
+     "denominator neglect": 0.7220602526724975,
+     "false consensus": 0.8644659863945579,
+     "framing problem": 0.8258503401360544,
+     "less is more": 0.8211289277615809,
+     "myside": 0.8476190476190476,
+     "non-separability of risks and benefits": 0.8636925008098477,
+     "omission": 0.8033689666342727,
+     "outcome bias": 0.872772918691286,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.7741563486283078,
+     "sunk cost fallacy": 0.8008746355685131
+    },
+    "task_r": {
+     "Allais": 0.4377418510437848,
+     "WTA/WTP-Thaler": 0.627150162300891,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5687838786159994,
+     "base rate": 0.3189205602748572,
+     "conjunction problem (Linda)": 0.3338387916078163,
+     "denominator neglect": 0.39928639308301334,
+     "false consensus": 0.6316308052947429,
+     "framing problem": 0.2718788534431622,
+     "less is more": 0.5466413633887921,
+     "myside": 0.5645606657996316,
+     "non-separability of risks and benefits": 0.5203063956861247,
+     "omission": 0.5333615957232722,
+     "outcome bias": 0.36884266538723837,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.10428276871619079,
+     "sunk cost fallacy": 0.3883031662569679
+    },
+    "r_score": 0.4952995070510532,
+    "task_r_score": {
+     "Allais": 0.45205080362414884,
+     "WTA/WTP-Thaler": 0.6380779583638817,
+     "absolute vs. relative savings": 0.49759590252661456,
+     "anchoring and adjustment": 0.5784765619632782,
+     "base rate": 0.317327737085693,
+     "conjunction problem (Linda)": 0.3829592802238349,
+     "denominator neglect": 0.4316771667875469,
+     "false consensus": 0.6464445619151368,
+     "framing problem": 0.34190359752104166,
+     "less is more": 0.5820267807000814,
+     "myside": 0.6074874454587115,
+     "non-separability of risks and benefits": 0.5610770271972323,
+     "omission": 0.5924506763510219,
+     "outcome bias": 0.4408157839375641,
+     "pricing": 0.67335753225548,
+     "prob matching vs. max": 0.28524697555360856,
+     "sunk cost fallacy": 0.39111582840302717
+    },
+    "normalised": 1.0070839830002172
+   },
+   "echo_transition": {
+    "accuracy": 0.8274725668044995,
+    "r": 0.4537334968749831,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.8912644422848505,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8527696793002916,
+     "base rate": 0.8616132167152575,
+     "conjunction problem (Linda)": 0.8495302883057985,
+     "denominator neglect": 0.7215743440233235,
+     "false consensus": 0.8667069970845481,
+     "framing problem": 0.8292517006802721,
+     "less is more": 0.8329122125040492,
+     "myside": 0.8488824101068999,
+     "non-separability of risks and benefits": 0.8696347586653709,
+     "omission": 0.8091998704243603,
+     "outcome bias": 0.8784418529316489,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.7760985676134984,
+     "sunk cost fallacy": 0.806511175898931
+    },
+    "task_r": {
+     "Allais": 0.4455106065622185,
+     "WTA/WTP-Thaler": 0.5744793588180175,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.557297326612698,
+     "base rate": 0.2876793822353024,
+     "conjunction problem (Linda)": 0.32836571503105855,
+     "denominator neglect": 0.4029719593959553,
+     "false consensus": 0.6246215357146314,
+     "framing problem": 0.3102306731955816,
+     "less is more": 0.5765538082799454,
+     "myside": 0.5602396839769616,
+     "non-separability of risks and benefits": 0.5340262097200252,
+     "omission": 0.5577756146827592,
+     "outcome bias": 0.35122440009130873,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.06470899471477286,
+     "sunk cost fallacy": 0.3665193867756736
+    },
+    "r_score": 0.47526394480330036,
+    "task_r_score": {
+     "Allais": 0.44167407503662875,
+     "WTA/WTP-Thaler": 0.5790598114841076,
+     "absolute vs. relative savings": 0.4966096654594301,
+     "anchoring and adjustment": 0.5701649743747023,
+     "base rate": 0.3009038051528582,
+     "conjunction problem (Linda)": 0.36464704473093484,
+     "denominator neglect": 0.3982933848756302,
+     "false consensus": 0.6277542408257911,
+     "framing problem": 0.32167780470274454,
+     "less is more": 0.5817646922061852,
+     "myside": 0.5821260066279085,
+     "non-separability of risks and benefits": 0.5547015123254183,
+     "omission": 0.5778672489554342,
+     "outcome bias": 0.4063542785476182,
+     "pricing": 0.6717347724289552,
+     "prob matching vs. max": 0.2273545498180669,
+     "sunk cost fallacy": 0.37679919410369156
+    },
+    "normalised": 1.0124259340117745
+   },
+   "facts": {
+    "accuracy": 0.7633922441992671,
+    "r": 0.07858759653130964,
+    "task_accuracy": {
+     "Allais": 0.6273080660835764,
+     "WTA/WTP-Thaler": 0.8300399524889321,
+     "absolute vs. relative savings": 0.717201166180758,
+     "anchoring and adjustment": 0.7832037576935537,
+     "base rate": 0.8321282798833819,
+     "conjunction problem (Linda)": 0.8303530936183997,
+     "denominator neglect": 0.6190476190476191,
+     "false consensus": 0.8109586977648202,
+     "framing problem": 0.8137026239067056,
+     "less is more": 0.7618075801749271,
+     "myside": 0.8078717201166181,
+     "non-separability of risks and benefits": 0.8248198088759313,
+     "omission": 0.7599611273080661,
+     "outcome bias": 0.8545513443472628,
+     "pricing": 0.565524781341108,
+     "prob matching vs. max": 0.7649915027919398,
+     "sunk cost fallacy": 0.7764091350826045
+    },
+    "task_r": {
+     "Allais": -0.008648718961568243,
+     "WTA/WTP-Thaler": 0.04076361031581641,
+     "absolute vs. relative savings": 0.009667699522831818,
+     "anchoring and adjustment": 0.02395958599390436,
+     "base rate": 0.09277459981382294,
+     "conjunction problem (Linda)": 0.06017154754659667,
+     "denominator neglect": 0.04669125896491891,
+     "false consensus": 0.2904946498298162,
+     "framing problem": 0.0,
+     "less is more": 0.079685363912629,
+     "myside": 0.17207605438868948,
+     "non-separability of risks and benefits": 0.12282601649954336,
+     "omission": 0.289996554126447,
+     "outcome bias": 0.0189983903271184,
+     "pricing": 0.053928037024209216,
+     "prob matching vs. max": -2.0492024866917112e-05,
+     "sunk cost fallacy": 0.04262498375235534
+    },
+    "r_score": 0.11859435172619998,
+    "task_r_score": {
+     "Allais": 0.09381910742510566,
+     "WTA/WTP-Thaler": 0.09203054748749212,
+     "absolute vs. relative savings": 0.11413236969183124,
+     "anchoring and adjustment": 0.019814476576156394,
+     "base rate": 0.09689844462514718,
+     "conjunction problem (Linda)": 0.05950967947167483,
+     "denominator neglect": 0.1392979342132654,
+     "false consensus": 0.31893008813550894,
+     "framing problem": -0.0945111130192206,
+     "less is more": 0.14789461599925052,
+     "myside": 0.21568205533896734,
+     "non-separability of risks and benefits": 0.16987408043533359,
+     "omission": 0.32572064211486934,
+     "outcome bias": 0.09415995740470293,
+     "pricing": 0.0877514758670904,
+     "prob matching vs. max": 0.06075713737342886,
+     "sunk cost fallacy": 0.07434248020479546
+    },
+    "normalised": 0.9340226333248212
+   },
+   "persona+others": {
+    "accuracy": 0.7592663509848384,
+    "r": 0.15097313925357453,
+    "task_accuracy": {
+     "Allais": 0.6277939747327502,
+     "WTA/WTP-Thaler": 0.7532123960695389,
+     "absolute vs. relative savings": 0.717201166180758,
+     "anchoring and adjustment": 0.7931378900766656,
+     "base rate": 0.8333965014577259,
+     "conjunction problem (Linda)": 0.8335924846128928,
+     "denominator neglect": 0.6370262390670554,
+     "false consensus": 0.8177937317784256,
+     "framing problem": 0.8145772594752186,
+     "less is more": 0.6848396501457725,
+     "myside": 0.8181729834791059,
+     "non-separability of risks and benefits": 0.8307519436345967,
+     "omission": 0.767897635244574,
+     "outcome bias": 0.8539034661483641,
+     "pricing": 0.5814139941690962,
+     "prob matching vs. max": 0.765052197135227,
+     "sunk cost fallacy": 0.7804421768707483
+    },
+    "task_r": {
+     "Allais": 0.0755980604763958,
+     "WTA/WTP-Thaler": 0.10728432657186031,
+     "absolute vs. relative savings": -0.009559496913051326,
+     "anchoring and adjustment": 0.17221281501073482,
+     "base rate": 0.11543231555750778,
+     "conjunction problem (Linda)": 0.10069139748246608,
+     "denominator neglect": 0.15170425442066715,
+     "false consensus": 0.3706528977051693,
+     "framing problem": 0.04577406674482381,
+     "less is more": 0.1299683889678343,
+     "myside": 0.3134411299538764,
+     "non-separability of risks and benefits": 0.20586910388177804,
+     "omission": 0.33286283746069,
+     "outcome bias": 0.1253144581369821,
+     "pricing": 0.11275547807430952,
+     "prob matching vs. max": 0.040443755531241965,
+     "sunk cost fallacy": 0.17609757824748035
+    },
+    "r_score": 0.20774301740307627,
+    "task_r_score": {
+     "Allais": 0.20313193658046666,
+     "WTA/WTP-Thaler": 0.10851548813167793,
+     "absolute vs. relative savings": 0.10680852271579197,
+     "anchoring and adjustment": 0.1891007709359066,
+     "base rate": 0.12113387343352369,
+     "conjunction problem (Linda)": 0.13135934603863816,
+     "denominator neglect": 0.26589369567475,
+     "false consensus": 0.39824133988921717,
+     "framing problem": 0.12333033170905998,
+     "less is more": 0.1307849870446497,
+     "myside": 0.367392143689263,
+     "non-separability of risks and benefits": 0.2605035685554379,
+     "omission": 0.3935664523261816,
+     "outcome bias": 0.1905728325132351,
+     "pricing": 0.15097186714189093,
+     "prob matching vs. max": 0.20461731675797673,
+     "sunk cost fallacy": 0.18570682271462924
+    },
+    "normalised": 0.9289745369179735
+   },
+   "persona": {
+    "accuracy": 0.7571540298659146,
+    "r": 0.13710381970022706,
+    "task_accuracy": {
+     "Allais": 0.6331389698736638,
+     "WTA/WTP-Thaler": 0.7366915019976245,
+     "absolute vs. relative savings": 0.717687074829932,
+     "anchoring and adjustment": 0.7941097073750135,
+     "base rate": 0.8335471331389699,
+     "conjunction problem (Linda)": 0.832555879494655,
+     "denominator neglect": 0.6345966958211856,
+     "false consensus": 0.8162230320699708,
+     "framing problem": 0.8140913508260447,
+     "less is more": 0.6788548752834467,
+     "myside": 0.8127308066083576,
+     "non-separability of risks and benefits": 0.8294865565273729,
+     "omission": 0.7591512795594428,
+     "outcome bias": 0.8539034661483641,
+     "pricing": 0.5814018464528669,
+     "prob matching vs. max": 0.7652342801650887,
+     "sunk cost fallacy": 0.7808309037900875
+    },
+    "task_r": {
+     "Allais": 0.10070899120350262,
+     "WTA/WTP-Thaler": 0.06888341353722495,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": 0.188274810592681,
+     "base rate": 0.1085195427858078,
+     "conjunction problem (Linda)": 0.08388133810109193,
+     "denominator neglect": 0.15107928554383016,
+     "false consensus": 0.3582940612761774,
+     "framing problem": 0.04549790464357839,
+     "less is more": 0.08479713435194196,
+     "myside": 0.23453500188500648,
+     "non-separability of risks and benefits": 0.1859324361060164,
+     "omission": 0.27601932612172336,
+     "outcome bias": 0.13147581070925668,
+     "pricing": 0.11289872730980374,
+     "prob matching vs. max": 0.04040483845762393,
+     "sunk cost fallacy": 0.159562312278593
+    },
+    "r_score": 0.19374881198674487,
+    "task_r_score": {
+     "Allais": 0.21074412744695029,
+     "WTA/WTP-Thaler": 0.059835881419379205,
+     "absolute vs. relative savings": 0.11383834156364939,
+     "anchoring and adjustment": 0.19836866899590158,
+     "base rate": 0.11206858690294384,
+     "conjunction problem (Linda)": 0.12542351044865072,
+     "denominator neglect": 0.2738186200718208,
+     "false consensus": 0.38816276872921895,
+     "framing problem": 0.13194437794012645,
+     "less is more": 0.07348557571153257,
+     "myside": 0.30471216449559285,
+     "non-separability of risks and benefits": 0.2478240372689918,
+     "omission": 0.3351245167848524,
+     "outcome bias": 0.19541492797583182,
+     "pricing": 0.1490834973890322,
+     "prob matching vs. max": 0.2039309185859041,
+     "sunk cost fallacy": 0.169949282044284
+    },
+    "normalised": 0.926390078208946
+   },
+   "self": {
+    "accuracy": 0.7655545424519015,
+    "r": 0.10978570631338204,
+    "task_accuracy": {
+     "Allais": 0.6268221574344024,
+     "WTA/WTP-Thaler": 0.8341431810819566,
+     "absolute vs. relative savings": 0.717687074829932,
+     "anchoring and adjustment": 0.7839596155922687,
+     "base rate": 0.8330758017492711,
+     "conjunction problem (Linda)": 0.8307094266277939,
+     "denominator neglect": 0.6229348882410106,
+     "false consensus": 0.8129125364431486,
+     "framing problem": 0.8139941690962099,
+     "less is more": 0.7695578231292517,
+     "myside": 0.8107871720116618,
+     "non-separability of risks and benefits": 0.8284742468415938,
+     "omission": 0.7525105280207322,
+     "outcome bias": 0.8544703595724004,
+     "pricing": 0.5802356656948493,
+     "prob matching vs. max": 0.7659019179412478,
+     "sunk cost fallacy": 0.7783527696793003
+    },
+    "task_r": {
+     "Allais": 0.029023089652908014,
+     "WTA/WTP-Thaler": 0.12604920576644343,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": 0.05045333745049786,
+     "base rate": 0.05457666524175918,
+     "conjunction problem (Linda)": 0.061061947242193854,
+     "denominator neglect": 0.07670819230961078,
+     "false consensus": 0.33571145094347876,
+     "framing problem": 0.01067339099840486,
+     "less is more": 0.1847464202395882,
+     "myside": 0.20966320509111513,
+     "non-separability of risks and benefits": 0.17036983293528696,
+     "omission": 0.24780450086062356,
+     "outcome bias": 0.09511474438720839,
+     "pricing": 0.10923619788993318,
+     "prob matching vs. max": 0.020504088038617908,
+     "sunk cost fallacy": 0.08466073827982454
+    },
+    "r_score": 0.16251537205733083,
+    "task_r_score": {
+     "Allais": 0.11598874320421862,
+     "WTA/WTP-Thaler": 0.16082490493811372,
+     "absolute vs. relative savings": 0.07854618343686662,
+     "anchoring and adjustment": 0.06508600189061817,
+     "base rate": 0.03997410412704951,
+     "conjunction problem (Linda)": 0.09511378889718836,
+     "denominator neglect": 0.1746591481680486,
+     "false consensus": 0.36641458153965034,
+     "framing problem": 0.09070473654735953,
+     "less is more": 0.2548489618780343,
+     "myside": 0.2987519863457913,
+     "non-separability of risks and benefits": 0.23615373663095401,
+     "omission": 0.30316453924578707,
+     "outcome bias": 0.1484906669939548,
+     "pricing": 0.13705687204106676,
+     "prob matching vs. max": 0.11799343616460352,
+     "sunk cost fallacy": 0.07898893292531876
+    },
+    "normalised": 0.9366682398571192
+   },
+   "tests": {
+    "accuracy": 0.7621072492489058,
+    "r": 0.06458169300778095,
+    "task_accuracy": {
+     "Allais": 0.6277939747327502,
+     "WTA/WTP-Thaler": 0.8328474246841594,
+     "absolute vs. relative savings": 0.717201166180758,
+     "anchoring and adjustment": 0.7929489256019868,
+     "base rate": 0.8324635568513119,
+     "conjunction problem (Linda)": 0.8287333981211532,
+     "denominator neglect": 0.640913508260447,
+     "false consensus": 0.7920867346938776,
+     "framing problem": 0.8133138969873663,
+     "less is more": 0.7602121801101392,
+     "myside": 0.8027210884353742,
+     "non-separability of risks and benefits": 0.8230583900226758,
+     "omission": 0.7298347910592808,
+     "outcome bias": 0.8547942986718498,
+     "pricing": 0.5642371234207969,
+     "prob matching vs. max": 0.7651128914785141,
+     "sunk cost fallacy": 0.779980563654033
+    },
+    "task_r": {
+     "Allais": -0.007231036858306503,
+     "WTA/WTP-Thaler": 0.054893901369832715,
+     "absolute vs. relative savings": -0.010003828284198907,
+     "anchoring and adjustment": 0.17037106143840272,
+     "base rate": 0.10974463307329657,
+     "conjunction problem (Linda)": 0.03416756530986464,
+     "denominator neglect": 0.168886630023385,
+     "false consensus": 0.07475033995579985,
+     "framing problem": 0.00024281173524362185,
+     "less is more": 0.005364016697317721,
+     "myside": -0.001807316436273502,
+     "non-separability of risks and benefits": 0.08220410650996895,
+     "omission": 0.0806773731555763,
+     "outcome bias": 0.10366987357072954,
+     "pricing": 0.04744422606832489,
+     "prob matching vs. max": 0.03263234482592798,
+     "sunk cost fallacy": 0.15188207897738462
+    },
+    "r_score": 0.10617824449828155,
+    "task_r_score": {
+     "Allais": 0.09423915103045859,
+     "WTA/WTP-Thaler": 0.09408723129643572,
+     "absolute vs. relative savings": 0.05645125694778572,
+     "anchoring and adjustment": 0.18206271912160113,
+     "base rate": 0.10762674848765276,
+     "conjunction problem (Linda)": 0.06469197885945034,
+     "denominator neglect": 0.2713285172933925,
+     "false consensus": 0.09240218529189667,
+     "framing problem": 0.03290641050423042,
+     "less is more": 0.00045882235909087195,
+     "myside": 0.016118197369971082,
+     "non-separability of risks and benefits": 0.12192316678722433,
+     "omission": 0.09673550043265841,
+     "outcome bias": 0.13222333844536285,
+     "pricing": 0.08114223751433866,
+     "prob matching vs. max": 0.19051331114685485,
+     "sunk cost fallacy": 0.17011938358238138
+    },
+    "normalised": 0.9324504214292124
+   },
+   "words": {
+    "accuracy": 0.7661841307951751,
+    "r": 0.12194870982170691,
+    "task_accuracy": {
+     "Allais": 0.6234207968901846,
+     "WTA/WTP-Thaler": 0.8339272216823237,
+     "absolute vs. relative savings": 0.717687074829932,
+     "anchoring and adjustment": 0.784796458265846,
+     "base rate": 0.8331049562682216,
+     "conjunction problem (Linda)": 0.8319403952057014,
+     "denominator neglect": 0.6166180758017492,
+     "false consensus": 0.8187866861030126,
+     "framing problem": 0.8145772594752186,
+     "less is more": 0.7708697764820214,
+     "myside": 0.8137998056365403,
+     "non-separability of risks and benefits": 0.8302356656948493,
+     "omission": 0.7575315840621963,
+     "outcome bias": 0.854875283446712,
+     "pricing": 0.5818027210884353,
+     "prob matching vs. max": 0.7655377518815246,
+     "sunk cost fallacy": 0.7778425655976676
+    },
+    "task_r": {
+     "Allais": 0.023588407471618986,
+     "WTA/WTP-Thaler": 0.13850686578648952,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": 0.05293665636811677,
+     "base rate": 0.06229257805876774,
+     "conjunction problem (Linda)": 0.0808110805635573,
+     "denominator neglect": 0.05867979770802744,
+     "false consensus": 0.3758438673651364,
+     "framing problem": 0.03140428640525684,
+     "less is more": 0.20156486358187692,
+     "myside": 0.2444125812160905,
+     "non-separability of risks and benefits": 0.1938597827439276,
+     "omission": 0.2730412202190438,
+     "outcome bias": 0.12109260719936821,
+     "pricing": 0.11370609665389875,
+     "prob matching vs. max": 0.017778224544914657,
+     "sunk cost fallacy": 0.08360915108292578
+    },
+    "r_score": 0.17973017033102184,
+    "task_r_score": {
+     "Allais": 0.1366255764453206,
+     "WTA/WTP-Thaler": 0.17581958888910398,
+     "absolute vs. relative savings": 0.10331541081821646,
+     "anchoring and adjustment": 0.07385624398516817,
+     "base rate": 0.0646828583794386,
+     "conjunction problem (Linda)": 0.10308723386902367,
+     "denominator neglect": 0.17493160074368508,
+     "false consensus": 0.40091102459270056,
+     "framing problem": 0.0930365547827874,
+     "less is more": 0.26898137023195323,
+     "myside": 0.3175233501189852,
+     "non-separability of risks and benefits": 0.25342410417354955,
+     "omission": 0.352041892330005,
+     "outcome bias": 0.16848841708398993,
+     "pricing": 0.14350997477431424,
+     "prob matching vs. max": 0.12725933986629426,
+     "sunk cost fallacy": 0.09791835454283568
+    },
+    "normalised": 0.9374385512753494
+   },
+   "echo_llm": {
+    "accuracy": 0.8225370354491003,
+    "r": 0.4509203527163521,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.8854875283446711,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8416207752942446,
+     "base rate": 0.8476433430515063,
+     "conjunction problem (Linda)": 0.8496598639455782,
+     "denominator neglect": 0.7215743440233235,
+     "false consensus": 0.8634941690962099,
+     "framing problem": 0.8209912536443149,
+     "less is more": 0.8229510851959831,
+     "myside": 0.8456754130223518,
+     "non-separability of risks and benefits": 0.8623157596371882,
+     "omission": 0.8035309361839974,
+     "outcome bias": 0.872772918691286,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.775977178926924,
+     "sunk cost fallacy": 0.7967687074829932
+    },
+    "task_r": {
+     "Allais": 0.4455106065622185,
+     "WTA/WTP-Thaler": 0.6331847851520435,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.561088577192422,
+     "base rate": 0.3112258300914388,
+     "conjunction problem (Linda)": 0.3262754833602313,
+     "denominator neglect": 0.4029719593959553,
+     "false consensus": 0.6249688824583879,
+     "framing problem": 0.23058107282924473,
+     "less is more": 0.5564565866089152,
+     "myside": 0.5540095484338216,
+     "non-separability of risks and benefits": 0.5152684733512475,
+     "omission": 0.52500994905675,
+     "outcome bias": 0.36594615367632777,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.07649862696627367,
+     "sunk cost fallacy": 0.36538466997490504
+    },
+    "r_score": 0.48547160634964176,
+    "task_r_score": {
+     "Allais": 0.4419763477975034,
+     "WTA/WTP-Thaler": 0.6386323489021049,
+     "absolute vs. relative savings": 0.4966739001072851,
+     "anchoring and adjustment": 0.5706487986185477,
+     "base rate": 0.31087553462184064,
+     "conjunction problem (Linda)": 0.37777291973853955,
+     "denominator neglect": 0.3984300672765255,
+     "false consensus": 0.6396347382121506,
+     "framing problem": 0.32495224112422855,
+     "less is more": 0.595005413607712,
+     "myside": 0.5978765490784168,
+     "non-separability of risks and benefits": 0.5533525139823845,
+     "omission": 0.5894873169915124,
+     "outcome bias": 0.42739879361148525,
+     "pricing": 0.6927247453905852,
+     "prob matching vs. max": 0.22620433942556675,
+     "sunk cost fallacy": 0.3713707394575224
+    },
+    "normalised": 1.0063872323764669
+   }
+  },
+  "hypotheses": {
+   "llm_best": "llm:JSON Persona - GPT4.1-mini",
+   "H1": {
+    "delta": -0.02318542496363625,
+    "upper95_one_sided": -0.020859543658733336,
+    "ci95": [
+     -0.026170705702916092,
+     -0.020431111968596965
+    ],
+    "p": 0.0,
+    "holds": true,
+    "p_holm": 0.0
+   },
+   "H2": {
+    "r_persona": 0.13710381970022706,
+    "r_llm_best": 0.043189369495471204,
+    "wins": 14,
+    "of": 17,
+    "p_sign": 0.0063629150390625,
+    "diff_ci95": [
+     0.0812071589613018,
+     0.10678316866834028
+    ],
+    "p_boot": 0.0,
+    "p": 0.0063629150390625,
+    "p_holm": 0.0063629150390625
+   },
+   "H3": {
+    "r_again": 0.4856782377630939,
+    "r_persona_others": 0.15097313925357453,
+    "wins": 17,
+    "of": 17,
+    "p": 7.62939453125e-06,
+    "diff_ci95": [
+     0.32307894638960666,
+     0.3467476355478796
+    ],
+    "holds": true,
+    "p_holm": 1.52587890625e-05
+   },
+   "H4": {
+    "witness": "echo",
+    "acc_echo": 0.8218490586710875,
+    "acc_again": 0.8173166441179647,
+    "normalised": 1.005545481773486,
+    "delta": 0.004532414553122836,
+    "ci95": [
+     0.0031275437555974765,
+     0.006002113662925486
+    ],
+    "p": 0.0,
+    "p_holm": 0.0
+   },
+   "H5": {
+    "r_words": 0.12194870982170691,
+    "r_deeds": 0.07436819835396392,
+    "diff_ci95": [
+     -0.05869710345922895,
+     -0.0368888609214439
+    ],
+    "r_score_words": 0.17973017033102184,
+    "r_score_deeds": 0.124937957544767
+   }
+  },
+  "H6": {
+   "columns": 122,
+   "corr_pred_obs_columns": 0.9985899054390873,
+   "mad_columns": 0.008892988140178215,
+   "corr_pred_obs_tasks": 0.9983116297615994,
+   "mean_pred_r2": 0.3368674808458016,
+   "mean_obs_r2": 0.3286756168383621,
+   "by_task": {
+    "Allais": {
+     "rho": 0.4455,
+     "pi": 0.0421,
+     "pred_r2": 0.2136,
+     "obs_r2": 0.1976
+    },
+    "WTA/WTP-Thaler": {
+     "rho": 0.6445,
+     "pi": 0.012,
+     "pred_r2": 0.419,
+     "obs_r2": 0.4114
+    },
+    "absolute vs. relative savings": {
+     "rho": 0.4987,
+     "pi": 0.0116,
+     "pred_r2": 0.2519,
+     "obs_r2": 0.247
+    },
+    "anchoring and adjustment": {
+     "rho": 0.5745,
+     "pi": 0.0531,
+     "pred_r2": 0.3422,
+     "obs_r2": 0.331
+    },
+    "base rate": {
+     "rho": 0.315,
+     "pi": 0.016,
+     "pred_r2": 0.1146,
+     "obs_r2": 0.1054
+    },
+    "conjunction problem (Linda)": {
+     "rho": 0.3815,
+     "pi": 0.023,
+     "pred_r2": 0.1563,
+     "obs_r2": 0.1449
+    },
+    "denominator neglect": {
+     "rho": 0.403,
+     "pi": 0.0707,
+     "pred_r2": 0.1895,
+     "obs_r2": 0.1841
+    },
+    "false consensus": {
+     "rho": 0.6304,
+     "pi": 0.1864,
+     "pred_r2": 0.4343,
+     "obs_r2": 0.4346
+    },
+    "framing problem": {
+     "rho": 0.3325,
+     "pi": 0.0174,
+     "pred_r2": 0.1185,
+     "obs_r2": 0.1076
+    },
+    "less is more": {
+     "rho": 0.5892,
+     "pi": 0.0208,
+     "pred_r2": 0.3564,
+     "obs_r2": 0.3483
+    },
+    "myside": {
+     "rho": 0.5868,
+     "pi": 0.1385,
+     "pred_r2": 0.372,
+     "obs_r2": 0.3465
+    },
+    "non-separability of risks and benefits": {
+     "rho": 0.5532,
+     "pi": 0.0737,
+     "pred_r2": 0.326,
+     "obs_r2": 0.3226
+    },
+    "omission": {
+     "rho": 0.5775,
+     "pi": 0.1549,
+     "pred_r2": 0.3662,
+     "obs_r2": 0.361
+    },
+    "outcome bias": {
+     "rho": 0.4341,
+     "pi": 0.0366,
+     "pred_r2": 0.2006,
+     "obs_r2": 0.1839
+    },
+    "pricing": {
+     "rho": 0.6726,
+     "pi": 0.0234,
+     "pred_r2": 0.4552,
+     "obs_r2": 0.4538
+    },
+    "prob matching vs. max": {
+     "rho": 0.2387,
+     "pi": 0.0448,
+     "pred_r2": 0.0881,
+     "obs_r2": 0.057
+    },
+    "sunk cost fallacy": {
+     "rho": 0.3788,
+     "pi": 0.0397,
+     "pred_r2": 0.1596,
+     "obs_r2": 0.1392
+    }
+   }
+  },
+  "robustness": {
+   "no_anchoring": {
+    "base": {
+     "accuracy": 0.7598645495896771,
+     "r": -0.0045009263250826576,
+     "normalised": 0.9314722233582472
+    },
+    "again": {
+     "accuracy": 0.8157672666288738,
+     "r": 0.4801283226409686,
+     "normalised": 1.0
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1": {
+     "accuracy": 0.7273746709993522,
+     "r": 0.08794671876504798,
+     "normalised": 0.8916448364068338
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1-mini": {
+     "accuracy": 0.7041857385811467,
+     "r": 0.06125932394334643,
+     "normalised": 0.8632189196450192
+    },
+    "llm:JSON Persona - GPT4.1": {
+     "accuracy": 0.7185987592457618,
+     "r": 0.08585674420320497,
+     "normalised": 0.8808869743147981
+    },
+    "llm:JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.737762496963071,
+     "r": 0.04463083135075713,
+     "normalised": 0.9043786471254792
+    },
+    "llm:LLM Finetuning (500 training samples) - GPT4.1-mini": {
+     "accuracy": 0.7096766733479106,
+     "r": 0.030555845975955103,
+     "normalised": 0.8699499261359451
+    },
+    "llm:Persona Summary - GPT4.1-mini": {
+     "accuracy": 0.6834323996463666,
+     "r": 0.07057934490626212,
+     "normalised": 0.8377786503626509
+    },
+    "llm:Persona Summary - JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.6798635693364646,
+     "r": 0.05066394960664674,
+     "normalised": 0.8334038360548275
+    },
+    "llm:Text Persona (Default Temperature) - GPT4.1-mini": {
+     "accuracy": 0.7216177079958968,
+     "r": 0.07368585624738876,
+     "normalised": 0.8845877219098942
+    },
+    "llm:Text Persona (Reasoning) - GPT4.1-mini": {
+     "accuracy": 0.7144897250566894,
+     "r": 0.07312975806085215,
+     "normalised": 0.8758499565804965
+    },
+    "llm:Text Persona (Repeating Questions) - GPT4.1-mini": {
+     "accuracy": 0.7124091991955512,
+     "r": 0.08169321880430834,
+     "normalised": 0.8732995651315532
+    },
+    "llm:Text Persona - GPT4.1-mini": {
+     "accuracy": 0.7268821317217363,
+     "r": 0.07717618739141228,
+     "normalised": 0.8910410621469873
+    },
+    "llm:Text Persona - Gemini-Flash2.5": {
+     "accuracy": 0.6956618143289062,
+     "r": 0.08128534942024199,
+     "normalised": 0.8527699538665008
+    },
+    "llm_mean": {
+     "accuracy": 0.7306400429219306,
+     "r": 0.08928631823600969,
+     "normalised": 0.8956476593394975
+    },
+    "llm_demographics": {
+     "accuracy": 0.6858723798050967,
+     "r": 0.041523042179343835,
+     "normalised": 0.8407696752033671
+    },
+    "choices": {
+     "accuracy": 0.7579486657758342,
+     "r": 0.03207920767044942,
+     "normalised": 0.9291236566870688
+    },
+    "deeds": {
+     "accuracy": 0.7604184449573479,
+     "r": 0.0685915474978383,
+     "normalised": 0.9321512103565363
+    },
+    "echo": {
+     "accuracy": 0.8205728339947089,
+     "r": 0.4402019172020618,
+     "normalised": 1.005890855838938
+    },
+    "echo_persona": {
+     "accuracy": 0.8218464410565813,
+     "r": 0.451125676817143,
+     "normalised": 1.0074520940915288
+    },
+    "echo_transition": {
+     "accuracy": 0.8258914972735126,
+     "r": 0.44726075751637595,
+     "normalised": 1.012410685079921
+    },
+    "facts": {
+     "accuracy": 0.7621540246058741,
+     "r": 0.08200184718989748,
+     "normalised": 0.9342787530019998
+    },
+    "persona+others": {
+     "accuracy": 0.7571493797915991,
+     "r": 0.14964565951875197,
+     "normalised": 0.9281438600993261
+    },
+    "persona": {
+     "accuracy": 0.754844300021596,
+     "r": 0.13390563276944867,
+     "normalised": 0.925318201526963
+    },
+    "self": {
+     "accuracy": 0.7644042253806285,
+     "r": 0.11349397936731229,
+     "normalised": 0.9370371387166574
+    },
+    "tests": {
+     "accuracy": 0.7601796444768384,
+     "r": 0.057969857480867096,
+     "normalised": 0.9318584792182836
+    },
+    "words": {
+     "accuracy": 0.7650208603282583,
+     "r": 0.12626196316255628,
+     "normalised": 0.9377930343904053
+    },
+    "echo_llm": {
+     "accuracy": 0.8213443017087788,
+     "r": 0.44403483868659777,
+     "normalised": 1.0068365516833642
+    }
+   },
+   "within_only": {
+    "base": {
+     "accuracy": 0.7465581410694789,
+     "r": -0.004283811750567489,
+     "normalised": 0.9097763772464914
+    },
+    "again": {
+     "accuracy": 0.8205952140997493,
+     "r": 0.5211750085403493,
+     "normalised": 1.0
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1": {
+     "accuracy": 0.7220035543317855,
+     "r": 0.12525558164834888,
+     "normalised": 0.8798534794330652
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1-mini": {
+     "accuracy": 0.6976817478314076,
+     "r": 0.0867721419401274,
+     "normalised": 0.8502142540482807
+    },
+    "llm:JSON Persona - GPT4.1": {
+     "accuracy": 0.7189209198670651,
+     "r": 0.12414164940363108,
+     "normalised": 0.8760968959047267
+    },
+    "llm:JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.7263886279379476,
+     "r": 0.06276974120245887,
+     "normalised": 0.8851972512840536
+    },
+    "llm:LLM Finetuning (500 training samples) - GPT4.1-mini": {
+     "accuracy": 0.7116225839542166,
+     "r": 0.046683856922691336,
+     "normalised": 0.8672029421167373
+    },
+    "llm:Persona Summary - GPT4.1-mini": {
+     "accuracy": 0.6866039694537427,
+     "r": 0.10565118313736077,
+     "normalised": 0.8367145672510357
+    },
+    "llm:Persona Summary - JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.6777038626738173,
+     "r": 0.07051027082430582,
+     "normalised": 0.8258686512293472
+    },
+    "llm:Text Persona (Default Temperature) - GPT4.1-mini": {
+     "accuracy": 0.729910082904414,
+     "r": 0.10862518074519306,
+     "normalised": 0.8894885935999233
+    },
+    "llm:Text Persona (Reasoning) - GPT4.1-mini": {
+     "accuracy": 0.7173714681639851,
+     "r": 0.10530968983618991,
+     "normalised": 0.8742086912497925
+    },
+    "llm:Text Persona (Repeating Questions) - GPT4.1-mini": {
+     "accuracy": 0.7145796050342534,
+     "r": 0.11555712001217872,
+     "normalised": 0.8708064497039475
+    },
+    "llm:Text Persona - GPT4.1-mini": {
+     "accuracy": 0.7347065561674406,
+     "r": 0.11559374014082627,
+     "normalised": 0.8953337084392643
+    },
+    "llm:Text Persona - Gemini-Flash2.5": {
+     "accuracy": 0.6940639359800357,
+     "r": 0.10868985823835825,
+     "normalised": 0.8458054885702357
+    },
+    "llm_mean": {
+     "accuracy": 0.7257305906489581,
+     "r": 0.12394909138543492,
+     "normalised": 0.8843953488628806
+    },
+    "llm_demographics": {
+     "accuracy": 0.6898889098849417,
+     "r": 0.06971213369776688,
+     "normalised": 0.840717686419605
+    },
+    "choices": {
+     "accuracy": 0.744941349026383,
+     "r": 0.03696970302215186,
+     "normalised": 0.9078061097926778
+    },
+    "deeds": {
+     "accuracy": 0.7485760297064151,
+     "r": 0.07245252514770573,
+     "normalised": 0.9122354320913943
+    },
+    "echo": {
+     "accuracy": 0.8249185983035189,
+     "r": 0.4804057653899114,
+     "normalised": 1.005268595440826
+    },
+    "echo_persona": {
+     "accuracy": 0.8248705833303339,
+     "r": 0.4854527981363225,
+     "normalised": 1.0052100830679045
+    },
+    "echo_transition": {
+     "accuracy": 0.8286104032441901,
+     "r": 0.4817866781981361,
+     "normalised": 1.0097675309418348
+    },
+    "facts": {
+     "accuracy": 0.7516991175658976,
+     "r": 0.10939294957723444,
+     "normalised": 0.9160413132442704
+    },
+    "persona+others": {
+     "accuracy": 0.7409891720356573,
+     "r": 0.17247027112177965,
+     "normalised": 0.9029898777176937
+    },
+    "persona": {
+     "accuracy": 0.736842121681124,
+     "r": 0.15135450675615933,
+     "normalised": 0.8979361675774475
+    },
+    "self": {
+     "accuracy": 0.7550309001907642,
+     "r": 0.1480213151361974,
+     "normalised": 0.9201015156042388
+    },
+    "tests": {
+     "accuracy": 0.7482895295684412,
+     "r": 0.06455783376844423,
+     "normalised": 0.9118862951075914
+    },
+    "words": {
+     "accuracy": 0.7561140025675173,
+     "r": 0.1615324221296525,
+     "normalised": 0.9214214140854179
+    },
+    "echo_llm": {
+     "accuracy": 0.8250652467336141,
+     "r": 0.48146796153065147,
+     "normalised": 1.0054473052694668
+    }
+   }
+  },
+  "echo_llm_weights": {
+   "Allais": {
+    "b": -0.069,
+    "c": 0.453
+   },
+   "WTA/WTP-Thaler": {
+    "b": 0.11,
+    "c": 0.625
+   },
+   "absolute vs. relative savings": {
+    "b": 0.085,
+    "c": 0.491
+   },
+   "anchoring and adjustment": {
+    "b": 0.103,
+    "c": 0.558
+   },
+   "base rate": {
+    "b": 0.261,
+    "c": 0.299
+   },
+   "conjunction problem (Linda)": {
+    "b": 0.155,
+    "c": 0.353
+   },
+   "denominator neglect": {
+    "b": -0.116,
+    "c": 0.406
+   },
+   "false consensus": {
+    "b": 0.2,
+    "c": 0.573
+   },
+   "framing problem": {
+    "b": -0.016,
+    "c": 0.311
+   },
+   "less is more": {
+    "b": 0.307,
+    "c": 0.568
+   },
+   "myside": {
+    "b": 0.327,
+    "c": 0.528
+   },
+   "non-separability of risks and benefits": {
+    "b": 0.239,
+    "c": 0.536
+   },
+   "omission": {
+    "b": 0.511,
+    "c": 0.524
+   },
+   "outcome bias": {
+    "b": 0.331,
+    "c": 0.403
+   },
+   "pricing": {
+    "b": 0.297,
+    "c": 0.586
+   },
+   "prob matching vs. max": {
+    "b": 0.489,
+    "c": 0.236
+   },
+   "sunk cost fallacy": {
+    "b": 0.049,
+    "c": 0.357
+   }
+  }
+ },
+ "published": {
+  "cells": 193464,
+  "people": 2058,
+  "silent_twin_share": {
+   "Demographics Only - GPT4.1-mini": 0.0,
+   "JSON Persona (Predicted Output) - GPT4.1": 0.008389157672745317,
+   "JSON Persona (Predicted Output) - GPT4.1-mini": 0.11958297150891121,
+   "JSON Persona - GPT4.1": 0.004129967332423603,
+   "JSON Persona - GPT4.1-mini": 0.5149019972708101,
+   "LLM Finetuning (500 training samples) - GPT4.1-mini": 0.24287722780465618,
+   "Persona Summary - GPT4.1-mini": 0.0,
+   "Persona Summary - JSON Persona - GPT4.1-mini": 0.0,
+   "Text Persona (Default Temperature) - GPT4.1-mini": 5.16892031592441e-05,
+   "Text Persona (Reasoning) - GPT4.1-mini": 0.0001033784063184882,
+   "Text Persona (Repeating Questions) - GPT4.1-mini": 5.16892031592441e-05,
+   "Text Persona - GPT4.1-mini": 0.0,
+   "Text Persona - Gemini-Flash2.5": 1.033784063184882e-05
+  },
+  "witnesses": {
+   "base": {
+    "accuracy": 0.7547756642339475,
+    "r": -0.004370656451167036,
+    "task_accuracy": {
+     "Allais": 0.6331389698736638,
+     "WTA/WTP-Thaler": 0.8234531908001296,
+     "absolute vs. relative savings": 0.6967930029154519,
+     "anchoring and adjustment": 0.7803962854983263,
+     "base rate": 0.8224975704567541,
+     "conjunction problem (Linda)": 0.8186588921282798,
+     "denominator neglect": 0.6394557823129252,
+     "false consensus": 0.7884135082604471,
+     "framing problem": 0.7997084548104956,
+     "less is more": 0.7677518626498219,
+     "myside": 0.7871720116618076,
+     "non-separability of risks and benefits": 0.8197177680596048,
+     "omission": 0.7173631357304828,
+     "outcome bias": 0.843699384515711,
+     "pricing": 0.5694727891156462,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.7637269193391643
+    },
+    "task_r": {
+     "Allais": 0.0,
+     "WTA/WTP-Thaler": 0.0,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": -0.009466564924020206,
+     "base rate": 0.0,
+     "conjunction problem (Linda)": 0.0,
+     "denominator neglect": 0.0,
+     "false consensus": -0.013065212071209606,
+     "framing problem": 0.0,
+     "less is more": -0.005411820865223544,
+     "myside": -0.03512956742781542,
+     "non-separability of risks and benefits": 0.0,
+     "omission": 0.0,
+     "outcome bias": -0.011227994381570836,
+     "pricing": 0.0,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.0
+    },
+    "r_score": -0.0857625945358439,
+    "task_r_score": {
+     "Allais": -0.09138104162712979,
+     "WTA/WTP-Thaler": -0.11906454868213677,
+     "absolute vs. relative savings": -0.09156510160384185,
+     "anchoring and adjustment": -0.08516569088346043,
+     "base rate": -0.09521538256207929,
+     "conjunction problem (Linda)": -0.10693091061419557,
+     "denominator neglect": -0.0689849070091765,
+     "false consensus": -0.06087773506604564,
+     "framing problem": -0.09228847236522394,
+     "less is more": -0.10206216191250521,
+     "myside": -0.08039075712790716,
+     "non-separability of risks and benefits": -0.055927849826242805,
+     "omission": -0.0706533612823531,
+     "outcome bias": -0.08750630339387053,
+     "pricing": -0.061321833610651265,
+     "prob matching vs. max": -0.09944095790246082,
+     "sunk cost fallacy": -0.08918709164006536
+    },
+    "normalised": 0.9234801097786153
+   },
+   "again": {
+    "accuracy": 0.8173166441179647,
+    "r": 0.4856782377630939,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.891912320483749,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8421066839434186,
+     "base rate": 0.8345578231292516,
+     "conjunction problem (Linda)": 0.8240686750890832,
+     "denominator neglect": 0.7215743440233235,
+     "false consensus": 0.8607733236151603,
+     "framing problem": 0.8027210884353742,
+     "less is more": 0.8314949789439585,
+     "myside": 0.8456754130223518,
+     "non-separability of risks and benefits": 0.8632065921606737,
+     "omission": 0.8057985098801426,
+     "outcome bias": 0.8634596695821186,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.7441126487011411,
+     "sunk cost fallacy": 0.7884353741496599
+    },
+    "task_r": {
+     "Allais": 0.44551060656221847,
+     "WTA/WTP-Thaler": 0.6445456706092481,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5744768797170974,
+     "base rate": 0.31496738928594364,
+     "conjunction problem (Linda)": 0.38145059287218674,
+     "denominator neglect": 0.40297195939595526,
+     "false consensus": 0.6304316858090722,
+     "framing problem": 0.33252634765963346,
+     "less is more": 0.5892061107191053,
+     "myside": 0.5868488324942138,
+     "non-separability of risks and benefits": 0.5532148199927631,
+     "omission": 0.5775025135694402,
+     "outcome bias": 0.43409335676361727,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.23867481646931404,
+     "sunk cost fallacy": 0.37884366898498373
+    },
+    "normalised": 1.0
+   },
+   "llm:JSON Persona (Predicted Output) - GPT4.1": {
+    "accuracy": 0.7191785190266583,
+    "r": 0.08120323610222949,
+    "task_accuracy": {
+     "Allais": 0.5631681243926142,
+     "WTA/WTP-Thaler": 0.8054745707806932,
+     "absolute vs. relative savings": 0.6817298347910593,
+     "anchoring and adjustment": 0.6680434078393261,
+     "base rate": 0.8119630709426627,
+     "conjunction problem (Linda)": 0.7555555555555555,
+     "denominator neglect": 0.3654033041788144,
+     "false consensus": 0.7870106899902818,
+     "framing problem": 0.7280855199222547,
+     "less is more": 0.7657353417557499,
+     "myside": 0.7949465500485908,
+     "non-separability of risks and benefits": 0.8127024619371559,
+     "omission": 0.6993845157110463,
+     "outcome bias": 0.8367346938775511,
+     "pricing": 0.6981778425655977,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6921525753158406
+    },
+    "task_r": {
+     "Allais": 0.011659500368189846,
+     "WTA/WTP-Thaler": 0.063812661798067,
+     "absolute vs. relative savings": -0.03150105682566517,
+     "anchoring and adjustment": 0.03572906096834103,
+     "base rate": -0.030675130371225698,
+     "conjunction problem (Linda)": 0.016100321207050825,
+     "denominator neglect": -0.00968653761636721,
+     "false consensus": 0.28546832348707063,
+     "framing problem": 0.018545380381367157,
+     "less is more": 0.18024996947330107,
+     "myside": 0.20477865031234915,
+     "non-separability of risks and benefits": 0.024178235929602054,
+     "omission": 0.18433628278452932,
+     "outcome bias": 0.03603308551921441,
+     "pricing": 0.39582324984409095,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.0043969835220140675
+    },
+    "normalised": 0.87992643267749
+   },
+   "llm:JSON Persona (Predicted Output) - GPT4.1-mini": {
+    "accuracy": 0.6990126336248785,
+    "r": 0.05252432985876883,
+    "task_accuracy": {
+     "Allais": 0.564625850340136,
+     "WTA/WTP-Thaler": 0.7602850664075154,
+     "absolute vs. relative savings": 0.5442176870748299,
+     "anchoring and adjustment": 0.6300615484288954,
+     "base rate": 0.8057191448007774,
+     "conjunction problem (Linda)": 0.7708130871396177,
+     "denominator neglect": 0.42759961127308066,
+     "false consensus": 0.755265306122449,
+     "framing problem": 0.7171039844509233,
+     "less is more": 0.7591026886945255,
+     "myside": 0.776287657920311,
+     "non-separability of risks and benefits": 0.8034094590217039,
+     "omission": 0.600907029478458,
+     "outcome bias": 0.8433754454162617,
+     "pricing": 0.6139698736637512,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.7507045675413022
+    },
+    "task_r": {
+     "Allais": 0.011761013634662233,
+     "WTA/WTP-Thaler": 0.056198782309231,
+     "absolute vs. relative savings": 0.020996060982644393,
+     "anchoring and adjustment": -0.01972022022705885,
+     "base rate": -0.00945030073155905,
+     "conjunction problem (Linda)": -0.004069973316808625,
+     "denominator neglect": -0.04198068963664389,
+     "false consensus": 0.23167186539449416,
+     "framing problem": 0.01162590462326902,
+     "less is more": 0.11354958033410815,
+     "myside": 0.08270025395992531,
+     "non-separability of risks and benefits": 0.014490451546278111,
+     "omission": 0.10548700189540156,
+     "outcome bias": 0.016850990474072503,
+     "pricing": 0.26484081531605386,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.03796207104100024
+    },
+    "normalised": 0.8552531490157551
+   },
+   "llm:JSON Persona - GPT4.1": {
+    "accuracy": 0.713183278073134,
+    "r": 0.08571671429432774,
+    "task_accuracy": {
+     "Allais": 0.5947521865889213,
+     "WTA/WTP-Thaler": 0.7940287226001512,
+     "absolute vs. relative savings": 0.641885325558795,
+     "anchoring and adjustment": 0.696577043515819,
+     "base rate": 0.8117881438289601,
+     "conjunction problem (Linda)": 0.7396177518626499,
+     "denominator neglect": 0.40330417881438285,
+     "false consensus": 0.7709808066083577,
+     "framing problem": 0.6702623906705539,
+     "less is more": 0.7291059280855199,
+     "myside": 0.7743440233236152,
+     "non-separability of risks and benefits": 0.7984491415613865,
+     "omission": 0.7290249433106576,
+     "outcome bias": 0.8138969873663751,
+     "pricing": 0.7193634596695822,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6769679300291546
+    },
+    "task_r": {
+     "Allais": 0.022941259779041996,
+     "WTA/WTP-Thaler": 0.05225163515915693,
+     "absolute vs. relative savings": -0.004541416116781715,
+     "anchoring and adjustment": 0.07011797238480258,
+     "base rate": -0.025428583584998783,
+     "conjunction problem (Linda)": 0.01172398508175059,
+     "denominator neglect": -0.02480972252984967,
+     "false consensus": 0.2647233436910749,
+     "framing problem": -0.027922263973383342,
+     "less is more": 0.15914878390988343,
+     "myside": 0.20237285014656464,
+     "non-separability of risks and benefits": 0.042591503871619585,
+     "omission": 0.20216768521452738,
+     "outcome bias": 0.1111056893618759,
+     "pricing": 0.4263831791727988,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.025641758564511376
+    },
+    "normalised": 0.8725911593820412
+   },
+   "llm:JSON Persona - GPT4.1-mini": {
+    "accuracy": 0.7323936654026689,
+    "r": 0.03676206181682369,
+    "task_accuracy": {
+     "Allais": 0.6034985422740524,
+     "WTA/WTP-Thaler": 0.8065003779289494,
+     "absolute vs. relative savings": 0.6588921282798834,
+     "anchoring and adjustment": 0.7275672173631358,
+     "base rate": 0.8163945578231293,
+     "conjunction problem (Linda)": 0.7867184969225786,
+     "denominator neglect": 0.5174927113702623,
+     "false consensus": 0.7787874149659864,
+     "framing problem": 0.7619047619047619,
+     "less is more": 0.7648931000971817,
+     "myside": 0.7860058309037901,
+     "non-separability of risks and benefits": 0.8144132653061225,
+     "omission": 0.6775186264982184,
+     "outcome bias": 0.840217039196631,
+     "pricing": 0.6155733722060253,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.7345481049562683
+    },
+    "task_r": {
+     "Allais": -0.0022931675147122316,
+     "WTA/WTP-Thaler": 0.03172531110015125,
+     "absolute vs. relative savings": -0.0045275005011291974,
+     "anchoring and adjustment": 0.04583286595064663,
+     "base rate": 0.023390340663145895,
+     "conjunction problem (Linda)": 0.0039889815589958045,
+     "denominator neglect": 0.02347101091025975,
+     "false consensus": 0.1602846553572888,
+     "framing problem": -0.014603003461668573,
+     "less is more": 0.09774619055785104,
+     "myside": 0.042459482412043385,
+     "non-separability of risks and benefits": 0.01631492353786808,
+     "omission": 0.05942778166891253,
+     "outcome bias": -0.022573452365586198,
+     "pricing": 0.1921808497126513,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.02787021870071549
+    },
+    "normalised": 0.8960953758540628
+   },
+   "llm:LLM Finetuning (500 training samples) - GPT4.1-mini": {
+    "accuracy": 0.7090960050686941,
+    "r": 0.026447130714688554,
+    "task_accuracy": {
+     "Allais": 0.576287657920311,
+     "WTA/WTP-Thaler": 0.7752942446819998,
+     "absolute vs. relative savings": 0.5208940719144801,
+     "anchoring and adjustment": 0.7681135946442069,
+     "base rate": 0.8061418853255589,
+     "conjunction problem (Linda)": 0.7232264334305151,
+     "denominator neglect": 0.6375121477162293,
+     "false consensus": 0.7671146744412051,
+     "framing problem": 0.7012633624878524,
+     "less is more": 0.7108033689666342,
+     "myside": 0.7580174927113702,
+     "non-separability of risks and benefits": 0.7567925979915776,
+     "omission": 0.7160673793326855,
+     "outcome bias": 0.833495302883058,
+     "pricing": 0.5289723032069971,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.714868804664723
+    },
+    "task_r": {
+     "Allais": -0.004466449246036843,
+     "WTA/WTP-Thaler": 0.031007366705263578,
+     "absolute vs. relative savings": 0.0028559197766633085,
+     "anchoring and adjustment": 0.03474151730216018,
+     "base rate": -0.035252256871408004,
+     "conjunction problem (Linda)": -0.009808398368761049,
+     "denominator neglect": -0.0005862619589644808,
+     "false consensus": 0.09061754637349084,
+     "framing problem": 0.0017646521740204753,
+     "less is more": 0.06295545274527153,
+     "myside": 0.10456662705983694,
+     "non-separability of risks and benefits": -0.00298646589304985,
+     "omission": 0.11445207506112985,
+     "outcome bias": 0.031298729940410316,
+     "pricing": 0.04503659404504916,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.016595426695370518
+    },
+    "normalised": 0.8675903154204566
+   },
+   "llm:Persona Summary - GPT4.1-mini": {
+    "accuracy": 0.6777944717569567,
+    "r": 0.05998844449117995,
+    "task_accuracy": {
+     "Allais": 0.5310981535471331,
+     "WTA/WTP-Thaler": 0.7729726811359464,
+     "absolute vs. relative savings": 0.6132167152575316,
+     "anchoring and adjustment": 0.6290627362055934,
+     "base rate": 0.6422886297376094,
+     "conjunction problem (Linda)": 0.7281179138321996,
+     "denominator neglect": 0.3683187560738581,
+     "false consensus": 0.7095230806608358,
+     "framing problem": 0.7303206997084548,
+     "less is more": 0.704348882410107,
+     "myside": 0.7257531584062196,
+     "non-separability of risks and benefits": 0.7794784580498866,
+     "omission": 0.6784904437965662,
+     "outcome bias": 0.8429705215419501,
+     "pricing": 0.6243197278911565,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6824586977648202
+    },
+    "task_r": {
+     "Allais": 0.027591468510401194,
+     "WTA/WTP-Thaler": 0.10189346636541198,
+     "absolute vs. relative savings": -0.021525913816800697,
+     "anchoring and adjustment": 0.016678618786835943,
+     "base rate": -0.026697867807414795,
+     "conjunction problem (Linda)": 0.0057168120853852014,
+     "denominator neglect": 0.0011847592814571678,
+     "false consensus": 0.24535407538082632,
+     "framing problem": -0.006191098223176927,
+     "less is more": 0.06363264732200224,
+     "myside": 0.1331500729105443,
+     "non-separability of risks and benefits": 0.02542070286267007,
+     "omission": 0.14189941002924875,
+     "outcome bias": 0.03194561603745835,
+     "pricing": 0.2932047238675954,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.013453937242385425
+    },
+    "normalised": 0.829292388249871
+   },
+   "llm:Persona Summary - JSON Persona - GPT4.1-mini": {
+    "accuracy": 0.6743414873886063,
+    "r": 0.040867741436772013,
+    "task_accuracy": {
+     "Allais": 0.5228377065111759,
+     "WTA/WTP-Thaler": 0.74349422308606,
+     "absolute vs. relative savings": 0.554907677356657,
+     "anchoring and adjustment": 0.6282798833819242,
+     "base rate": 0.7058309037900874,
+     "conjunction problem (Linda)": 0.7518302559118886,
+     "denominator neglect": 0.4514091350826045,
+     "false consensus": 0.7067461127308066,
+     "framing problem": 0.721865889212828,
+     "less is more": 0.7320780693229674,
+     "myside": 0.7424684159378037,
+     "non-separability of risks and benefits": 0.7248744735989634,
+     "omission": 0.6559766763848396,
+     "outcome bias": 0.8428895367670878,
+     "pricing": 0.534851797862002,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6836977648202138
+    },
+    "task_r": {
+     "Allais": -0.03781209196611765,
+     "WTA/WTP-Thaler": 0.05088982234851722,
+     "absolute vs. relative savings": -0.020701118640391057,
+     "anchoring and adjustment": 0.01062372860624878,
+     "base rate": -0.017948626707625776,
+     "conjunction problem (Linda)": 0.010434854741467596,
+     "denominator neglect": -0.04170762126561498,
+     "false consensus": 0.2332642277773233,
+     "framing problem": 0.0007832878215014577,
+     "less is more": 0.11386585194843872,
+     "myside": 0.13961377837106786,
+     "non-separability of risks and benefits": 0.025945871161697925,
+     "omission": 0.07392826671496992,
+     "outcome bias": -0.004811335910293734,
+     "pricing": 0.15708705190722858,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.0012956575167060239
+    },
+    "normalised": 0.8250676065900323
+   },
+   "llm:Text Persona (Default Temperature) - GPT4.1-mini": {
+    "accuracy": 0.7122718023717423,
+    "r": 0.05791366045757391,
+    "task_accuracy": {
+     "Allais": 0.5612244897959184,
+     "WTA/WTP-Thaler": 0.7975920526940935,
+     "absolute vs. relative savings": 0.6389698736637512,
+     "anchoring and adjustment": 0.6332199546485261,
+     "base rate": 0.7798785228377065,
+     "conjunction problem (Linda)": 0.7541626174279235,
+     "denominator neglect": 0.5602526724975705,
+     "false consensus": 0.7444416909620991,
+     "framing problem": 0.7004859086491739,
+     "less is more": 0.7546890184645287,
+     "myside": 0.7587949465500485,
+     "non-separability of risks and benefits": 0.7946327340459993,
+     "omission": 0.7006802721088435,
+     "outcome bias": 0.843942338840298,
+     "pricing": 0.6657069970845482,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6601797862001944
+    },
+    "task_r": {
+     "Allais": 0.002272173683864981,
+     "WTA/WTP-Thaler": 0.039753053078844414,
+     "absolute vs. relative savings": 0.033604165254975185,
+     "anchoring and adjustment": 0.011987422745010872,
+     "base rate": -0.04467984591709785,
+     "conjunction problem (Linda)": 0.005367188509326946,
+     "denominator neglect": -0.035204167896483146,
+     "false consensus": 0.27054486846946624,
+     "framing problem": -0.009516348472898504,
+     "less is more": 0.12705684892907504,
+     "myside": 0.12898684353616324,
+     "non-separability of risks and benefits": 0.03775154205517485,
+     "omission": 0.10765807334114644,
+     "outcome bias": -0.0003554021948509882,
+     "pricing": 0.30409259105900965,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.005213221598029141
+    },
+    "normalised": 0.8714759542679017
+   },
+   "llm:Text Persona (Reasoning) - GPT4.1-mini": {
+    "accuracy": 0.7037479420339564,
+    "r": 0.06206316899830704,
+    "task_accuracy": {
+     "Allais": 0.564625850340136,
+     "WTA/WTP-Thaler": 0.8036389158838139,
+     "absolute vs. relative savings": 0.629251700680272,
+     "anchoring and adjustment": 0.6382140157650362,
+     "base rate": 0.7911661807580175,
+     "conjunction problem (Linda)": 0.744606413994169,
+     "denominator neglect": 0.44217687074829937,
+     "false consensus": 0.7624905247813412,
+     "framing problem": 0.6861030126336249,
+     "less is more": 0.7452542921930677,
+     "myside": 0.7614188532555879,
+     "non-separability of risks and benefits": 0.7807337220602527,
+     "omission": 0.7050534499514092,
+     "outcome bias": 0.8429705215419501,
+     "pricing": 0.6477162293488824,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6585276967930029
+    },
+    "task_r": {
+     "Allais": -0.006856842525805007,
+     "WTA/WTP-Thaler": 0.017727506918967028,
+     "absolute vs. relative savings": 0.014745151118964904,
+     "anchoring and adjustment": 0.03188890488861668,
+     "base rate": -0.02436799150698271,
+     "conjunction problem (Linda)": 0.011350709881769137,
+     "denominator neglect": -0.03367606121996825,
+     "false consensus": 0.28247519544563937,
+     "framing problem": -0.026921840214040028,
+     "less is more": 0.10908261189569451,
+     "myside": 0.1558353945153046,
+     "non-separability of risks and benefits": 0.03686058953656247,
+     "omission": 0.1473406644388358,
+     "outcome bias": 0.009414509221942294,
+     "pricing": 0.3211283181946888,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": 0.009047052381030167
+    },
+    "normalised": 0.861046874670502
+   },
+   "llm:Text Persona (Repeating Questions) - GPT4.1-mini": {
+    "accuracy": 0.7043082010582009,
+    "r": 0.07317264289432952,
+    "task_accuracy": {
+     "Allais": 0.5621963070942663,
+     "WTA/WTP-Thaler": 0.8023431594860166,
+     "absolute vs. relative savings": 0.6341107871720116,
+     "anchoring and adjustment": 0.6478781988986071,
+     "base rate": 0.7730320699708455,
+     "conjunction problem (Linda)": 0.7612244897959184,
+     "denominator neglect": 0.3683187560738581,
+     "false consensus": 0.7617368804664724,
+     "framing problem": 0.6866861030126337,
+     "less is more": 0.7507207644962747,
+     "myside": 0.7745383867832847,
+     "non-separability of risks and benefits": 0.8001295756397797,
+     "omission": 0.7035957240038873,
+     "outcome bias": 0.8443472627146096,
+     "pricing": 0.6725947521865889,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6700194363459671
+    },
+    "task_r": {
+     "Allais": 0.0009170669346075227,
+     "WTA/WTP-Thaler": 0.057874559086602835,
+     "absolute vs. relative savings": 0.016506810826088514,
+     "anchoring and adjustment": 0.013918575316965274,
+     "base rate": 0.02067124056521201,
+     "conjunction problem (Linda)": -0.0001800825754880095,
+     "denominator neglect": 0.015336942279167107,
+     "false consensus": 0.2909839318815954,
+     "framing problem": -0.006697481004383513,
+     "less is more": 0.14941923715118288,
+     "myside": 0.1860850308038769,
+     "non-separability of risks and benefits": 0.05320803301012328,
+     "omission": 0.1255287706093854,
+     "outcome bias": 0.004335443344254145,
+     "pricing": 0.321604043188681,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.0055771922142687355
+    },
+    "normalised": 0.8617323605568797
+   },
+   "llm:Text Persona - GPT4.1-mini": {
+    "accuracy": 0.7171234763746769,
+    "r": 0.06259057637374657,
+    "task_accuracy": {
+     "Allais": 0.5626822157434402,
+     "WTA/WTP-Thaler": 0.7972681135946442,
+     "absolute vs. relative savings": 0.6486880466472303,
+     "anchoring and adjustment": 0.63022351797862,
+     "base rate": 0.7928231292517007,
+     "conjunction problem (Linda)": 0.7612892776158082,
+     "denominator neglect": 0.5738581146744413,
+     "false consensus": 0.7439480077745384,
+     "framing problem": 0.7009718172983479,
+     "less is more": 0.7570861678004535,
+     "myside": 0.7661807580174926,
+     "non-separability of risks and benefits": 0.8031968739876904,
+     "omission": 0.7154195011337869,
+     "outcome bias": 0.8445092322643343,
+     "pricing": 0.6711613216715258,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.6620262390670555
+    },
+    "task_r": {
+     "Allais": 0.0,
+     "WTA/WTP-Thaler": 0.06543635011844658,
+     "absolute vs. relative savings": -0.006009873787737449,
+     "anchoring and adjustment": 0.022171798117897788,
+     "base rate": -0.023877950373685515,
+     "conjunction problem (Linda)": 0.020432971664805042,
+     "denominator neglect": -0.059697560680663675,
+     "false consensus": 0.2751963202674125,
+     "framing problem": -0.03465684488168711,
+     "less is more": 0.14233210857181433,
+     "myside": 0.1567769269456552,
+     "non-separability of risks and benefits": 0.07843332610964206,
+     "omission": 0.1211666075136968,
+     "outcome bias": 0.030487132772663034,
+     "pricing": 0.3160040103153084,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.040155524319876165
+    },
+    "normalised": 0.8774120550898425
+   },
+   "llm:Text Persona - Gemini-Flash2.5": {
+    "accuracy": 0.6939313407902844,
+    "r": 0.07767578085599405,
+    "task_accuracy": {
+     "Allais": 0.6005830903790088,
+     "WTA/WTP-Thaler": 0.6312493251268761,
+     "absolute vs. relative savings": 0.5923226433430515,
+     "anchoring and adjustment": 0.713934780261311,
+     "base rate": 0.7929737609329446,
+     "conjunction problem (Linda)": 0.749271137026239,
+     "denominator neglect": 0.6336248785228378,
+     "false consensus": 0.7592640913508261,
+     "framing problem": 0.7061224489795919,
+     "less is more": 0.7179462261094914,
+     "myside": 0.7152575315840621,
+     "non-separability of risks and benefits": 0.7835985584710075,
+     "omission": 0.5215419501133788,
+     "outcome bias": 0.811872367994817,
+     "pricing": 0.6684037900874635,
+     "prob matching vs. max": 0.7591041514930809,
+     "sunk cost fallacy": 0.641156462585034
+    },
+    "task_r": {
+     "Allais": 0.06047268292794851,
+     "WTA/WTP-Thaler": 0.005659904163651625,
+     "absolute vs. relative savings": 0.03069673855619177,
+     "anchoring and adjustment": 0.041317351629309926,
+     "base rate": 0.03943127945994608,
+     "conjunction problem (Linda)": 0.009352770370806458,
+     "denominator neglect": 0.07416965962658402,
+     "false consensus": 0.27908249445338734,
+     "framing problem": 0.05325367779679061,
+     "less is more": 0.10837265598147197,
+     "myside": 0.18377032893640688,
+     "non-separability of risks and benefits": 0.08672991156839442,
+     "omission": -0.007883662324831479,
+     "outcome bias": -0.005245596259712884,
+     "pricing": 0.3775330492496985,
+     "prob matching vs. max": 0.0040713438459096234,
+     "sunk cost fallacy": -0.020296315430054387
+    },
+    "normalised": 0.8490361058768897
+   },
+   "llm_mean": {
+    "accuracy": 0.7226781712685074,
+    "r": 0.07726880734150751,
+    "task_accuracy": {
+     "Allais": 0.5626822157434402,
+     "WTA/WTP-Thaler": 0.7941906921498758,
+     "absolute vs. relative savings": 0.662293488824101,
+     "anchoring and adjustment": 0.6734963826800562,
+     "base rate": 0.7921914480077745,
+     "conjunction problem (Linda)": 0.7826044703595724,
+     "denominator neglect": 0.3940719144800777,
+     "false consensus": 0.7701413994169096,
+     "framing problem": 0.7584062196307094,
+     "less is more": 0.7644557823129252,
+     "myside": 0.7867832847424684,
+     "non-separability of risks and benefits": 0.8080154680919988,
+     "omission": 0.7121801101392938,
+     "outcome bias": 0.8452380952380952,
+     "pricing": 0.7040451895043731,
+     "prob matching vs. max": 0.7615926195678563,
+     "sunk cost fallacy": 0.7149659863945579
+    },
+    "task_r": {
+     "Allais": 0.0,
+     "WTA/WTP-Thaler": 0.06895616534894118,
+     "absolute vs. relative savings": -0.020401934554116565,
+     "anchoring and adjustment": 0.0885553692790307,
+     "base rate": -0.02231418527806345,
+     "conjunction problem (Linda)": 0.007952600597413003,
+     "denominator neglect": -0.06426613302903232,
+     "false consensus": 0.3045234598852165,
+     "framing problem": -0.01984490527330438,
+     "less is more": 0.17373898501195129,
+     "myside": 0.21117938352030524,
+     "non-separability of risks and benefits": 0.059029245655161544,
+     "omission": 0.11556584626638752,
+     "outcome bias": 0.020029314277162556,
+     "pricing": 0.41679895739884454,
+     "prob matching vs. max": 0.0,
+     "sunk cost fallacy": -0.025932444300269492
+    },
+    "r_score": 0.10309508619311654,
+    "task_r_score": {
+     "Allais": 0.04628153971961853,
+     "WTA/WTP-Thaler": 0.0816169937355391,
+     "absolute vs. relative savings": 0.006928112902267975,
+     "anchoring and adjustment": 0.09338610759365681,
+     "base rate": -0.017574636600225513,
+     "conjunction problem (Linda)": 0.012213839304883628,
+     "denominator neglect": -0.05547108350019164,
+     "false consensus": 0.31440807179057706,
+     "framing problem": 0.015965219983464514,
+     "less is more": 0.18704675668206025,
+     "myside": 0.24053638217833306,
+     "non-separability of risks and benefits": 0.09184071832703619,
+     "omission": 0.23926855365573843,
+     "outcome bias": 0.05447979403225915,
+     "pricing": 0.461145892325442,
+     "prob matching vs. max": 0.003626104961803318,
+     "sunk cost fallacy": -0.02308190180928184
+    },
+    "normalised": 0.8842083132277458
+   },
+   "llm_demographics": {
+    "accuracy": 0.6803671865571626,
+    "r": 0.038574008440194756,
+    "task_accuracy": {
+     "Allais": 0.47327502429543244,
+     "WTA/WTP-Thaler": 0.7695173307418206,
+     "absolute vs. relative savings": 0.5782312925170068,
+     "anchoring and adjustment": 0.6306554367778858,
+     "base rate": 0.6931146744412051,
+     "conjunction problem (Linda)": 0.7622610949141562,
+     "denominator neglect": 0.36588921282798836,
+     "false consensus": 0.7200413022351797,
+     "framing problem": 0.7045675413022352,
+     "less is more": 0.719185293164885,
+     "myside": 0.7590864917395529,
+     "non-separability of risks and benefits": 0.7818168934240363,
+     "omission": 0.6982507288629738,
+     "outcome bias": 0.8437803692905734,
+     "pricing": 0.5846452866861029,
+     "prob matching vs. max": 0.7616533139111434,
+     "sunk cost fallacy": 0.722108843537415
+    },
+    "task_r": {
+     "Allais": 0.01856631106042726,
+     "WTA/WTP-Thaler": 0.058080428819125535,
+     "absolute vs. relative savings": 0.017319524795967395,
+     "anchoring and adjustment": 0.0038915440059589515,
+     "base rate": -0.015468842565308763,
+     "conjunction problem (Linda)": 0.02051498380577769,
+     "denominator neglect": 0.00484515379687241,
+     "false consensus": 0.19593547539561434,
+     "framing problem": -0.05476269926804032,
+     "less is more": 0.045028562643262465,
+     "myside": 0.05571613488261125,
+     "non-separability of risks and benefits": 0.010530161388799024,
+     "omission": 0.0636732803247151,
+     "outcome bias": 0.0015089832337677519,
+     "pricing": 0.2524438046086228,
+     "prob matching vs. max": 0.006111684679864946,
+     "sunk cost fallacy": -0.028176348124727038
+    },
+    "normalised": 0.8324401459992341
+   },
+   "choices": {
+    "accuracy": 0.7547270034998127,
+    "r": 0.052618922339062776,
+    "task_accuracy": {
+     "Allais": 0.6491739552964042,
+     "WTA/WTP-Thaler": 0.824802937047835,
+     "absolute vs. relative savings": 0.6987366375121478,
+     "anchoring and adjustment": 0.7728377065111759,
+     "base rate": 0.8175898931000972,
+     "conjunction problem (Linda)": 0.8173955296404276,
+     "denominator neglect": 0.6384839650145773,
+     "false consensus": 0.787413508260447,
+     "framing problem": 0.800485908649174,
+     "less is more": 0.7607709750566893,
+     "myside": 0.7896015549076774,
+     "non-separability of risks and benefits": 0.8171262552640104,
+     "omission": 0.7170391966310334,
+     "outcome bias": 0.8465338516358925,
+     "pricing": 0.5727040816326531,
+     "prob matching vs. max": 0.7615319252245691,
+     "sunk cost fallacy": 0.760689990281827
+    },
+    "task_r": {
+     "Allais": 0.12261724302720356,
+     "WTA/WTP-Thaler": 0.06569940794213397,
+     "absolute vs. relative savings": 0.037597717308833024,
+     "anchoring and adjustment": -0.012326161264117992,
+     "base rate": 0.042995232126119505,
+     "conjunction problem (Linda)": 0.016403065766070132,
+     "denominator neglect": 0.06659537998361618,
+     "false consensus": 0.06742941311107062,
+     "framing problem": 0.07219264642994686,
+     "less is more": 0.022464147180775638,
+     "myside": 0.0012112499593811693,
+     "non-separability of risks and benefits": 0.04580502964353943,
+     "omission": 0.10870522220659223,
+     "outcome bias": 0.07922006160149948,
+     "pricing": 0.04301297515105522,
+     "prob matching vs. max": 0.02919046771232952,
+     "sunk cost fallacy": 0.0857085818780186
+    },
+    "r_score": 0.07866382477146307,
+    "task_r_score": {
+     "Allais": 0.1956034412201571,
+     "WTA/WTP-Thaler": 0.03125745299635405,
+     "absolute vs. relative savings": 0.08009096850085962,
+     "anchoring and adjustment": 0.012044320501101819,
+     "base rate": 0.03533443560737169,
+     "conjunction problem (Linda)": 0.006829012911970254,
+     "denominator neglect": 0.18705418198857554,
+     "false consensus": 0.0836321868302043,
+     "framing problem": 0.12297373747687722,
+     "less is more": 0.02302612860878424,
+     "myside": -0.030953886575549105,
+     "non-separability of risks and benefits": 0.09082868578683062,
+     "omission": 0.13237215039690495,
+     "outcome bias": 0.05344985610976715,
+     "pricing": 0.08992388054918035,
+     "prob matching vs. max": 0.12468475916186665,
+     "sunk cost fallacy": 0.09913370904361554
+    },
+    "normalised": 0.9234205725913024
+   },
+   "deeds": {
+    "accuracy": 0.7559127127041292,
+    "r": 0.08001498060474038,
+    "task_accuracy": {
+     "Allais": 0.6443148688046647,
+     "WTA/WTP-Thaler": 0.8251808659971925,
+     "absolute vs. relative savings": 0.6987366375121478,
+     "anchoring and adjustment": 0.7817190368210776,
+     "base rate": 0.8188532555879495,
+     "conjunction problem (Linda)": 0.819047619047619,
+     "denominator neglect": 0.6477162293488824,
+     "false consensus": 0.7881659378036929,
+     "framing problem": 0.8000971817298348,
+     "less is more": 0.7598720440557175,
+     "myside": 0.7917395529640427,
+     "non-separability of risks and benefits": 0.81859410430839,
+     "omission": 0.716715257531584,
+     "outcome bias": 0.844671201814059,
+     "pricing": 0.5752915451895044,
+     "prob matching vs. max": 0.7607428987618354,
+     "sunk cost fallacy": 0.7613945578231293
+    },
+    "task_r": {
+     "Allais": 0.11555599761249079,
+     "WTA/WTP-Thaler": 0.05866207353883965,
+     "absolute vs. relative savings": 0.0333130677291124,
+     "anchoring and adjustment": 0.1460056788426718,
+     "base rate": 0.11395650508484984,
+     "conjunction problem (Linda)": 0.03859092871304826,
+     "denominator neglect": 0.12892147684135716,
+     "false consensus": 0.09208894520912672,
+     "framing problem": 0.054064405870333926,
+     "less is more": 0.024974755133812906,
+     "myside": 0.0457637542290138,
+     "non-separability of risks and benefits": 0.08105788234962552,
+     "omission": 0.11810430807854422,
+     "outcome bias": 0.11852791358762842,
+     "pricing": 0.05776685378806985,
+     "prob matching vs. max": 0.038350919186798484,
+     "sunk cost fallacy": 0.09454920448526283
+    },
+    "r_score": 0.12692149968913063,
+    "task_r_score": {
+     "Allais": 0.25113252227019,
+     "WTA/WTP-Thaler": 0.04797961497241512,
+     "absolute vs. relative savings": 0.0881764437126313,
+     "anchoring and adjustment": 0.15654315255847906,
+     "base rate": 0.11154329772752679,
+     "conjunction problem (Linda)": 0.08475268113011726,
+     "denominator neglect": 0.26143005783312495,
+     "false consensus": 0.11480753398003193,
+     "framing problem": 0.10816635486134152,
+     "less is more": 0.06081279722384192,
+     "myside": 0.033532826639498796,
+     "non-separability of risks and benefits": 0.13195535044479004,
+     "omission": 0.14605677077586218,
+     "outcome bias": 0.15017571522752166,
+     "pricing": 0.10717650409711987,
+     "prob matching vs. max": 0.18078411027879038,
+     "sunk cost fallacy": 0.1226397609819385
+    },
+    "normalised": 0.9248713067869777
+   },
+   "echo_persona": {
+    "accuracy": 0.8178430070440874,
+    "r": 0.46112049441336805,
+    "task_accuracy": {
+     "Allais": 0.7473275024295433,
+     "WTA/WTP-Thaler": 0.8837058632977001,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8350880034553504,
+     "base rate": 0.8348542274052478,
+     "conjunction problem (Linda)": 0.8378684807256236,
+     "denominator neglect": 0.7235179786200194,
+     "false consensus": 0.8633714771622935,
+     "framing problem": 0.8145772594752186,
+     "less is more": 0.8229672821509556,
+     "myside": 0.8365403304178815,
+     "non-separability of risks and benefits": 0.8625789601554907,
+     "omission": 0.8017492711370262,
+     "outcome bias": 0.8564949789439585,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.7680262199563,
+     "sunk cost fallacy": 0.7827502429543246
+    },
+    "task_r": {
+     "Allais": 0.4555003249727135,
+     "WTA/WTP-Thaler": 0.6221159894405979,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5649070340461088,
+     "base rate": 0.3330808172376315,
+     "conjunction problem (Linda)": 0.33374446581154055,
+     "denominator neglect": 0.4005678136723974,
+     "false consensus": 0.6299202339758253,
+     "framing problem": 0.2872596973078958,
+     "less is more": 0.5470202070733189,
+     "myside": 0.5374634726453059,
+     "non-separability of risks and benefits": 0.528546632511741,
+     "omission": 0.5508003378101219,
+     "outcome bias": 0.39725954247876105,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.10924992251938057,
+     "sunk cost fallacy": 0.3703471224561147
+    },
+    "r_score": 0.4956368460905008,
+    "task_r_score": {
+     "Allais": 0.4752851959963684,
+     "WTA/WTP-Thaler": 0.6380716175600026,
+     "absolute vs. relative savings": 0.5032634133258237,
+     "anchoring and adjustment": 0.5800518277382518,
+     "base rate": 0.3350613047679818,
+     "conjunction problem (Linda)": 0.385487776433378,
+     "denominator neglect": 0.4257229068530929,
+     "false consensus": 0.642964528298466,
+     "framing problem": 0.3367786058111424,
+     "less is more": 0.5838012822219203,
+     "myside": 0.5871485068881932,
+     "non-separability of risks and benefits": 0.5652499454409106,
+     "omission": 0.6041600698523527,
+     "outcome bias": 0.4408359558540148,
+     "pricing": 0.6729209973392909,
+     "prob matching vs. max": 0.2747949555092468,
+     "sunk cost fallacy": 0.3742274936480759
+    },
+    "normalised": 1.0006440134676209
+   },
+   "echo_transition": {
+    "accuracy": 0.8218552166898505,
+    "r": 0.4532669882690377,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.8922362595831984,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.845670014037361,
+     "base rate": 0.847837706511176,
+     "conjunction problem (Linda)": 0.8348234531908001,
+     "denominator neglect": 0.7215743440233235,
+     "false consensus": 0.8664069484936832,
+     "framing problem": 0.8147716229348883,
+     "less is more": 0.8319403952057014,
+     "myside": 0.8424684159378037,
+     "non-separability of risks and benefits": 0.8684604794298671,
+     "omission": 0.8001295756397797,
+     "outcome bias": 0.8672659540006479,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.770939548434086,
+     "sunk cost fallacy": 0.7942176870748299
+    },
+    "task_r": {
+     "Allais": 0.44551060656221847,
+     "WTA/WTP-Thaler": 0.5706471224758562,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5503503363934765,
+     "base rate": 0.3054481088756055,
+     "conjunction problem (Linda)": 0.3281889120304661,
+     "denominator neglect": 0.40297195939595526,
+     "false consensus": 0.627634443866258,
+     "framing problem": 0.29485274535825046,
+     "less is more": 0.5655854358770331,
+     "myside": 0.5605943565169894,
+     "non-separability of risks and benefits": 0.5381035016473236,
+     "omission": 0.5554871922895981,
+     "outcome bias": 0.3672990964966672,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.0769457601418474,
+     "sunk cost fallacy": 0.34465443157829256
+    },
+    "r_score": 0.47494476555183535,
+    "task_r_score": {
+     "Allais": 0.4417714573384828,
+     "WTA/WTP-Thaler": 0.5709569919730612,
+     "absolute vs. relative savings": 0.4956711293132837,
+     "anchoring and adjustment": 0.5670323780524131,
+     "base rate": 0.31533740359468765,
+     "conjunction problem (Linda)": 0.36907462476537334,
+     "denominator neglect": 0.4001136843571628,
+     "false consensus": 0.6283710999454482,
+     "framing problem": 0.32123214665226013,
+     "less is more": 0.5835142642856851,
+     "myside": 0.5822750952687845,
+     "non-separability of risks and benefits": 0.5521118457845902,
+     "omission": 0.5768028087428365,
+     "outcome bias": 0.4065153428584404,
+     "pricing": 0.6717743884404761,
+     "prob matching vs. max": 0.2265330491965935,
+     "sunk cost fallacy": 0.3649733038116205
+    },
+    "normalised": 1.0055530162080375
+   },
+   "facts": {
+    "accuracy": 0.7573522932982716,
+    "r": 0.06774747544278625,
+    "task_accuracy": {
+     "Allais": 0.6394557823129252,
+     "WTA/WTP-Thaler": 0.821563546053342,
+     "absolute vs. relative savings": 0.6967930029154519,
+     "anchoring and adjustment": 0.7772378792786956,
+     "base rate": 0.8179883381924198,
+     "conjunction problem (Linda)": 0.817654680919987,
+     "denominator neglect": 0.6384839650145773,
+     "false consensus": 0.8086000971817298,
+     "framing problem": 0.7996112730806608,
+     "less is more": 0.7631519274376417,
+     "myside": 0.7931000971817298,
+     "non-separability of risks and benefits": 0.8212666018788468,
+     "omission": 0.7410106899902817,
+     "outcome bias": 0.8443472627146097,
+     "pricing": 0.5741132167152576,
+     "prob matching vs. max": 0.760924981791697,
+     "sunk cost fallacy": 0.7615403304178814
+    },
+    "task_r": {
+     "Allais": 0.07807597841287561,
+     "WTA/WTP-Thaler": 0.034416182595549565,
+     "absolute vs. relative savings": 0.0,
+     "anchoring and adjustment": 0.06517774861410824,
+     "base rate": 0.043125619274348034,
+     "conjunction problem (Linda)": -0.014303784886807185,
+     "denominator neglect": 0.022122598544117952,
+     "false consensus": 0.28612328810431187,
+     "framing problem": -0.010095717069395006,
+     "less is more": 0.06218918024835808,
+     "myside": 0.09559431374626784,
+     "non-separability of risks and benefits": 0.1140534763911045,
+     "omission": 0.2721268046501591,
+     "outcome bias": 0.029319168482697257,
+     "pricing": 0.049447563571671974,
+     "prob matching vs. max": 0.005705194302658158,
+     "sunk cost fallacy": 0.018629467545340537
+    },
+    "r_score": 0.10116074475887316,
+    "task_r_score": {
+     "Allais": 0.1659373463045537,
+     "WTA/WTP-Thaler": 0.06137713685561152,
+     "absolute vs. relative savings": 0.00620389155584165,
+     "anchoring and adjustment": 0.07978107993534846,
+     "base rate": 0.043167602912762996,
+     "conjunction problem (Linda)": -0.030774741910568087,
+     "denominator neglect": 0.12930008126320727,
+     "false consensus": 0.3121328712186476,
+     "framing problem": -0.01523718098499654,
+     "less is more": 0.12321404270858974,
+     "myside": 0.1690420786266043,
+     "non-separability of risks and benefits": 0.15392114251728434,
+     "omission": 0.3322624586479234,
+     "outcome bias": 0.08364832060538385,
+     "pricing": 0.09071504415927242,
+     "prob matching vs. max": 0.05450726715873411,
+     "sunk cost fallacy": -0.039465780673357154
+    },
+    "normalised": 0.9266326566927978
+   },
+   "persona": {
+    "accuracy": 0.750310003366426,
+    "r": 0.1326064081051832,
+    "task_accuracy": {
+     "Allais": 0.6545189504373178,
+     "WTA/WTP-Thaler": 0.7164992981319511,
+     "absolute vs. relative savings": 0.7016520894071914,
+     "anchoring and adjustment": 0.7859842349638269,
+     "base rate": 0.8190136054421768,
+     "conjunction problem (Linda)": 0.8203757693553612,
+     "denominator neglect": 0.6540330417881438,
+     "false consensus": 0.8130347424684159,
+     "framing problem": 0.8004859086491739,
+     "less is more": 0.6745221898283122,
+     "myside": 0.796307094266278,
+     "non-separability of risks and benefits": 0.8261358114674441,
+     "omission": 0.742792355037253,
+     "outcome bias": 0.8445902170391967,
+     "pricing": 0.586212342079689,
+     "prob matching vs. max": 0.7597110949259529,
+     "sunk cost fallacy": 0.7613702623906705
+    },
+    "task_r": {
+     "Allais": 0.1382353938637992,
+     "WTA/WTP-Thaler": 0.03364241192428409,
+     "absolute vs. relative savings": 0.06283437396372538,
+     "anchoring and adjustment": 0.2020489746786378,
+     "base rate": 0.12330297573936932,
+     "conjunction problem (Linda)": 0.071689424095453,
+     "denominator neglect": 0.14713808721355442,
+     "false consensus": 0.35009284096599086,
+     "framing problem": 0.03917382477285433,
+     "less is more": 0.05622360741121704,
+     "myside": 0.15536433970749544,
+     "non-separability of risks and benefits": 0.21013101613204632,
+     "omission": 0.276308550663045,
+     "outcome bias": 0.15238011547633346,
+     "pricing": 0.10221934210219077,
+     "prob matching vs. max": 0.030607652580037732,
+     "sunk cost fallacy": 0.10291600649808062
+    },
+    "r_score": 0.18792776720543156,
+    "task_r_score": {
+     "Allais": 0.2726069187931633,
+     "WTA/WTP-Thaler": 0.01405580971290915,
+     "absolute vs. relative savings": 0.1552836968880273,
+     "anchoring and adjustment": 0.21575027744077996,
+     "base rate": 0.12361030284705399,
+     "conjunction problem (Linda)": 0.14131721496728614,
+     "denominator neglect": 0.2569741038292696,
+     "false consensus": 0.3778198936669743,
+     "framing problem": 0.10643911347605561,
+     "less is more": 0.05932751729382949,
+     "myside": 0.22251664953499914,
+     "non-separability of risks and benefits": 0.26179076881362573,
+     "omission": 0.35866401489424926,
+     "outcome bias": 0.19004886135936822,
+     "pricing": 0.143372783922314,
+     "prob matching vs. max": 0.1876848892124593,
+     "sunk cost fallacy": 0.10750922583997206
+    },
+    "normalised": 0.9180163022082448
+   },
+   "self": {
+    "accuracy": 0.7592441468650952,
+    "r": 0.11175007704006597,
+    "task_accuracy": {
+     "Allais": 0.6355685131195336,
+     "WTA/WTP-Thaler": 0.8259367238959076,
+     "absolute vs. relative savings": 0.7011661807580175,
+     "anchoring and adjustment": 0.7792085088003455,
+     "base rate": 0.8180174927113703,
+     "conjunction problem (Linda)": 0.8195983155166828,
+     "denominator neglect": 0.6365403304178814,
+     "false consensus": 0.810040573372206,
+     "framing problem": 0.7997084548104956,
+     "less is more": 0.7686345966958212,
+     "myside": 0.7985422740524781,
+     "non-separability of risks and benefits": 0.8249514091350826,
+     "omission": 0.7398769031422092,
+     "outcome bias": 0.8448331713637836,
+     "pricing": 0.5855928085519922,
+     "prob matching vs. max": 0.7603180383588249,
+     "sunk cost fallacy": 0.7606413994169097
+    },
+    "task_r": {
+     "Allais": 0.027120722855005858,
+     "WTA/WTP-Thaler": 0.15840847733026475,
+     "absolute vs. relative savings": 0.05962497634485828,
+     "anchoring and adjustment": 0.12564667134138263,
+     "base rate": 0.05283822280240888,
+     "conjunction problem (Linda)": 0.06549748400200556,
+     "denominator neglect": 0.00999430926088974,
+     "false consensus": 0.3275628770643987,
+     "framing problem": -0.0036961886515458845,
+     "less is more": 0.16599166035797716,
+     "myside": 0.1780005863372284,
+     "non-separability of risks and benefits": 0.19577629323874854,
+     "omission": 0.2601909121873663,
+     "outcome bias": 0.1431295063165886,
+     "pricing": 0.10062670187425526,
+     "prob matching vs. max": -0.005950672711677459,
+     "sunk cost fallacy": 0.03898876973096585
+    },
+    "r_score": 0.1640152724651657,
+    "task_r_score": {
+     "Allais": 0.1277073684727441,
+     "WTA/WTP-Thaler": 0.1818444959588761,
+     "absolute vs. relative savings": 0.1324038055112492,
+     "anchoring and adjustment": 0.13874171812896063,
+     "base rate": 0.047092155466239474,
+     "conjunction problem (Linda)": 0.1224759787184066,
+     "denominator neglect": 0.14147927991520332,
+     "false consensus": 0.35600337244414665,
+     "framing problem": 0.04076227986991877,
+     "less is more": 0.23988848590922196,
+     "myside": 0.2373308771985858,
+     "non-separability of risks and benefits": 0.2572943363507665,
+     "omission": 0.33243434663962695,
+     "outcome bias": 0.16136862851900957,
+     "pricing": 0.13147636019487763,
+     "prob matching vs. max": 0.11219455000321846,
+     "sunk cost fallacy": 0.027761592606764758
+    },
+    "normalised": 0.9289473698219612
+   },
+   "tests": {
+    "accuracy": 0.7554174606350477,
+    "r": 0.06702695339815462,
+    "task_accuracy": {
+     "Allais": 0.6511175898931001,
+     "WTA/WTP-Thaler": 0.8252348558471008,
+     "absolute vs. relative savings": 0.6982507288629738,
+     "anchoring and adjustment": 0.7814760824964906,
+     "base rate": 0.819625850340136,
+     "conjunction problem (Linda)": 0.8194687398769032,
+     "denominator neglect": 0.6467444120505346,
+     "false consensus": 0.7878304178814383,
+     "framing problem": 0.7997084548104956,
+     "less is more": 0.759507612568837,
+     "myside": 0.7928085519922254,
+     "non-separability of risks and benefits": 0.8179563492063492,
+     "omission": 0.7087787495950761,
+     "outcome bias": 0.8433754454162617,
+     "pricing": 0.5720238095238095,
+     "prob matching vs. max": 0.7597110949259529,
+     "sunk cost fallacy": 0.7602526724975704
+    },
+    "task_r": {
+     "Allais": 0.09250743434446186,
+     "WTA/WTP-Thaler": 0.0469451452309246,
+     "absolute vs. relative savings": 0.03231750450237374,
+     "anchoring and adjustment": 0.13923690994714344,
+     "base rate": 0.12890775693870032,
+     "conjunction problem (Linda)": 0.06829243205480091,
+     "denominator neglect": 0.13020338863707495,
+     "false consensus": 0.07021963377765329,
+     "framing problem": 0.0,
+     "less is more": 0.01019248878567067,
+     "myside": 0.03556657673752125,
+     "non-separability of risks and benefits": 0.07801135856428434,
+     "omission": 0.07657600883984568,
+     "outcome bias": 0.11077119283163162,
+     "pricing": 0.03523605507752278,
+     "prob matching vs. max": 0.018989406035659292,
+     "sunk cost fallacy": 0.06548491546335981
+    },
+    "r_score": 0.09835339280302176,
+    "task_r_score": {
+     "Allais": 0.1794828738656879,
+     "WTA/WTP-Thaler": 0.037631353894991594,
+     "absolute vs. relative savings": 0.04459806928300019,
+     "anchoring and adjustment": 0.1278229047209552,
+     "base rate": 0.13231391142387997,
+     "conjunction problem (Linda)": 0.0920233856520638,
+     "denominator neglect": 0.2580704628516038,
+     "false consensus": 0.08725602767390774,
+     "framing problem": -0.02876669279413331,
+     "less is more": 0.030247177863624505,
+     "myside": 0.038541946600783375,
+     "non-separability of risks and benefits": 0.11188870135876165,
+     "omission": 0.0896690407536297,
+     "outcome bias": 0.15207119021764282,
+     "pricing": 0.07561933216585556,
+     "prob matching vs. max": 0.1722031635135731,
+     "sunk cost fallacy": 0.07133482860554252
+    },
+    "normalised": 0.9242653579510575
+   },
+   "words": {
+    "accuracy": 0.7607202706479417,
+    "r": 0.12583124882209837,
+    "task_accuracy": {
+     "Allais": 0.641399416909621,
+     "WTA/WTP-Thaler": 0.825288845697009,
+     "absolute vs. relative savings": 0.6992225461613217,
+     "anchoring and adjustment": 0.7802613108735558,
+     "base rate": 0.8184062196307095,
+     "conjunction problem (Linda)": 0.8191124068675089,
+     "denominator neglect": 0.6389698736637512,
+     "false consensus": 0.8153258017492712,
+     "framing problem": 0.7999028182701653,
+     "less is more": 0.7694930353093619,
+     "myside": 0.8009718172983479,
+     "non-separability of risks and benefits": 0.8260851959831552,
+     "omission": 0.7479753806284419,
+     "outcome bias": 0.8447521865889213,
+     "pricing": 0.5866375121477163,
+     "prob matching vs. max": 0.7605001213886866,
+     "sunk cost fallacy": 0.7599368318756073
+    },
+    "task_r": {
+     "Allais": 0.06068774526493147,
+     "WTA/WTP-Thaler": 0.1499380325921861,
+     "absolute vs. relative savings": 0.04663891875491105,
+     "anchoring and adjustment": 0.13828964904731791,
+     "base rate": 0.07209733043203069,
+     "conjunction problem (Linda)": 0.06450248320805482,
+     "denominator neglect": 0.04101409950920323,
+     "false consensus": 0.3645466933103154,
+     "framing problem": 0.010129930472065186,
+     "less is more": 0.17253704141129744,
+     "myside": 0.20687753356189173,
+     "non-separability of risks and benefits": 0.20998230022383763,
+     "omission": 0.3126461833162812,
+     "outcome bias": 0.15768799440915515,
+     "pricing": 0.10439488231823157,
+     "prob matching vs. max": 0.003325769619984694,
+     "sunk cost fallacy": 0.023834642523976872
+    },
+    "r_score": 0.17832986500986164,
+    "task_r_score": {
+     "Allais": 0.17104885787674462,
+     "WTA/WTP-Thaler": 0.1885944420989526,
+     "absolute vs. relative savings": 0.1359965778507357,
+     "anchoring and adjustment": 0.15256322933143368,
+     "base rate": 0.06533409720927008,
+     "conjunction problem (Linda)": 0.12405112237532094,
+     "denominator neglect": 0.1656528191051815,
+     "false consensus": 0.39041084203738685,
+     "framing problem": 0.04805013573627148,
+     "less is more": 0.2521348245207153,
+     "myside": 0.25231668405210494,
+     "non-separability of risks and benefits": 0.27065842113903865,
+     "omission": 0.3758444612352219,
+     "outcome bias": 0.17256962025806877,
+     "pricing": 0.138659017816472,
+     "prob matching vs. max": 0.12345982277070634,
+     "sunk cost fallacy": 0.004262729754022664
+    },
+    "normalised": 0.9307534309042478
+   },
+   "echo_llm": {
+    "accuracy": 0.8166894964334941,
+    "r": 0.45252615483537106,
+    "task_accuracy": {
+     "Allais": 0.7405247813411079,
+     "WTA/WTP-Thaler": 0.8843537414965986,
+     "absolute vs. relative savings": 0.7915451895043731,
+     "anchoring and adjustment": 0.8356279019544326,
+     "base rate": 0.8339407191448007,
+     "conjunction problem (Linda)": 0.8346938775510204,
+     "denominator neglect": 0.7215743440233235,
+     "false consensus": 0.8621302235179786,
+     "framing problem": 0.8117589893100097,
+     "less is more": 0.824303530936184,
+     "myside": 0.8365403304178815,
+     "non-separability of risks and benefits": 0.8623360058309038,
+     "omission": 0.7936507936507937,
+     "outcome bias": 0.8555231616456106,
+     "pricing": 0.8389091350826045,
+     "prob matching vs. max": 0.771546491866958,
+     "sunk cost fallacy": 0.7830660835762877
+    },
+    "task_r": {
+     "Allais": 0.44551060656221847,
+     "WTA/WTP-Thaler": 0.6244827639411596,
+     "absolute vs. relative savings": 0.4986878836417439,
+     "anchoring and adjustment": 0.5638094738872805,
+     "base rate": 0.3051778760208552,
+     "conjunction problem (Linda)": 0.30805175853253386,
+     "denominator neglect": 0.40297195939595526,
+     "false consensus": 0.6248011903839772,
+     "framing problem": 0.2663652687136521,
+     "less is more": 0.5529607201649303,
+     "myside": 0.5438474027931408,
+     "non-separability of risks and benefits": 0.5226015059106426,
+     "omission": 0.5151855780773267,
+     "outcome bias": 0.3895624176032702,
+     "pricing": 0.6725769074260588,
+     "prob matching vs. max": 0.0818991370668833,
+     "sunk cost fallacy": 0.37445218207967945
+    },
+    "r_score": 0.48385178477559654,
+    "task_r_score": {
+     "Allais": 0.4421272000477295,
+     "WTA/WTP-Thaler": 0.6397668753229431,
+     "absolute vs. relative savings": 0.49491254624864395,
+     "anchoring and adjustment": 0.5735609664861514,
+     "base rate": 0.3066441215421198,
+     "conjunction problem (Linda)": 0.37376651235882763,
+     "denominator neglect": 0.39974659796126616,
+     "false consensus": 0.6377599908550382,
+     "framing problem": 0.32792692787211675,
+     "less is more": 0.586513000472364,
+     "myside": 0.5897073765789465,
+     "non-separability of risks and benefits": 0.5523630616388144,
+     "omission": 0.5834356142541245,
+     "outcome bias": 0.4277350314183569,
+     "pricing": 0.6930468951874242,
+     "prob matching vs. max": 0.22438488950181484,
+     "sunk cost fallacy": 0.37208273343846054
+    },
+    "normalised": 0.9992326747668924
+   }
+  },
+  "hypotheses": {
+   "llm_best": "llm:JSON Persona - GPT4.1-mini",
+   "H1": {
+    "delta": -0.022381998831278546,
+    "upper95_one_sided": -0.02018964736688327,
+    "ci95": [
+     -0.02505024958396057,
+     -0.019733912215679925
+    ],
+    "p": 0.0,
+    "holds": true,
+    "p_holm": 0.0
+   },
+   "H2": {
+    "r_persona": 0.1326064081051832,
+    "r_llm_best": 0.03676206181682369,
+    "wins": 15,
+    "of": 17,
+    "p_sign": 0.0011749267578125,
+    "diff_ci95": [
+     0.0835293618824751,
+     0.10814748087485904
+    ],
+    "p_boot": 0.0,
+    "p": 0.0011749267578125,
+    "p_holm": 0.002349853515625
+   },
+   "H4": {
+    "witness": "echo_persona",
+    "acc_echo": 0.8178430070440874,
+    "acc_again": 0.8173166441179647,
+    "normalised": 1.0006440134676209,
+    "delta": 0.0005263629261228303,
+    "ci95": [
+     -0.0007448573477009834,
+     0.0018296652788099353
+    ],
+    "p": 0.2065,
+    "p_holm": 0.2065
+   },
+   "H5": {
+    "r_words": 0.12583124882209837,
+    "r_deeds": 0.08001498060474038,
+    "diff_ci95": [
+     -0.058089441990220425,
+     -0.03478124602877688
+    ],
+    "r_score_words": 0.17832986500986164,
+    "r_score_deeds": 0.12692149968913063
+   }
+  },
+  "H6": {
+   "columns": 122,
+   "corr_pred_obs_columns": 0.9997284454412717,
+   "mad_columns": 0.0040658373349291965,
+   "corr_pred_obs_tasks": 0.9994904828425405,
+   "mean_pred_r2": 0.3355075667003501,
+   "mean_obs_r2": 0.3321196018675834,
+   "by_task": {
+    "Allais": {
+     "rho": 0.4455,
+     "pi": 0.0747,
+     "pred_r2": 0.225,
+     "obs_r2": 0.228
+    },
+    "WTA/WTP-Thaler": {
+     "rho": 0.6445,
+     "pi": 0.0009,
+     "pred_r2": 0.4174,
+     "obs_r2": 0.4095
+    },
+    "absolute vs. relative savings": {
+     "rho": 0.4987,
+     "pi": 0.0253,
+     "pred_r2": 0.2556,
+     "obs_r2": 0.2534
+    },
+    "anchoring and adjustment": {
+     "rho": 0.5745,
+     "pi": 0.0557,
+     "pred_r2": 0.3431,
+     "obs_r2": 0.341
+    },
+    "base rate": {
+     "rho": 0.315,
+     "pi": 0.0192,
+     "pred_r2": 0.1195,
+     "obs_r2": 0.1166
+    },
+    "conjunction problem (Linda)": {
+     "rho": 0.3815,
+     "pi": 0.0239,
+     "pred_r2": 0.1569,
+     "obs_r2": 0.1516
+    },
+    "denominator neglect": {
+     "rho": 0.403,
+     "pi": 0.066,
+     "pred_r2": 0.1876,
+     "obs_r2": 0.1812
+    },
+    "false consensus": {
+     "rho": 0.6304,
+     "pi": 0.17,
+     "pred_r2": 0.4316,
+     "obs_r2": 0.4288
+    },
+    "framing problem": {
+     "rho": 0.3325,
+     "pi": 0.0133,
+     "pred_r2": 0.1166,
+     "obs_r2": 0.1135
+    },
+    "less is more": {
+     "rho": 0.5892,
+     "pi": 0.0062,
+     "pred_r2": 0.3544,
+     "obs_r2": 0.3469
+    },
+    "myside": {
+     "rho": 0.5868,
+     "pi": 0.0503,
+     "pred_r2": 0.3534,
+     "obs_r2": 0.3448
+    },
+    "non-separability of risks and benefits": {
+     "rho": 0.5532,
+     "pi": 0.0751,
+     "pred_r2": 0.3263,
+     "obs_r2": 0.3259
+    },
+    "omission": {
+     "rho": 0.5775,
+     "pi": 0.1286,
+     "pred_r2": 0.3599,
+     "obs_r2": 0.365
+    },
+    "outcome bias": {
+     "rho": 0.4341,
+     "pi": 0.0367,
+     "pred_r2": 0.2006,
+     "obs_r2": 0.1944
+    },
+    "pricing": {
+     "rho": 0.6726,
+     "pi": 0.0215,
+     "pred_r2": 0.455,
+     "obs_r2": 0.4531
+    },
+    "prob matching vs. max": {
+     "rho": 0.2387,
+     "pi": 0.0384,
+     "pred_r2": 0.0842,
+     "obs_r2": 0.0788
+    },
+    "sunk cost fallacy": {
+     "rho": 0.3788,
+     "pi": 0.0148,
+     "pred_r2": 0.1493,
+     "obs_r2": 0.1402
+    }
+   }
+  },
+  "robustness": {
+   "no_anchoring": {
+    "base": {
+     "accuracy": 0.7531743754049238,
+     "r": -0.004052162171613713,
+     "normalised": 0.9232711414339869
+    },
+    "again": {
+     "accuracy": 0.8157672666288738,
+     "r": 0.4801283226409686,
+     "normalised": 1.0
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1": {
+     "accuracy": 0.7223744634758664,
+     "r": 0.0840453720480975,
+     "normalised": 0.8855153829119065
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1-mini": {
+     "accuracy": 0.7033220764496274,
+     "r": 0.05703961423913306,
+     "normalised": 0.862160208212421
+    },
+    "llm:JSON Persona - GPT4.1": {
+     "accuracy": 0.7142211677329662,
+     "r": 0.08669163566367308,
+     "normalised": 0.8755207483188889
+    },
+    "llm:JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.7326953184051398,
+     "r": 0.03619513655845976,
+     "normalised": 0.8981670978696834
+    },
+    "llm:LLM Finetuning (500 training samples) - GPT4.1-mini": {
+     "accuracy": 0.7054074057202245,
+     "r": 0.02592873155297158,
+     "normalised": 0.8647164878719551
+    },
+    "llm:Persona Summary - GPT4.1-mini": {
+     "accuracy": 0.680840205228917,
+     "r": 0.06269530859770145,
+     "normalised": 0.8346010352222913
+    },
+    "llm:Persona Summary - JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.6772203376390239,
+     "r": 0.042757992238679716,
+     "normalised": 0.8301636573843056
+    },
+    "llm:Text Persona (Default Temperature) - GPT4.1-mini": {
+     "accuracy": 0.7172125428544434,
+     "r": 0.060784050314609095,
+     "normalised": 0.8791876950619704
+    },
+    "llm:Text Persona (Reasoning) - GPT4.1-mini": {
+     "accuracy": 0.7078438124257639,
+     "r": 0.06394906050516269,
+     "normalised": 0.8677031322314521
+    },
+    "llm:Text Persona (Repeating Questions) - GPT4.1-mini": {
+     "accuracy": 0.7078350761931758,
+     "r": 0.0768760221179148,
+     "normalised": 0.8676924230096611
+    },
+    "llm:Text Persona - GPT4.1-mini": {
+     "accuracy": 0.7225547237744304,
+     "r": 0.06511675001473713,
+     "normalised": 0.885736353164009
+    },
+    "llm:Text Persona - Gemini-Flash2.5": {
+     "accuracy": 0.6926811258233451,
+     "r": 0.07994818268266182,
+     "normalised": 0.8491161072027598
+    },
+    "llm_mean": {
+     "accuracy": 0.7257520330552856,
+     "r": 0.07656339722041232,
+     "normalised": 0.8896557422001343
+    },
+    "llm_demographics": {
+     "accuracy": 0.6834741709183674,
+     "r": 0.04074166246733449,
+     "normalised": 0.837829855251238
+    },
+    "choices": {
+     "accuracy": 0.7535950845616025,
+     "r": 0.05667799006426157,
+     "normalised": 0.9237868634712504
+    },
+    "deeds": {
+     "accuracy": 0.75429981744682,
+     "r": 0.07589056196486968,
+     "normalised": 0.92465075310503
+    },
+    "echo_persona": {
+     "accuracy": 0.8167651947683835,
+     "r": 0.45463383568632176,
+     "normalised": 1.0012233000517827
+    },
+    "echo_transition": {
+     "accuracy": 0.8203667918556312,
+     "r": 0.4471992790112602,
+     "normalised": 1.0056382811800781
+    },
+    "facts": {
+     "accuracy": 0.7561094441744952,
+     "r": 0.06790808336957864,
+     "normalised": 0.926869065608734
+    },
+    "persona": {
+     "accuracy": 0.7480803638915885,
+     "r": 0.1282662476943423,
+     "normalised": 0.9170266992729449
+    },
+    "self": {
+     "accuracy": 0.7579963742441421,
+     "r": 0.11088153989623364,
+     "normalised": 0.9291821396273136
+    },
+    "tests": {
+     "accuracy": 0.7537887967687075,
+     "r": 0.06251383111384282,
+     "normalised": 0.9240243236085092
+    },
+    "words": {
+     "accuracy": 0.759498955633841,
+     "r": 0.12505259880802216,
+     "normalised": 0.931024063728912
+    },
+    "echo_llm": {
+     "accuracy": 0.8155058460884352,
+     "r": 0.4455709473946267,
+     "normalised": 0.9996795402915358
+    }
+   },
+   "within_only": {
+    "base": {
+     "accuracy": 0.7448948547673037,
+     "r": -0.0020530036596036836,
+     "normalised": 0.907749450603981
+    },
+    "again": {
+     "accuracy": 0.8205952140997493,
+     "r": 0.5211750085403493,
+     "normalised": 1.0
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1": {
+     "accuracy": 0.7165790051470323,
+     "r": 0.1266980563230383,
+     "normalised": 0.8732429739224958
+    },
+    "llm:JSON Persona (Predicted Output) - GPT4.1-mini": {
+     "accuracy": 0.6945687650721662,
+     "r": 0.08224309264912381,
+     "normalised": 0.8464206872497508
+    },
+    "llm:JSON Persona - GPT4.1": {
+     "accuracy": 0.7159601884845649,
+     "r": 0.12602004373010686,
+     "normalised": 0.8724888668404234
+    },
+    "llm:JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.7246293476826358,
+     "r": 0.06501552271155317,
+     "normalised": 0.883053343758049
+    },
+    "llm:LLM Finetuning (500 training samples) - GPT4.1-mini": {
+     "accuracy": 0.7083944348462489,
+     "r": 0.0367431009677144,
+     "normalised": 0.8632690304237363
+    },
+    "llm:Persona Summary - GPT4.1-mini": {
+     "accuracy": 0.6805929675221059,
+     "r": 0.0975896219105108,
+     "normalised": 0.8293893942201018
+    },
+    "llm:Persona Summary - JSON Persona - GPT4.1-mini": {
+     "accuracy": 0.6734475008698365,
+     "r": 0.06930092503711426,
+     "normalised": 0.8206817311366552
+    },
+    "llm:Text Persona (Default Temperature) - GPT4.1-mini": {
+     "accuracy": 0.7257694243482226,
+     "r": 0.09522444417172894,
+     "normalised": 0.8844426726817346
+    },
+    "llm:Text Persona (Reasoning) - GPT4.1-mini": {
+     "accuracy": 0.710159686978848,
+     "r": 0.09914328167690988,
+     "normalised": 0.8654202154443993
+    },
+    "llm:Text Persona (Repeating Questions) - GPT4.1-mini": {
+     "accuracy": 0.708936762888577,
+     "r": 0.11264171495902778,
+     "normalised": 0.8639299263600148
+    },
+    "llm:Text Persona - GPT4.1-mini": {
+     "accuracy": 0.7314437935668094,
+     "r": 0.10658934820894023,
+     "normalised": 0.8913576157877727
+    },
+    "llm:Text Persona - Gemini-Flash2.5": {
+     "accuracy": 0.6914010785972237,
+     "r": 0.10412090299278583,
+     "normalised": 0.8425604569918669
+    },
+    "llm_mean": {
+     "accuracy": 0.7210524211448247,
+     "r": 0.1202554585705426,
+     "normalised": 0.8786944022527232
+    },
+    "llm_demographics": {
+     "accuracy": 0.6846024997300507,
+     "r": 0.07301817060696159,
+     "normalised": 0.8342755209474476
+    },
+    "choices": {
+     "accuracy": 0.7438566179558244,
+     "r": 0.051700567633020326,
+     "normalised": 0.9064842265402283
+    },
+    "deeds": {
+     "accuracy": 0.7454433136570325,
+     "r": 0.0709464603154692,
+     "normalised": 0.9084178177602904
+    },
+    "echo_persona": {
+     "accuracy": 0.8226837094626209,
+     "r": 0.4882825011378869,
+     "normalised": 1.0025450981519102
+    },
+    "echo_transition": {
+     "accuracy": 0.8252485902650302,
+     "r": 0.48201569279448847,
+     "normalised": 1.0056707327624204
+    },
+    "facts": {
+     "accuracy": 0.7494350022195827,
+     "r": 0.09243116705790266,
+     "normalised": 0.9132821997283589
+    },
+    "persona": {
+     "accuracy": 0.7323719660703787,
+     "r": 0.14200588145420212,
+     "normalised": 0.8924887124449565
+    },
+    "self": {
+     "accuracy": 0.7521627224081873,
+     "r": 0.14201089362269206,
+     "normalised": 0.916606274913951
+    },
+    "tests": {
+     "accuracy": 0.7439423838318396,
+     "r": 0.05940732411149294,
+     "normalised": 0.9065887432063526
+    },
+    "words": {
+     "accuracy": 0.7541546059340845,
+     "r": 0.15809860950104357,
+     "normalised": 0.9190336392120506
+    },
+    "echo_llm": {
+     "accuracy": 0.8216882536083217,
+     "r": 0.47839239121105187,
+     "normalised": 1.0013320081445656
+    }
+   }
+  },
+  "echo_llm_weights": {
+   "Allais": {
+    "b": 0.289,
+    "c": 0.44
+   },
+   "WTA/WTP-Thaler": {
+    "b": 0.136,
+    "c": 0.66
+   },
+   "absolute vs. relative savings": {
+    "b": -0.026,
+    "c": 0.507
+   },
+   "anchoring and adjustment": {
+    "b": 0.423,
+    "c": 0.586
+   },
+   "base rate": {
+    "b": -0.22,
+    "c": 0.335
+   },
+   "conjunction problem (Linda)": {
+    "b": 0.001,
+    "c": 0.414
+   },
+   "denominator neglect": {
+    "b": -0.152,
+    "c": 0.397
+   },
+   "false consensus": {
+    "b": 0.18,
+    "c": 0.591
+   },
+   "framing problem": {
+    "b": 0.189,
+    "c": 0.355
+   },
+   "less is more": {
+    "b": 0.126,
+    "c": 0.572
+   },
+   "myside": {
+    "b": 0.237,
+    "c": 0.59
+   },
+   "non-separability of risks and benefits": {
+    "b": 0.193,
+    "c": 0.561
+   },
+   "omission": {
+    "b": 0.4,
+    "c": 0.577
+   },
+   "outcome bias": {
+    "b": 0.184,
+    "c": 0.463
+   },
+   "pricing": {
+    "b": 0.299,
+    "c": 0.583
+   },
+   "prob matching vs. max": {
+    "b": 0.051,
+    "c": 0.241
+   },
+   "sunk cost fallacy": {
+    "b": -0.128,
+    "c": 0.402
+   }
+  }
+ }
+}

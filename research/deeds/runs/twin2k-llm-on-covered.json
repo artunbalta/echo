@@ -1,0 +1,456 @@
+{
+ "forward": {
+  "specs": {
+   "Demographics Only - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6851062694919238,
+    "acc_base": 0.7613740067455553,
+    "acc_persona": 0.7571540298659146,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.07626773725363162,
+    "llm_minus_base_ci95": [
+     -0.08026473835565973,
+     -0.07221692780286718
+    ],
+    "r_llm": 0.039328964275750056,
+    "r_persona_same_cells": 0.13710381970022706,
+    "persona_wins_tasks": 15,
+    "tasks": 17,
+    "p_sign": 0.0011749267578125
+   },
+   "JSON Persona (Predicted Output) - GPT4.1": {
+    "people": 2050,
+    "acc_llm": 0.7255504807574792,
+    "acc_base": 0.7610978143033635,
+    "acc_persona": 0.7569239774961475,
+    "acc_again": 0.8172133608852755,
+    "llm_minus_base": -0.035547333545884484,
+    "llm_minus_base_ci95": [
+     -0.038908026912462146,
+     -0.032054445507698336
+    ],
+    "r_llm": 0.08454445964239977,
+    "r_persona_same_cells": 0.1377869479321758,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "JSON Persona (Predicted Output) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7001480592637921,
+    "acc_base": 0.7632893495864506,
+    "acc_persona": 0.7579900906584315,
+    "acc_again": 0.8189815001095425,
+    "llm_minus_base": -0.06314129032265839,
+    "llm_minus_base_ci95": [
+     -0.06699620538849063,
+     -0.05923751698678099
+    ],
+    "r_llm": 0.0650604106622468,
+    "r_persona_same_cells": 0.13514318908286752,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "JSON Persona - GPT4.1": {
+    "people": 2058,
+    "acc_llm": 0.7175930859446953,
+    "acc_base": 0.7610704593345275,
+    "acc_persona": 0.7568661306784619,
+    "acc_again": 0.8183606345315905,
+    "llm_minus_base": -0.04347737338983212,
+    "llm_minus_base_ci95": [
+     -0.04674730186717544,
+     -0.04006629024873839
+    ],
+    "r_llm": 0.08144975095929696,
+    "r_persona_same_cells": 0.13715228878809166,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "JSON Persona - GPT4.1-mini": {
+    "people": 1000,
+    "acc_llm": 0.7092475356889978,
+    "acc_base": 0.7570563011437909,
+    "acc_persona": 0.7537015748638344,
+    "acc_again": 0.811566828077342,
+    "llm_minus_base": -0.047808765454793026,
+    "llm_minus_base_ci95": [
+     -0.05317183756127451,
+     -0.04239968188487201
+    ],
+    "r_llm": 0.06995863301598007,
+    "r_persona_same_cells": 0.13699924954187,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "LLM Finetuning (500 training samples) - GPT4.1-mini": {
+    "people": 1558,
+    "acc_llm": 0.6996401201473316,
+    "acc_base": 0.7632157512983798,
+    "acc_persona": 0.7578623004186698,
+    "acc_again": 0.8200967072751223,
+    "llm_minus_base": -0.06357563115104836,
+    "llm_minus_base_ci95": [
+     -0.06717378337192816,
+     -0.059865830795304865
+    ],
+    "r_llm": 0.04217507050909572,
+    "r_persona_same_cells": 0.13038387411629526,
+    "persona_wins_tasks": 16,
+    "tasks": 17,
+    "p_sign": 0.0001373291015625
+   },
+   "Persona Summary - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6828050537675387,
+    "acc_base": 0.7613740067455553,
+    "acc_persona": 0.7571540298659146,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.07856895297801661,
+    "llm_minus_base_ci95": [
+     -0.08247978282582874,
+     -0.07481198542909227
+    ],
+    "r_llm": 0.06877162766064353,
+    "r_persona_same_cells": 0.13710381970022706,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Persona Summary - JSON Persona - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6793397628892828,
+    "acc_base": 0.7613740067455553,
+    "acc_persona": 0.7571540298659146,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.08203424385627266,
+    "llm_minus_base_ci95": [
+     -0.08571827123706627,
+     -0.0781949913298653
+    ],
+    "r_llm": 0.04750797303629036,
+    "r_persona_same_cells": 0.13710381970022706,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Text Persona (Default Temperature) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7189209048698845,
+    "acc_base": 0.761372220316698,
+    "acc_persona": 0.7571533152943717,
+    "acc_again": 0.817317215775199,
+    "llm_minus_base": -0.04245131544681365,
+    "llm_minus_base_ci95": [
+     -0.04529881575646132,
+     -0.03963390530815501
+    ],
+    "r_llm": 0.07111423030129316,
+    "r_persona_same_cells": 0.13710868466443835,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Text Persona (Reasoning) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.712500706631859,
+    "acc_base": 0.7613726204767621,
+    "acc_persona": 0.7571525435571054,
+    "acc_again": 0.8173150291862776,
+    "llm_minus_base": -0.04887191384490304,
+    "llm_minus_base_ci95": [
+     -0.05220618378303702,
+     -0.045531683387640784
+    ],
+    "r_llm": 0.0702703901937774,
+    "r_persona_same_cells": 0.13711124245168343,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Text Persona (Repeating Questions) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7111090531450676,
+    "acc_base": 0.7613716200766021,
+    "acc_persona": 0.7571524578085203,
+    "acc_again": 0.8173170014037361,
+    "llm_minus_base": -0.05026256693153452,
+    "llm_minus_base_ci95": [
+     -0.05376788858400504,
+     -0.04671320440874763
+    ],
+    "r_llm": 0.07726633291080019,
+    "r_persona_same_cells": 0.13710594915065838,
+    "persona_wins_tasks": 15,
+    "tasks": 17,
+    "p_sign": 0.0011749267578125
+   },
+   "Text Persona - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7237163865546218,
+    "acc_base": 0.7613740067455553,
+    "acc_persona": 0.7571540298659146,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.03765762019093352,
+    "llm_minus_base_ci95": [
+     -0.04029995426742126,
+     -0.035035344812528194
+    ],
+    "r_llm": 0.07373315914217614,
+    "r_persona_same_cells": 0.13710381970022706,
+    "persona_wins_tasks": 13,
+    "tasks": 17,
+    "p_sign": 0.0245208740234375
+   },
+   "Text Persona - Gemini-Flash2.5": {
+    "people": 2058,
+    "acc_llm": 0.6985472547153783,
+    "acc_base": 0.7613746712970902,
+    "acc_persona": 0.757151325907347,
+    "acc_again": 0.817326034778991,
+    "llm_minus_base": -0.06282741658171205,
+    "llm_minus_base_ci95": [
+     -0.06590554781932614,
+     -0.05991774939886669
+    ],
+    "r_llm": 0.07852985866098232,
+    "r_persona_same_cells": 0.13708526255358947,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   }
+  },
+  "most_favourable_by_accuracy": "JSON Persona (Predicted Output) - GPT4.1",
+  "most_favourable_by_r": "JSON Persona (Predicted Output) - GPT4.1"
+ },
+ "published": {
+  "specs": {
+   "Demographics Only - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6803671865571626,
+    "acc_base": 0.7547756642339475,
+    "acc_persona": 0.750310003366426,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.074408477676785,
+    "llm_minus_base_ci95": [
+     -0.0787503194531781,
+     -0.07020798756010342
+    ],
+    "r_llm": 0.038574008440194756,
+    "r_persona_same_cells": 0.1326064081051832,
+    "persona_wins_tasks": 15,
+    "tasks": 17,
+    "p_sign": 0.0011749267578125
+   },
+   "JSON Persona (Predicted Output) - GPT4.1": {
+    "people": 2050,
+    "acc_llm": 0.7187947614976885,
+    "acc_base": 0.7546682964623519,
+    "acc_persona": 0.7501291204035815,
+    "acc_again": 0.8172133608852755,
+    "llm_minus_base": -0.03587353496466337,
+    "llm_minus_base_ci95": [
+     -0.0393166004983328,
+     -0.032290103475543334
+    ],
+    "r_llm": 0.08368710216149455,
+    "r_persona_same_cells": 0.1323129218402558,
+    "persona_wins_tasks": 13,
+    "tasks": 17,
+    "p_sign": 0.0245208740234375
+   },
+   "JSON Persona (Predicted Output) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6967176281875801,
+    "acc_base": 0.7563749602090877,
+    "acc_persona": 0.751110969524514,
+    "acc_again": 0.8189815001095425,
+    "llm_minus_base": -0.059657332021507595,
+    "llm_minus_base_ci95": [
+     -0.06359540949560016,
+     -0.05573045832637683
+    ],
+    "r_llm": 0.06638774807549748,
+    "r_persona_same_cells": 0.13296680496581925,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "JSON Persona - GPT4.1": {
+    "people": 2058,
+    "acc_llm": 0.712210175042239,
+    "acc_base": 0.7547771919283586,
+    "acc_persona": 0.7503495980733563,
+    "acc_again": 0.8183606345315905,
+    "llm_minus_base": -0.04256701688611953,
+    "llm_minus_base_ci95": [
+     -0.04581246174809209,
+     -0.039162123448089545
+    ],
+    "r_llm": 0.08635535553478867,
+    "r_persona_same_cells": 0.13344983398990157,
+    "persona_wins_tasks": 13,
+    "tasks": 17,
+    "p_sign": 0.0245208740234375
+   },
+   "JSON Persona - GPT4.1-mini": {
+    "people": 1000,
+    "acc_llm": 0.7031138159722222,
+    "acc_base": 0.7492329742783225,
+    "acc_persona": 0.7472459133986928,
+    "acc_again": 0.811566828077342,
+    "llm_minus_base": -0.046119158306100215,
+    "llm_minus_base_ci95": [
+     -0.0513486055371732,
+     -0.040771878290441176
+    ],
+    "r_llm": 0.06044757890651253,
+    "r_persona_same_cells": 0.14397767643940892,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "LLM Finetuning (500 training samples) - GPT4.1-mini": {
+    "people": 1558,
+    "acc_llm": 0.6959912888989571,
+    "acc_base": 0.7563306589644843,
+    "acc_persona": 0.7506749163079867,
+    "acc_again": 0.8200967072751223,
+    "llm_minus_base": -0.060339370065527274,
+    "llm_minus_base_ci95": [
+     -0.06401595318700865,
+     -0.05683708248382794
+    ],
+    "r_llm": 0.0340078408555719,
+    "r_persona_same_cells": 0.1270991273311814,
+    "persona_wins_tasks": 16,
+    "tasks": 17,
+    "p_sign": 0.0001373291015625
+   },
+   "Persona Summary - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6777944717569567,
+    "acc_base": 0.7547756642339475,
+    "acc_persona": 0.750310003366426,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.07698119247699081,
+    "llm_minus_base_ci95": [
+     -0.08103882179856071,
+     -0.07286801907270847
+    ],
+    "r_llm": 0.05998844449117995,
+    "r_persona_same_cells": 0.1326064081051832,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Persona Summary - JSON Persona - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.6743414873886063,
+    "acc_base": 0.7547756642339475,
+    "acc_persona": 0.750310003366426,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.08043417684534131,
+    "llm_minus_base_ci95": [
+     -0.084359461681498,
+     -0.07653285659501896
+    ],
+    "r_llm": 0.040867741436772013,
+    "r_persona_same_cells": 0.1326064081051832,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Text Persona (Default Temperature) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.712270216022917,
+    "acc_base": 0.7547758643139796,
+    "acc_persona": 0.7503105321493676,
+    "acc_again": 0.817317215775199,
+    "llm_minus_base": -0.04250564829106246,
+    "llm_minus_base_ci95": [
+     -0.04539032394703914,
+     -0.03942582961756132
+    ],
+    "r_llm": 0.05791058902795598,
+    "r_persona_same_cells": 0.13261813314415016,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Text Persona (Reasoning) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7037407248613732,
+    "acc_base": 0.7547741636337074,
+    "acc_persona": 0.7503093030863139,
+    "acc_again": 0.8173150291862776,
+    "llm_minus_base": -0.05103343877233433,
+    "llm_minus_base_ci95": [
+     -0.054476491945984744,
+     -0.04748515259278316
+    ],
+    "r_llm": 0.06207438142307723,
+    "r_persona_same_cells": 0.13261025689134356,
+    "persona_wins_tasks": 14,
+    "tasks": 17,
+    "p_sign": 0.0063629150390625
+   },
+   "Text Persona (Repeating Questions) - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7043060573435723,
+    "acc_base": 0.7547753069481761,
+    "acc_persona": 0.7503091315891436,
+    "acc_again": 0.8173170014037361,
+    "llm_minus_base": -0.05046924960460375,
+    "llm_minus_base_ci95": [
+     -0.054146844134479184,
+     -0.046729724985232195
+    ],
+    "r_llm": 0.07316832110985105,
+    "r_persona_same_cells": 0.1326064665782971,
+    "persona_wins_tasks": 13,
+    "tasks": 17,
+    "p_sign": 0.0245208740234375
+   },
+   "Text Persona - GPT4.1-mini": {
+    "people": 2058,
+    "acc_llm": 0.7171234763746769,
+    "acc_base": 0.7547756642339475,
+    "acc_persona": 0.750310003366426,
+    "acc_again": 0.8173166441179647,
+    "llm_minus_base": -0.03765218785927069,
+    "llm_minus_base_ci95": [
+     -0.040331883070688586,
+     -0.03494352490996399
+    ],
+    "r_llm": 0.06259057637374657,
+    "r_persona_same_cells": 0.1326064081051832,
+    "persona_wins_tasks": 13,
+    "tasks": 17,
+    "p_sign": 0.0245208740234375
+   },
+   "Text Persona - Gemini-Flash2.5": {
+    "people": 2058,
+    "acc_llm": 0.6939241409857594,
+    "acc_base": 0.7547707004428755,
+    "acc_persona": 0.7503078727522754,
+    "acc_again": 0.817326034778991,
+    "llm_minus_base": -0.06084655945711618,
+    "llm_minus_base_ci95": [
+     -0.06383282405223994,
+     -0.057859247190939864
+    ],
+    "r_llm": 0.07761960706252269,
+    "r_persona_same_cells": 0.1326154447956848,
+    "persona_wins_tasks": 13,
+    "tasks": 17,
+    "p_sign": 0.0245208740234375
+   }
+  },
+  "most_favourable_by_accuracy": "JSON Persona (Predicted Output) - GPT4.1",
+  "most_favourable_by_r": "JSON Persona - GPT4.1"
+ }
+}
