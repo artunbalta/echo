@@ -5557,8 +5557,14 @@ other people.
   - **Heavier panels miss** where ρ̂ is near zero and noisy (29/36 at K = 6, 15/60 at K = 10).
   - **The more a browser played, the less it is one person.** ρ̂ for humans against pets falls from
     .40 (two visits or more) to .07 (21 or more).
+- **Is a browser one person?** (Exploratory.) Among 24,478 browsers that took the survey twice, 27%
+  report a different person at some point. That share rises only from 25% to about 32% with
+  sessions, so shared machines do not by themselves explain the fall in ρ̂. Where the stated person
+  never changes (17,913 browsers), ρ̂ for humans against pets is .54, above one half. There copying
+  beats the crowd (+.072), as 2ρ̂ − 1 says (+.074): the copy law's sign turns where the theory says.
 - **The visit is a unit** (M4). Two dilemmas in one visit agree about twice as much as two from
-  different visits.
+  different visits. Part of that is mixed browsers. Among single-person browsers the ratio is
+  1.2–1.5, against 1.6–3.1 where the stated person changes.
 - **Country knows little.** A country-aware crowd gains .002–.020, between an eighth and about half of
   one visit.
 
