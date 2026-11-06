@@ -27,7 +27,7 @@ recipient's own work that the paper builds on or tests. A generic email gets a g
 >   intervals.
 >
 > The paper gives closed forms for each witness and a knowable ceiling estimated from the retest. A
-> two-page brief is attached.
+> short brief is attached.
 >
 > [One sentence specific to them: the question you would want their view on.]
 >
