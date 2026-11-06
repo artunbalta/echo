@@ -6,24 +6,28 @@ recipient's own work that the paper builds on or tests. A generic email gets a g
 
 ## The email (about 180 words)
 
-> **Subject:** Twin-2K-500's crowd baseline, and a ceiling above the retest
+> **Subject:** Twin-2K-500's crowd baseline, a ceiling above the retest, and the rate of knowing a person
 >
 > Dear Professor [Name],
 >
 > Your work on [their specific contribution, one line] is the starting point of a paper I have just
 > posted: [preprint link].
 >
-> In three pre-registered re-analyses of public data, I find three things:
+> In four pre-registered re-analyses of public data, I find four things:
 >
 > - On Twin-2K-500, the crowd's median answer is more accurate than all 13 released LLM twins.
 > - One earlier answer by the same person to the same question tells people apart at r = .49, against
 >   the twins' .07.
 > - Copying a person's own past behaviour loses to the crowd whenever the behaviour is less than half
 >   steady. A two-layer estimate that reads it against the crowd beats the person's own retest, which
->   the field uses as its ceiling. This holds in the Basel–Berlin Risk Study and across 138 measures of
->   the Self-Regulation Ontology.
+>   the field uses as its ceiling. This holds in the Basel–Berlin Risk Study, across 138 measures of
+>   the Self-Regulation Ontology, and in two million Moral Machine browsers.
+> - In the Moral Machine, how fast a person becomes knowable follows a curve drawn from pairs of
+>   visits alone: the predicted skill after one, two and three visits lies inside the measured 95%
+>   intervals.
 >
-> The paper gives closed forms for each witness and a knowable ceiling estimated from the retest.
+> The paper gives closed forms for each witness and a knowable ceiling estimated from the retest. A
+> two-page brief is attached.
 >
 > [One sentence specific to them: the question you would want their view on.]
 >
