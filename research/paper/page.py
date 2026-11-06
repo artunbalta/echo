@@ -1,7 +1,7 @@
 """The draft as a page to read: `python3 research/paper/page.py` (needs the `markdown` package).
 
-Reads draft.md (made by build.py, never by hand) and writes draft.html: the same text, set as a paper,
-in the report's palette, light and dark.
+Reads draft.md and brief.md (made by build.py, never by hand) and writes draft.html and brief.html: the
+same text, set as a paper, in the report's palette, light and dark.
 """
 import html
 import json
@@ -137,8 +137,20 @@ def figures() -> dict[str, tuple[str, str]]:
 
 
 
+STATUS = {
+    "draft": "Working draft. Studies 1 and 2 are pre-registered analyses of public data. Study 3's pilot data are not yet in, so its results are simulated.",
+    "brief": "Brief version of the working draft. All four studies are pre-registered analyses of public data; the working draft has every table, test and deviation.",
+}
+
+
 def main() -> int:
-    text = (HERE / "draft.md").read_text()
+    for name in STATUS:
+        render(name)
+    return 0
+
+
+def render(name: str) -> None:
+    text = (HERE / f"{name}.md").read_text()
     title = re.match(r"# (.+)", text).group(1)
     body = markdown.markdown(text, extensions=["tables", "sane_lists"])
     body = body.replace("<table>", '<div class="tablewrap"><table>').replace("</table>", "</table></div>")
@@ -165,13 +177,12 @@ def main() -> int:
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <style>{CSS}</style>
 <main class="page">
-<div class="status">Working draft. Studies 1 and 2 are pre-registered analyses of public data. Study 3's pilot data are not yet in, so its results are simulated.</div>
+<div class="status">{STATUS[name]}</div>
 {body}
 </main>
 """
-    (HERE / "draft.html").write_text(page, encoding="utf-8")
-    print(f"draft.html: {len(page)} bytes")
-    return 0
+    (HERE / f"{name}.html").write_text(page, encoding="utf-8")
+    print(f"{name}.html: {len(page)} bytes")
 
 
 if __name__ == "__main__":

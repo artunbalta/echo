@@ -4,7 +4,7 @@
 
 Reads research/pilot/runs/study-16.json (the many-group study) and research/pilot/runs/power.json (the power
 run) for Study 3, and research/deeds/runs/facts.json for Studies 1 and 2. It fills the {{placeholders}} of
-`draft.template.md` and `preregistration.template.md`, and writes `draft.md` and `preregistration.md`.
+`draft.template.md`, `preregistration.template.md` and `brief.template.md`, and writes `draft.md`, `preregistration.md` and `brief.md`.
 An unknown placeholder fails.
 
 A Study 1–2 placeholder is {{f:key:format}}. The formats are:
@@ -132,7 +132,7 @@ def main() -> int:
             return f"{fn(h2, nu, int(parts[2])):.2f}"
         raise KeyError(key)
 
-    for name in ("draft", "preregistration"):
+    for name in ("draft", "preregistration", "brief"):
         text = (HERE / f"{name}.template.md").read_text()
         out = re.sub(r"\{\{([^}]+)\}\}", lambda m: value(m.group(1)), text)
         (HERE / f"{name}.md").write_text(out)
