@@ -14,6 +14,7 @@ A Study 1–2 placeholder is {{f:key:format}}. The formats are:
 - `r2`, `r3`: a correlation without its leading zero;
 - `p`: a p-value;
 - `pts`: a difference in accuracy points;
+- `abs3`: a magnitude, to three decimals;
 - `s`: as written.
 Minus signs are typographic throughout.
 """
@@ -59,6 +60,8 @@ def fact(facts: dict, spec: str) -> str:
         return "< .001" if x < 0.001 else f"{x:.3f}".replace("0.", ".", 1)
     if fmt == "pts":
         return f"{abs(x) * 100:.1f}"
+    if fmt == "abs3":
+        return f"{abs(x):.3f}"
     return minus(format(x, fmt))
 
 

@@ -125,7 +125,8 @@ Nor has it been asked *how much* of what is knowable each source carries:
   knowledge index*: the share of the knowable, beyond the crowd, that a witness knows.
 - **§3, Study 1.** A pre-registered test on Twin-2K-500, the field's public benchmark, using the
   authors' own metric and the released twins' own predictions.
-- **§4, Study 2.** A pre-registered replication on incentivised behaviour.
+- **§4, Studies 2 and 2b.** Pre-registered replications on incentivised behaviour, and across 138
+  behavioural measures spanning the whole range of reliabilities.
 - **§5, Study 3.** The design, simulation and pre-registration of a study in ECHO, a multiplayer world
   that brings people back to the same situations. A world that watches is the instrument the first
   two studies call for.
@@ -416,8 +417,8 @@ registered (`PREREG-BBRS.md`) before any model was fitted.
   +0.018, and of both +0.028. The echo's is
   +0.166. The words themselves are reliable (retest r 0.67–0.84).
   They are reliable about words, not about deeds.
-- **B4: the observed echo against the theory.** It sits −0.033 below the
-  theory's population optimum on average. That is the price of fitting three weights on about 170
+- **B4: the observed echo against the theory.** On average it falls 0.033
+  short of the theory's population optimum. That is the price of fitting three weights on about 170
   people.
 
 ### 4.2 The same laws across 138 measures (Self-Regulation Ontology, pre-registered)
