@@ -5550,6 +5550,13 @@ other people.
   self-consistent (ρ̂ .008–.07, plausibly shared machines), so five curves hug zero. Humans against
   pets carries signal: there, the curve measured out to twenty visits lands on the theory drawn from
   pairs alone (.0388 against .0408).
+- **Exploratory panels** (not registered): everyone with more than K visits, for K = 3, 6 and 10.
+  - **Four visits or more** (4,826–52,263 browsers per contrast): all 18 predicted points lie within
+    their measured 95% intervals (r .99996).
+  - **Humans against pets** lands at every point of every panel: 3/3, 6/6, 10/10 and 20/20.
+  - **Heavier panels miss** where ρ̂ is near zero and noisy (29/36 at K = 6, 15/60 at K = 10).
+  - **The more a browser played, the less it is one person.** ρ̂ for humans against pets falls from
+    .40 (two visits or more) to .07 (21 or more).
 - **The visit is a unit** (M4). Two dilemmas in one visit agree about twice as much as two from
   different visits.
 - **Country knows little.** A country-aware crowd gains .002–.020, between an eighth and about half of
