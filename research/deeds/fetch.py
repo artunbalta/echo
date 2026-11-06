@@ -6,8 +6,10 @@
   and the questionnaire scores, main sample and both retests, per person.
 - Study 2b: the Self-Regulation Ontology (Eisenberg et al. 2019, CC BY 4.0, GitHub): the meaningful
   variables at time 1 and at the retest.
+- Study 4: the Moral Machine (Awad et al. 2018, CC BY 4.0, OSF 3hvt2): every shared response, and the
+  responses of those who took the survey. 3.5 GB, kept compressed (`--mm`).
 
-    /opt/anaconda3/bin/python3.13 research/deeds/fetch.py [--personas]
+    /opt/anaconda3/bin/python3.13 research/deeds/fetch.py [--personas] [--mm]
 """
 import json
 import pathlib
@@ -82,7 +84,31 @@ def fetch_sro():
         print(f"got   sro/{dest.name}")
 
 
+# The Moral Machine: local name → OSF download (listed from osf.io/3hvt2 on 2026-11-06).
+MM = {"SharedResponsesSurvey.csv.tar.gz": "q4695", "SharedResponses.csv.tar.gz": "tdqrn"}
+
+
+def fetch_mm():
+    out = DATA / "mm"
+    out.mkdir(parents=True, exist_ok=True)
+    for name, key in MM.items():
+        dest = out / name
+        if dest.exists() and dest.stat().st_size > 0:
+            print(f"have  mm/{name}")
+            continue
+        tmp = dest.with_suffix(dest.suffix + ".part")
+        req = urllib.request.Request(f"https://osf.io/download/{key}/", headers={"User-Agent": "echo-research/1.0"})
+        with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+        tmp.rename(dest)
+        print(f"got   mm/{name} ({dest.stat().st_size / 1e6:.1f} MB)", flush=True)
+
+
 def main():
+    if "--mm" in sys.argv:
+        fetch_mm()
+        return
     fetch_bbrs()
     fetch_sro()
     personas = "--personas" in sys.argv
