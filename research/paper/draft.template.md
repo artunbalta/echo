@@ -720,6 +720,12 @@ accuracy.
   situation. The persona bound caps every model that reads only it, language model or regression.
 - One earlier observation of the person in the same situation carries about half of it. A two-layer
   echo reads that observation against the crowd, and three observations carry about four fifths.
+- How much each further observation adds is not a guess. Where a person's own share ρ can be
+  measured, the curve the theory draws from pairs alone predicts the second and third look to within
+  their intervals (§4.3).
+- How knowable a person is depends on the situation: ρ is .08–.16 for moral contrasts of character and
+  .40 for humans against pets. A twin promising to know someone in a few visits must be built on
+  situations where ρ is not small, and must measure it where it is applied.
 - The echo composes with any twin: laid on the released LLM twins it scores
   {{f:t1.echo_llm.acc:.3f}}, from their {{f:t1.llm_headline.acc:.3f}}.
 
@@ -730,7 +736,8 @@ a ceiling above the retest. The persona's poor showing elsewhere is the personal
 (Mischel, 1968) seen from the machine's side.
 
 **Why a world.** If knowing someone takes watching them again in the situations one cares about, the
-instrument is a place people come back to. Such a place sets out comparable situations repeatedly, at
+instrument is a place people come back to. Looks are worth more spread over visits than packed into
+one, since two choices in one visit share the visit's mood (§4.3). Such a place sets out comparable situations repeatedly, at
 no cost per observation, with the person's consent. Study 3 is the first test of such an instrument.
 It also gives the debrief, "who knew you best?", which is the reason a person would come back.
 
@@ -739,6 +746,9 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
 - **The stakes.** Twin-2K-500's choices are hypothetical survey answers, and its "deeds elsewhere" are
   survey choices too.
 - **The retest sample.** Study 2's behaviour is incentivised, but its retest sample is small.
+- **The Moral Machine's people are browsers.** A browser can be several people, and the more a browser
+  played, the less it behaves like one person (§4.3). The registered looks curve was therefore a weak
+  test; the stronger evidence is exploratory and reported with every panel.
 - **The ceiling model.** The knowable ceiling comes from an ordered latent model. It is a model-based
   estimate, though one that reproduced the observed one-look echo to the third decimal. Its interval
   over people is narrow ({{f:t1.model.ceiling.lo:.3f}}–{{f:t1.model.ceiling.hi:.3f}}), but that
