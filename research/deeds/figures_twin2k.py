@@ -137,15 +137,29 @@ def build() -> dict[str, tuple[str, str]]:
 
     mm = _load("mm")
     if mm and mm["M1"].get("pooled"):
+        # The figure draws an exploratory panel (not registered; the caption says so).
         names = {"Utilitarian": "more lives", "Gender": "gender", "Fitness": "fitness", "Age": "age", "Social Status": "status", "Species": "humans over pets"}
-        curves = [{"label": names[k], **{x: mm["M1"][k][x] for x in ("n", "observed", "lo", "hi", "predicted")}} for k in names if k in mm["M1"]]
-        pooled = mm["M1"]["pooled"]
+        panel, k = mm["M1"], None
+        # Six points a curve, and most of them where ρ̂ is precise; the paper's table gives every panel.
+        for kk in (6, 3, 10):
+            for path in (RUNS / f"mm-exploratory-k{kk}.json", OUT / "mm" / f"exploratory_k{kk}.json"):
+                if path.exists():
+                    panel, k = json.loads(path.read_text())["M1"], kk
+                    break
+            if k:
+                break
+        curves = [{"label": names[n], **{x: panel[n][x] for x in ("n", "observed", "lo", "hi", "predicted")}} for n in names if n in panel]
+        pooled = panel["pooled"]
+        inside = sum(lo <= p <= hi for c in curves for lo, p, hi in zip(c["lo"], c["predicted"], c["hi"]))
+        points = sum(len(c["n"]) for c in curves)
+        people = [panel[n]["people"] for n in names if n in panel]
+        who = f"everyone with more than {k} visits ({min(people):,}–{max(people):,} browsers per contrast; exploratory)" if k else "the registered panel"
         figs["looks_mm"] = (
             F.looks_measured(curves, note="The looks curve, measured on the Moral Machine"),
-            f"The looks curve, measured (Moral Machine: the same people seen in up to {max(c['n'][-1] for c in curves) + 1} visits). "
-            f"Dots: the echo's skill on a held-out visit after n other visits, with 95% intervals over people; one curve per kind of dilemma. "
+            f"The looks curve, measured (Moral Machine): {who}. "
+            f"Dots: the echo's skill on a held-out visit after n other visits, with 95% intervals over people, one curve per kind of dilemma. "
             f"Dashes: the theory's nρ̂² / (nρ̂ + 1 − ρ̂), from ρ̂ fitted on pairs of visits only. "
-            f"Across all points r = {pooled['corr']:.3f}, mean gap {pooled['mad']:.4f}.",
+            f"{inside} of {points} predicted points lie inside their measured interval; r = {pooled['corr']:.5f}, mean gap {pooled['mad']:.4f}.",
         )
 
     if exch:

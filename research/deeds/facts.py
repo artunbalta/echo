@@ -198,6 +198,10 @@ def main():
             for k in ("corr", "mad", "mad_n2plus", "max_abs"):
                 f[f"t4.m1.{k}"] = m1["pooled"][k]
             f["t4.m1.holds"] = m1["pooled"]["holds"]
+            f["t4.m1.points"] = sum(v["K"] for k, v in m1.items() if k != "pooled")
+            f["t4.m1.inside"] = sum(lo <= pr <= hi for k, v in m1.items() if k != "pooled" for lo, pr, hi in zip(v["lo"], v["predicted"], v["hi"]))
+            f["t4.m1.people_min"] = min(v["people"] for k, v in m1.items() if k != "pooled")
+            f["t4.m1.people_max"] = max(v["people"] for k, v in m1.items() if k != "pooled")
         for name, sl in slug.items():
             if name in m1:
                 d = m1[name]
@@ -209,6 +213,7 @@ def main():
                         f[f"t4.m1.{sl}.obs{n}"], f[f"t4.m1.{sl}.pred{n}"] = d["observed"][n - 1], d["predicted"][n - 1]
                 if d.get("lo"):
                     f[f"t4.m1.{sl}.obsK.lo"], f[f"t4.m1.{sl}.obsK.hi"] = d["lo"][-1], d["hi"][-1]
+                    f[f"t4.m1.{sl}.inside"] = sum(lo <= pr <= hi for lo, pr, hi in zip(d["lo"], d["predicted"], d["hi"]))
             d = m2[name]
             f[f"t4.m2.{sl}.people"], f[f"t4.m2.{sl}.rho"] = d["people"], d["rho"]
             f[f"t4.m2.{sl}.copy"], f[f"t4.m2.{sl}.theory"] = d["copy"]["value"], d["theory_copy"]
@@ -230,6 +235,29 @@ def main():
             f["t4.m3.holds"] = m3["holds"]
             f["t4.m3.beats"] = sum(m3[n]["persona"]["value"] < m3[n]["echo1"]["value"] for n in slug if n in m3)
         shutil.copy(mm_path, RUNS / "mm-results.json")
+        # Exploratory (not registered): the looks curve on panels of everyone with more than K visits.
+        for k in (3, 6, 10):
+            xp = OUT / "mm" / f"exploratory_k{k}.json"
+            if not xp.exists():
+                continue
+            x = json.loads(xp.read_text())["M1"]
+            inside = total = 0
+            for name, sl in slug.items():
+                if name not in x:
+                    continue
+                d = x[name]
+                f[f"t4.x{k}.{sl}.people"], f[f"t4.x{k}.{sl}.rho"] = d["people"], d["rho"]
+                for n in range(1, d["K"] + 1):
+                    f[f"t4.x{k}.{sl}.obs{n}"], f[f"t4.x{k}.{sl}.pred{n}"] = d["observed"][n - 1], d["predicted"][n - 1]
+                    f[f"t4.x{k}.{sl}.lo{n}"], f[f"t4.x{k}.{sl}.hi{n}"] = d["lo"][n - 1], d["hi"][n - 1]
+                    inside += d["lo"][n - 1] <= d["predicted"][n - 1] <= d["hi"][n - 1]
+                    total += 1
+                f[f"t4.x{k}.{sl}.inside"] = sum(lo <= pr <= hi for lo, pr, hi in zip(d["lo"], d["predicted"], d["hi"]))
+            f[f"t4.x{k}.inside"], f[f"t4.x{k}.points"] = inside, total
+            f[f"t4.x{k}.corr"], f[f"t4.x{k}.mad"] = x["pooled"]["corr"], x["pooled"]["mad"]
+            f[f"t4.x{k}.people_min"] = min(x[n]["people"] for n in slug if n in x)
+            f[f"t4.x{k}.people_max"] = max(x[n]["people"] for n in slug if n in x)
+            shutil.copy(xp, RUNS / f"mm-exploratory-k{k}.json")
     audit_path = OUT / "audit" / "audit.json"
     if audit_path.exists():
         shutil.copy(audit_path, RUNS / "twin2k-audit.json")

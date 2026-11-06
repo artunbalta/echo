@@ -5524,3 +5524,42 @@ months).
   ceiling matches a simulation.
 - **The data.** `fetch.py` re-downloads both datasets; the Basel–Berlin files match the literature
   agent's copies byte for byte.
+
+## C82 — how fast a person becomes knowable: the Moral Machine (Study 2c)
+
+What it answers: Studies 1, 2 and 2b (C81) saw each person at most twice, so everything the theory says
+about the second, third and twentieth look was a model. The Moral Machine (Awad et al., 2018; OSF 3hvt2,
+CC BY 4.0) saw people again and again. Each session sets two dilemmas on each of six contrasts of
+character, and many browsers came back. The analysis was registered before the response files were
+opened (`research/deeds/PREREG-MM.md`, 3748247). The code was committed before the real run (9779af6),
+after a synthetic test caught an indexing bug in the pair correlation. The results are in 92168e7.
+
+**Data.** 31,517,766 dilemmas from 2,093,956 browsers in 3,534,594 sessions. A look is one visit's share
+of its two dilemmas on a contrast. The crowd is the mean choice in the dilemma's situation, fitted on
+other people.
+
+- **Copying is 2ρ − 1, and one look is ρ², in all six contrasts** (M2, registered: 6 of 6). There are
+  22,202–311,536 people per contrast. ρ̂ is .08–.16 for the five contrasts of character and .40 for
+  humans against pets, so copying loses badly to the crowd (−.21 to −.85). It matches 2ρ̂ − 1 in the
+  third decimal, and the echo after one look matches ρ̂² in the fourth.
+- **One visit knows more than the whole survey** (M3, registered: 6 of 6). The survey covers age,
+  gender, education, income, politics, religion and country. The mean gap is .037 (.035–.039). The
+  survey knows most about humans against pets (.086); one visit knows .232 there.
+- **The looks curve holds as registered** (M1: r .992, mean gap .0019, against > .95 and < .01). The
+  registered panel is a weak test, and the paper says so. Browsers with 21 or more visits are barely
+  self-consistent (ρ̂ .008–.07, plausibly shared machines), so five curves hug zero. Humans against
+  pets carries signal: there, the curve measured out to twenty visits lands on the theory drawn from
+  pairs alone (.0388 against .0408).
+- **The visit is a unit** (M4). Two dilemmas in one visit agree about twice as much as two from
+  different visits.
+- **Country knows little.** A country-aware crowd gains .002–.020, between an eighth and about half of
+  one visit.
+
+**What it changes for ECHO.**
+- **Looks are worth more spread over visits** than packed into one. That is the pilot's design (C75,
+  C78) and circles' (C83).
+- **The theory's two cheap laws are now confirmed on two million people.** Those laws are copying's
+  2ρ − 1 and one look's ρ². The debrief's "share of the knowable" (C80) stands on them.
+- **How knowable a person is depends on the situation** (ρ .08 to .40 here). A product promising "three
+  visits" must pick situations where ρ is not tiny. The pilot's simulation assumed retest reliabilities
+  of .5–.7 for its six, from the literature; the pilot will measure them.

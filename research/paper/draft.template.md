@@ -58,6 +58,17 @@ pre-registered):
   (r = {{f:t3.deeds.echo_rho2_corr:r2}});
 - self-reports know nothing of behaviour ({{f:t3.deeds.mean.words:+.3f}}).
 
+**How fast a person becomes knowable: the Moral Machine** (pre-registered). It has
+{{f:t4.dilemmas:,d}} moral dilemmas from {{f:t4.people:,d}} browsers, many of them seen in many visits.
+
+- **The two laws again.** Copying another visit scores 2ρ − 1, and one look ρ², in all six contrasts.
+- **One visit knows more than the whole survey**, country included, in {{f:t4.m3.beats:d}} of 6.
+- **The looks curve holds as registered, and exploratory panels show where.**
+  - On everyone with four visits or more, the curve the theory draws from pairs alone puts all
+    {{f:t4.x3.points:d}} points within their 95% intervals.
+  - For the contrast where people differ most, it does so out to twenty visits.
+  - In heavier panels, where ρ is near zero and noisy, it misses.
+
 On this evidence, knowing a person means watching them in the situation of interest, again. Asking
 them about themselves, and knowing what they did elsewhere, adds little. **Study 3** describes a
 multiplayer world built to watch people again, and a pre-registered study of friends in it.
@@ -125,8 +136,11 @@ Nor has it been asked *how much* of what is knowable each source carries:
   knowledge index*: the share of the knowable, beyond the crowd, that a witness knows.
 - **§3, Study 1.** A pre-registered test on Twin-2K-500, the field's public benchmark, using the
   authors' own metric and the released twins' own predictions.
-- **§4, Studies 2 and 2b.** Pre-registered replications on incentivised behaviour, and across 138
-  behavioural measures spanning the whole range of reliabilities.
+- **§4, Studies 2, 2b and 2c.** Three more pre-registered tests:
+  - on incentivised behaviour;
+  - across 138 behavioural measures spanning the whole range of reliabilities;
+  - on two million people seen again and again (the Moral Machine), where the looks curve, how fast a
+    person becomes knowable, is measured for the first time.
 - **§5, Study 3.** The design, simulation and pre-registration of a study in ECHO, a multiplayer world
   that brings people back to the same situations. A world that watches is the instrument the first
   two studies call for.
@@ -172,6 +186,8 @@ Three predictions follow.
 - In forecast verification, copying is *persistence*. Its skill against climatology is 2ρ − 1.
 - The echo after one look, without a persona, is the best linear blend of persistence and climatology.
   Its skill is ρ² (Murphy, 1992).
+- After n looks, without a persona, the skill is ρ times the reliability of the n looks' mean, which is
+  the Spearman–Brown prophecy (Spearman, 1910; Brown, 1910): nρ² / (nρ + 1 − ρ).
 
 What is new here is the persona prior and the knowable ceiling for discrete answers. So is the
 evidence that the field of digital twins has been scoring itself against persistence while calling it
@@ -474,6 +490,160 @@ self-report surveys. It retested 150 of them about four months later, on everyth
 Words know words and deeds know deeds, but neither knows the other. That is the self-report–behaviour
 gap (Dang, King & Inzlicht, 2020), seen as a matrix of witnesses.
 
+### 4.3 How fast a person becomes knowable (Moral Machine, pre-registered)
+
+The studies so far saw each person at most twice, so the looks curve beyond one look was a model. The
+Moral Machine (Awad et al., 2018) saw people again and again. It is a website that sets dilemmas for a
+self-driving car that must kill one group of characters or another. Each session sets 13 dilemmas. Six
+contrasts of character each come up in two of them:
+
+- more lives against fewer;
+- men against women;
+- fit against large;
+- young against old;
+- high status against low;
+- humans against pets.
+
+Many people played more than one session. The released data hold {{f:t4.dilemmas:,d}} such dilemmas,
+from {{f:t4.people:,d}} browsers in {{f:t4.sessions:,d}} sessions. A browser stands for a person here,
+which the data allow and which shared computers blur.
+
+**Design.** The analysis was registered before the response files were opened (`PREREG-MM.md`).
+
+- **A look** is one visit's score on one contrast: the share of its two dilemmas in which the person
+  spared the first side named above.
+- **The crowd** is the mean choice in each dilemma's situation, fitted on other people. The situation
+  is who dies if the car stays or swerves, pedestrians or passengers, the crossing signal, and the
+  numbers.
+- **ρ̂** is fitted on pairs of visits only. From it alone the theory draws the whole curve: skill
+  nρ̂² / (nρ̂ + 1 − ρ̂) after n visits.
+- **The panel.** The curve is measured on held-out visits of a fixed panel: the people with more than
+  K visits on the contrast, where K is the largest number of looks, up to 20, that at least 2,000
+  people reach.
+
+**Copying, and one look (M2).** Among the people with two or more visits on a contrast, a visit's
+choice is mostly the moment. ρ̂ is {{f:t4.m2.fitness.rho:.2f}} to {{f:t4.m2.age.rho:.2f}} for the five
+contrasts of character, and {{f:t4.m2.species.rho:.2f}} for humans against pets. Copying the person's
+other visit therefore loses to the crowd, and by 2ρ̂ − 1:
+
+| Contrast | People | ρ̂ | Copy | 2ρ̂ − 1 | One look | ρ̂² |
+|---|---|---|---|---|---|---|
+| more lives | {{f:t4.m2.util.people:,d}} | {{f:t4.m2.util.rho:.3f}} | {{f:t4.m2.util.copy:+.3f}} | {{f:t4.m2.util.theory:+.3f}} | {{f:t4.m2.util.echo1:.4f}} | {{f:t4.m2.util.echo1_theory:.4f}} |
+| men over women | {{f:t4.m2.gender.people:,d}} | {{f:t4.m2.gender.rho:.3f}} | {{f:t4.m2.gender.copy:+.3f}} | {{f:t4.m2.gender.theory:+.3f}} | {{f:t4.m2.gender.echo1:.4f}} | {{f:t4.m2.gender.echo1_theory:.4f}} |
+| fit over large | {{f:t4.m2.fitness.people:,d}} | {{f:t4.m2.fitness.rho:.3f}} | {{f:t4.m2.fitness.copy:+.3f}} | {{f:t4.m2.fitness.theory:+.3f}} | {{f:t4.m2.fitness.echo1:.4f}} | {{f:t4.m2.fitness.echo1_theory:.4f}} |
+| young over old | {{f:t4.m2.age.people:,d}} | {{f:t4.m2.age.rho:.3f}} | {{f:t4.m2.age.copy:+.3f}} | {{f:t4.m2.age.theory:+.3f}} | {{f:t4.m2.age.echo1:.4f}} | {{f:t4.m2.age.echo1_theory:.4f}} |
+| high status over low | {{f:t4.m2.status.people:,d}} | {{f:t4.m2.status.rho:.3f}} | {{f:t4.m2.status.copy:+.3f}} | {{f:t4.m2.status.theory:+.3f}} | {{f:t4.m2.status.echo1:.4f}} | {{f:t4.m2.status.echo1_theory:.4f}} |
+| humans over pets | {{f:t4.m2.species.people:,d}} | {{f:t4.m2.species.rho:.3f}} | {{f:t4.m2.species.copy:+.3f}} | {{f:t4.m2.species.theory:+.3f}} | {{f:t4.m2.species.echo1:.4f}} | {{f:t4.m2.species.echo1_theory:.4f}} |
+
+- **Copying.** The registered test asked for the sign and a gap under .03. It holds in
+  {{f:t4.m2.holds:d}} of 6, and the largest gap is in the third decimal.
+- **One look.** The echo after one look scores ρ̂² to within a few ten-thousandths.
+- **Copying the raw choice** is worse still, since it carries the other visit's situation along. It
+  ranges from {{f:t4.m2.species.raw:+.2f}} to {{f:t4.m2.fitness.raw:+.2f}}.
+
+**One visit against the whole survey (M3).** {{f:t4.survey:,d}} people also answered the site's
+survey: their age, gender, education and income, a political and a religious slider, and their
+country. Among those with two visits, a ridge regression on all of it, fitted on other people, knows
+less than one visit in {{f:t4.m3.beats:d}} of 6 contrasts:
+
+| Contrast | People | Survey | One visit | Both |
+|---|---|---|---|---|
+| more lives | {{f:t4.m3.util.people:,d}} | {{f:t4.m3.util.persona:+.3f}} | {{f:t4.m3.util.echo1:.3f}} | {{f:t4.m3.util.both:.3f}} |
+| men over women | {{f:t4.m3.gender.people:,d}} | {{f:t4.m3.gender.persona:+.3f}} | {{f:t4.m3.gender.echo1:.3f}} | {{f:t4.m3.gender.both:.3f}} |
+| fit over large | {{f:t4.m3.fitness.people:,d}} | {{f:t4.m3.fitness.persona:+.3f}} | {{f:t4.m3.fitness.echo1:.3f}} | {{f:t4.m3.fitness.both:.3f}} |
+| young over old | {{f:t4.m3.age.people:,d}} | {{f:t4.m3.age.persona:+.3f}} | {{f:t4.m3.age.echo1:.3f}} | {{f:t4.m3.age.both:.3f}} |
+| high status over low | {{f:t4.m3.status.people:,d}} | {{f:t4.m3.status.persona:+.3f}} | {{f:t4.m3.status.echo1:.3f}} | {{f:t4.m3.status.both:.3f}} |
+| humans over pets | {{f:t4.m3.species.people:,d}} | {{f:t4.m3.species.persona:+.3f}} | {{f:t4.m3.species.echo1:.3f}} | {{f:t4.m3.species.both:.3f}} |
+
+- **The registered gap.** The mean gap is {{f:t4.m3.gap:.3f}} ({{f:t4.m3.gap.lo:.3f}}–{{f:t4.m3.gap.hi:.3f}}),
+  as registered.
+- **Where the survey knows most.** It is humans against pets, at {{f:t4.m3.species.persona:.3f}}. One
+  visit knows {{f:t4.m3.species.echo1:.3f}} there.
+
+**The visit is a unit (M4).** Two dilemmas of a kind in the same visit agree more than two from
+different visits:
+
+| Contrast | Within a visit | Across visits | Visits for 80% of the knowable | Country crowd | One visit |
+|---|---|---|---|---|---|
+| more lives | {{f:t4.m4.util.within:.2f}} | {{f:t4.m4.util.across:.2f}} | {{f:t4.m4.util.n80:.0f}} | {{f:t4.m4.util.country:+.4f}} | {{f:t4.m2.util.echo1:.4f}} |
+| men over women | {{f:t4.m4.gender.within:.2f}} | {{f:t4.m4.gender.across:.2f}} | {{f:t4.m4.gender.n80:.0f}} | {{f:t4.m4.gender.country:+.4f}} | {{f:t4.m2.gender.echo1:.4f}} |
+| fit over large | {{f:t4.m4.fitness.within:.2f}} | {{f:t4.m4.fitness.across:.2f}} | {{f:t4.m4.fitness.n80:.0f}} | {{f:t4.m4.fitness.country:+.4f}} | {{f:t4.m2.fitness.echo1:.4f}} |
+| young over old | {{f:t4.m4.age.within:.2f}} | {{f:t4.m4.age.across:.2f}} | {{f:t4.m4.age.n80:.0f}} | {{f:t4.m4.age.country:+.4f}} | {{f:t4.m2.age.echo1:.4f}} |
+| high status over low | {{f:t4.m4.status.within:.2f}} | {{f:t4.m4.status.across:.2f}} | {{f:t4.m4.status.n80:.0f}} | {{f:t4.m4.status.country:+.4f}} | {{f:t4.m2.status.echo1:.4f}} |
+| humans over pets | {{f:t4.m4.species.within:.2f}} | {{f:t4.m4.species.across:.2f}} | {{f:t4.m4.species.n80:.0f}} | {{f:t4.m4.species.country:+.4f}} | {{f:t4.m2.species.echo1:.4f}} |
+
+Country, the variable this dataset is famous for, is in the table's last two columns. A crowd that
+knows each person's country, shrunk toward the world's, gains {{f:t4.m4.fitness.country:+.3f}} to
+{{f:t4.m4.species.country:+.3f}}: between an eighth and about half of what one visit gains.
+
+Part of what the theory calls the day is the visit. Looks are worth more spread over visits than
+packed into one, which is how ECHO's pilot is built. The knowable is small here, ρ̂ itself, so 80% of
+it takes six visits for humans against pets and twenty or more for the rest.
+
+**The looks curve as registered (M1).** The registered panel is the browsers with more than K visits,
+K = {{f:t4.m1.util.k:d}} for five contrasts and {{f:t4.m1.status.k:d}} for status:
+{{f:t4.m1.status.people:,d}}–{{f:t4.m1.species.people:,d}} browsers per contrast. By the registered criterion the
+curve holds. Across the {{f:t4.m1.points:d}} (contrast, n) points, measured and predicted skill
+correlate at r = {{f:t4.m1.corr:.3f}}, with a mean gap of {{f:t4.m1.mad:.4f}} (registered:
+above .95 and below .01).
+
+The panel is a poor place to test it, though, and we say so:
+
+- **Barely self-consistent.** Browsers that played 21 times or more agree with themselves little
+  (ρ̂ {{f:t4.m1.gender.rho:.3f}}–{{f:t4.m1.species.rho:.3f}}, against {{f:t4.m2.fitness.rho:.2f}}–{{f:t4.m2.species.rho:.2f}}
+  among everyone with two visits). Shared machines would do that.
+- **Noisy where it is near zero.** ρ̂ there is about as noisy as it is large, so for five contrasts the
+  curve hugs zero and the criterion is easy to meet.
+- **Humans against pets carries signal.** The measured curve rises from
+  {{f:t4.m1.species.obs1:.4f}} at one visit to {{f:t4.m1.species.obsK:.4f}} at twenty
+  ({{f:t4.m1.species.obsK.lo:.4f}}–{{f:t4.m1.species.obsK.hi:.4f}}). The theory, from pairs alone, said
+  {{f:t4.m1.species.pred1:.4f}} and {{f:t4.m1.species.predK:.4f}}.
+- **Where ρ̂ is near zero,** the measured curve sits below the theory's. A κ set from a noisy ρ̂ does
+  worse than the theory, which assumes ρ known, and averaging the theory over noisy ρ̂ (Jensen's
+  inequality) inflates it.
+
+**The looks curve, exploratory.** The registered panel asked for more than twenty visits. The curve
+can also be measured on everyone with more than K visits for smaller K, where browsers are many and
+ρ̂ is precise. This is not registered, and it is reported as such. Each cell counts the predicted
+points that lie inside their measured 95% interval:
+
+| Contrast | More than 3 visits | More than 6 | More than 10 | More than 20 (registered) |
+|---|---|---|---|---|
+| more lives | {{f:t4.x3.util.inside:d}}/3 | {{f:t4.x6.util.inside:d}}/6 | {{f:t4.x10.util.inside:d}}/10 | {{f:t4.m1.util.inside:d}}/{{f:t4.m1.util.k:d}} |
+| men over women | {{f:t4.x3.gender.inside:d}}/3 | {{f:t4.x6.gender.inside:d}}/6 | {{f:t4.x10.gender.inside:d}}/10 | {{f:t4.m1.gender.inside:d}}/{{f:t4.m1.gender.k:d}} |
+| fit over large | {{f:t4.x3.fitness.inside:d}}/3 | {{f:t4.x6.fitness.inside:d}}/6 | {{f:t4.x10.fitness.inside:d}}/10 | {{f:t4.m1.fitness.inside:d}}/{{f:t4.m1.fitness.k:d}} |
+| young over old | {{f:t4.x3.age.inside:d}}/3 | {{f:t4.x6.age.inside:d}}/6 | {{f:t4.x10.age.inside:d}}/10 | {{f:t4.m1.age.inside:d}}/{{f:t4.m1.age.k:d}} |
+| high status over low | {{f:t4.x3.status.inside:d}}/3 | {{f:t4.x6.status.inside:d}}/6 | {{f:t4.x10.status.inside:d}}/10 | {{f:t4.m1.status.inside:d}}/{{f:t4.m1.status.k:d}} |
+| humans over pets | {{f:t4.x3.species.inside:d}}/3 | {{f:t4.x6.species.inside:d}}/6 | {{f:t4.x10.species.inside:d}}/10 | {{f:t4.m1.species.inside:d}}/{{f:t4.m1.species.k:d}} |
+| browsers per contrast | {{f:t4.x3.people_min:,d}}–{{f:t4.x3.people_max:,d}} | {{f:t4.x6.people_min:,d}}–{{f:t4.x6.people_max:,d}} | {{f:t4.x10.people_min:,d}}–{{f:t4.x10.people_max:,d}} | {{f:t4.m1.people_min:,d}}–{{f:t4.m1.people_max:,d}} |
+| all points (r, mean gap) | {{f:t4.x3.inside:d}}/{{f:t4.x3.points:d}} ({{f:t4.x3.corr:.5f}}, {{f:t4.x3.mad:.4f}}) | {{f:t4.x6.inside:d}}/{{f:t4.x6.points:d}} ({{f:t4.x6.corr:.5f}}, {{f:t4.x6.mad:.4f}}) | {{f:t4.x10.inside:d}}/{{f:t4.x10.points:d}} ({{f:t4.x10.corr:.3f}}, {{f:t4.x10.mad:.4f}}) | {{f:t4.m1.inside:d}}/{{f:t4.m1.points:d}} ({{f:t4.m1.corr:.3f}}, {{f:t4.m1.mad:.4f}}) |
+
+- **Where ρ̂ is measured on many people, the curve lands.** At four visits or more, all
+  {{f:t4.x3.points:d}} points do. For humans against pets the measured skill is
+  {{f:t4.x3.species.obs1:.3f}}, {{f:t4.x3.species.obs2:.3f}} and {{f:t4.x3.species.obs3:.3f}} after one, two and
+  three visits. The theory, from pairs alone, said {{f:t4.x3.species.pred1:.3f}},
+  {{f:t4.x3.species.pred2:.3f}} and {{f:t4.x3.species.pred3:.3f}}.
+- **Humans against pets lands in every panel.** It is the contrast where people differ most, and every
+  point of every panel lies inside its interval, out to twenty visits in the registered one.
+- **Where ρ̂ is near zero, the curve misses.** In the heaviest panels the other contrasts have ρ̂ of .01
+  to .04, about as noisy as it is large, and most of their points miss.
+- **The more a browser played, the less it is one person.** For humans against pets, ρ̂ falls with
+  the number of visits the panel asks for:
+
+  | Panel | ρ̂ |
+  |---|---|
+  | two visits or more | {{f:t4.m2.species.rho:.2f}} |
+  | 4 or more | {{f:t4.x3.species.rho:.2f}} |
+  | 7 or more | {{f:t4.x6.species.rho:.2f}} |
+  | 11 or more | {{f:t4.x10.species.rho:.2f}} |
+  | 21 or more | {{f:t4.m1.species.rho:.2f}} |
+
+  Shared machines would do that, and so would people trying the answers out. The theory does not
+  need ρ to be the same in every panel. It needs ρ to be measured where it is applied, and that is
+  what the debrief and the pilot do.
+
+<!-- figure:looks_mm -->
+
 ## 5. Study 3: the village (pre-registered pilot)
 
 Studies 1 and 2 say that knowing a person takes watching them again, in the situation of interest. ECHO
@@ -597,15 +767,17 @@ Two patterns stand out:
 ## References
 
 - Argyle, L. P., Busby, E. C., Fulda, N., Gubler, J. R., Rytting, C., & Wingate, D. (2023). Out of one, many: Using language models to simulate human samples. *Political Analysis, 31*(3), 337–351. https://doi.org/10.1017/pan.2023.2
+- Awad, E., Dsouza, S., Kim, R., Schulz, J., Henrich, J., Shariff, A., Bonnefon, J.-F., & Rahwan, I. (2018). The Moral Machine experiment. *Nature, 563*(7729), 59–64. https://doi.org/10.1038/s41586-018-0637-6
 - Berg, J., Dickhaut, J., & McCabe, K. (1995). Trust, reciprocity, and social history. *Games and Economic Behavior, 10*(1), 122–142.
+- Brown, W. (1910). Some experimental results in the correlation of mental abilities. *British Journal of Psychology, 3*(3), 296–322.
 - Dang, J., King, K. M., & Inzlicht, M. (2020). Why are self-report and behavioral measures weakly correlated? *Trends in Cognitive Sciences, 24*(4), 267–269. https://doi.org/10.1016/j.tics.2020.01.007
+- Eisenberg, I. W., Bissett, P. G., Enkavi, A. Z., Li, J., MacKinnon, D. P., Marsch, L. A., & Poldrack, R. A. (2019). Uncovering the structure of self-regulation through data-driven ontology discovery. *Nature Communications, 10*, 2319. https://doi.org/10.1038/s41467-019-10301-1
+- Enkavi, A. Z., Eisenberg, I. W., Bissett, P. G., Mazza, G. L., MacKinnon, D. P., Marsch, L. A., & Poldrack, R. A. (2019). Large-scale analysis of test–retest reliabilities of self-regulation measures. *PNAS, 116*(12), 5472–5477. https://doi.org/10.1073/pnas.1818430116
 - Epstein, S. (1979). The stability of behavior: I. On predicting most of the people much of the time. *Journal of Personality and Social Psychology, 37*(7), 1097–1126.
 - Fleeson, W. (2001). Toward a structure- and process-integrated view of personality: Traits as density distributions of states. *Journal of Personality and Social Psychology, 80*(6), 1011–1027.
 - Forsythe, R., Horowitz, J. L., Savin, N. E., & Sefton, M. (1994). Fairness in simple bargaining experiments. *Games and Economic Behavior, 6*(3), 347–369.
 - Frederick, S., Loewenstein, G., & O'Donoghue, T. (2002). Time discounting and time preference: A critical review. *Journal of Economic Literature, 40*(2), 351–401.
 - Frey, R., Pedroni, A., Mata, R., Rieskamp, J., & Hertwig, R. (2017). Risk preference shares the psychometric structure of major psychological traits. *Science Advances, 3*(10), e1701381. https://doi.org/10.1126/sciadv.1701381
-- Eisenberg, I. W., Bissett, P. G., Enkavi, A. Z., Li, J., MacKinnon, D. P., Marsch, L. A., & Poldrack, R. A. (2019). Uncovering the structure of self-regulation through data-driven ontology discovery. *Nature Communications, 10*, 2319. https://doi.org/10.1038/s41467-019-10301-1
-- Enkavi, A. Z., Eisenberg, I. W., Bissett, P. G., Mazza, G. L., MacKinnon, D. P., Marsch, L. A., & Poldrack, R. A. (2019). Large-scale analysis of test–retest reliabilities of self-regulation measures. *PNAS, 116*(12), 5472–5477. https://doi.org/10.1073/pnas.1818430116
 - Hedge, C., Powell, G., & Sumner, P. (2018). The reliability paradox: Why robust cognitive tasks do not produce reliable individual differences. *Behavior Research Methods, 50*(3), 1166–1186. https://doi.org/10.3758/s13428-017-0935-1
 - Holt, C. A., & Laury, S. K. (2002). Risk aversion and incentive effects. *American Economic Review, 92*(5), 1644–1655.
 - Kelley, T. L. (1927). *Interpretation of Educational Measurements.* World Book.
@@ -616,6 +788,7 @@ Two patterns stand out:
 - Park, J. S., Zou, C. Q., Shaw, A., Hill, B. M., Cai, C., Morris, M. R., Willer, R., Liang, P., & Bernstein, M. S. (2024). Generative agent simulations of 1,000 people. arXiv:2411.10109.
 - Peng, T., Gui, G., Brucks, M., Merlau, D. J., Fan, G. J., Ben Sliman, M., Johnson, E. J., et al. (2026). Digital twins as funhouse mirrors: Five key distortions. arXiv:2509.19088.
 - Sheeran, P. (2002). Intention–behavior relations: A conceptual and empirical review. *European Review of Social Psychology, 12*(1), 1–36. https://doi.org/10.1080/14792772143000003
+- Spearman, C. (1910). Correlation calculated from faulty data. *British Journal of Psychology, 3*(3), 271–295.
 - Toubia, O., Gui, G. Z., Peng, T., Merlau, D. J., Li, A., & Chen, H. (2025). Twin-2K-500: A data set for building digital twins of over 2,000 people based on their answers to over 500 questions. *Marketing Science, 44*(6), 1446–1455. https://doi.org/10.1287/mksc.2025.0262
 - Wang, Hunt, Tang, & Joseph (2026). When can LLM digital twins reduce human measurement? From behavioral fidelity to statistical substitutability. arXiv:2609.07987.
 - Wilson, R. C., Geana, A., White, J. M., Ludvig, E. A., & Cohen, J. D. (2014). Humans use directed and random exploration to solve the explore–exploit dilemma. *Journal of Experimental Psychology: General, 143*(6), 2074–2081.
