@@ -93,6 +93,7 @@ beforeEach(() => {
   process.env.ECHO_PILOT_ADMIN = ADMIN;
   delete process.env.ECHO_PILOT_CELL;
   delete process.env.ECHO_PILOT_VISITS;
+  delete process.env.ECHO_PILOT_REVEAL;
   process.env.ML_SERVICE_URL = "https://ml.test";
   process.env.ML_SERVICE_TOKEN = "t";
 });
@@ -411,4 +412,37 @@ test("C75: everything the pilot's six say or offer has its Turkish", () => {
   for (const line of ["Two fish, still cold from the sea.", "Low water: one fish.", "The tide comes in high: three fish.", "The tide turns your way: four fish.", "The tide goes out and stays out. Nothing.", "Your pack is too full to carry them all."]) {
     assert.ok(BEATS_TR_FOR_TEST[line], line);
   }
+});
+
+test("C80: who knew you best is the owner's to switch on, and only after the last visit; one friend's guess stays hidden", async () => {
+  const reveal = async (who: string) => PILOT_GET(new Request("https://echo.test/api/pilot?op=reveal", { headers: auth(who) }));
+  const C = subject(3);
+  await join(A, "Deniz");
+  await join(B, "Ece");
+  await join(C, "Can");
+  assert.equal((await reveal(A)).status, 404, "off unless the owner switches it on");
+  process.env.ECHO_PILOT_REVEAL = "1";
+  assert.deepEqual(await (await reveal(A)).json(), { ready: false }, "nothing before the visits");
+  await pilot(A, "start");
+  assert.equal((await act(A, await setOut(A, "hungry_stranger", "rv_1"), "give-one")).status, 200);
+  await pilot(A, "end");
+  assert.deepEqual(await (await reveal(A)).json(), { ready: false }, "nothing between the visits: it could change what they do");
+  now += PILOT.betweenMs;
+  await pilot(A, "start");
+  assert.equal((await act(A, await setOut(A, "hungry_stranger", "rv_2"), "give-two")).status, 200);
+  await pilot(A, "end");
+  const guess = { give: 2, lend: false, bet: "bet-safe", seed: "now", path: "marked", greet: true };
+  assert.equal((await pilot(B, "rate", { ratee: "Deniz", know: 2, axes: SELF, predicted: guess })).status, 200);
+  type Row = { paradigm: string; said: number | null; friends: number | null; friendsCount: number; echo: number | null; did: number | null; looks: number; closest: string[] };
+  const one = (await (await reveal(A)).json()) as { ready: boolean; rows: Row[]; tally: Record<string, number> };
+  assert.equal(one.ready, true);
+  const give = one.rows.find((r) => r.paradigm === "give")!;
+  assert.deepEqual([give.said, give.did, give.looks, give.friends, give.friendsCount], [2 / 3, 2 / 3, 1, null, 1], "one friend's guess is not shown");
+  assert.ok(Math.abs(give.echo! - (0.5 + 0.6 * (1 / 3 - 0.5))) < 1e-9, "the echo moved from one half towards one loaf by ρ");
+  assert.deepEqual(give.closest, ["said"]);
+  assert.equal(one.rows.find((r) => r.paradigm === "greet")!.did, null, "never met on the last visit: nothing scored");
+  assert.equal((await pilot(C, "rate", { ratee: "Deniz", know: 1, axes: null, predicted: guess })).status, 200);
+  const two = (await (await reveal(A)).json()) as { rows: Row[] };
+  assert.deepEqual(two.rows.find((r) => r.paradigm === "give")!.friends, 2 / 3, "two friends: their median");
+  assert.deepEqual(await (await reveal(B)).json(), { ready: false }, "someone who has not played sees nothing of anyone");
 });

@@ -13,6 +13,9 @@
  * - `POST ?op=rate` `{ ratee, know, axes, predicted }`: how they place a friend, by the friend's nickname,
  *   and what they think the friend would do in each of the six (C76).
  * - `GET ?op=export` with `x-pilot-admin`: everything, for the owner's analysis.
+ * - `GET ?op=reveal`: who knew the caller best (C80), once their last visit is over, and only while the
+ *   owner has switched it on (`ECHO_PILOT_REVEAL=1`). It holds their own words, their friends' median
+ *   guess (two or more friends), their echo's guess, and what they did.
  */
 import { NextResponse } from "next/server";
 import { PILOT, PILOT_SITUATIONS, type Pack, type Staging } from "@echo/planet";
@@ -34,6 +37,7 @@ import {
   type PilotNotice,
   type PilotPerson,
 } from "@/lib/pilot";
+import { choices, reveal } from "@/lib/pilotReveal";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { villageStore } from "@/lib/villageStore";
@@ -51,6 +55,7 @@ export async function GET(req: Request) {
   const store = villageStore();
   if (!store) return bad("no_store", 503);
   if (new URL(req.url).searchParams.get("op") === "export") return exportAll(req, cfg.cell);
+  if (new URL(req.url).searchParams.get("op") === "reveal") return revealFor(req, cfg.visits);
 
   const caller = subjectOf(req);
   const base = { on: true, cell: cfg.cell, sessionMs: PILOT.sessionMs, sessions: cfg.visits };
@@ -156,6 +161,34 @@ export async function POST(req: Request) {
   }
 
   return bad("bad_op");
+}
+
+/**
+ * The debrief (C80): only for someone whose visits are all over, so that nothing they see can change what
+ * they do; only while the owner allows it; and friends' guesses only as a median of two or more.
+ */
+async function revealFor(req: Request, visits: number) {
+  if (process.env.ECHO_PILOT_REVEAL !== "1") return off();
+  const caller = subjectOf(req);
+  if (!caller.ok) {
+    const { body, status } = subjectRejection(caller);
+    return NextResponse.json(body, { status });
+  }
+  const store = villageStore()!;
+  const person = await store.pilotPersonOf(caller.subject);
+  if (person === undefined) return bad("unreadable", 503);
+  if (!person) return off();
+  const start = canStart(person, Date.now(), visits);
+  if (start.ok || start.why !== "done") return NextResponse.json({ ready: false });
+  const [people, ratings, mine] = await Promise.all([store.pilotPeople(), store.pilotRatings(), store.stagingsOf(person.subject)]);
+  if (!people || !ratings || !mine) return bad("unreadable", 503);
+  const others = await Promise.all(
+    people
+      .filter((p) => p.subject !== person.subject)
+      .slice(0, 40)
+      .map(async (p) => choices((await store.stagingsOf(p.subject)) ?? [], p.sessions)),
+  );
+  return NextResponse.json({ ready: true, ...reveal(person, mine, ratings, others) });
 }
 
 /** Everything the pilot holds, for the owner's analysis: the people, the ratings, what was set out, every event, and each echo now. */

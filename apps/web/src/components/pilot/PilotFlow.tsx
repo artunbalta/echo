@@ -8,7 +8,8 @@
  * - what they say they would do in each of the six, before they meet any of them.
  *
  * Then a visit of 25 minutes in the world, with nothing in it that says how the echo reads them. After
- * it, how they see each of their friends. Then, a day later, the second visit.
+ * it, how they see each of their friends. Then, a day later, the second visit. After the last, if the
+ * owner allows it, who knew them best (C80): their words, their friends, their echo, and what they did.
  *
  * A first join is a fresh person: whatever identity this browser had is set aside, so the pilot's echo
  * learns from the pilot alone. A returning one is recognised by the same browser.
@@ -18,6 +19,7 @@ import { PERSONA_AXIS_KEYS } from "@echo/shared";
 
 import ParcelCanvas, { type ParcelCanvasProps } from "@/components/planet/ParcelCanvas";
 import type { PilotSettings } from "@/components/pilot/PilotOverlay";
+import PilotReveal, { type Debrief } from "@/components/pilot/PilotReveal";
 import { setLang, t, useLang, type Key } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 
@@ -47,7 +49,9 @@ interface Stated {
   greet: boolean | null;
 }
 
-type Step = "loading" | "intro" | "self" | "stated" | "ready" | "playing" | "rate" | "thanks" | "unavailable";
+type Step = "loading" | "intro" | "self" | "stated" | "ready" | "playing" | "rate" | "thanks" | "reveal" | "unavailable";
+
+
 
 const button = "rounded-full bg-parchment px-4 py-2 text-sm font-medium text-ink disabled:opacity-40";
 const quiet = "text-sm text-parchment/55 hover:text-parchment";
@@ -110,6 +114,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
   const [busy, setBusy] = useState(false);
   const [visit, setVisit] = useState<PilotSettings | null>(null);
   const [rating, setRating] = useState<{ ratee: string; know: 0 | 1 | 2 | 3 | null; axes: (number | null)[]; predicted: Stated; noIdea: boolean } | null>(null);
+  const [debrief, setDebrief] = useState<Debrief | null>(null);
 
   const load = useCallback(async (): Promise<Info | null> => {
     try {
@@ -198,6 +203,20 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
       setBusy(false);
     }
   };
+
+  // Once every visit is over: who knew them best, if the owner allows it (a 404 otherwise, and no button).
+  const done = info?.me ? !info.me.start.ok && info.me.start.why === "done" : false;
+  useEffect(() => {
+    if (!done) return;
+    void (async () => {
+      try {
+        const res = await fetch("/api/pilot?op=reveal", { headers: identityHeaders() });
+        if (res.ok) setDebrief((await res.json()) as Debrief);
+      } catch {
+        // No debrief is a quiet page, not an error.
+      }
+    })();
+  }, [done]);
 
   const saveRating = async () => {
     if (!rating || rating.know === null) return;
@@ -394,12 +413,21 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
         ) : (
           <>
             <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, (info?.sessions ?? 2) === 3 ? "pilot.allDone3" : "pilot.allDone")}</p>
-            <div className="mt-6">{rateLink}</div>
+            <div className="mt-6 flex items-center gap-4">
+              {debrief?.ready ? (
+                <button type="button" data-pilot-reveal-open onClick={() => setStep("reveal")} className={button}>
+                  {t(lang, "pilot.reveal.open")}
+                </button>
+              ) : null}
+              {rateLink}
+            </div>
           </>
         )}
       </>,
     );
   }
+
+  if (step === "reveal" && debrief?.ready) return page(<PilotReveal debrief={debrief} lang={lang} onBack={() => setStep("ready")} />);
 
   if (step === "rate") {
     const group = info?.group ?? [];

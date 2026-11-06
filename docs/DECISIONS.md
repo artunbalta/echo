@@ -5398,3 +5398,64 @@ Sensitivity (40 groups per assumption): two layers beat one under all six assump
 a power run that takes 42 minutes awake had done a fraction of its work after 80. Long runs now go under
 `caffeinate -i -s -w <pid>`, and with one matrix thread per worker (`VECLIB_MAXIMUM_THREADS=1`). The
 scripts take their worker count from `ECHO_RESEARCH_WORKERS`.
+
+## C80 — who knew you best: the pilot's debrief
+
+What it answers: the pilot asks friends for an hour of their time and gives nothing back. The study's
+own question is the thing they would most like to see answered. After a person's last visit, this
+shows them who knew them best:
+- their own words, given before they began;
+- their friends' guesses;
+- their echo, guessing the last visit from the ones before;
+- what they did.
+
+It is the research made into a moment the person keeps, and the shape of the product's loop (C81).
+
+**What it shows** (`lib/pilotReveal.ts`, `components/pilot/PilotReveal.tsx`, `GET /api/pilot?op=reveal`):
+- For each of the six, the four answers in the six's own words. The closest guess is marked; a tie
+  marks each.
+- Then how many each was closest on.
+- Then what the echo now knows. That is nρ / (nρ + 1 − ρ) after n looks: the share of what is knowable
+  without knowing the day (research/deeds, the paper's §2). With ρ = .6 that is 60% after one look,
+  75% after two, 82% after three.
+
+**The echo here** is the two-layer echo in its one-kind form. It starts from the crowd and moves towards
+the person's own mean by κ = nρ / (nρ + 1 − ρ).
+- The crowd is the others' first visits once there are three of them; until then, one half.
+- ρ = .6 is the pilot's assumed steadiness of one choice (C77's .5–.7, taken in the middle).
+- It does not read the self-rating. On public data, what people say about themselves adds next to
+  nothing to a choice (C81).
+- It is the debrief's own reading, not the engine's (C7 untouched). The analysis remains the research
+  code's.
+
+**What protects the study and the friends:**
+- **Only after the last visit.** Nothing a person sees can change what they do in the study.
+- **Only with the owner's switch,** `ECHO_PILOT_REVEAL=1`. Without it the operation answers 404 and the
+  flow shows no button. It belongs in the pre-registration: friends who have finished may talk to
+  friends who have not.
+- **Friends only as a median, and only once two have guessed.** One friend's guess would be readable.
+  A person's rating of themselves is never a friend's.
+- **Only the person's own page.** Someone who has not played sees `{ ready: false }`.
+
+**Codes are the research's.** `paradigms.py`'s action and stated codes, and `analysis.py`'s "the visit
+it was set out in" (a minute early to ten late), are mirrored. A test reads `paradigms.py` itself, so the
+two cannot drift apart unnoticed.
+
+**Tests.**
+- `apps/web/tests/pilotReveal.test.mts` (5 tests):
+  - the codes;
+  - visit boundaries;
+  - κ against the paper's closed form;
+  - one friend hidden, ties for each;
+  - the crowd from three others.
+- `apps/web/tests/pilot.test.mts` (C80):
+  - off without the switch;
+  - `{ ready: false }` before and between visits;
+  - after two real visits through the director: the words, the act, the echo's exact value, one
+    friend hidden, two friends' median;
+  - nothing for someone who has not played.
+
+**Checks.**
+- tsc clean; pilot 16/16.
+- A dev-only preview at `/dev/pilot-reveal`, made-up answers, nothing in production. Looked at in
+  English at desktop width, in Turkish, and at phone width.
