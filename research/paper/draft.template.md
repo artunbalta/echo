@@ -576,8 +576,12 @@ Country, the variable this dataset is famous for, is in the table's last two col
 knows each person's country, shrunk toward the world's, gains {{f:t4.m4.fitness.country:+.3f}} to
 {{f:t4.m4.species.country:+.3f}}: between an eighth and about half of what one visit gains.
 
-Part of what the theory calls the day is the visit. Looks are worth more spread over visits than
-packed into one, which is how ECHO's pilot is built. The knowable is small here, ρ̂ itself, so 80% of
+Part of what the theory calls the day is the visit. Part of the gap, though, is browsers that are
+more than one person (below). Among browsers whose stated person never changes, two dilemmas in one
+visit still agree {{f:t4.p.same.ratio_min:.1f}}–{{f:t4.p.same.ratio_max:.1f}} times as much as two from different
+visits, against {{f:t4.p.mixed.ratio_min:.1f}}–{{f:t4.p.mixed.ratio_max:.1f}} times among browsers whose stated person
+changes. Looks are worth more spread over visits than packed into one, which is how ECHO's pilot is
+built. The knowable is small here, ρ̂ itself, so 80% of
 it takes six visits for humans against pets and twenty or more for the rest.
 
 **The looks curve as registered (M1).** The registered panel is the browsers with more than K visits,
@@ -638,9 +642,26 @@ points that lie inside their measured 95% interval:
   | 11 or more | {{f:t4.x10.species.rho:.2f}} |
   | 21 or more | {{f:t4.m1.species.rho:.2f}} |
 
-  Shared machines would do that, and so would people trying the answers out. The theory does not
-  need ρ to be the same in every panel. It needs ρ to be measured where it is applied, and that is
-  what the debrief and the pilot do.
+  Shared machines would do that, and so would people trying the answers out.
+
+**Is a browser one person?** This check is exploratory. The site's survey asks for age, gender and
+education after each session. Among the {{f:t4.p.two_surveyed:,d}} browsers that answered it at least
+twice, {{f:t4.p.changed:%}} report a different person at some point: an age more than a year apart, or
+another gender or education.
+
+- **Not the whole story of the fall in ρ̂.** That share rises only from {{f:t4.p.changed_2:%}} at two
+  sessions to about {{f:t4.p.changed_7_20:%}} at seven to twenty. So shared machines are common, but they
+  do not by themselves explain the steep fall in ρ̂ with visits. People trying the answers out remain
+  a candidate.
+- **The copy law's sign turns where the theory says it should.** Among the
+  {{f:t4.p.same.browsers:,d}} browsers whose stated person never changes, ρ̂ is higher in every contrast.
+  For humans against pets it is {{f:t4.p.same.species.rho:.2f}}, above one half. There, copying the other
+  visit beats the crowd ({{f:t4.p.same.species.copy:+.3f}}), as 2ρ̂ − 1 says ({{f:t4.p.same.species.theory:+.3f}}).
+  Among browsers whose stated person changes, ρ̂ is {{f:t4.p.mixed.species.rho:.2f}} and copying loses
+  ({{f:t4.p.mixed.species.copy:+.3f}} against {{f:t4.p.mixed.species.theory:+.3f}}).
+
+The theory does not need ρ to be the same in every panel or every group. It needs ρ to be measured
+where it is applied, and that is what the debrief and the pilot do.
 
 <!-- figure:looks_mm -->
 
@@ -746,9 +767,10 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
 - **The stakes.** Twin-2K-500's choices are hypothetical survey answers, and its "deeds elsewhere" are
   survey choices too.
 - **The retest sample.** Study 2's behaviour is incentivised, but its retest sample is small.
-- **The Moral Machine's people are browsers.** A browser can be several people, and the more a browser
-  played, the less it behaves like one person (§4.3). The registered looks curve was therefore a weak
-  test; the stronger evidence is exploratory and reported with every panel.
+- **The Moral Machine's people are browsers.** A browser can be several people; about a quarter of
+  those that took the survey twice report a different person. The more a browser played, the less it
+  behaves like one person (§4.3). The registered looks curve was therefore a weak test. The stronger
+  evidence is exploratory, and it is reported with every panel.
 - **The ceiling model.** The knowable ceiling comes from an ordered latent model. It is a model-based
   estimate, though one that reproduced the observed one-look echo to the third decimal. Its interval
   over people is narrow ({{f:t1.model.ceiling.lo:.3f}}–{{f:t1.model.ceiling.hi:.3f}}), but that

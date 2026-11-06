@@ -258,6 +258,23 @@ def main():
             f[f"t4.x{k}.people_min"] = min(x[n]["people"] for n in slug if n in x)
             f[f"t4.x{k}.people_max"] = max(x[n]["people"] for n in slug if n in x)
             shutil.copy(xp, RUNS / f"mm-exploratory-k{k}.json")
+    people_path = OUT / "mm" / "people.json"
+    if people_path.exists():
+        # Exploratory (not registered): browsers whose surveyed person never changes, against those whose does.
+        pp = json.loads(people_path.read_text())
+        f["t4.p.two_surveyed"], f["t4.p.changed"] = pp["browsers_two_surveyed"], pp["changed"]
+        bins = pp["by_sessions_played"]
+        f["t4.p.changed_2"], f["t4.p.changed_7_20"] = bins[0]["changed"], max(b["changed"] for b in bins if b["from"] in (7, 11))
+        slug = {"Utilitarian": "util", "Gender": "gender", "Fitness": "fitness", "Age": "age", "Social Status": "status", "Species": "species"}
+        for g, key in (("same_person", "same"), ("changes", "mixed")):
+            G = pp["groups"][g]
+            f[f"t4.p.{key}.browsers"] = G["browsers"]
+            for name, sl in slug.items():
+                f[f"t4.p.{key}.{sl}.rho"], f[f"t4.p.{key}.{sl}.copy"], f[f"t4.p.{key}.{sl}.theory"] = G["rho"][name], G["copy"][name], G["theory_copy"][name]
+                f[f"t4.p.{key}.{sl}.ratio"] = G["within"][name] / G["across"][name]
+            ratios = [G["within"][n] / G["across"][n] for n in slug]
+            f[f"t4.p.{key}.ratio_min"], f[f"t4.p.{key}.ratio_max"] = min(ratios), max(ratios)
+        shutil.copy(people_path, RUNS / "mm-people.json")
     audit_path = OUT / "audit" / "audit.json"
     if audit_path.exists():
         shutil.copy(audit_path, RUNS / "twin2k-audit.json")
