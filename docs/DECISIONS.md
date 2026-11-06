@@ -5565,6 +5565,11 @@ other people.
 - **The visit is a unit** (M4). Two dilemmas in one visit agree about twice as much as two from
   different visits. Part of that is mixed browsers. Among single-person browsers the ratio is
   1.2–1.5, against 1.6–3.1 where the stated person changes.
+- **Again against elsewhere** (exploratory). For humans against pets, the same choice in another visit
+  knows .158, and that visit's five other choices know .014. For the five contrasts of character
+  (ρ̂ ≈ .1), the other choices know a good part of what the same choice knows, and most of it comes
+  from the same visit. Watching again in the situation matters in proportion to how much people
+  differ in it.
 - **Country knows little.** A country-aware crowd gains .002–.020, between an eighth and about half of
   one visit.
 
