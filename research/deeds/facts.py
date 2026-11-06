@@ -166,6 +166,9 @@ def main():
             f[f"t3.{role}.diff"] = s["S2"]["mean_diff"]
             f[f"t3.{role}.diff_lo"], f[f"t3.{role}.diff_hi"] = s["S2"]["mean_diff_fixed_ci95"]
         shutil.copy(sro_path, RUNS / "sro-results.json")
+    audit_path = OUT / "audit" / "audit.json"
+    if audit_path.exists():
+        shutil.copy(audit_path, RUNS / "twin2k-audit.json")
     (RUNS / "facts.json").write_text(json.dumps(f, indent=1, sort_keys=True))
     for src, dst in [(OUT / "twin2k" / "results.json", "twin2k-results.json"), (OUT / "twin2k" / "llm_on_covered.json", "twin2k-llm-on-covered.json"),
                      (OUT / "twin2k" / "ceiling.json", "twin2k-ceiling.json"), (OUT / "bbrs" / "results.json", "bbrs-results.json")] + \

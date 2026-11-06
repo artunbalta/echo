@@ -24,6 +24,7 @@ research/deeds/
   run_bbrs.py            Study 2, all of it → out/bbrs/results.json
   run_sro.py             Study 2b, all of it → out/sro/results.json
   facts.py               every number the paper quotes → runs/facts.json (and the result files → runs/)
+  audit.py               a twin audit for any panel (the first product): --demo audits Twin-2K-500's 13 twins
   figures_twin2k.py      the figures (SVG in the pilot report's language) → out/figures/
   runs/                  the result files the paper is built from (committed)
   deeds/
@@ -50,7 +51,7 @@ $PY research/deeds/exploratory_twin2k.py && $PY research/deeds/robust_hgb_twin2k
 $PY research/deeds/analyze_twin2k.py && $PY research/deeds/fair_llm_twin2k.py
 $PY research/deeds/ceiling_twin2k.py && $PY research/deeds/exchange_twin2k.py
 $PY research/deeds/run_bbrs.py && $PY research/deeds/run_sro.py
-$PY research/deeds/facts.py && $PY research/deeds/figures_twin2k.py
+$PY research/deeds/audit.py --demo && $PY research/deeds/facts.py && $PY research/deeds/figures_twin2k.py
 $PY -m pytest research/deeds/tests -q
 ```
 

@@ -121,6 +121,11 @@ are three:
 1. **Twin audits.** This is the first sale, and it costs us almost nothing to deliver. A team gives us
    its twins and a panel. We measure what the twins know about individuals against the crowd and the
    knowable ceiling, the way Study 1 did. It also sets the standard everyone else must meet.
+
+   **It runs today:** `research/deeds/audit.py`, in about ten seconds per panel. Run on Twin-2K-500's 13
+   released twins:
+   - every one knows less than nobody, between −33% and −77% of the knowable;
+   - with one earlier answer per person read through each twin, every one rises to 54–58%.
 2. **Echo studies.** A team brings situations it cares about: a price, an offer, a message, a feature.
    We set them in the world for consented players, more than once. They get:
    - echoes of their audience, with each prediction's confidence;
