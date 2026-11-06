@@ -110,6 +110,38 @@ def acts_of(export: dict) -> dict[str, dict[str, dict[int, float]]]:
     return out
 
 
+def finished_at(person: dict, visits: int, session_ms: float) -> Optional[datetime]:
+    """When someone's last visit was over, so that the debrief was open to them (the route's `canStart` "done"); None before."""
+    sessions = person.get("sessions") or []
+    if len(sessions) < visits:
+        return None
+    last = sessions[-1]
+    if last.get("endedAt"):
+        return _t(last["endedAt"])
+    return _t(last["startedAt"]) + timedelta(milliseconds=session_ms) + timedelta(minutes=10)
+
+
+def after_debrief(export: dict) -> set[tuple[str, str]]:
+    """
+    The ratings made after the rater had finished all their visits, while the debrief was switched on: the
+    registration (§2, Blinding) reports the results with and without them. An export from before the route
+    said whether the debrief was on counts it as on, and takes the visit count from the most anyone made.
+    """
+    if export.get("reveal") is False:
+        return set()
+    visits = int(export.get("visits") or max([len(p.get("sessions") or []) for p in export["people"]] + [2]))
+    session_ms = float((export.get("pilot") or {}).get("sessionMs", 25 * 60 * 1000))
+    done = {p["subject"]: finished_at(p, visits, session_ms) for p in export["people"]}
+    return {(r["rater"], r["ratee"]) for r in export["ratings"]
+            if done.get(r["rater"]) is not None and r.get("at") and _t(r["at"]) >= done[r["rater"]]}
+
+
+def before_debrief(export: dict) -> dict:
+    """The export without the ratings made after the rater's debrief was open."""
+    late = after_debrief(export)
+    return {**export, "ratings": [r for r in export["ratings"] if (r["rater"], r["ratee"]) not in late]}
+
+
 def coverage(export: dict) -> dict:
     """How much of the study there is: people, visits, the six met and unmet, ratings and guesses, and where the events came from."""
     met = {p: 0 for p in PARADIGMS}
@@ -137,6 +169,7 @@ def coverage(export: dict) -> dict:
         "ratings_known": len(known),
         "guesses": sum(1 for r in known if r.get("predicted")),
         "know": {k: sum(1 for r in export["ratings"] if r["know"] == k) for k in range(4)},
+        "after_debrief": len(after_debrief(export)),
         "event_sources": sources,
     }
 

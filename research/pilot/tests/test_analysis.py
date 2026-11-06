@@ -206,3 +206,24 @@ def test_a_third_visit_is_predicted_from_both_before_it_and_never_seen():
     third = [it for it in res["items"]["again"] if it["subject"] == s and it["visit"] == 3]
     assert third and all(it["watched"] == (1, 2) and not it["in_curve"] for it in third)
     assert all(it["retest"] == A.acts_of(export)[s][it["paradigm"]].get(2) for it in third)
+
+
+def test_ratings_made_once_the_raters_debrief_was_open_are_told_apart():
+    """Registration §2: a rating after the rater's last visit was over is reported with and without."""
+    two = [{"n": 1, "startedAt": "2026-11-10T10:00:00Z", "endedAt": "2026-11-10T10:25:00Z"},
+           {"n": 2, "startedAt": "2026-11-11T10:00:00Z", "endedAt": "2026-11-11T10:25:00Z"}]
+    one = two[:1]
+    export = {
+        "visits": 2, "reveal": True, "pilot": {"sessionMs": 25 * 60 * 1000},
+        "people": [{"subject": "a", "sessions": two}, {"subject": "b", "sessions": one}, {"subject": "c", "sessions": two[:1] + [{"n": 2, "startedAt": "2026-11-11T12:00:00Z", "endedAt": None}]}],
+        "ratings": [
+            {"rater": "a", "ratee": "b", "know": 2, "at": "2026-11-10T10:30:00Z"},   # after the first visit: kept
+            {"rater": "a", "ratee": "c", "know": 2, "at": "2026-11-11T10:26:00Z"},   # after the last: told apart
+            {"rater": "b", "ratee": "a", "know": 2, "at": "2026-11-12T09:00:00Z"},   # b has one visit to go: kept
+            {"rater": "c", "ratee": "a", "know": 2, "at": "2026-11-11T12:20:00Z"},   # c's last visit is still on: kept
+            {"rater": "c", "ratee": "b", "know": 2, "at": "2026-11-11T13:00:00Z"},   # past its 25 minutes and the grace: told apart
+        ],
+    }
+    assert A.after_debrief(export) == {("a", "c"), ("c", "b")}
+    assert [(r["rater"], r["ratee"]) for r in A.before_debrief(export)["ratings"]] == [("a", "b"), ("b", "a"), ("c", "a")]
+    assert A.after_debrief({**export, "reveal": False}) == set()

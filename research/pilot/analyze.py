@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from echo_pilot import report  # noqa: E402
-from echo_pilot.analysis import analyze  # noqa: E402
+from echo_pilot.analysis import analyze, before_debrief  # noqa: E402
 from echo_pilot.simulate import make_group  # noqa: E402
 
 
@@ -48,10 +48,18 @@ def main() -> int:
         export, truth = make_group(args.n, seed=args.seed)
     else:
         export, truth = json.loads(Path(args.export).read_text()), None
-    results = analyze(export, mode="fast" if args.fast or args.simulate else "exact", truth=truth)
+    mode = "fast" if args.fast or args.simulate else "exact"
+    results = analyze(export, mode=mode, truth=truth)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"sim-{args.n}-{args.seed}" if args.simulate else "pilot"
+    if results["coverage"]["after_debrief"]:
+        # Registered (§2, Blinding): also without the ratings made once the rater's debrief was open.
+        early = analyze(before_debrief(export), mode=mode, truth=truth)
+        (out / f"{stem}-before-debrief-results.json").write_text(report.to_json(early))
+        (out / f"{stem}-before-debrief-report.html").write_text(report.render(early), encoding="utf-8")
+        print(f"{results['coverage']['after_debrief']} ratings made after the rater's debrief opened; "
+              f"without them: {out / (stem + '-before-debrief-report.html')}")
     (out / f"{stem}-results.json").write_text(report.to_json(results))
     power = json.loads(Path(args.power).read_text()) if (args.simulate and Path(args.power).exists()) else None
     sensitivity = json.loads(Path(args.sensitivity).read_text()) if (args.simulate and Path(args.sensitivity).exists()) else None

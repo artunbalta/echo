@@ -54,7 +54,7 @@ export async function GET(req: Request) {
   if (!cfg) return off();
   const store = villageStore();
   if (!store) return bad("no_store", 503);
-  if (new URL(req.url).searchParams.get("op") === "export") return exportAll(req, cfg.cell);
+  if (new URL(req.url).searchParams.get("op") === "export") return exportAll(req, cfg.cell, cfg.visits);
   if (new URL(req.url).searchParams.get("op") === "reveal") return revealFor(req, cfg.visits);
 
   const caller = subjectOf(req);
@@ -191,8 +191,8 @@ async function revealFor(req: Request, visits: number) {
   return NextResponse.json({ ready: true, ...reveal(person, mine, ratings, others) });
 }
 
-/** Everything the pilot holds, for the owner's analysis: the people, the ratings, what was set out, every event, and each echo now. */
-async function exportAll(req: Request, cell: string) {
+/** Everything the pilot holds, for the owner's analysis: the people, the ratings, what was set out, every event, each echo now, and whether the debrief was on. */
+async function exportAll(req: Request, cell: string, visits: number) {
   if (!pilotAdmin(req)) return bad("not_found", 404);
   const store = villageStore()!;
   const [people, ratings] = await Promise.all([store.pilotPeople(), store.pilotRatings()]);
@@ -208,6 +208,9 @@ async function exportAll(req: Request, cell: string) {
     exportedAt: new Date().toISOString(),
     cell,
     pilot: PILOT,
+    // The analysis tells the ratings made once a rater's debrief was open from the rest (registration §2).
+    visits,
+    reveal: process.env.ECHO_PILOT_REVEAL === "1",
     people,
     ratings,
     byPerson: Object.fromEntries(each),

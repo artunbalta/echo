@@ -66,6 +66,8 @@ def test_the_export_carries_what_the_analysis_reads(root):
     route = (root / "apps/web/src/app/api/pilot/route.ts").read_text()
     assert "{ stagings: pilotOnly(stagings), events, echo }" in route
     assert re.search(r"people,\s*ratings,\s*byPerson", route)
+    # The debrief split (registration §2) reads the visit count and whether the debrief was on.
+    assert re.search(r"\bvisits,\s*reveal: process\.env\.ECHO_PILOT_REVEAL === \"1\"", route)
     store = (root / "apps/web/src/lib/behavioral-store.ts").read_text()
     assert 'return { rows, source: "table" }' in store
     pilot = (root / "apps/web/src/lib/pilot.ts").read_text()

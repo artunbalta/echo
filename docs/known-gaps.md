@@ -2406,10 +2406,10 @@ not the class:
   engine keeps its eight axes and nothing else, and engine change is the owner's call (C7).
 - **The debrief's echo is the research's simplest form.** It uses one fixed ρ = .6 for all six choices,
   and no per-choice stability, because it has only the group to learn from.
-- **The analysis does not yet split ratings** by whether the rater had already finished, and so had
-  the debrief open. The export's timestamps allow it, and the pilot's registration now asks for it
-  (§2, Blinding). `research/pilot/echo_pilot/analysis.py` needs that split before the debrief is
-  switched on for a registered study.
+- ~~**The analysis does not yet split ratings** by whether the rater had already finished, and so had
+  the debrief open.~~ Done 2026-11-06: the export says its visit count and whether the debrief was on,
+  `analysis.after_debrief` tells those ratings apart, and `analyze.py` writes the results both with and
+  without them (registration §2).
 - **The twin audit is a command-line tool** (`research/deeds/audit.py`): a concierge product with no
   web upload.
 - **Circles are a proposal** (`docs/company/circles.md`). They need a migration (0037) and the

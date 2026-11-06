@@ -351,10 +351,13 @@ test("C75: the export is the owner's alone, and it is everything: people, rating
   process.env.ECHO_PILOT_ADMIN = ADMIN;
   const res = await get({ "x-pilot-admin": ADMIN });
   assert.equal(res.status, 200);
-  const data = (await res.json()) as { people: { subject: string }[]; ratings: unknown[]; byPerson: Record<string, { stagings: Staging[]; echo: { persona: { version: number } } }> };
+  const data = (await res.json()) as { people: { subject: string }[]; ratings: unknown[]; visits: number; reveal: boolean; byPerson: Record<string, { stagings: Staging[]; echo: { persona: { version: number } } }> };
   assert.deepEqual(data.people.map((p) => p.subject), [A]);
   assert.deepEqual(data.byPerson[A]!.stagings.map((s) => s.situation), ["lone_traveler"]);
   assert.equal(data.byPerson[A]!.echo.persona.version, 3);
+  // What the analysis needs to tell ratings made once the debrief was open (registration §2).
+  assert.equal(data.visits, 2);
+  assert.equal(data.reveal, process.env.ECHO_PILOT_REVEAL === "1");
 });
 
 test("C75: an erasure takes the person out of the pilot, and every rating either way", async () => {
