@@ -18,6 +18,7 @@ research/deeds/
   analyze_twin2k.py      the registered scoring and tests → out/twin2k/results.json, summary.md
   fair_llm_twin2k.py     the twins on the people they answered (a reported deviation, see below)
   ceiling_twin2k.py      the knowable ceiling and the looks curve per column → out/twin2k/ceiling.json
+  ceiling_boot_twin2k.py how sure the ceiling is: a bootstrap over people (200 draws, ≈ 12 min on 4 cores)
   exchange_twin2k.py     the exchange rate: r from k items of each pool
   robust_hgb_twin2k.py   registered robustness: a boosted median model for the persona
   exploratory_twin2k.py  exploratory: the one-look echo from the crowd's own transitions
@@ -49,7 +50,7 @@ $PY research/deeds/fetch.py
 caffeinate -i -s $PY research/deeds/run_twin2k.py --workers 9
 $PY research/deeds/exploratory_twin2k.py && $PY research/deeds/robust_hgb_twin2k.py
 $PY research/deeds/analyze_twin2k.py && $PY research/deeds/fair_llm_twin2k.py
-$PY research/deeds/ceiling_twin2k.py && $PY research/deeds/exchange_twin2k.py
+$PY research/deeds/ceiling_twin2k.py && $PY research/deeds/ceiling_boot_twin2k.py && $PY research/deeds/exchange_twin2k.py
 $PY research/deeds/run_bbrs.py && $PY research/deeds/run_sro.py
 $PY research/deeds/audit.py --demo && $PY research/deeds/facts.py && $PY research/deeds/figures_twin2k.py
 $PY -m pytest research/deeds/tests -q

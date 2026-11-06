@@ -166,6 +166,26 @@ def main():
             f[f"t3.{role}.diff"] = s["S2"]["mean_diff"]
             f[f"t3.{role}.diff_lo"], f[f"t3.{role}.diff_hi"] = s["S2"]["mean_diff_fixed_ci95"]
         shutil.copy(sro_path, RUNS / "sro-results.json")
+    # Appendix A: one row per task, observed accuracies beside the model's ρ and ceiling.
+    ta = {name: w[key]["task_accuracy"] for name, key in (("crowd", "base"), ("twin", f"llm:{HEADLINE}"), ("again", "again"),
+                                                          ("echo", "echo_transition"))}
+    tr = {name: w[key]["task_r"] for name, key in (("twin", f"llm:{HEADLINE}"), ("again", "again"))}
+    head = "| Task | ρ | Crowd | Headline twin (r) | Retest (r) | Echo, one look | Ceiling |\n|---|---|---|---|---|---|---|"
+    rows = []
+    for task in sorted(tasks, key=lambda t: tasks[t]["rho"]):
+        v = tasks[task]
+        rows.append(f"| {task} | {v['rho']:.2f} | {ta['crowd'][task]:.3f} | {ta['twin'][task]:.3f} ({tr['twin'][task]:.2f}) | "
+                    f"{ta['again'][task]:.3f} ({tr['again'][task]:.2f}) | {ta['echo'][task]:.3f} | {v['ceiling']:.3f} |")
+    f["t1.table.tasks"] = (head + "\n" + "\n".join(rows)).replace("-0.", "−0.")
+    boot_path = OUT / "twin2k" / "ceiling_boot.json"
+    if boot_path.exists():
+        boot = json.loads(boot_path.read_text())
+        f["t1.boot.draws"] = boot["draws"]
+        for k, key in (("ceiling", "ceiling"), ("looks1", "looks_1"), ("looks3", "looks_3"), ("base", "base")):
+            f[f"t1.model.{k}.lo"], f[f"t1.model.{k}.hi"] = boot["model"][key]["lo"], boot["model"][key]["hi"]
+        for k, key in (("again", "again"), ("echo", "echo"), ("echo_transition", "echo_transition"), ("llm_headline", f"llm:{HEADLINE}")):
+            f[f"t1.know.{k}.lo"], f[f"t1.know.{k}.hi"] = boot["knows"][key]["lo"], boot["knows"][key]["hi"]
+        shutil.copy(boot_path, RUNS / "twin2k-ceiling-boot.json")
     audit_path = OUT / "audit" / "audit.json"
     if audit_path.exists():
         shutil.copy(audit_path, RUNS / "twin2k-audit.json")

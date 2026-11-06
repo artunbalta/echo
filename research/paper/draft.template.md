@@ -570,6 +570,23 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
   bound says by how little, if the persona is all they read.
 - **Study 3** is a pilot among friends.
 
+## Appendix A. Study 1, task by task
+
+The 17 tasks of Twin-2K-500, ordered by retest reliability ρ:
+
+- **ρ and the ceiling** come from the ordered latent model.
+- **The accuracies** are observed, forward direction.
+- **r** is the individual-level correlation of the twin and of the retest.
+- **"Echo, one look"** is the crowd-transition echo.
+
+Two patterns stand out:
+
+- On several tasks the headline twin gives the crowd's answer to almost everyone. It scores exactly
+  the crowd's accuracy with r ≈ 0.
+- On the framing problem, the sunk-cost task and the Allais problem it falls far below the crowd.
+
+{{f:t1.table.tasks:s}}
+
 ## References
 
 - Argyle, L. P., Busby, E. C., Fulda, N., Gubler, J. R., Rytting, C., & Wingate, D. (2023). Out of one, many: Using language models to simulate human samples. *Political Analysis, 31*(3), 337–351. https://doi.org/10.1017/pan.2023.2

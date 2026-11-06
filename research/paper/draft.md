@@ -570,6 +570,41 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
   bound says by how little, if the persona is all they read.
 - **Study 3** is a pilot among friends.
 
+## Appendix A. Study 1, task by task
+
+The 17 tasks of Twin-2K-500, ordered by retest reliability ρ:
+
+- **ρ and the ceiling** come from the ordered latent model.
+- **The accuracies** are observed, forward direction.
+- **r** is the individual-level correlation of the twin and of the retest.
+- **"Echo, one look"** is the crowd-transition echo.
+
+Two patterns stand out:
+
+- On several tasks the headline twin gives the crowd's answer to almost everyone. It scores exactly
+  the crowd's accuracy with r ≈ 0.
+- On the framing problem, the sunk-cost task and the Allais problem it falls far below the crowd.
+
+| Task | ρ | Crowd | Headline twin (r) | Retest (r) | Echo, one look | Ceiling |
+|---|---|---|---|---|---|---|
+| prob matching vs. max | 0.42 | 0.766 | 0.766 (0.00) | 0.744 (0.24) | 0.776 | 0.816 |
+| framing problem | 0.48 | 0.814 | 0.717 (−0.03) | 0.803 (0.33) | 0.829 | 0.859 |
+| base rate | 0.48 | 0.834 | 0.804 (0.02) | 0.835 (0.31) | 0.862 | 0.883 |
+| conjunction problem (Linda) | 0.49 | 0.827 | 0.780 (0.02) | 0.824 (0.38) | 0.850 | 0.875 |
+| sunk cost fallacy | 0.54 | 0.782 | 0.688 (−0.01) | 0.788 (0.38) | 0.807 | 0.848 |
+| outcome bias | 0.58 | 0.860 | 0.860 (0.02) | 0.863 (0.43) | 0.878 | 0.904 |
+| denominator neglect | 0.60 | 0.621 | 0.568 (−0.04) | 0.722 (0.40) | 0.722 | 0.796 |
+| Allais | 0.64 | 0.629 | 0.509 (0.00) | 0.741 (0.45) | 0.741 | 0.809 |
+| non-separability of risks and benefits | 0.67 | 0.823 | 0.805 (0.08) | 0.863 (0.55) | 0.870 | 0.903 |
+| myside | 0.69 | 0.802 | 0.776 (0.17) | 0.846 (0.59) | 0.849 | 0.891 |
+| less is more | 0.70 | 0.764 | 0.757 (0.17) | 0.831 (0.59) | 0.833 | 0.879 |
+| omission | 0.70 | 0.732 | 0.731 (0.13) | 0.806 (0.58) | 0.809 | 0.860 |
+| anchoring and adjustment | 0.71 | 0.786 | 0.673 (0.02) | 0.842 (0.57) | 0.853 | 0.887 |
+| absolute vs. relative savings | 0.72 | 0.718 | 0.664 (0.01) | 0.792 (0.50) | 0.792 | 0.850 |
+| false consensus | 0.72 | 0.793 | 0.746 (0.28) | 0.861 (0.63) | 0.867 | 0.902 |
+| WTA/WTP-Thaler | 0.79 | 0.835 | 0.793 (0.08) | 0.892 (0.64) | 0.891 | 0.923 |
+| pricing | 0.87 | 0.559 | 0.669 (0.32) | 0.839 (0.67) | 0.839 | 0.879 |
+
 ## References
 
 - Argyle, L. P., Busby, E. C., Fulda, N., Gubler, J. R., Rytting, C., & Wingate, D. (2023). Out of one, many: Using language models to simulate human samples. *Political Analysis, 31*(3), 337–351. https://doi.org/10.1017/pan.2023.2

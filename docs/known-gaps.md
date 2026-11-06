@@ -2397,3 +2397,24 @@ not the class:
 - **Ratings need migration 0036** on a Supabase store: without it, saving a rating fails (C76).
 
 **Status:** OPEN, all of it, written down rather than discovered.
+
+
+## ⚑ 66. What C80–C81 do not do yet (2026-11-06)
+
+- **The engine's echo is still one layer.** On public data (C81, `research/deeds/`), what matters is
+  reading one earlier act in the same situation against the crowd: the second layer (C77). The
+  engine keeps its eight axes and nothing else, and engine change is the owner's call (C7).
+- **The debrief's echo is the research's simplest form.** It uses one fixed ρ = .6 for all six choices,
+  and no per-choice stability, because it has only the group to learn from.
+- **The analysis does not yet split ratings** by whether the rater had already finished, and so had
+  the debrief open. The export's timestamps allow it, and the pilot's registration now asks for it
+  (§2, Blinding). `research/pilot/echo_pilot/analysis.py` needs that split before the debrief is
+  switched on for a registered study.
+- **The twin audit is a command-line tool** (`research/deeds/audit.py`): a concierge product with no
+  web upload.
+- **Circles are a proposal** (`docs/company/circles.md`). They need a migration (0037) and the
+  owner's yes.
+- **Study 1's choices are hypothetical survey answers.** Studies 2 and 2b carry the laws to
+  incentivised and task behaviour. Transfer from the world to choices outside it is not yet measured.
+
+**Status:** OPEN, all of it.

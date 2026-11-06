@@ -67,6 +67,12 @@ set out one at a time in a counterbalanced order per person:
 
 - Nobody sees anyone's choices, ratings or guesses.
 - Friends do not see each other in the world.
+- **The debrief** ("who knew you best", web decision C80) is either off for the whole study, or shown
+  to each person only after their own last visit. State which here: ☐ off ☐ after the last visit.
+  If it is on, it shows a person only their own data, with friends' guesses as a median of two or
+  more. Its risk is that someone who has finished tells a friend who has not. A rating made after the
+  rater had finished all their visits, so after the debrief was open to them, is identified from the
+  export's timestamps. Results are reported both with and without such ratings.
 - The analysis code never lets a witness see the choice it predicts. Its tests verify this to the last
   float.
 
