@@ -4,6 +4,8 @@
   texts (full_persona/, wave_split/) are skipped by default: the study reads the answers, not the prompts.
 - Study 2: the Basel–Berlin Risk Study (Frey et al. 2017, CC BY 4.0, OSF rce7g): the seven risk tasks
   and the questionnaire scores, main sample and both retests, per person.
+- Study 2b: the Self-Regulation Ontology (Eisenberg et al. 2019, CC BY 4.0, GitHub): the meaningful
+  variables at time 1 and at the retest.
 
     /opt/anaconda3/bin/python3.13 research/deeds/fetch.py [--personas]
 """
@@ -66,8 +68,23 @@ def fetch_bbrs():
         print(f"got   bbrs/{name}.csv")
 
 
+def fetch_sro():
+    out = DATA / "sro"
+    out.mkdir(parents=True, exist_ok=True)
+    for wave in ("Complete", "Retest"):
+        dest = out / f"{wave}_meaningful_variables.csv"
+        if dest.exists() and dest.stat().st_size > 0:
+            print(f"have  sro/{dest.name}")
+            continue
+        url = f"https://raw.githubusercontent.com/IanEisenberg/Self_Regulation_Ontology/master/Data/{wave}_02-16-2019/meaningful_variables.csv"
+        with urllib.request.urlopen(url) as r:
+            dest.write_bytes(r.read())
+        print(f"got   sro/{dest.name}")
+
+
 def main():
     fetch_bbrs()
+    fetch_sro()
     personas = "--personas" in sys.argv
     jobs = []
     for repo in REPOS:

@@ -149,6 +149,23 @@ def main():
         f[f"t2.{key}.copy"] = t[task]["skill"]["copy"]
         f[f"t2.{key}.echo"] = t[task]["skill"]["echo"]
 
+    sro_path = OUT / "sro" / "results.json"
+    if sro_path.exists():
+        sro = json.loads(sro_path.read_text())["summary"]
+        for role in ("deeds", "words"):
+            s = sro[role]
+            f[f"t3.{role}.n"] = s["variables"]
+            f[f"t3.{role}.median_rho"] = s["median_rho"]
+            for k, v in s["mean_skill"].items():
+                f[f"t3.{role}.mean.{k}"] = v
+            f[f"t3.{role}.copy_corr"] = s["S1"]["corr_copy_2rho_minus_1"]
+            f[f"t3.{role}.low"] = s["S1"]["low_rho"]
+            f[f"t3.{role}.low_negative"] = s["S1"]["copy_negative_when_low"]
+            f[f"t3.{role}.echo_beats"] = s["S2"]["echo_np_beats_copy"]
+            f[f"t3.{role}.echo_rho2_corr"] = s["S2"]["corr_echo_np_rho2"]
+            f[f"t3.{role}.diff"] = s["S2"]["mean_diff"]
+            f[f"t3.{role}.diff_lo"], f[f"t3.{role}.diff_hi"] = s["S2"]["mean_diff_fixed_ci95"]
+        shutil.copy(sro_path, RUNS / "sro-results.json")
     (RUNS / "facts.json").write_text(json.dumps(f, indent=1, sort_keys=True))
     for src, dst in [(OUT / "twin2k" / "results.json", "twin2k-results.json"), (OUT / "twin2k" / "llm_on_covered.json", "twin2k-llm-on-covered.json"),
                      (OUT / "twin2k" / "ceiling.json", "twin2k-ceiling.json"), (OUT / "bbrs" / "results.json", "bbrs-results.json")] + \

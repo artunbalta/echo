@@ -180,7 +180,7 @@ def exchange(curves: dict[str, dict[int, float]], again: float, colors: dict[str
         out.append(f'<text x="{xk(k):.1f}" y="{H - bottom_pad + 18}" class="tick" text-anchor="middle">{k}</text>')
     out.append(f'<text x="{(left + W - right) / 2:.1f}" y="{H - 8}" class="refl" text-anchor="middle">questions drawn at random from the pool (each with all its coded answers)</text>')
     out.append(f'<line x1="{left}" x2="{W - right}" y1="{y(again):.1f}" y2="{y(again):.1f}" class="ref" style="stroke:var(--retest)"/>')
-    ends = [(y(again), f"one earlier answer to the same question {fmt(again)}", "--retest")]
+    ends = [(y(again), f"one earlier answer {fmt(again)}", "--retest")]
     for name, c in curves.items():
         kk = sorted(c)
         d = " ".join(f'{"M" if i == 0 else "L"}{xk(k):.1f},{y(c[k]):.1f}' for i, k in enumerate(kk))
@@ -194,5 +194,32 @@ def exchange(curves: dict[str, dict[int, float]], again: float, colors: dict[str
         yy = max(yy, placed[-1] + 14) if placed else yy
         placed.append(yy)
         out.append(f'<text x="{W - right + 8}" y="{yy + 4:.1f}" class="refl" style="fill:var({color})">{esc(text)}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def laws(points: list[dict], note: str = "") -> str:
+    """Many measures at once: skill of copying and of the echo against each measure's retest r, with 2ρ − 1 and ρ²."""
+    W, H, left, right, top, bottom_pad = 820, 420, 70, 190, 24, 48
+    xlo, xhi, lo, hi = -0.2, 1.0, -1.6, 0.9
+    x = lambda r: left + (W - left - right) * (min(max(r, xlo), xhi) - xlo) / (xhi - xlo)  # noqa: E731
+    y = lambda v: top + (H - top - bottom_pad) * (hi - min(max(v, lo), hi)) / (hi - lo)  # noqa: E731
+    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="{esc(note)}" class="chart">']
+    for t in _ticks(lo, hi, 0.4):
+        out.append(f'<line x1="{left}" x2="{W - right}" y1="{y(t):.1f}" y2="{y(t):.1f}" class="grid{" zero" if abs(t) < 1e-9 else ""}"/>')
+        out.append(f'<text x="{left - 8}" y="{y(t) + 4:.1f}" class="tick" text-anchor="end">{fmt(t, 1)}</text>')
+    for t in _ticks(-0.2, 1.0, 0.2):
+        out.append(f'<text x="{x(t):.1f}" y="{H - bottom_pad + 18}" class="tick" text-anchor="middle">{fmt(t, 1)}</text>')
+    out.append(f'<text x="{(left + W - right) / 2:.1f}" y="{H - 8}" class="refl" text-anchor="middle">retest r of the measure (ρ), about four months apart</text>')
+    out.append(f'<text x="{left + 6}" y="{y(0) - 6:.1f}" class="refl">0 = the crowd\'s mean</text>')
+    rs = [i / 100 for i in range(0, 95)]
+    for fn, color, label, ly in ((lambda r: r * r, "--accent", "echo after one look: theory ρ²", 0), (lambda r: 2 * r - 1, "--retest", "copying: theory 2ρ − 1", 1)):
+        d = " ".join(f'{"M" if i == 0 else "L"}{x(r):.1f},{y(fn(r)):.1f}' for i, r in enumerate(rs))
+        out.append(f'<path d="{d}" style="fill:none;stroke:var({color});stroke-width:2;stroke-dasharray:6 5"/>')
+        out.append(f'<text x="{W - right + 8}" y="{top + 18 + 18 * ly:.1f}" class="refl" style="fill:var({color})">{esc(label)}</text>')
+    for p in points:
+        out.append(f'<circle cx="{x(p["rho"]):.1f}" cy="{y(p["copy"]):.1f}" r="3.2" style="fill:var(--retest);opacity:.75"/>')
+    for p in points:
+        out.append(f'<circle cx="{x(p["rho"]):.1f}" cy="{y(p["echo"]):.1f}" r="3.2" style="fill:var(--accent);opacity:.85"/>')
     out.append("</svg>")
     return "".join(out)

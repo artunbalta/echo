@@ -8,6 +8,7 @@ each registration was committed before any model was fitted:
 |---|---|---|
 | 1 | Twin-2K-500: 2,058 US adults, 17 retested tasks | `PREREG.md` (63757d0) |
 | 2 | Basel–Berlin Risk Study: incentivised risk tasks, six-month retest | `PREREG-BBRS.md` (dfc8349) |
+| 2b | Self-Regulation Ontology: 138 behavioural and 66 survey measures, four-month retest | `PREREG-SRO.md` (2c23f3b) |
 
 ```
 research/deeds/
@@ -21,6 +22,8 @@ research/deeds/
   robust_hgb_twin2k.py   registered robustness: a boosted median model for the persona
   exploratory_twin2k.py  exploratory: the one-look echo from the crowd's own transitions
   run_bbrs.py            Study 2, all of it → out/bbrs/results.json
+  run_sro.py             Study 2b, all of it → out/sro/results.json
+  facts.py               every number the paper quotes → runs/facts.json (and the result files → runs/)
   figures_twin2k.py      the figures (SVG in the pilot report's language) → out/figures/
   runs/                  the result files the paper is built from (committed)
   deeds/
@@ -46,7 +49,8 @@ caffeinate -i -s $PY research/deeds/run_twin2k.py --workers 9
 $PY research/deeds/exploratory_twin2k.py && $PY research/deeds/robust_hgb_twin2k.py
 $PY research/deeds/analyze_twin2k.py && $PY research/deeds/fair_llm_twin2k.py
 $PY research/deeds/ceiling_twin2k.py && $PY research/deeds/exchange_twin2k.py
-$PY research/deeds/run_bbrs.py && $PY research/deeds/figures_twin2k.py
+$PY research/deeds/run_bbrs.py && $PY research/deeds/run_sro.py
+$PY research/deeds/facts.py && $PY research/deeds/figures_twin2k.py
 $PY -m pytest research/deeds/tests -q
 ```
 

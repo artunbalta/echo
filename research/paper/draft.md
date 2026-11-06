@@ -49,6 +49,15 @@ later.
 - **The echo is the best witness.** The same one observation, read by the echo, scores
   +0.17.
 
+**The same laws across 138 behavioural measures** (Self-Regulation Ontology, also
+pre-registered):
+
+- copying loses to the crowd on 102 of the 106 measures less
+  than half steady;
+- the echo beats copying on 135 of 138 and tracks ρ²
+  (r = .99);
+- self-reports know nothing of behaviour (+0.005).
+
 On this evidence, knowing a person means watching them in the situation of interest, again. Asking
 them about themselves, and knowing what they did elsewhere, adds little. **Study 3** describes a
 multiplayer world built to watch people again, and a pre-registered study of friends in it.
@@ -395,6 +404,54 @@ registered (`PREREG-BBRS.md`) before any model was fitted.
   theory's population optimum on average. That is the price of fitting three weights on about 170
   people.
 
+### 4.2 The same laws across 138 measures (Self-Regulation Ontology, pre-registered)
+
+Two studies give a handful of tasks; the laws should hold across the whole range of reliabilities. The
+Self-Regulation Ontology (Eisenberg et al., 2019; Enkavi et al., 2019) gave 522 people 37 tasks and 22
+self-report surveys. It retested 150 of them about four months later, on everything.
+
+**Words and deeds.** We classed measures by what they record, before computing any relationship
+(`PREREG-SRO.md`):
+
+- **138 deeds**: task scores, and the two forms that record choices or performance;
+- **66 words**: survey scores.
+
+**Witnesses.** As in §4.
+
+<!-- figure:laws -->
+
+**Results for deeds** (median ρ = 0.38):
+
+- **Copying** loses to the crowd on 102 of the 106 measures
+  that are less than half steady. Its skill tracks 2ρ − 1 (r = .88). We had
+  registered a correlation above .9; this falls short of it, mostly through heavy-tailed measures far
+  below the line.
+- **The echo without a persona** beats copying on 135 of 138,
+  by +0.36 on average (95% CI +0.33 to
+  +0.39, with the variance held at the full sample's; the registered
+  per-resample interval is unstable on heavy-tailed measures). Its skill tracks ρ²
+  (r = .99).
+- **Mean skills:**
+
+| Witness | Mean skill |
+|---|---|
+| words | +0.005 |
+| other tasks | +0.113 |
+| copying | −0.213 |
+| echo | +0.180 |
+
+**The mirror image.** With the surveys as targets (median ρ = 0.80):
+
+| Witness | Mean skill |
+|---|---|
+| other surveys | +0.407 |
+| the deeds | −0.006 |
+| copying | +0.563 |
+| echo | +0.625 |
+
+Words know words and deeds know deeds, but neither knows the other. That is the self-report–behaviour
+gap (Dang, King & Inzlicht, 2020), seen as a matrix of witnesses.
+
 ## 5. Study 3: the village (pre-registered pilot)
 
 Studies 1 and 2 say that knowing a person takes watching them again, in the situation of interest. ECHO
@@ -506,6 +563,8 @@ It also gives the debrief, "who knew you best?", which is the reason a person wo
 - Forsythe, R., Horowitz, J. L., Savin, N. E., & Sefton, M. (1994). Fairness in simple bargaining experiments. *Games and Economic Behavior, 6*(3), 347–369.
 - Frederick, S., Loewenstein, G., & O'Donoghue, T. (2002). Time discounting and time preference: A critical review. *Journal of Economic Literature, 40*(2), 351–401.
 - Frey, R., Pedroni, A., Mata, R., Rieskamp, J., & Hertwig, R. (2017). Risk preference shares the psychometric structure of major psychological traits. *Science Advances, 3*(10), e1701381. https://doi.org/10.1126/sciadv.1701381
+- Eisenberg, I. W., Bissett, P. G., Enkavi, A. Z., Li, J., MacKinnon, D. P., Marsch, L. A., & Poldrack, R. A. (2019). Uncovering the structure of self-regulation through data-driven ontology discovery. *Nature Communications, 10*, 2319. https://doi.org/10.1038/s41467-019-10301-1
+- Enkavi, A. Z., Eisenberg, I. W., Bissett, P. G., Mazza, G. L., MacKinnon, D. P., Marsch, L. A., & Poldrack, R. A. (2019). Large-scale analysis of test–retest reliabilities of self-regulation measures. *PNAS, 116*(12), 5472–5477. https://doi.org/10.1073/pnas.1818430116
 - Hedge, C., Powell, G., & Sumner, P. (2018). The reliability paradox: Why robust cognitive tasks do not produce reliable individual differences. *Behavior Research Methods, 50*(3), 1166–1186. https://doi.org/10.3758/s13428-017-0935-1
 - Holt, C. A., & Laury, S. K. (2002). Risk aversion and incentive effects. *American Economic Review, 92*(5), 1644–1655.
 - Kelley, T. L. (1927). *Interpretation of Educational Measurements.* World Book.

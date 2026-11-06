@@ -30,6 +30,7 @@ SOURCES = {
     "ceiling": ("twin2k-ceiling.json", OUT / "twin2k" / "ceiling.json"),
     "exchange": ("twin2k-exchange.json", OUT / "twin2k" / "exchange.json"),
     "bbrs": ("bbrs-results.json", OUT / "bbrs" / "results.json"),
+    "sro": ("sro-results.json", OUT / "sro" / "results.json"),
 }
 
 
@@ -121,6 +122,16 @@ def build() -> dict[str, tuple[str, str]]:
             "Incentivised behaviour (Basel–Berlin Risk Study, seven risk tasks, about 170 people retested after six months). Amber: guessing a person's standing from their own "
             "earlier standing, copied; it is worse than knowing nobody on every task less than half steady, as 2ρ − 1 says. Teal: the same one observation read by the two-layer echo; "
             f"it is the best witness on six of seven tasks. Mean skill: words {F.fmt(m['words'])}, other tasks {F.fmt(m['elsewhere'])}, copying {F.fmt(m['copy'])}, echo {F.fmt(m['echo'])}.",
+        )
+
+    sro = _load("sro")
+    if sro:
+        s = sro["summary"]["deeds"]
+        figs["laws"] = (
+            F.laws(s["points"], note="Copying and the echo across 138 behavioural measures"),
+            f"The laws across the range (Self-Regulation Ontology: {s['variables']} behavioural measures from 37 tasks and forms, 150 people retested after about four months). "
+            f"Amber: copying a person's earlier score; it is below the crowd on {s['S1']['copy_negative_when_low']} of the {s['S1']['low_rho']} measures less than half steady. "
+            f"Teal: the same one observation read by the echo; it beats copying on {s['S2']['echo_np_beats_copy']} of {s['variables']} and tracks ρ² (r = {s['S2']['corr_echo_np_rho2']:.2f}).",
         )
 
     if exch:
