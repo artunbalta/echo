@@ -26,12 +26,13 @@ product's loop. The research says why (C81, C82), and the debrief (C80) is its m
   - the owner's export, the study's alone;
   - an erasure that leaves a circle for its friends and clears who started it;
   - rate limits: five new circles a day per address, and sixty code checks per ten minutes;
-  - starting a circle for other friends from one's own finished circle.
+  - starting a circle for other friends from one's own finished circle;
+  - a share card for a circle's debrief: the tally and the way to start a circle, never a choice or a guess
+    (the study's debrief has none, so it cannot reach a friend still playing).
 - **Not built.**
   - Reporting a nickname through the moderation path.
   - The funnel's numbers (below), beyond what the tables already hold.
   - A per-circle research export (no circle is a research circle today).
-  - A share card for the debrief.
 
 ## What
 

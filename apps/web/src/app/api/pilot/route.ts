@@ -246,7 +246,8 @@ async function revealFor(req: Request, cfg: Config) {
       .slice(0, 40)
       .map(async (p) => choices((await store.stagingsOf(p.subject)) ?? [], p.sessions)),
   );
-  return NextResponse.json({ ready: true, ...reveal(person, mine, ratings, others) });
+  // A circle's debrief can be passed on as a card (C83); the study's cannot, so it cannot reach a friend still playing.
+  return NextResponse.json({ ready: true, shareable: !inStudy(person), ...reveal(person, mine, ratings, others) });
 }
 
 /** Everything the pilot holds, for the owner's analysis: the people, the ratings, what was set out, every event, each echo now, and whether the debrief was on. */

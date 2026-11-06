@@ -5615,8 +5615,12 @@ who the pilot village is for and needs migration 0037.
 - **Tests.** `apps/web/tests/circles.test.mts` has 7 tests. The pilot's own tests pass, and the whole
   suite is 507/507.
 
-**Not built:** reporting a nickname, the funnel's numbers beyond the tables, a per-circle research
-export, and a share card.
+- **A share card** for a circle's debrief (`lib/shareCard.ts`). It carries the tally and the way to
+  start a circle, never a choice, a guess or a name. The study's debrief has none, so a card cannot reach
+  a friend still playing.
+
+**Not built:** reporting a nickname, the funnel's numbers beyond the tables, and a per-circle research
+export.
 
 **The owner's call.** Merge `feat/circles`, apply 0037 after 0036, and set `ECHO_CIRCLES=1`, or delete
 the branch and the file. Nothing is merged, pushed or applied.

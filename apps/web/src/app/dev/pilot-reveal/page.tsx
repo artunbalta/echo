@@ -9,6 +9,7 @@ import { setLang, useLang } from "@/lib/i18n";
 
 const SAMPLE: Debrief = {
   ready: true,
+  shareable: true,
   rows: [
     { paradigm: "give", said: 2 / 3, friends: 2 / 3, friendsCount: 3, echo: 0.43, did: 1 / 3, looks: 1, closest: ["echo"] },
     { paradigm: "lend", said: 1, friends: 1, friendsCount: 3, echo: 0.8, did: 1, looks: 1, closest: ["said", "friends"] },

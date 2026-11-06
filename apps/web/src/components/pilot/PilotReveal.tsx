@@ -6,9 +6,10 @@
  * echo's guess and what they did, with the closest marked. Then how many each was closest on, and what the
  * echo now knows. Plain words in the pilot's one palette; the flow sets it in its page.
  */
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 import { t, type Key } from "@/lib/i18n";
+import { shareCard, shareOrSave, shareText } from "@/lib/shareCard";
 
 type Paradigm = "give" | "lend" | "bet" | "seed" | "path" | "greet";
 type Witness = "said" | "friends" | "echo";
@@ -18,6 +19,8 @@ export interface Debrief {
   rows?: { paradigm: Paradigm; said: number | null; friends: number | null; friendsCount: number; echo: number | null; did: number | null; looks: number; closest: Witness[] }[];
   tally?: Record<Witness, number>;
   knows?: Record<Paradigm, { looks: number; share: number }>;
+  /** A circle's debrief, which may be passed on as a card (C83); never the study's. */
+  shareable?: boolean;
 }
 
 /** A coded answer (0..1) in the words of the six, rounded to the nearest choice there is. */
@@ -33,7 +36,13 @@ export function answerText(lang: "en" | "tr", p: Paradigm, v: number): string {
 const LABEL: Record<Witness, Key> = { said: "pilot.reveal.said", friends: "pilot.reveal.friends", echo: "pilot.reveal.echo" };
 
 export default function PilotReveal({ debrief, lang, onBack }: { debrief: Debrief; lang: "en" | "tr"; onBack: () => void }) {
+  const [shared, setShared] = useState<"shared" | "saved" | "cancelled" | null>(null);
   if (!debrief.rows || !debrief.tally || !debrief.knows) return null;
+  const met = debrief.rows.filter((r) => r.did !== null).length;
+  const passOn = async () => {
+    const text = shareText(lang, debrief.tally!, met, `${window.location.origin}/pilot`);
+    setShared(await shareOrSave(await shareCard(text, met), text));
+  };
   const seen = Object.values(debrief.knows).map((k) => k.looks).filter((n) => n > 0).sort((a, b) => a - b);
   const looks = seen.length ? seen[Math.floor(seen.length / 2)]! : 0;
   const share = Object.values(debrief.knows).find((k) => k.looks === looks)?.share ?? 0;
@@ -76,6 +85,14 @@ export default function PilotReveal({ debrief, lang, onBack }: { debrief: Debrie
       <p className="mt-6 text-[15px] leading-relaxed text-parchment/85">{t(lang, "pilot.reveal.tally", { echo: debrief.tally.echo, friends: debrief.tally.friends, said: debrief.tally.said })}</p>
       {looks > 0 ? <p className="mt-3 text-[13px] leading-relaxed text-parchment/60">{t(lang, "pilot.reveal.knows", { looks, share: `${Math.round(share * 100)}%` })}</p> : null}
       <p className="mt-3 text-[12px] text-parchment/45">{t(lang, "pilot.reveal.private")}</p>
+      {debrief.shareable && met > 0 ? (
+        <div className="mt-5">
+          <button type="button" data-pilot-share onClick={() => void passOn()} className="rounded-full bg-parchment px-4 py-2 text-sm font-medium text-ink">
+            {t(lang, "pilot.share.button")}
+          </button>
+          <p className="mt-2 text-[12px] leading-relaxed text-parchment/45">{shared === "saved" ? t(lang, "pilot.share.saved") : t(lang, "pilot.share.note")}</p>
+        </div>
+      ) : null}
       <div className="mt-6">
         <button type="button" onClick={onBack} className="text-sm text-parchment/55 hover:text-parchment">
           {t(lang, "pilot.back")}
