@@ -19,7 +19,7 @@ import { adminClient } from "@/lib/supabaseAdmin";
 import type { DemoVisit, EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
 import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
 import type { PilotPerson, PilotRating } from "@/lib/pilot";
-import { STUDY, circlesOn, type PilotCircle } from "@/lib/pilotCircles";
+import { STUDY, circleTablesOn, type PilotCircle } from "@/lib/pilotCircles";
 
 export interface VillagerMemory {
   /** In the villager's words. */
@@ -138,6 +138,10 @@ export interface VillageStore {
   pilotCircle(by: { id: string } | { codeHash: string }): Promise<PilotCircle | null | undefined>;
   /** Write a new circle. False when not written, including a code hash or id already taken. */
   savePilotCircle(c: PilotCircle): Promise<boolean>;
+  /** The owner's groups (C85), oldest first. Null: unreadable. */
+  pilotGroups(): Promise<PilotCircle[] | null>;
+  /** A person who asked to join a group and was told no (C85): their row, gone. False when not removed. */
+  dropPilotPerson(subject: string): Promise<boolean>;
   /**
    * Everything of one person this store holds, gone (§13): in the in-process store, every map, with the
    * world's history kept and made nameless (C44, C45). Against Supabase it does nothing, because
@@ -413,9 +417,10 @@ interface DemoRow {
 const DEMO_COLUMNS = "subject, host, name, started_at, voice_id, voice_until, voice_deleted_at";
 interface PilotRow {
   subject: string;
-  /** Only read with circles on (migration 0037). */
+  /** Only read with circles or groups on (migrations 0037 and 0038). */
   circle?: string;
   research_at?: string | null;
+  waiting_since?: string | null;
   nickname: string;
   joined_at: string;
   consent_at: string;
@@ -425,8 +430,8 @@ interface PilotRow {
   settled: PilotPerson["settled"] | null;
 }
 const PILOT_COLUMNS = "subject, nickname, joined_at, consent_at, self_axes, stated, sessions, settled";
-// With circles off the store reads the tables as they were before 0037, so the study runs either way.
-const pilotColumns = () => (circlesOn() ? `${PILOT_COLUMNS}, circle, research_at` : PILOT_COLUMNS);
+// With circles and groups off the store reads the tables as they were before 0037, so the study runs either way.
+const pilotColumns = () => (circleTablesOn() ? `${PILOT_COLUMNS}, circle, research_at, waiting_since` : PILOT_COLUMNS);
 const pilotFromRow = (r: PilotRow): PilotPerson => ({
   subject: r.subject,
   circle: r.circle ?? STUDY,
@@ -435,6 +440,7 @@ const pilotFromRow = (r: PilotRow): PilotPerson => ({
   consentAt: new Date(r.consent_at).toISOString(),
   // In the study the one yes is to the research; elsewhere research is a yes of its own.
   researchAt: r.circle && r.circle !== STUDY ? iso(r.research_at ?? null) : new Date(r.consent_at).toISOString(),
+  waitingSince: iso(r.waiting_since ?? null),
   self: r.self_axes,
   stated: r.stated,
   sessions: r.sessions ?? [],
@@ -447,7 +453,12 @@ interface CircleRow {
   created_at: string;
   visits: number;
   research: boolean;
+  name: string | null;
+  code: string | null;
+  owner: boolean;
+  approval: boolean;
 }
+const CIRCLE_COLUMNS = "id, code_hash, created_by, created_at, visits, research, name, code, owner, approval";
 const circleFromRow = (r: CircleRow): PilotCircle => ({
   id: r.id,
   codeHash: r.code_hash,
@@ -455,6 +466,10 @@ const circleFromRow = (r: CircleRow): PilotCircle => ({
   createdAt: new Date(r.created_at).toISOString(),
   visits: r.visits === 2 ? 2 : 3,
   research: r.research,
+  name: r.name,
+  code: r.code,
+  owner: r.owner,
+  approval: r.approval,
 });
 const pilotRatingFromRow = (r: { rater: string; ratee: string; know: number; axes: number[] | null; predicted?: PilotRating["predicted"]; created_at: string }): PilotRating => ({
   rater: r.rater,
@@ -895,49 +910,71 @@ function supabaseStore(): VillageStore | null {
     },
     async savePilotPerson(p) {
       const row = { subject: p.subject, nickname: p.nickname, joined_at: p.joinedAt, consent_at: p.consentAt, self_axes: p.self, stated: p.stated, sessions: p.sessions, settled: p.settled };
-      if (!circlesOn() && p.circle !== STUDY) return false;
-      const values = (circlesOn() ? { ...row, circle: p.circle, research_at: p.researchAt } : row) as typeof row;
+      if (!circleTablesOn() && (p.circle !== STUDY || p.waitingSince)) return false;
+      const values = (circleTablesOn() ? { ...row, circle: p.circle, research_at: p.researchAt, waiting_since: p.waitingSince } : row) as typeof row;
       const { error } = await admin.from("pilot_people").upsert(values, { onConflict: "subject" });
       if (error) return warn("savePilotPerson", error.message), false;
       return true;
     },
     async pilotPeople(circle) {
-      if (!circlesOn() && circle !== STUDY) return [];
+      if (!circleTablesOn() && circle !== STUDY) return [];
       let q = admin.from("pilot_people").select(pilotColumns());
-      if (circlesOn()) q = q.eq("circle", circle);
+      if (circleTablesOn()) q = q.eq("circle", circle);
       const { data, error } = await q.order("joined_at", { ascending: true }).limit(500);
       if (error) return warn("pilotPeople", error.message), null;
       return (data as unknown as PilotRow[]).map(pilotFromRow);
     },
     async savePilotRating(r, circle) {
       const row = { rater: r.rater, ratee: r.ratee, know: r.know, axes: r.axes, predicted: r.predicted, created_at: r.at };
-      if (!circlesOn() && circle !== STUDY) return false;
-      const values = (circlesOn() ? { ...row, circle } : row) as typeof row;
+      if (!circleTablesOn() && circle !== STUDY) return false;
+      const values = (circleTablesOn() ? { ...row, circle } : row) as typeof row;
       const { error } = await admin.from("pilot_ratings").upsert(values, { onConflict: "rater,ratee" });
       if (error) return warn("savePilotRating", error.message), false;
       return true;
     },
     async pilotRatings(circle) {
-      if (!circlesOn() && circle !== STUDY) return [];
+      if (!circleTablesOn() && circle !== STUDY) return [];
       let q = admin.from("pilot_ratings").select("rater, ratee, know, axes, predicted, created_at");
-      if (circlesOn()) q = q.eq("circle", circle);
+      if (circleTablesOn()) q = q.eq("circle", circle);
       const { data, error } = await q.limit(5000);
       if (error) return warn("pilotRatings", error.message), null;
       return (data as Parameters<typeof pilotRatingFromRow>[0][]).map(pilotRatingFromRow);
     },
     async pilotCircle(by) {
-      if (!circlesOn()) return null;
-      const q = admin.from("pilot_circles").select("id, code_hash, created_by, created_at, visits, research");
+      if (!circleTablesOn()) return null;
+      const q = admin.from("pilot_circles").select(CIRCLE_COLUMNS);
       const { data, error } = await ("id" in by ? q.eq("id", by.id) : q.eq("code_hash", by.codeHash)).maybeSingle();
       if (error) return warn("pilotCircle", error.message), undefined;
       return data ? circleFromRow(data as CircleRow) : null;
     },
     async savePilotCircle(c) {
-      if (!circlesOn()) return false;
-      const { error } = await admin
-        .from("pilot_circles")
-        .insert({ id: c.id, code_hash: c.codeHash, created_by: c.createdBy, created_at: c.createdAt, visits: c.visits, research: c.research });
+      if (!circleTablesOn()) return false;
+      const { error } = await admin.from("pilot_circles").insert({
+        id: c.id,
+        code_hash: c.codeHash,
+        created_by: c.createdBy,
+        created_at: c.createdAt,
+        visits: c.visits,
+        research: c.research,
+        name: c.name,
+        code: c.code,
+        owner: c.owner,
+        approval: c.approval,
+      });
       if (error) return warn("savePilotCircle", error.message), false;
+      return true;
+    },
+    async pilotGroups() {
+      if (!circleTablesOn()) return [];
+      const { data, error } = await admin.from("pilot_circles").select(CIRCLE_COLUMNS).eq("owner", true).order("created_at", { ascending: true }).limit(200);
+      if (error) return warn("pilotGroups", error.message), null;
+      return (data as CircleRow[]).map(circleFromRow);
+    },
+    async dropPilotPerson(subject) {
+      if (!circleTablesOn()) return false;
+      // Only someone still waiting: a person who has played is never dropped this way.
+      const { error } = await admin.from("pilot_people").delete().eq("subject", subject).not("waiting_since", "is", null);
+      if (error) return warn("dropPilotPerson", error.message), false;
       return true;
     },
     async forgetSubject() {
@@ -1300,6 +1337,14 @@ function memoryStore(): VillageStore {
     async savePilotCircle(c) {
       for (const x of memory.circles?.values() ?? []) if (x.id === c.id || x.codeHash === c.codeHash) return false;
       (memory.circles ??= new Map()).set(c.id, { ...c });
+      return true;
+    },
+    async pilotGroups() {
+      return [...(memory.circles?.values() ?? [])].filter((c) => c.owner).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((c) => ({ ...c }));
+    },
+    async dropPilotPerson(subject) {
+      const p = memory.pilot?.get(subject);
+      if (p?.waitingSince) memory.pilot!.delete(subject);
       return true;
     },
     async forgetSubject(subject) {

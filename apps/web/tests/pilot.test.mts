@@ -135,7 +135,7 @@ test("C75: off unless switched on, with a code at least four long", async () => 
   process.env.ECHO_PILOT_CODE = "abc";
   assert.equal(pilotConfig(), null, "on with a code anyone could guess");
   process.env.ECHO_PILOT_CODE = CODE;
-  assert.deepEqual(pilotConfig(), { cell: CELL, code: CODE, visits: 2, circles: false });
+  assert.deepEqual(pilotConfig(), { cell: CELL, code: CODE, visits: 2, circles: false, groups: false });
   const page = readFileSync(new URL("../src/app/pilot/page.tsx", import.meta.url), "utf8");
   assert.match(page, /if \(!cfg\) notFound\(\)/);
 });

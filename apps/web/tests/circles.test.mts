@@ -107,7 +107,7 @@ test("C83: off unless switched on; the study's code still opens the study", asyn
   // On without a study: circles alone switch the pilot on, and an empty code opens nothing.
   process.env.ECHO_CIRCLES = "1";
   delete process.env.ECHO_PILOT_CODE;
-  assert.deepEqual(pilotConfig(), { cell: "843f6a1ffffffff", code: "", visits: 2, circles: true });
+  assert.deepEqual(pilotConfig(), { cell: "843f6a1ffffffff", code: "", visits: 2, circles: true, groups: false });
   assert.equal((await join(A, "", "Deniz")).status, 403);
   delete process.env.ECHO_CIRCLES;
   assert.equal(pilotConfig(), null);
@@ -190,10 +190,12 @@ test("C83: an erasure leaves a circle for its friends and takes the person out o
   assert.ok(erase.includes('["pilot_circles", "created_by"]'));
 });
 
-test("C83: with circles off, the store asks the tables for nothing 0037 adds", () => {
+test("C83, C85: with circles and groups off, the store asks the tables for nothing 0037 or 0038 adds", () => {
   const store = readFileSync(new URL("../src/lib/villageStore.ts", import.meta.url), "utf8");
   assert.match(store, /const PILOT_COLUMNS = "subject, nickname, joined_at, consent_at, self_axes, stated, sessions, settled";/);
-  assert.match(store, /const pilotColumns = \(\) => \(circlesOn\(\) \? `\$\{PILOT_COLUMNS\}, circle, research_at` : PILOT_COLUMNS\);/);
-  for (const write of ["{ ...row, circle: p.circle, research_at: p.researchAt } : row", "{ ...row, circle } : row"]) assert.ok(store.includes(`(circlesOn() ? ${write})`), write);
-  assert.match(store, /async pilotCircle\(by\) \{\n\s+if \(!circlesOn\(\)\) return null;/);
+  assert.match(store, /const pilotColumns = \(\) => \(circleTablesOn\(\) \? `\$\{PILOT_COLUMNS\}, circle, research_at, waiting_since` : PILOT_COLUMNS\);/);
+  for (const write of ["{ ...row, circle: p.circle, research_at: p.researchAt, waiting_since: p.waitingSince } : row", "{ ...row, circle } : row"]) assert.ok(store.includes(`(circleTablesOn() ? ${write})`), write);
+  for (const read of ["pilotCircle(by)", "pilotGroups()", "savePilotCircle(c)", "dropPilotPerson(subject)"]) {
+    assert.match(store, new RegExp(`async ${read.replace(/[()]/g, "\\$&")} \\{\\n\\s+if \\(!circleTablesOn\\(\\)\\) return`), read);
+  }
 });

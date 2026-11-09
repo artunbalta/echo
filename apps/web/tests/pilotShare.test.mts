@@ -22,7 +22,8 @@ test("C83: the card says how many each came closest on, and how to start a circl
 
 test("C83: only a circle's debrief is shareable, and the card is drawn from the tally alone", () => {
   const route = readFileSync(new URL("../src/app/api/pilot/route.ts", import.meta.url), "utf8");
-  assert.match(route, /shareable: !inStudy\(person\)/);
+  // Not the study's, and not its groups' either (C85): `place.study` is both.
+  assert.match(route, /shareable: !place\.study/);
   const reveal = readFileSync(new URL("../src/components/pilot/PilotReveal.tsx", import.meta.url), "utf8");
   assert.match(reveal, /debrief\.shareable && met > 0/);
   assert.match(reveal, /shareText\(lang, debrief\.tally!, met,/);

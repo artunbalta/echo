@@ -5,8 +5,9 @@
  * their friends say of them.
  *
  * OFF UNLESS SWITCHED ON. `ECHO_PILOT=1` with `ECHO_PILOT_CODE` (at least four characters, the code the
- * owner gives their friends), or with circles (`ECHO_CIRCLES=1`, `lib/pilotCircles.ts`, C83). Without
- * either there is no `/pilot` page and `/api/pilot` answers 404.
+ * owner gives their friends), with circles (`ECHO_CIRCLES=1`, `lib/pilotCircles.ts`, C83), or with the
+ * owner's groups (`ECHO_GROUPS=1`, C85). Without any of them there is no `/pilot` page and `/api/pilot`
+ * answers 404.
  * `ECHO_PILOT_CELL` picks the village (Senstrand by default), and `ECHO_PILOT_ADMIN` (at least twelve
  * characters) is the token the export asks for.
  *
@@ -22,7 +23,7 @@ import { timingSafeEqual } from "node:crypto";
 import { PERSONA_AXIS_KEYS } from "@echo/shared";
 import { PILOT, PILOT_SITUATIONS, TIDE, add, loanComesBack, type Pack } from "@echo/planet";
 
-import { STUDY, circlesOn } from "@/lib/pilotCircles";
+import { STUDY, circlesOn, groupsOn } from "@/lib/pilotCircles";
 import type { VillageStore } from "@/lib/villageStore";
 
 const CELL = /^[0-9a-f]{15}$/;
@@ -56,6 +57,11 @@ export interface PilotPerson {
   consentAt: string;
   /** Their yes to research, if they gave one: the same moment as `consentAt` in the study, optional elsewhere. */
   researchAt: string | null;
+  /**
+   * When they asked to join a group that needs the owner's yes (C85), while they wait for it; null once
+   * they are in, and for everyone in the study or a circle. Waiting, they cannot play, rate or be rated.
+   */
+  waitingSince: string | null;
   /** Where they place themselves, 1–7, in `PERSONA_AXIS_KEYS` order. */
   self: number[];
   stated: PilotStated;
@@ -87,17 +93,18 @@ export interface PilotNotice {
 /**
  * The pilot's settings, or null when it is not switched on. `visits` is the study's: two, or three with
  * `ECHO_PILOT_VISITS=3` (C78), the study's power lever, for the owner to choose. `code` is empty when
- * there is no study, only circles (C83).
+ * there is no study code, only circles (C83) or the owner's groups (C85).
  */
-export function pilotConfig(): { cell: string; code: string; visits: number; circles: boolean } | null {
+export function pilotConfig(): { cell: string; code: string; visits: number; circles: boolean; groups: boolean } | null {
   if (process.env.ECHO_PILOT !== "1") return null;
   const raw = (process.env.ECHO_PILOT_CODE ?? "").trim();
   const code = raw.length >= 4 ? raw : "";
   const circles = circlesOn();
-  if (!code && !circles) return null;
+  const groups = groupsOn();
+  if (!code && !circles && !groups) return null;
   const cell = CELL.test(process.env.ECHO_PILOT_CELL ?? "") ? process.env.ECHO_PILOT_CELL! : PILOT_DEFAULT_CELL;
   const visits = process.env.ECHO_PILOT_VISITS === "3" ? 3 : PILOT.sessions;
-  return { cell, code, visits, circles };
+  return { cell, code, visits, circles, groups };
 }
 
 /** Whether a person is in the owner's registered study, rather than a circle of their own (C83). */

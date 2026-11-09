@@ -5667,3 +5667,45 @@ that looks dead bores people, and the echo learns nothing from people who are bo
 
 **Not built:** a night that passes faster than the day; a guide on arrival (the controls line and the
 chips over what is near are what there is); requests from villagers more often than C50's.
+
+## C85 — the owner's groups: a link per group of friends, and the owner's yes to let each person in
+
+What it answers: the owner's friends come in groups that do not know each other (one group from an
+entrepreneurship foundation, another from elsewhere). With a single study code, everyone would be in one
+group, rating people they have never met. The owner asked for a group of their own naming for each set
+of friends, with one link each. Whoever opens a link asks to join, and the owner lets them in.
+
+- **A group** is a row of `pilot_circles` made by the owner (`owner`), with a `name` and `approval` on.
+  It keeps its `code` beside the hash, so the owner's page can show the link again. A leaked code lets
+  nobody in; it only lets someone ask.
+- **Waiting.** Joining a group saves the person with `waiting_since`. Until the owner says yes, they
+  cannot begin a visit, rate anyone, be rated, or be seen in the group. Their page asks every fifteen
+  seconds and opens by itself when the yes comes. A no deletes the request, and they may ask again. A
+  person who is in is never removed this way.
+- **Part of the study.**
+  - The one yes covers the research, as in the study.
+  - The debrief is the owner's switch (`ECHO_PILOT_REVEAL`), and there is no card to pass on.
+  - The export carries the study's people and every group's, each with its `circle`, plus a `groups`
+    list. Nobody still waiting is in it, and no friend's circle (C83) is.
+  - All groups play the same village (`ECHO_PILOT_CELL`, Senstrand by default), so the conditions are
+    the same for everyone. Ratings stay inside each group.
+- **The owner's page,** `/pilot/admin`. It asks for `ECHO_PILOT_ADMIN` once and keeps it on that device.
+  It shows each group's link with a copy button, who is waiting (let in, or say no) and who is in, with
+  their visits. A new group is a name and two or three visits. The page asks again every twenty seconds.
+- **Switched on by `ECHO_GROUPS=1`,** apart from circles (`ECHO_CIRCLES`). The owner can have groups
+  without anyone else starting circles. A circle's code opens nothing with circles off, and a group's
+  nothing with groups off.
+- **Migration 0038** adds `name`, `code`, `owner` and `approval` to `pilot_circles`, and `waiting_since`
+  to `pilot_people`. Either switch needs 0037 and 0038. It was dry-run on a local Postgres at 0036:
+  - 0038 before 0037 refuses, and a second run refuses;
+  - the raw file re-runs without error;
+  - a name over 40 characters is refused;
+  - a decline deletes only someone waiting;
+  - the runner reports no drift.
+
+  The one-file SQL is `~/Desktop/apply_0038.sql`.
+- **Tests.** `apps/web/tests/groups.test.mts` has 6 tests. The C83 store test now holds the 0038
+  columns to the same rule. Web 515/515, and a production build passes.
+
+**Not built:** a message to the owner when someone asks (the page shows it on its next look), renaming
+or closing a group, and moving someone between groups.

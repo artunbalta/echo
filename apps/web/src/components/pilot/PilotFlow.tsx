@@ -18,6 +18,9 @@
  * visits) before anyone agrees to anything; a circle asks a yes to play and, apart, an optional yes to
  * research. Anyone can start a circle and send its link (`/pilot?code=…`), on the way in or after their
  * own last visit.
+ *
+ * The owner's groups (C85): a group's link says its name. Whoever joins one waits on this page for the
+ * owner's yes, which it asks about every quarter of a minute, and opens by itself when it comes.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { PERSONA_AXIS_KEYS } from "@echo/shared";
@@ -41,10 +44,20 @@ interface Info {
   cell: string;
   sessionMs: number;
   sessions: number;
-  /** Whether circles are on (C83), and whether there is a study at all. */
+  /** Whether circles are on (C83), the owner's groups (C85), and whether there is a study code at all. */
   circles?: boolean;
+  groups?: boolean;
   study?: boolean;
-  me: { nickname: string; inStudy?: boolean; sessions: Session[]; open: Session | null; start: { ok: true; n: number } | { ok: false; why: "open" | "done" | "too_soon"; at?: string } } | null;
+  me: {
+    nickname: string;
+    inStudy?: boolean;
+    /** The owner's group they are in (C85), and whether they are still waiting to be let in. */
+    groupName?: string | null;
+    waiting?: boolean;
+    sessions: Session[];
+    open: Session | null;
+    start: { ok: true; n: number } | { ok: false; why: "open" | "done" | "too_soon" | "waiting"; at?: string };
+  } | null;
   group: { nickname: string; rated: boolean }[];
 }
 
@@ -59,7 +72,8 @@ interface Stated {
 
 type Step = "loading" | "intro" | "self" | "stated" | "ready" | "playing" | "rate" | "thanks" | "reveal" | "unavailable";
 
-
+/** How often a page waiting for the owner's yes asks again (C85). */
+const WAIT_POLL_MS = 15_000;
 
 const button = "rounded-full bg-parchment px-4 py-2 text-sm font-medium text-ink disabled:opacity-40";
 const quiet = "text-sm text-parchment/55 hover:text-parchment";
@@ -124,7 +138,7 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
   const [rating, setRating] = useState<{ ratee: string; know: 0 | 1 | 2 | 3 | null; axes: (number | null)[]; predicted: Stated; noIdea: boolean } | null>(null);
   const [debrief, setDebrief] = useState<Debrief | null>(null);
   // What the typed code opens (C83): undefined while unknown, null for nothing; `failed` if it could not be asked.
-  const [opens, setOpens] = useState<{ kind: "study" | "circle"; visits: number } | null | undefined>(undefined);
+  const [opens, setOpens] = useState<{ kind: "study" | "circle" | "group"; visits: number; name?: string } | null | undefined>(undefined);
   const [checkFailed, setCheckFailed] = useState(false);
   const [research, setResearch] = useState(false);
   const [made, setMade] = useState<{ code: string; link: string; after: boolean } | null>(null);
@@ -188,8 +202,8 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
         try {
           const res = await fetch(`/api/pilot?op=code&code=${encodeURIComponent(code)}`);
           if (!res.ok) return setCheckFailed(true);
-          const data = (await res.json()) as { kind: "study" | "circle" | null; visits?: number };
-          setOpens(data.kind ? { kind: data.kind, visits: data.visits ?? 2 } : null);
+          const data = (await res.json()) as { kind: "study" | "circle" | "group" | null; visits?: number; name?: string };
+          setOpens(data.kind ? { kind: data.kind, visits: data.visits ?? 2, name: data.name } : null);
         } catch {
           setCheckFailed(true);
         }
@@ -298,6 +312,23 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
     })();
   }, [done]);
 
+  // Waiting for the owner's yes (C85): ask again every so often, and open when it comes. A request that
+  // was turned down is gone, and the page goes back to the start with a word about it.
+  const waiting = step === "ready" && info?.me?.waiting === true;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => {
+      void (async () => {
+        const data = await load();
+        if (data && !data.me) {
+          setStep("intro");
+          setError(t(lang, "pilot.group.declined"));
+        }
+      })();
+    }, WAIT_POLL_MS);
+    return () => clearInterval(timer);
+  }, [waiting, load, lang]);
+
   const saveRating = async () => {
     if (!rating || rating.know === null) return;
     setBusy(true);
@@ -363,22 +394,33 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
 
   if (step === "intro") {
     const circle = opens?.kind === "circle";
+    // One of the owner's groups (C85): the study's words, under the group's name, and the owner's yes to wait for.
+    const group = opens?.kind === "group" ? opens : null;
     const typed = code.replace(/[^a-z0-9]/gi, "").length >= 4;
     return page(
       <>
-        <h1 className="font-serif text-4xl leading-tight">{t(lang, circle ? "pilot.circle.title" : "pilot.title")}</h1>
+        <h1 className="font-serif text-4xl leading-tight">{group ? t(lang, "pilot.group.title", { name: group.name ?? "" }) : t(lang, circle ? "pilot.circle.title" : "pilot.title")}</h1>
         <p className="mt-4 text-[15px] leading-relaxed text-parchment/75">
-          {circle ? t(lang, "pilot.circle.intro", { visits: opens!.visits }) : t(lang, (info?.sessions ?? 2) === 3 ? "pilot.intro3" : "pilot.intro")}
+          {circle ? t(lang, "pilot.circle.intro", { visits: opens!.visits }) : t(lang, (group?.visits ?? info?.sessions ?? 2) === 3 ? "pilot.intro3" : "pilot.intro")}
         </p>
         <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, circle ? "pilot.circle.kept" : "pilot.kept")}</p>
+        {group ? <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, "pilot.group.ask")}</p> : null}
         <p className="mt-3 text-[13px] leading-relaxed text-parchment/55">{t(lang, "pilot.sameBrowser")}</p>
         <label className="mt-6 block text-xs text-parchment/55">
           {t(lang, "pilot.code")}
           <input data-pilot-code value={code} onChange={(e) => setCode(e.target.value)} className="mt-1 block w-full rounded-lg bg-white/10 px-3 py-2 text-[15px] text-parchment outline-none focus:bg-white/15" />
         </label>
-        {typed && info?.circles ? (
+        {typed && (info?.circles || info?.groups) ? (
           <p data-pilot-code-opens={opens === undefined ? "" : (opens?.kind ?? "none")} className="mt-1.5 text-[12px] text-parchment/55">
-            {opens === undefined ? "\u00a0" : opens === null ? t(lang, "pilot.circle.unknown") : opens.kind === "circle" ? t(lang, "pilot.circle.which", { visits: opens.visits }) : t(lang, "pilot.circle.whichStudy")}
+            {opens === undefined
+              ? "\u00a0"
+              : opens === null
+                ? t(lang, "pilot.circle.unknown")
+                : opens.kind === "group"
+                  ? t(lang, "pilot.group.which", { name: opens.name ?? "", visits: opens.visits })
+                  : opens.kind === "circle"
+                    ? t(lang, "pilot.circle.which", { visits: opens.visits })
+                    : t(lang, "pilot.circle.whichStudy")}
           </p>
         ) : null}
         {madeBox}
@@ -511,11 +553,22 @@ export default function PilotFlow(parcel: Omit<ParcelCanvasProps, "demo" | "stat
     </button>
   );
 
+  if (step === "ready" && me?.waiting) {
+    return page(
+      <div data-pilot-waiting>
+        <h2 className="font-serif text-3xl">{t(lang, "pilot.hello", { name: me.nickname })}</h2>
+        <p className="mt-1 text-xs uppercase tracking-wider text-parchment/45">{t(lang, "pilot.group.waitingTitle")}</p>
+        <p className="mt-4 text-[15px] leading-relaxed text-parchment/75">{t(lang, "pilot.group.waiting", { name: me.groupName ?? "" })}</p>
+      </div>,
+    );
+  }
+
   if (step === "ready" && me) {
     const start = me.start;
     return page(
       <>
         <h2 className="font-serif text-3xl">{t(lang, "pilot.hello", { name: me.nickname })}</h2>
+        {me.groupName ? <p data-pilot-group className="mt-1 text-xs uppercase tracking-wider text-parchment/45">{me.groupName}</p> : null}
         {start.ok ? (
           <>
             <p className="mt-3 text-[15px] leading-relaxed text-parchment/75">{t(lang, start.n === 1 ? "pilot.readyFirst" : start.n === 2 ? "pilot.readySecond" : "pilot.readyThird")}</p>

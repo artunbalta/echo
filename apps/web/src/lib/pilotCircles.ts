@@ -11,6 +11,12 @@
  *
  * A code is eight letters and digits from an alphabet without look-alikes, shown as two groups of four.
  * The store keeps only its SHA-256, so a leaked table does not let anyone in.
+ *
+ * Groups (C85) are the owner's own circles inside the study: named, each with its own link, and whoever
+ * asks to join waits for the owner's yes. A group keeps its code beside the hash, so the owner's page can
+ * show the link again; a leaked code lets nobody in, only ask. Switched on by `ECHO_GROUPS=1`, apart from
+ * circles, so that the owner can have groups without anyone else starting circles. Either switch reads
+ * the columns of 0037 and 0038.
  */
 import "server-only";
 
@@ -26,8 +32,16 @@ export interface PilotCircle {
   createdBy: string | null;
   createdAt: string;
   visits: 2 | 3;
-  /** Whether its friends may give their data to research. False for every circle today (C83). */
+  /** Whether its friends may give their data to research. False for every circle today (C83), true for the owner's groups. */
   research: boolean;
+  /** What its friends call it: the owner's groups have a name (C85), circles none. */
+  name: string | null;
+  /** The code itself, kept only for the owner's groups, so their page can show the link again. */
+  code: string | null;
+  /** Made by the owner on their page (C85): part of the study, in the export, its debrief the owner's switch. */
+  owner: boolean;
+  /** Whoever asks to join waits for the owner's yes. */
+  approval: boolean;
 }
 
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -35,6 +49,23 @@ const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 /** Whether circles are switched on. */
 export function circlesOn(): boolean {
   return process.env.ECHO_PILOT === "1" && process.env.ECHO_CIRCLES === "1";
+}
+
+/** Whether the owner's groups are switched on (C85). */
+export function groupsOn(): boolean {
+  return process.env.ECHO_PILOT === "1" && process.env.ECHO_GROUPS === "1";
+}
+
+/** Whether the store may read and write what 0037 and 0038 add: with circles or groups on, and never otherwise. */
+export function circleTablesOn(): boolean {
+  return circlesOn() || groupsOn();
+}
+
+/** A group's name, as typed: one line, 1–40 characters; null when it cannot be one. */
+export function cleanGroupName(x: unknown): string | null {
+  if (typeof x !== "string") return null;
+  const s = x.replace(/\s+/g, " ").trim();
+  return s.length >= 1 && s.length <= 40 ? s : null;
 }
 
 /** A code as typed, lower case, letters and digits only; null when it cannot be one. */
