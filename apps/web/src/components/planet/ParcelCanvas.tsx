@@ -166,6 +166,9 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
           },
         };
       }
+      // The same, for any parcel in development: how a browser script looks at the village from where
+      // its people are (placing the player beside them). Never in a production bundle.
+      if (process.env.NODE_ENV !== "production") (window as unknown as { __world?: PlanetWorld }).__world = built;
       return list;
     },
     [chain, touch, stations, onReaction],

@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { ROOM, roomOf, roomToLocal, roomHeading, type Room } from "../lib/interiors.js";
 import { present } from "../lib/life.js";
-import { dayPlans, doorOf, homeState } from "../lib/schedule.js";
+import { dayPlans, doorOf, homeState, watchOn } from "../lib/schedule.js";
 import { ageYears, occupationOn, settlementAt, type Settlement, type SettlementGeography } from "../lib/society.js";
 import { plotState, residentsOn, villagePlan, type Plot, type VillageGround, type VillagePlan, type VillageSite } from "../lib/village.js";
 
@@ -117,11 +117,13 @@ test("C54: home, asleep, out or away, from the day plan", () => {
   let awayHome = 0;
   for (const { s, plan } of villages.slice(0, 3)) {
     const { plans } = dayPlans(s, plan, DAY);
+    // Last night's watch (C84) is still going round the houses before dawn.
+    const watch = new Set(watchOn(s, plan, DAY - 1));
     for (const { person, plot } of residentsOn(s, plan, DAY)) {
       const d = plans.find((x) => x.person === person.id);
       const door = doorOf(plot);
       // Before dawn and after the last of them goes in, everyone of the house is asleep at home.
-      assert.equal(homeState(d, 0.08, door), "asleep", `${person.given} is not asleep at night`);
+      assert.equal(homeState(d, 0.08, door), watch.has(person.id) ? "out" : "asleep", `${person.given} is not asleep at night`);
       if (homeState(d, 0.97, door) === "asleep") asleep++;
       // Out at mid-morning: out of doors, or away beyond the village — never asleep at home.
       const mid = homeState(d, 0.45, door);

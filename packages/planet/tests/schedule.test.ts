@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { ageYears, settlementAt, type Settlement, type SettlementGeography } from "../lib/society.js";
 import { temperaments } from "../lib/life.js";
 import { villagePlan, type VillageGround, type VillagePlan, type VillageSite } from "../lib/village.js";
-import { SCHEDULE, boatAt, dayPlans, whereabouts } from "../lib/schedule.js";
+import { SCHEDULE, boatAt, dayPlans, watchOn, whereabouts } from "../lib/schedule.js";
 import { WORLD_DAY_S } from "../lib/worldclock.js";
 import { pathLength } from "../lib/nav.js";
 import { weatherOn } from "../lib/weather.js";
@@ -99,17 +99,56 @@ test("the temperament shows in the stride: more energy, a quicker walk", () => {
   }
 });
 
-test("at midnight the village is asleep: nobody is out", () => {
+test("at midnight the village is asleep: nobody is out but the watch", () => {
   for (const { s, plan } of villages(COAST, SHORE, SHORE_SITE, 6, "night")) {
     const { plans, boats, moorings } = dayPlans(s, plan, 0);
+    // Tonight's watch is out until midnight, and last night's from midnight until first light (C84).
+    const tonight = new Set(watchOn(s, plan, 0));
+    const lastNight = new Set(watchOn(s, plan, -1));
     for (const d of plans) {
-      // 0.95 and not 0.92: since C46 the young walk home round the houses, and the last of them is at
-      // their door just after 0.917 — ten past ten. Midnight is the claim, and midnight is checked.
-      for (const t of [0.02, 0.1, 0.17, 0.95, 0.98]) {
-        assert.equal(whereabouts(d, t, boats, moorings).visible, false, `${d.person} is out at ${t}`);
+      // 0.97 and not 0.92: since C46 the young walk home round the houses, and since C84 some of them
+      // sit round the well until about ten and are at their doors by a quarter to eleven. Midnight
+      // is the claim, and midnight is checked.
+      for (const t of [0.02, 0.1, 0.17, 0.97, 0.99]) {
+        const watching = t < 0.5 ? lastNight.has(d.person) : tonight.has(d.person);
+        assert.equal(whereabouts(d, t, boats, moorings).visible, watching, `${d.person} is ${watching ? "not " : ""}out at ${t}`);
       }
     }
   }
+});
+
+test("C84: the night watch goes round the houses all night, and on across midnight without a jump", () => {
+  let villagesSeen = 0;
+  for (const [geo, ground, site] of [[COAST, SHORE, SHORE_SITE], [VALLEY, INLAND, INLAND_SITE]] as const) {
+    for (const { s, plan } of villages(geo, ground, site, 4, "watch")) {
+      for (const day of [0, 1, 2]) {
+        const watch = watchOn(s, plan, day);
+        assert.ok(watch.length >= 1 && watch.length <= 2, `${s.cell}: ${watch.length} on watch on night ${day}`);
+        const today = dayPlans(s, plan, day);
+        const tomorrow = dayPlans(s, plan, day + 1);
+        for (const id of watch) {
+          const before = today.plans.find((d) => d.person === id)!;
+          const after = tomorrow.plans.find((d) => d.person === id)!;
+          // Out from when the green empties until first light: round the houses, not standing at a door.
+          const seen: { x: number; y: number }[] = [];
+          for (let t = SCHEDULE.lateEnd; t < 1; t += 0.004) seen.push(whereabouts(before, t, today.boats, today.moorings));
+          for (let t = 0; t < SCHEDULE.wake - 0.03; t += 0.004) seen.push(whereabouts(after, t, tomorrow.boats, tomorrow.moorings));
+          assert.ok(seen.every((w) => (w as { visible: boolean }).visible), `${id} goes in during the watch`);
+          const spread = Math.max(...seen.map((w) => Math.hypot(w.x - plan.centre.x, w.y - plan.centre.y)));
+          assert.ok(spread > plan.greenRadiusM, `${id} keeps to the green all night`);
+          // Midnight: the last instant of one day's plan and the first of the next agree.
+          const a = whereabouts(before, 1 - 1e-9, today.boats, today.moorings);
+          const b = whereabouts(after, 0, tomorrow.boats, tomorrow.moorings);
+          assert.ok(Math.hypot(a.x - b.x, a.y - b.y) < 0.05, `${id} jumps ${Math.hypot(a.x - b.x, a.y - b.y).toFixed(2)} m at midnight`);
+          // And after the night, the morning in bed: indoors at mid-morning, out by mid-afternoon.
+          assert.equal(whereabouts(after, 0.38, tomorrow.boats, tomorrow.moorings).visible, false, `${id} is out the morning after the watch`);
+          assert.equal(whereabouts(after, SCHEDULE.watchUp + 0.08, tomorrow.boats, tomorrow.moorings).visible, true, `${id} never gets up after the watch`);
+        }
+      }
+      villagesSeen++;
+    }
+  }
+  assert.equal(villagesSeen, 8);
 });
 
 test("at noon the boats are out, the fishers are in them, and the children are on the green", () => {

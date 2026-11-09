@@ -116,3 +116,29 @@ test("C55: a bond is what a stranger has done for a dog, over days — and shooi
   assert.equal(bondWith([deed("stroke", 1)], "stray:0", 1 + ANIMALS.bondDays + 1), 0, "a bond never forgotten");
   assert.equal(bondWith([deed("stroke", 100)], "dog:4", 100), 0, "a bond with the wrong dog");
 });
+
+test("an animal that stops stays on the spot: a dog lies where it got to, a goat grazes and a hen pecks without sliding, and walks on from there", () => {
+  let rests = 0;
+  for (const { animals } of villages) {
+    for (const a of animals.filter((x) => (x.kind === "dog" && !x.follows) || x.kind === "goat" || x.kind === "hen")) {
+      const rest = a.kind === "dog" ? "lie" : a.kind === "goat" ? "graze" : "peck";
+      let prev = animalAt(a, 0.4);
+      for (let t = 0.4 + 1e-4; t < 0.6; t += 1e-4) {
+        const now = animalAt(a, t);
+        if (now.activity === "hidden" || prev.activity === "hidden") {
+          prev = now;
+          continue;
+        }
+        const moved = Math.hypot(now.x - prev.x, now.y - prev.y);
+        if (now.activity === rest && prev.activity === rest) {
+          rests++;
+          assert.ok(moved < 1e-9, `${a.id} slid ${moved.toFixed(3)} m while it was meant to be still`);
+        }
+        // Never a jump: the walk picks up exactly where the rest left off.
+        assert.ok(moved < 0.6, `${a.id} jumped ${moved.toFixed(2)} m in a step of the day`);
+        prev = now;
+      }
+    }
+  }
+  assert.ok(rests > 1000, "the animals do rest");
+});

@@ -30,7 +30,7 @@ import { WORLD_DAY_S } from "./worldclock.js";
 import { ageYears, hash01, occupationOn, type Person, type Settlement } from "./society.js";
 import type { LifeChange } from "./changes.js";
 import { eveningOf, type GoalPlace } from "./goals.js";
-import { navGraph, pathLength, route } from "./nav.js";
+import { blocked, navGraph, pathLength, route, type NavGraph } from "./nav.js";
 import { weatherOn } from "./weather.js";
 import { friendCircles } from "./social.js";
 import { gatheringsOn, type Gathering } from "./events.js";
@@ -51,6 +51,11 @@ export const SCHEDULE = {
   workEnd: 0.6,
   /** When the green fills, and when the last of them go in. */
   gatherEnd: 0.8,
+  /** When the last of the young who stay out round the well go in (C84): about ten at night. */
+  lateEnd: 0.885,
+  /** The night watch (C84): how long they stop at each place on the round, and when the one who watched last night is up again. */
+  watchPause: 0.008,
+  watchUp: 0.52,
   /** Children are put to bed first, and the old go in early. */
   childBed: 0.76,
   elderBed: 0.77,
@@ -251,6 +256,38 @@ const CRAFT = new Set(["smith", "potter", "weaver", "carpenter", "healer"]);
 const GREEN = new Set(["trader", "innkeeper", "teacher"]);
 
 /**
+ * Who keeps the night watch (C84) on the night that begins at the end of `night`: one of the grown,
+ * two in a big village, chosen afresh each night. Not a fisher (the boats go out before first light),
+ * not someone on the road to the market, not a visitor, not the ill.
+ */
+export function watchOn(s: Settlement, plan: VillagePlan, night: number): string[] {
+  const market = plan.market ?? null;
+  const away = market !== null && isTravelDay(market, night) ? new Set(market.goers) : null;
+  const eligible = residentsOn(s, plan, night)
+    .map((r) => r.person)
+    .filter((p) => {
+      const age = ageYears(p, night);
+      return age >= 20 && age < 60 && !p.visiting && !isAiling(p, night) && occupationOn(p, night) !== "fisher" && !away?.has(p.id);
+    })
+    .sort((a, b) => hash01(`${a.id}/watch/${night}`) - hash01(`${b.id}/watch/${night}`));
+  return eligible.slice(0, eligible.length > 24 ? 2 : 1).map((p) => p.id);
+}
+
+/**
+ * The night watch's round (C84): out in the lane before a house in every few, the way in, the dock,
+ * in order round the green, and only places a body can stand.
+ */
+function watchStops(plan: VillagePlan, nav: NavGraph): Point[] {
+  const c = plan.centre;
+  const plots = [...plan.plots].sort((a, b) => toward(c, doorOf(a)) - toward(c, doorOf(b)));
+  const every = Math.max(1, Math.round(plots.length / 6));
+  const stops = plots.filter((_, i) => i % every === 0).map((plot) => along(doorOf(plot), plot.facing, 2));
+  stops.push(plan.arrival);
+  if (plan.dock) stops.push(along(plan.dock.root, plan.dock.heading, 1));
+  return stops.filter((q) => !blocked(nav, q)).sort((a, b) => toward(c, a) - toward(c, b));
+}
+
+/**
  * Everyone's plan for a world day. Computed once per day; `whereabouts` evaluates an instant of it.
  * Infants are left out: they are carried, and nothing in this file draws a carried child.
  */
@@ -345,15 +382,28 @@ export function dayPlans(
     if (list) list.push(person.id);
     else members.set(k, [person.id]);
   }
+  const hosting = new Set(s.people.filter((q) => q.visiting).map((q) => q.visiting as string));
+  // Where on the green a circle stands, inside its edge (C84), and a spot that is clear of the well,
+  // the benches and anything else standing there, or the green's old ring if it is not.
+  const ringOf = (k: string) => 0.35 + 0.55 * hash01(`${k}/ring`);
+  const onGreen = (spot: Point, id: string): Point => (blocked(nav, spot) ? greenSpot(plan, id, 0.9) : spot);
+  // The night watch (C84): tonight's, and last night's, who are still out until first light. At
+  // midnight each stands by the well at a spot of their own, which both days' plans agree on, so the
+  // round goes on across the turn of the day without a jump.
+  const watchTonight = new Set(watchOn(s, plan, day));
+  const watchedLastNight = new Set(watchOn(s, plan, day - 1));
+  const stops = watchTonight.size + watchedLastNight.size > 0 ? watchStops(plan, nav) : [];
+  const midnightSpot = (id: string): Point => onGreen(along(plan.centre, hash01(`${id}/watch-well`) * Math.PI * 2, 2.3), id);
   const eveningSpotOf = (id: string): Point => {
     const k = circle.get(id) ?? id;
     const group = members.get(k) ?? [id];
-    if (group.length <= 1) return greenSpot(plan, id, 0.9);
-    const centre = greenSpot(plan, k, 0.9);
+    if (group.length <= 1) return onGreen(greenSpot(plan, id, 0.5 + 0.45 * hash01(`${id}/alone`)), id);
+    // Each circle somewhere of its own on the green, not all on one ring: a green of friends, not a crowd.
+    const centre = greenSpot(plan, k, ringOf(k));
     const i = group.indexOf(id);
     const a = (i / group.length) * Math.PI * 2 + hash01(`${k}/circle`) * Math.PI;
-    const r = 0.55 + 0.12 * group.length;
-    return { x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r };
+    const r = 0.7 + 0.11 * group.length;
+    return onGreen({ x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r }, id);
   };
   for (const { person: p, plot } of residents) {
     const age = ageYears(p, day);
@@ -385,10 +435,49 @@ export function dayPlans(
       go(door);
       stays.push({ t0: clock, t1: clock + 0.004, at: door, heading: plot.facing + Math.PI, activity: "stand", wander: 0 });
     };
+    /**
+     * Round the houses on watch (C84) until `end`, from the nearest stop on and the same way round
+     * every time, a moment's stop at each looking out; at `end`, at `finish`, facing the well.
+     */
+    const round = (end: number, finish: Point) => {
+      if (stops.length > 0) {
+        let i = stops.reduce((best, q, k) => (dist(q, here) < dist(stops[best], here) ? k : best), 0);
+        for (let n = 0; n < 4 * stops.length; n++) {
+          const next = stops[i % stops.length];
+          if (clock + (walkLength(here, next) + walkLength(next, finish)) / v + SCHEDULE.watchPause > end) break;
+          go(next);
+          stay(clock + SCHEDULE.watchPause, toward(plan.centre, next), "stand");
+          i++;
+        }
+      }
+      go(finish);
+      stay(end, toward(finish, plan.centre), "stand");
+    };
+    /** The end of the day: in to bed, or, on watch tonight, out on the round until midnight. */
+    const night = () => {
+      if (!watchTonight.has(p.id)) return bed();
+      const spot = midnightSpot(p.id);
+      // Home for the lantern first, when there is time for it.
+      if (clock + (walkLength(here, door) + walkLength(door, spot)) / v + 0.01 < 1) {
+        go(door);
+        stay(clock + 0.006, plot.facing, "stand");
+      }
+      round(1, spot);
+    };
 
     const household = p.partnerDay !== null && p.partnerDay <= day ? p.household : p.bornInto;
     const boatIndex = boatOf.get(household);
     const rows = age >= SCHEDULE.childYears && age < SCHEDULE.elderYears && trade === "fisher" && boatIndex !== undefined && boats[boatIndex] !== null;
+    // On watch last night (C84): out from midnight by the well, round the houses until first light,
+    // then in to sleep the morning, and up at midday.
+    if (watchedLastNight.has(p.id) && !rows) {
+      here = midnightSpot(p.id);
+      clock = 0;
+      round(SCHEDULE.wake - 0.02, door);
+      stays.push({ t0: clock, t1: clock + 0.004, at: door, heading: plot.facing + Math.PI, activity: "stand", wander: 0 });
+      clock = Math.max(clock + 0.004, SCHEDULE.watchUp + j("up"));
+      here = door;
+    }
     // A moment on the step, then the day — except for those who row out, who leave before first
     // light; a stay on the step would overlap the walk down to the dock.
     if (!rows) stay(clock + 0.006, plot.facing, "stand");
@@ -538,8 +627,9 @@ export function dayPlans(
         here = back;
         clock = t0 + dur;
       } else if (GREEN.has(trade)) {
-        go(greenSpot(plan, p.id, 1.05));
-        stay(work, toward(here, plan.centre), "stand", 0.8);
+        // The trader at a stall, the innkeeper at the inn's door, the teacher among the children.
+        go(trade === "teacher" ? greenSpot(plan, p.id, 0.55) : greenSpot(plan, p.id, 1.05));
+        stay(work, toward(here, plan.centre), trade === "teacher" ? "stand" : "work", trade === "teacher" ? 1.6 : 0.8);
       } else if (CRAFT.has(trade)) {
         go(along(door, plot.facing + (hash01(`${p.id}/yard`) - 0.5), 1.8));
         stay(work, plot.facing, "work");
@@ -560,18 +650,61 @@ export function dayPlans(
       const spot = evening === null ? null : eveningSpot(plan, p.id, plot, evening.place, about ? (doorOfPerson.get(about) ?? null) : null, about ? (graves.get(about) ?? null) : null);
       if (spot === null) {
         const mine = eveningSpotOf(p.id);
-        go(mine);
-        // Facing in, toward the middle of the circle they are in, or the well if they are alone.
         const k = circle.get(p.id) ?? p.id;
-        const faceTo = (members.get(k)?.length ?? 1) > 1 ? greenSpot(plan, k, 0.9) : plan.centre;
-        stay(until, toward(here, faceTo), "stand", 0.15);
+        const inCircle = () => {
+          go(mine);
+          // Facing in, toward the middle of the circle they are in, or the well if they are alone.
+          const faceTo = (members.get(k)?.length ?? 1) > 1 ? greenSpot(plan, k, ringOf(k)) : plan.centre;
+          stay(until, toward(here, faceTo), "stand", 0.35);
+        };
+        // An evening of one's own (C84): most go to their friends on the green; some keep at a
+        // chore by their door; some walk out to look at the sea or the fields first; some sit on
+        // their step. Seeded by person and day, so every viewer sees the same evening.
+        // A circle meets on most evenings, and most of its friends come; whoever is hosting a visitor
+        // comes to it (C53), so the visitor finds them there.
+        const group = members.get(k)?.length ?? 1;
+        const meets = group > 1 && hash01(`${k}/meets/${day}`) < 0.8;
+        const style = hosting.has(p.id) || (meets && hash01(`${p.id}/skip/${day}`) > 0.15) ? 0 : 0.5 + 0.5 * hash01(`${p.id}/evening/${day}`);
+        // A step out from their own door, or the door itself where the houses stand too close for that.
+        const step = along(door, plot.facing + (hash01(`${p.id}/step`) - 0.5) * 0.6, 1.1);
+        const front = blocked(nav, step) ? door : step;
+        if (style < 0.5) {
+          inCircle();
+        } else if (style < 0.72) {
+          go(front);
+          stay(until, plot.facing, "work", 1);
+        } else if (style < 0.88) {
+          // Down the dock to look at the sea, or out past the last houses on the way in.
+          const out = toward(plan.centre, plan.arrival);
+          const far = plan.dock ? along(plan.dock.root, plan.dock.heading, 1.5 + hash01(`${p.id}/look`) * 3) : along(plan.arrival, out + (hash01(`${p.id}/look`) - 0.5) * 0.8, 3);
+          const look = blocked(nav, far) ? plan.arrival : far;
+          go(look);
+          stay(clock + 0.02 + 0.02 * hash01(`${p.id}/linger/${day}`), plan.dock ? plan.dock.heading : toward(plan.centre, look), "stand", 0.4);
+          inCircle();
+        } else {
+          go(front);
+          stay(until, plot.facing, "sit");
+        }
+        // Late round the well (C84): some of the young stay out after the green empties, sitting by
+        // the water and talking, so the village is never dark and empty straight after supper.
+        if (age >= 16 && age < 46 && hash01(`${p.id}/late/${day}`) < 0.35) {
+          const a = hash01(`${p.id}/well`) * Math.PI * 2;
+          const seat = along(plan.centre, a, 2.4 + 0.8 * hash01(`${p.id}/well-r`));
+          if (blocked(nav, seat)) {
+            night();
+            plans.push({ person: p.id, legs, stays, pace, boat });
+            continue;
+          }
+          go(seat);
+          stay(SCHEDULE.lateEnd + 0.03 * hash01(`${p.id}/late-end/${day}`) - 0.05 * wet, toward(seat, plan.centre), "sit");
+        }
       } else if (spot !== "here") {
         go(spot.at);
         stay(until, spot.heading, spot.activity, spot.wander);
       } else {
         stay(until, plot.facing, "work", 1);
       }
-      bed();
+      night();
     }
     plans.push({ person: p.id, legs, stays, pace, boat });
   }

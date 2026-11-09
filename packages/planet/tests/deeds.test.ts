@@ -172,12 +172,16 @@ test("C49: friends stand together on the green in the evening", () => {
         const a = at.get(id);
         const b = at.get(t.other);
         if (!a?.visible || !b?.visible) continue;
+        // Friends who are both on the green (C84: some keep a chore at home, take a walk or sit on
+        // their step instead): those stand together.
+        const onGreen = (w: { x: number; y: number }) => Math.hypot(w.x - plan.centre.x, w.y - plan.centre.y) < plan.greenRadiusM * 1.3 + 2;
+        if (!onGreen(a) || !onGreen(b)) continue;
         pairs++;
         if (Math.hypot(a.x - b.x, a.y - b.y) < 3.5) close++;
       }
     }
   }
-  assert.ok(pairs >= 10, `only ${pairs} friend pairs out on the green`);
+  assert.ok(pairs >= 8, `only ${pairs} friend pairs out on the green`);
   assert.ok(close / pairs > 0.6, `${close} of ${pairs} friends out in the evening are standing together`);
   void friendCircles;
 });

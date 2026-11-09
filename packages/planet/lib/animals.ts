@@ -69,6 +69,10 @@ export const ANIMALS = {
   herdOut: [0.3, 0.74],
   /** Hens are out from first light to dusk. */
   hensOut: [0.26, 0.78],
+  /** How long one bout of moving-then-stopping lasts, day fractions (a world day is twelve minutes). */
+  strayBout: 0.1,
+  goatBout: 0.03,
+  henBout: 0.008,
   /** A bond with a dog: what each kind act and each day it was done on adds; the dog follows from `follows`. */
   perAct: 0.1,
   perDay: 0.2,
@@ -193,6 +197,19 @@ function wander(a: Animal, t: number, speed: number): { x: number; y: number } {
   return { x: a.range.x + a.radiusM * dx, y: a.range.y + a.radiusM * dy };
 }
 
+/**
+ * An animal's day in bouts: it moves for a share `moving` of each bout of `bout` (day fractions), then
+ * stops where it is: the dog lies down, the goat grazes, the hen pecks. While it is stopped its walking
+ * time does not advance, so it stays on the spot and walks on from there, never sliding along the
+ * ground with its legs folded. Each animal keeps its own phase, so a herd does not stop as one.
+ */
+function bouts(a: Animal, t: number, bout: number, moving: number): { walked: number; resting: boolean } {
+  const u = t / bout + a.phase / (Math.PI * 2);
+  const k = Math.floor(u);
+  const r = u - k;
+  return { walked: (k * moving + Math.min(r, moving)) * bout, resting: r >= moving };
+}
+
 /** Is someone out of doors, and where, for a dog to follow: the schedule's whereabouts, as the caller has them. */
 export type OwnerAt = (id: string) => { x: number; y: number; heading: number; visible: boolean; boat: number | null } | null;
 
@@ -217,13 +234,18 @@ export function animalAt(a: Animal, t: number, ownerAt: OwnerAt = () => null): A
         const p = { x: a.home.x + (graze.x - a.home.x) * k, y: a.home.y + (graze.y - a.home.y) * k };
         return at(p, t < out ? graze : a.home, "walk");
       }
-      return at(graze, wander(a, t + dt, 6), Math.sin(t * 900 + a.phase) > 0.2 ? "walk" : "graze");
+      // About twenty seconds a bout, a third of it walking: it grazes where it stopped.
+      const b = bouts(a, t, ANIMALS.goatBout, 0.35);
+      const here = wander(a, b.walked, 6);
+      return at(here, wander(a, b.walked + dt, 6), b.resting ? "graze" : "walk");
     }
     case "hen": {
       const [out, back] = ANIMALS.hensOut;
       if (t < out || t > back) return { x: a.home.x, y: a.home.y, z: 0, heading: 0, activity: "hidden" };
-      const p = wander(a, t, 30);
-      return at(p, wander(a, t + dt, 30), Math.sin(t * 2400 + a.phase) > 0 ? "peck" : "walk");
+      // A few steps, then pecking on the spot.
+      const b = bouts(a, t, ANIMALS.henBout, 0.5);
+      const p = wander(a, b.walked, 30 / 0.7);
+      return at(p, wander(a, b.walked + dt, 30 / 0.7), b.resting ? "peck" : "walk");
     }
     case "dog": {
       if (a.follows) {
@@ -238,8 +260,10 @@ export function animalAt(a: Animal, t: number, ownerAt: OwnerAt = () => null): A
       }
       // A stray: about the green by day, curled by the well at night.
       if (t < 0.24 || t > 0.86) return at(a.home, { x: a.home.x, y: a.home.y + 1 }, "lie");
-      const p = wander(a, t, 8);
-      return at(p, wander(a, t + dt, 8), Math.sin(t * 600 + a.phase) > 0.7 ? "lie" : "walk");
+      // Most of a minute nosing about the green, then lying down where it got to for a while.
+      const b = bouts(a, t, ANIMALS.strayBout, 0.45);
+      const p = wander(a, b.walked, 8 / 0.7);
+      return at(p, wander(a, b.walked + dt, 8 / 0.7), b.resting ? "lie" : "walk");
     }
     case "bird": {
       if (t < 0.22 || t > 0.82) return { x: a.home.x, y: a.home.y, z: 0, heading: 0, activity: "hidden" };

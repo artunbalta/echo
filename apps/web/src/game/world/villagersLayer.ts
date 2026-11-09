@@ -38,6 +38,7 @@ import {
   needsOn,
   residentsOn,
   roomHeading,
+  watchOn,
   roomToLocal,
   occupationOn,
   timeOfDay,
@@ -79,6 +80,35 @@ const BODY_M = 0.3;
 const ASK_M = 5;
 /** How long a villager's own line to the stranger stays over them, seconds. */
 const SAY_S = 7;
+/** Lanterns drawn at once after dark (C84), and the warm light's strength, candela. */
+const LANTERNS = 32;
+const LAMP_CD = 5;
+
+/** A lantern's glow (C84): a bright core and a soft halo, computed once, pixel by pixel (no canvas, so it builds anywhere). */
+function lanternGlow(): THREE.Texture {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const r = Math.hypot(i + 0.5 - size / 2, j + 0.5 - size / 2) / (size / 2);
+      // A core that is nearly white, falling to warm orange and to nothing at the edge.
+      const core = Math.max(0, 1 - r / 0.14);
+      const halo = Math.max(0, 1 - r) ** 2.2;
+      const k = (j * size + i) * 4;
+      data[k] = 255;
+      data[k + 1] = Math.round(165 + 80 * core + 10 * halo);
+      data[k + 2] = Math.round(70 + 160 * core);
+      data[k + 3] = Math.round(255 * Math.min(1, 0.85 * core + 0.75 * halo));
+    }
+  }
+  const t = new THREE.DataTexture(data, size, size);
+  t.colorSpace = THREE.SRGBColorSpace;
+  // A data texture samples nearest by default, which shows its pixels on a glow drawn large.
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
 
 /** The person close enough to speak to, as the talk panel needs them. */
 export interface NearVillager {
@@ -236,6 +266,26 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   const RELEASE_S = 2.5;
   /** The player's last position (local metres) and the sky's last hour, for the calls between frames. */
   const playerAt = { x: Infinity, y: Infinity };
+  // Presentation only (C84), for this viewer: who waved at the stranger and when, who is near them
+  // now, who is saying a line (their hands move with it) and who is standing with someone (the talk
+  // goes back and forth there; nobody alone talks to the air).
+  const waved = new Map<string, number>();
+  const nearMe = new Set<string>();
+  let speaking = new Set<string>();
+  let company = new Set<string>();
+  const speakingNext = new Set<string>();
+  const companyNext = new Set<string>();
+  /**
+   * Lanterns after dark (C84): the night watch carries one on the round, anyone walking in the dark
+   * carries one, and whoever sits out late has theirs on the ground beside them. A glow each, and one
+   * warm light, always in the scene so that turning it up never recompiles a material, on whichever
+   * is nearest the stranger.
+   */
+  let glow: THREE.Points | null = null;
+  let glowAt: Float32Array | null = null;
+  let lamp: THREE.PointLight | null = null;
+  let watch = new Set<string>();
+  const lanternAt = new THREE.Vector3();
   let lastHour = 0.5;
   let lent: number | null = null;
   const zero = new THREE.Vector3(0, 0, 0);
@@ -247,6 +297,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     const v = village!;
     const next = dayPlans(v.settlement, v.plan, day, v.changes);
     state = { day, ...next };
+    watch = new Set([...watchOn(v.settlement, v.plan, day), ...watchOn(v.settlement, v.plan, day - 1)]);
     for (const d of next.plans) {
       if (!looks.has(d.person)) {
         const p = people.get(d.person)!;
@@ -286,6 +337,21 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       state.moorings.forEach((mo, i) => boatMesh!.setColorAt(i, tint.set(BOAT_PAINT[mo.household % BOAT_PAINT.length])));
       if (boatMesh.instanceColor) boatMesh.instanceColor.needsUpdate = true;
       ctx.scene.add(boatMesh);
+
+      glowAt = new Float32Array(LANTERNS * 3);
+      const glowGeometry = new THREE.BufferGeometry();
+      glowGeometry.setAttribute("position", new THREE.BufferAttribute(glowAt, 3).setUsage(THREE.DynamicDrawUsage));
+      glowGeometry.setDrawRange(0, 0);
+      glow = new THREE.Points(
+        glowGeometry,
+        new THREE.PointsMaterial({ map: lanternGlow(), color: 0xffc27a, size: 0.95 * ctx.frame.tileM / 1.6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      glow.name = "villagers:lanterns";
+      glow.frustumCulled = false;
+      ctx.scene.add(glow);
+      lamp = new THREE.PointLight(0xffb066, 0, 9, 2);
+      lamp.name = "villagers:lamp";
+      ctx.scene.add(lamp);
 
       const host = ctx.renderer.domElement.parentElement;
       if (host) {
@@ -338,6 +404,23 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       let nearest: { id: string; d: number; x: number; y: number; z: number } | null = null;
 
       crowd.begin();
+      const dark = sky ? sky.state().sun.y < 0.05 : hour > 0.78 || hour < 0.22;
+      const late = hour > SCHEDULE.gatherEnd || hour < SCHEDULE.wake;
+      let lanterns = 0;
+      let lampD = Infinity;
+      const putLantern = (x: number, y: number, z: number) => {
+        if (!glowAt || lanterns >= LANTERNS) return;
+        glowAt[lanterns * 3] = x;
+        glowAt[lanterns * 3 + 1] = y;
+        glowAt[lanterns * 3 + 2] = z;
+        lanterns++;
+        const [lx, ly] = frame!.toLocalM(x / frame!.tileM, z / frame!.tileM);
+        const dl = Math.hypot(lx - mx, ly - my);
+        if (lamp && dl < lampD && dl < 18) {
+          lampD = dl;
+          lamp.position.set(x, y + 0.15, z);
+        }
+      };
       const hostIn = hosting && indoors && indoors.plot.index === hosting.plot ? hosting.id : null;
       for (const d of state.plans) {
         // The one who asked the stranger in is inside with them (C54), not where their day has them.
@@ -392,6 +475,36 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         } else lastAt.set(d.person, { x: w.x, y: w.y, activity: w.activity, sx: tx * frame.tileM, sy: y, sz: ty * frame.tileM, heading: w.heading });
         const look = looks.get(d.person)!;
         const gait = w.activity === "walk" || w.activity === "play" ? (SCHEDULE.walkMps * w.speed) / PLAYER_WALK_MPS : 0;
+        // Alive to the stranger and to each other (C84). Anyone standing, sitting or at work within a few
+        // metres turns their head to the stranger; someone standing or sitting waves the first time
+        // the stranger comes close (and not again for a minute); and in a circle on the green the
+        // talk goes round, so the hands move with it even where no line is shown.
+        const still = w.activity === "stand" || w.activity === "sit" || w.activity === "work";
+        const dxp = mx - w.x;
+        const dyp = my - w.y;
+        const dp = Math.hypot(dxp, dyp);
+        let lookYaw: number | undefined;
+        if (still && dp < 6) {
+          const rel = Math.atan2(dyp, dxp) - w.heading;
+          lookYaw = Math.atan2(Math.sin(rel), Math.cos(rel));
+        }
+        if (still && w.activity !== "work" && dp < 4.5 && !nearMe.has(d.person)) {
+          nearMe.add(d.person);
+          const last = waved.get(d.person);
+          if (last === undefined || seconds - last > 60) waved.set(d.person, seconds);
+        } else if (dp > 7) nearMe.delete(d.person);
+        const since = seconds - (waved.get(d.person) ?? -Infinity);
+        const wave = since >= 0 && since < 1.8 ? Math.sin((Math.PI * since) / 1.8) : 0;
+        let talk = speaking.has(d.person) ? 1 : 0;
+        if (!talk && w.activity === "stand" && company.has(d.person)) {
+          const slot = (seconds + hashUnit(`${d.person}/talk`) * 7) / 3.4;
+          const k = Math.floor(slot);
+          if (hashUnit(`${d.person}/${k}`) < 0.3) talk = Math.sin(Math.PI * (slot - k));
+        }
+        // After dark the watch on its round and anyone walking carry a lantern; whoever sits out late
+        // has it on the ground beside them. Not the children, and not at sea.
+        const grown = look.scale > 0.86;
+        const lantern = dark && grown && w.boat === null && (w.activity === "walk" || (late && watch.has(d.person) && w.activity === "stand"));
         crowd.pose(
           {
             x: tx * frame.tileM,
@@ -403,9 +516,19 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
             speed: gait,
             time: seconds,
             phase0: hashUnit(d.person) * Math.PI * 2,
+            talk,
+            lookYaw,
+            wave,
+            lantern,
           },
           look,
         );
+        if (lantern && crowd.lanternAt(lanternAt)) putLantern(lanternAt.x, lanternAt.y, lanternAt.z);
+        else if (dark && late && grown && w.activity === "sit" && w.boat === null) {
+          const side = w.heading + Math.PI / 2;
+          const [gx, gy] = frame.fromLocalM(w.x + Math.cos(side) * 0.45 + Math.cos(w.heading) * 0.2, w.y + Math.sin(side) * 0.45 + Math.sin(w.heading) * 0.2);
+          putLantern(gx * frame.tileM, Math.max(0, frame.heightAtTile(gx, gy)) + 0.14, gy * frame.tileM);
+        }
         const dist = Math.hypot(w.x - mx, w.y - my);
         // While talking, the plate stays on the one being talked to, whoever wanders nearer.
         const eligible = held ? held.id === d.person : dist < SPEAKING_M;
@@ -451,6 +574,12 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       }
       crowd.end();
       drawn = crowd.placed();
+      if (glow) {
+        glow.geometry.setDrawRange(0, lanterns);
+        (glow.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+      }
+      // Flickering a little, as a flame does.
+      if (lamp) lamp.intensity = lampD < 18 ? LAMP_CD * (0.92 + 0.08 * Math.sin(seconds * 11.3) * Math.sin(seconds * 4.1)) : 0;
       if (nearest) {
         const p = people.get(nearest.id)!;
         near = { id: p.id, name: `${p.given} ${p.family}`, occupation: occupationOn(p, day), age: Math.floor(ageYears(p, day)), distanceM: nearest.d };
@@ -530,6 +659,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
             const [ia, a] = idle[i];
             const [ib, b] = idle[j];
             if (Math.hypot(a.x - b.x, a.y - b.y) > 2.6) continue;
+            companyNext.add(ia).add(ib);
             const pa = people.get(ia);
             const pb = people.get(ib);
             if (!pa || !pb || ageYears(pa, day) < 6 || ageYears(pb, day) < 6) continue;
@@ -537,9 +667,17 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
             const [speaker, listener, at] = first ? [pa, pb, a] : [pb, pa, b];
             if (spoken && (speaker.id === spoken.id || listener.id === spoken.id)) continue;
             const text = chatter(s, speaker, listener, day, hour, { weather, deeds, changes: village.changes, plan: village.plan, needs });
-            if (text) said.push({ key: `${speaker.id}:${text}`, at: new THREE.Vector3(at.sx, at.sy + overHead(speaker.id), at.sz), text: `${speaker.given}: ${text}`, d: Math.hypot(at.x - mx, at.y - my) });
+            if (text) {
+              said.push({ key: `${speaker.id}:${text}`, at: new THREE.Vector3(at.sx, at.sy + overHead(speaker.id), at.sz), text: `${speaker.given}: ${text}`, d: Math.hypot(at.x - mx, at.y - my) });
+              speakingNext.add(speaker.id);
+            }
           }
         }
+        if (spoken) speakingNext.add(spoken.id);
+        speaking = new Set(speakingNext);
+        company = new Set(companyNext);
+        speakingNext.clear();
+        companyNext.clear();
         said.sort((p, q) => p.d - q.d);
         // The same sentence twice on one screen reads as a machine; keep the nearer of the two.
         const shown = new Set<string>();
@@ -695,6 +833,16 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       crowd?.dispose();
       boatMesh?.geometry.dispose();
       boatMaterial?.dispose();
+      if (glow) {
+        const material = glow.material as THREE.PointsMaterial;
+        material.map?.dispose();
+        material.dispose();
+        glow.geometry.dispose();
+        glow.removeFromParent();
+      }
+      lamp?.removeFromParent();
+      glow = null;
+      lamp = null;
       label?.remove();
       crowd = null;
       boatMesh = null;

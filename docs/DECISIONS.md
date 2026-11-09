@@ -5624,3 +5624,46 @@ export.
 
 **The owner's call.** Merge `feat/circles`, apply 0037 after 0036, and set `ECHO_CIRCLES=1`, or delete
 the branch and the file. Nothing is merged, pushed or applied.
+
+## C84 — a village that lives: evenings, nights, gestures, and animals that stay on the ground
+
+What it answers: the owner played Senstrand before sending it to friends. A dog sank into the ground and
+came back out, people walked about with nothing in it, the evening green was a crowd standing still, and
+for about a third of every visit the village was dark and empty. A visit is 25 minutes (C75). A village
+that looks dead bores people, and the echo learns nothing from people who are bored.
+
+- **Animals** (`packages/planet/lib/animals.ts`). A stray, a goat and a hen walk and rest in bouts, and
+  resting, they stay where they stopped. The old code laid a dog down while it was still sliding, which
+  is what looked like sinking. In the layer, lying down and getting up take a moment, and the legs fold
+  with the body. The dog at the stranger's heel stands when it catches up, lies after five seconds, and
+  stays down until the stranger is a stride off.
+- **Evenings** (`schedule.ts`). A circle of friends meets on four evenings in five, and most of its
+  friends come. Others keep at a chore by their door, walk out to look at the sea first, or sit on their
+  step. Each circle stands somewhere of its own inside the green, clear of the well and the benches.
+- **Late round the well.** About a third of the young (16 to 45) sit by the well after the green
+  empties, until about ten, talking, with their lanterns on the ground.
+- **The night watch** (`watchOn`). One adult (two where more than 24 can watch) goes round the houses
+  with a lantern, from the end of their evening until first light. The round passes the lane before a
+  house in every few, the way in and the dock, and goes on across midnight without a jump: both days'
+  plans put the watch at the same spot by the well at midnight. Whoever watched sleeps the morning and
+  is up at midday. Not a fisher, a market goer on the road, a visitor or the ill.
+- **Lanterns** (`villagersLayer.ts`). After dark the watch and anyone walking carry one; whoever sits
+  out late has it on the ground beside them. Each has a glow, and one warm light follows whichever is
+  nearest the stranger. The light is always in the scene, so turning it up never recompiles a material.
+- **Gestures** (`crowd.ts`). Presentation only, for this viewer; the schedule everyone sees is unchanged.
+  - Standing still, the weight shifts and the head wanders.
+  - Standing with someone, the talk goes back and forth: the hands move and the head nods. Nobody alone
+    talks to the air.
+  - Whoever says a line moves their hands.
+  - Anyone standing, sitting or at work near the stranger turns their head to them.
+  - Standing or sitting, they wave the first time the stranger comes close, and not again for a minute.
+- **Tests.**
+  - Animals: a resting animal does not slide, and nothing jumps.
+  - The watch: it walks all night, crosses midnight within 5 cm, and sleeps the morning after.
+  - Midnight and the home state now allow the watch out.
+  - Planet 323/323, web 509/509.
+- **Seen.** Filmed headless at 16:48, 20:00, 23:00 and 01:00 in Senstrand: the circles talk and turn to
+  the stranger, the well has its sitters and their lanterns, and two lanterns go round the houses at night.
+
+**Not built:** a night that passes faster than the day; a guide on arrival (the controls line and the
+chips over what is near are what there is); requests from villagers more often than C50's.

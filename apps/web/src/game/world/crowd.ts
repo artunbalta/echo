@@ -151,6 +151,14 @@ export interface Pose {
   time: number;
   /** Per-person offset so a crowd does not move in step. */
   phase0: number;
+  /** Talking now (C84), 0 … 1: the hands move with the words and the head nods. */
+  talk?: number;
+  /** A turn of the head toward something, radians, beyond the body's facing (C84): the stranger, say. */
+  lookYaw?: number;
+  /** A wave (C84), 0 … 1: the right arm up and the hand going. */
+  wave?: number;
+  /** A lantern in the other hand (C84): that arm held out a little and steadier, and the hand's place kept for the light. */
+  lantern?: boolean;
 }
 
 // ── the crowd ───────────────────────────────────────────────────────────────────
@@ -183,6 +191,9 @@ export class Crowd {
   private readonly at0 = new THREE.Vector3();
   private readonly k = new THREE.Matrix4();
   private readonly lie = new THREE.Quaternion();
+  /** Where the last body placed holds its lantern, in the scene, or null if it carries none (C84). */
+  private readonly handAt = new THREE.Vector3();
+  private holding = false;
   /** Lying on the back: the body's up turned to the way it faces, its face turned up (C54). */
   private static readonly LYING = new THREE.Quaternion()
     .setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)
@@ -232,6 +243,7 @@ export class Crowd {
 
   /** Place one body. The arithmetic of poseCharacter, applied to matrices instead of bones. */
   pose(p: Pose, look: Look): void {
+    this.holding = false;
     if (this.count >= this.capacity) return;
     this.count++;
     const speed = p.activity === "walk" || p.activity === "play" ? p.speed : 0;
@@ -249,10 +261,16 @@ export class Crowd {
     const s = this.unitM * look.scale;
     this.root.compose(this.at0.set(p.x, p.y, p.z), this.q, this.scaleV.set(s, s, s));
 
+    // Still, nobody stands like a post (C84): the weight shifts from foot to foot, and the head goes
+    // where the eyes do now and then, unless something is being looked at.
+    const idle = !sleeping && speed === 0 && (p.activity === "stand" || p.activity === "sit" || p.activity === "work") ? 1 : 0;
+    const talk = Math.min(1, Math.max(0, p.talk ?? 0));
+    const wave = Math.min(1, Math.max(0, p.wave ?? 0));
     const bobY = sleeping
       ? Math.sin(p.time * 0.9 + p.phase0) * 0.004 // breathing
       : (speed > 0 ? Math.cos(phase * 2) * 0.009 * amount : Math.sin(p.time * 1.7 + p.phase0) * 0.002) - 0.035 * amount - 0.055 * run - (sitting ? 0.2 : 0);
-    this.at(this.root, 0, bobY, 0, 0, 0, Math.sin(phase) * 0.022 * amount, this.body);
+    const sway = p.activity === "stand" ? idle * Math.sin(p.time * 0.55 + p.phase0) * 0.028 : 0;
+    this.at(this.root, 0, bobY, 0, 0, 0, Math.sin(phase) * 0.022 * amount + sway, this.body);
     this.at(this.body, 0, 0.455, 0, 0, Math.sin(phase) * 0.055 * amount, 0, this.hips);
     if (look.skirt) this.put("pelvis", this.k.multiplyMatrices(this.hips, Crowd.SKIRT), look.cloth);
     else this.put("pelvis", this.hips, look.trousers);
@@ -269,7 +287,10 @@ export class Crowd {
     }
     this.at(this.body, 0, 0.43, 0, torsoX, -Math.sin(phase) * 0.065 * amount, 0, this.spine);
     this.put("torso", this.spine, look.cloth);
-    this.at(this.spine, 0, 0.36, 0, headX, Math.sin(phase) * 0.025 * amount, 0, this.neck);
+    headX += talk * Math.sin(p.time * 5.2 + p.phase0) * 0.07;
+    const wander = p.lookYaw === undefined ? idle * Math.sin(p.time * 0.33 + p.phase0 * 1.7) * 0.32 : 0;
+    const headYaw = THREE.MathUtils.clamp((p.lookYaw ?? 0) + wander, -1.1, 1.1);
+    this.at(this.spine, 0, 0.36, 0, headX, Math.sin(phase) * 0.025 * amount + headYaw, 0, this.neck);
     this.put("head", this.neck, look.skin);
     this.put("hair", this.neck, look.hair);
     if (look.longHair) this.put("hair", this.k.multiplyMatrices(this.neck, Crowd.LONG_HAIR), look.hair);
@@ -334,10 +355,32 @@ export class Crowd {
         arm = -0.05;
         elbow = -0.25;
       }
-      this.at(this.spine, side * 0.15, 0.275, 0, arm, 0, side * 0.065, this.j1);
+      // Talking hands (C84): one hand and then the other, at the speed of speech.
+      if (talk > 0 && !sitting && p.activity !== "work" && p.activity !== "stoop") {
+        const beat = Math.sin(p.time * (side > 0 ? 3.7 : 2.9) + p.phase0 + (side > 0 ? 0 : 1.9));
+        arm = arm * (1 - talk) + talk * (-0.45 - 0.35 * Math.max(0, beat));
+        elbow = elbow * (1 - talk) + talk * (-1.15 - 0.35 * beat);
+      }
+      // A wave (C84): the right arm raised, the forearm going side to side.
+      if (wave > 0 && side > 0) {
+        arm = arm * (1 - wave) + wave * -2.55;
+        elbow = elbow * (1 - wave) + wave * (-0.55 + Math.sin(p.time * 13) * 0.4);
+      }
+      // A lantern (C84): carried out from the body, swinging less than an empty hand would.
+      const lantern = p.lantern === true && side < 0 && !sitting;
+      if (lantern) {
+        arm = arm * 0.35 - 0.15;
+        elbow = -0.3;
+      }
+      this.at(this.spine, side * 0.15, 0.275, 0, arm, 0, side * (lantern ? 0.2 : 0.065), this.j1);
       this.put("upperArm", this.j1, look.cloth);
       this.at(this.j1, 0, -0.17, 0, elbow, 0, 0, this.j2);
       this.put("forearm", this.j2, look.skin);
+      if (lantern) {
+        // It hangs from the hand by its handle.
+        this.handAt.set(0, -0.3, 0.02).applyMatrix4(this.j2);
+        this.holding = true;
+      }
     }
   }
 
@@ -352,6 +395,12 @@ export class Crowd {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  /** Where the body just placed holds its lantern (C84), into `out`; false if it carries none. */
+  lanternAt(out: THREE.Vector3): boolean {
+    if (this.holding) out.copy(this.handAt);
+    return this.holding;
   }
 
   /** How many bodies the last frame placed. */

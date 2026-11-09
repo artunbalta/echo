@@ -124,6 +124,11 @@ export function clearWalk(g: NavGraph, p: Point, q: Point): boolean {
   return true;
 }
 
+/** Would a body standing at p be inside a house, the well or anything else in the way (C84)? */
+export function blocked(g: NavGraph, p: Point): boolean {
+  return g.obstacles.some((o) => inside(o, p, NAV.bodyM));
+}
+
 /** The village's graph: built once per plan. */
 export function navGraph(plan: VillagePlan): NavGraph {
   const known = memo.get(plan);

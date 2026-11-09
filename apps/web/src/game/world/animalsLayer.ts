@@ -47,6 +47,8 @@ const SPHERES_PER = 6;
 const CYLINDERS_PER = 6;
 /** How close a stranger gets before hens and goats move off, metres. */
 const SHY_M = 2.6;
+/** Where an animal is drawn: where its hour has it, or, for the dog at the stranger's heel, standing by them. */
+type Shown = Omit<AnimalAt, "activity"> & { activity: AnimalAt["activity"] | "stand" };
 
 const PALETTE = {
   goat: [0xe8e2d4, 0x8a6a4a, 0x3a3430, 0xb8a888],
@@ -69,6 +71,13 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
   /** Each animal's offset from where the hour has it, for shying away and following: this viewer's. */
   const offset = new Map<string, { x: number; y: number }>();
   const lastPos = new Map<string, { x: number; y: number; kind: Animal["kind"]; name: string | null }>();
+  /**
+   * How far down each animal is, 0 on its feet … 1 lying (C84): it goes down and gets up over a
+   * moment, never in one frame, so nothing seems to sink into the ground and come back out.
+   */
+  const low = new Map<string, number>();
+  /** When the dog at the stranger's heel caught up with them (C84): it stands a while before it lies. */
+  let settled: { id: string; at: number; lay?: { x: number; y: number } } | null = null;
   /** Everything drawn last frame, for the ears. */
   const heard: { id: string; kind: Animal["kind"]; x: number; y: number }[] = [];
   const m = new THREE.Matrix4();
@@ -107,7 +116,7 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
     ci++;
   };
 
-  const drawOne = (a: Animal, at: AnimalAt, x: number, y: number, ground: number, t: number, near: boolean) => {
+  const drawOne = (a: Animal, at: Shown, x: number, y: number, ground: number, t: number, near: boolean, down: number) => {
     if (!frame) return;
     const s = frame.tileM / 1.6;
     const [tx, ty] = frame.fromLocalM(x, y);
@@ -118,28 +127,28 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
     const step = Math.sin(t * 9 + a.phase) * (moving ? 0.5 : 0);
     if (a.kind === "dog") {
       const c = shade(PALETTE.dog);
-      const lying = at.activity === "lie";
-      const h = lying ? 0.16 : 0.36;
+      const up = 1 - down;
+      const h = 0.16 + 0.2 * up;
       sphere(0, h, 0, 0.72, 0.28, 0.26, c);
-      sphere(0.42, h + (lying ? 0.02 : 0.14), 0, 0.24, 0.22, 0.2, c);
-      sphere(0.56, h + (lying ? 0 : 0.11), 0, 0.14, 0.09, 0.1, 0x2a2420);
-      sphere(0.38, h + (lying ? 0.12 : 0.27), 0.08, 0.06, 0.12, 0.05, c);
-      sphere(0.38, h + (lying ? 0.12 : 0.27), -0.08, 0.06, 0.12, 0.05, c);
-      if (!lying) for (const [lx, lz, ph] of [[0.24, 0.08, 0], [0.24, -0.08, Math.PI], [-0.24, 0.08, Math.PI], [-0.24, -0.08, 0]] as const) limb(lx, h - 0.05, lz, 0.32, 0.03, c, Math.sin(t * 9 + a.phase + ph) * (moving ? 0.5 : 0));
+      sphere(0.42, h + 0.02 + 0.12 * up, 0, 0.24, 0.22, 0.2, c);
+      sphere(0.56, h + 0.11 * up, 0, 0.14, 0.09, 0.1, 0x2a2420);
+      sphere(0.38, h + 0.12 + 0.15 * up, 0.08, 0.06, 0.12, 0.05, c);
+      sphere(0.38, h + 0.12 + 0.15 * up, -0.08, 0.06, 0.12, 0.05, c);
+      // The legs fold as it goes down: their feet stay on the ground.
+      if (down < 0.9) for (const [lx, lz, ph] of [[0.24, 0.08, 0], [0.24, -0.08, Math.PI], [-0.24, 0.08, Math.PI], [-0.24, -0.08, 0]] as const) limb(lx, h - 0.05, lz, h - 0.04, 0.03, c, Math.sin(t * 9 + a.phase + ph) * (moving ? 0.5 : 0));
       // The tail: up, and wagging hard when its stranger is close.
       limb(-0.34, h + 0.06, 0, 0.26, 0.022, c, -2.3, Math.sin(t * (near ? 22 : 4)) * (near ? 0.7 : 0.2));
     } else if (a.kind === "goat") {
       const c = shade(PALETTE.goat);
-      const lying = at.activity === "lie";
       const grazing = at.activity === "graze";
-      const h = lying ? 0.22 : 0.55;
+      const h = 0.22 + 0.33 * (1 - down);
       sphere(0, h, 0, 0.78, 0.4, 0.32, c);
       const hx = grazing ? 0.48 : 0.44;
       const hy = grazing ? h - 0.3 : h + 0.2;
       sphere(hx, hy, 0, 0.24, 0.22, 0.17, c);
       limb(hx - 0.02, hy + 0.1, 0.05, 0.16, 0.025, 0x5a5048, -2.6);
       limb(hx - 0.02, hy + 0.1, -0.05, 0.16, 0.025, 0x5a5048, -2.6);
-      if (!lying) for (const [lx, lz, ph] of [[0.26, 0.1, 0], [0.26, -0.1, Math.PI], [-0.26, 0.1, Math.PI], [-0.26, -0.1, 0]] as const) limb(lx, h - 0.1, lz, 0.46, 0.032, c, Math.sin(t * 7 + a.phase + ph) * (moving ? 0.4 : 0));
+      if (down < 0.9) for (const [lx, lz, ph] of [[0.26, 0.1, 0], [0.26, -0.1, Math.PI], [-0.26, 0.1, Math.PI], [-0.26, -0.1, 0]] as const) limb(lx, h - 0.1, lz, h - 0.09, 0.032, c, Math.sin(t * 7 + a.phase + ph) * (moving ? 0.4 : 0));
     } else if (a.kind === "hen") {
       const c = shade(PALETTE.hen);
       const peck = at.activity === "peck" ? Math.max(0, Math.sin(t * 14 + a.phase)) : 0;
@@ -207,7 +216,7 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
       for (const [id, b] of bonds) if (b >= ANIMALS.follows && (!best || b > (bonds.get(best) ?? 0))) best = id;
       follower = me && best ? best : null;
       for (const a of animals) {
-        const at = animalAt(a, hour, ownerAt);
+        const at: Shown = animalAt(a, hour, ownerAt);
         if (at.activity === "hidden") {
           lastPos.delete(a.id);
           continue;
@@ -220,11 +229,24 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
           // At the stranger's heel: toward a point a step behind them, at a dog's trot — and at the door, waiting, while they are inside.
           const goal = inside ? { x: x + off.x, y: y + off.y } : { x: me.x - 1.2, y: me.y - 0.4 };
           const cur = { x: x + off.x, y: y + off.y };
-          const k = Math.min(1, dt * 2.5);
-          off.x += (goal.x - cur.x) * k;
-          off.y += (goal.y - cur.y) * k;
+          // Caught up, it stands by them; only after a few seconds there does it lie down, and once down
+          // it stays down until they are a stride off, not up at every shuffle.
+          const gap = Math.hypot(goal.x - cur.x, goal.y - cur.y);
+          if (gap > 0.9 || settled?.id !== a.id) settled = null;
+          if (gap < 0.3 && !settled) settled = { id: a.id, at: t };
+          const lying = settled !== null && t - settled.at > 5;
+          if (settled && lying) {
+            // Down, it stays where it lay, whatever its own day would have it doing.
+            settled.lay ??= cur;
+            off.x = settled.lay.x - x;
+            off.y = settled.lay.y - y;
+          } else {
+            const k = Math.min(1, dt * 2.5);
+            off.x += (goal.x - cur.x) * k;
+            off.y += (goal.y - cur.y) * k;
+          }
           near = Math.hypot(me.x - (x + off.x), me.y - (y + off.y)) < 3;
-          at.activity = Math.hypot(goal.x - cur.x, goal.y - cur.y) > 0.3 ? "walk" : "lie";
+          at.activity = lying ? "lie" : gap > 0.3 ? "walk" : "stand";
           if (at.activity === "walk") at.heading = Math.atan2(goal.y - cur.y, goal.x - cur.x);
         } else if (me && (a.kind === "hen" || a.kind === "goat")) {
           // Out of the way of someone walking at them, and back again after.
@@ -248,7 +270,10 @@ export function animalsLayer(options: { clock: WorldClock }): AnimalsLayer {
         y += off.y;
         const [tx, ty] = frame.fromLocalM(x, y);
         const ground = a.kind === "fish" ? 0.02 : a.kind === "bird" ? Math.max(0, frame.heightAtTile(tx, ty)) : Math.max(0, frame.heightAtTile(tx, ty));
-        drawOne(a, at, x, y, ground, t, near);
+        const target = at.activity === "lie" ? 1 : 0;
+        const down = (low.get(a.id) ?? target) + (target - (low.get(a.id) ?? target)) * Math.min(1, dt * 3.5);
+        low.set(a.id, down);
+        drawOne(a, at, x, y, ground, t, near, down);
         drawnCount++;
         heard.push({ id: a.id, kind: a.kind, x, y });
         if (a.kind === "dog" || a.kind === "goat" || a.kind === "hen") lastPos.set(a.id, { x, y, kind: a.kind, name: a.name });
