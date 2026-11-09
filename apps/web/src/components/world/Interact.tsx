@@ -24,20 +24,21 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { DYES, FATE_VERBS, ITEMS, PACK_SIZE, RECIPES, STAGES, bondWith, canBuild, canMake, fateTurn, nextStage, packCount, thingName, timeOfDay, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type Home, type LifeChange, type Look, type Pack, type Recipe, type Verb } from "@echo/planet";
+import { DYES, EGG_KINDS, FATE_VERBS, ITEMS, MOMENT_KINDS, PACK_SIZE, RECIPES, STAGES, bondWith, canBuild, canMake, fateTurn, nextStage, packCount, thingName, timeOfDay, verbOf, worldDayIndex, worldClock, WORLD_EPOCH, type Deed, type Home, type LifeChange, type Look, type Pack, type Recipe, type Verb } from "@echo/planet";
 
 import type { AnimalsLayer } from "@/game/world/animalsLayer";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { arrangementMeasurement, homeMeasurement } from "@/lib/homeMeasure";
 import type { InteractLayer, NearThing } from "@/game/world/interactLayer";
 import type { DirectorLayer } from "@/game/world/directorLayer";
+import type { MomentsLayer } from "@/game/world/momentsLayer";
 import type { LayerContext } from "@/game/world/PlanetWorld";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
-import { beatText, t, useLang, verbLabel } from "@/lib/i18n";
+import { beatText, nameText, t, useLang, verbLabel } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 import { tradeMeasurement, type TradeReply } from "@/lib/barter";
@@ -109,11 +110,14 @@ const STAGED = new Set<string>([
   "hungry-stranger", "raft-borrower", "tide-fisher", "seed-offer", "overgrown-path", "lone-traveler",
 ]);
 
+/** Moments and hidden things (C86): called by what they are ("a woman whose apples have rolled everywhere"). */
+const MOMENTARY = new Set<string>([...MOMENT_KINDS, ...EGG_KINDS]);
+
 /** A verb that costs something out of the pack (C75) is offered only while the pack holds it. */
 const affordable = (verbs: readonly Verb[], pack: Pack): Verb[] => verbs.filter((v) => !v.spends || (pack[v.spends.item] ?? 0) >= v.spends.count);
 
 const title = (t: NearThing) =>
-  t.kind === "villager" || t.kind === "home" || t.kind === "land" || t.kind === "furnishing" || STAGED.has(t.kind) || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind);
+  t.kind === "villager" || t.kind === "home" || t.kind === "land" || t.kind === "furnishing" || STAGED.has(t.kind) || MOMENTARY.has(t.kind) || t.name.startsWith("the ") || t.name.endsWith("grave") ? t.name : thingName(t.kind);
 
 export default function Interact({
   world,
@@ -189,6 +193,7 @@ export default function Interact({
       interact: ctx?.layer<InteractLayer>("interact") ?? null,
       villagers: ctx?.layer<VillagersLayer>("villagers") ?? null,
       player: ctx?.layer<WorldLayer & PlayerLayer>("player") ?? null,
+      moments: ctx?.layer<MomentsLayer>("moments") ?? null,
       ctx: ctx ?? null,
     };
   }, []);
@@ -481,7 +486,10 @@ export default function Interact({
         if (done) void tradeIt(a.verb, a.thing);
         return;
       }
-      if (done && a.verb.beat) say(a.verb.beat);
+      // A moment plays out, and a hidden thing says what was found (C86).
+      const told = done && (a.thing.ref.startsWith("moment:") || a.thing.ref.startsWith("egg:")) ? (layers().moments?.acted(a.thing.ref, a.verb.id) ?? null) : null;
+      if (done && told) say(beatText(lang, told), 6500);
+      else if (done && a.verb.beat) say(MOMENTARY.has(a.thing.kind) ? beatText(lang, a.verb.beat) : a.verb.beat);
       // Something done for a villager changes the terms: asking them again is not pressing (C58).
       if (done && a.thing.ref.startsWith("villager:") && a.verb.deed && !["harm", "theft", "trespass", "disrespect"].includes(a.verb.deed.reading)) refused.current.delete(a.thing.ref.slice(9));
       // What goes into the pack, or out of it, is the server's to say (see `record`); making something is too.
@@ -521,7 +529,7 @@ export default function Interact({
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
       if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
-    [chain, consent, layers, record, say, tradeIt, homeIt, stageIt],
+    [chain, consent, lang, layers, record, say, tradeIt, homeIt, stageIt],
   );
 
   const begin = useCallback(
@@ -871,7 +879,7 @@ export default function Interact({
       ) : near || talkHint ? (
         <div data-interact-prompt={near?.ref ?? ""} className={`absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${coarse ? "" : "pointer-events-none"}`}>
           {near ? (
-            <span className="rounded-full bg-ink-deep/80 px-3 py-1 text-xs text-parchment backdrop-blur-md">{title(near)}</span>
+            <span className="rounded-full bg-ink-deep/80 px-3 py-1 text-xs text-parchment backdrop-blur-md">{nameText(lang, title(near))}</span>
           ) : null}
           {verbs.map((v, i) =>
             coarse ? (

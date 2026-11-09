@@ -36,8 +36,12 @@ import type { VillagersLayer } from "./villagersLayer";
 import type { InteriorLayer } from "./interiorLayer";
 import type { HomeLayer } from "./homeLayer";
 import type { DirectorLayer } from "./directorLayer";
+import type { MomentsLayer } from "./momentsLayer";
 import type { AnimalsLayer } from "./animalsLayer";
 import { buildMarks } from "./villageGeometry";
+
+/** The refs that win over the ground's own things within reach: the director's, a moment's, a hidden thing's. */
+const SET_OUT = /^(staged|moment|egg):/;
 
 export interface NearThing extends Thing {
   verbs: readonly Verb[];
@@ -193,13 +197,20 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
       refreshThings(ctx, worldDayIndex(options.clock, Date.now()));
 
       let best: NearThing | null = null;
+      let bestRank = Infinity;
       const consider = (t: Thing) => {
         const verbs = verbsOf(t.kind);
         if (verbs.length === 0) return;
         const reach = Math.max(...verbs.map((v) => v.reachM));
         const d = Math.max(0, Math.hypot(t.x - mx, t.y - my) - t.sizeM);
         if (d > reach) return;
-        if (!best || d < best.distanceM) best = { ...t, verbs, distanceM: d };
+        // What was set out, what is happening, and what is hidden (C63, C86) come before the tuft of
+        // grass at your feet: within reach, they are what is near, a stride closer than they are.
+        const rank = SET_OUT.test(t.ref) ? d - 1.5 : d;
+        if (!best || rank < bestRank) {
+          best = { ...t, verbs, distanceM: d };
+          bestRank = rank;
+        }
       };
       // Your own land, your house, and what is set down in it (C59). First, so that a tuft of grass at
       // your feet does not stand between you and the house you mean to mark out: a tie goes to the first.
@@ -208,6 +219,8 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
       // What the director set out (C63): before the ground, so a shell at your feet does not stand
       // between you and the gull.
       for (const t of ctx.layer<DirectorLayer>("director")?.things(mx, my) ?? []) consider(t);
+      // A moment going on near the stranger, and the village's hidden things (C86).
+      for (const t of ctx.layer<MomentsLayer>("moments")?.things(mx, my) ?? []) consider(t);
       // Inside a house (C54), its own door is behind you: you do not knock on it from within.
       const within = ctx.layer<InteriorLayer>("interior")?.inside()?.plot;
       for (const t of things) if (Math.hypot(t.x - mx, t.y - my) < LOOK_M + t.sizeM && t.ref !== `house:${within}`) consider(t);

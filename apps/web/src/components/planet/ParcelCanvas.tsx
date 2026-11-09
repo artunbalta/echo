@@ -65,6 +65,7 @@ import Inspector, { useMeasureChain, type ReactionReading } from "@/components/w
 import RecognitionMeter from "@/components/world/RecognitionMeter";
 import Mirror from "@/components/world/Mirror";
 import Director from "@/components/world/Director";
+import Moments from "@/components/world/Moments";
 import DemoOverlay, { type DemoSettings } from "@/components/demo/DemoOverlay";
 import PilotOverlay, { type PilotSettings } from "@/components/pilot/PilotOverlay";
 import EchoAway from "@/components/world/EchoAway";
@@ -167,8 +168,10 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         };
       }
       // The same, for any parcel in development: how a browser script looks at the village from where
-      // its people are (placing the player beside them). Never in a production bundle.
-      if (process.env.NODE_ENV !== "production") (window as unknown as { __world?: PlanetWorld }).__world = built;
+      // its people are (placing the player beside them). Never in a production bundle, unless a test
+      // build asks for it (`NEXT_PUBLIC_ECHO_WORLD_HANDLE=1`, which no deployment sets): a played visit
+      // measured against a production build that later edits cannot change.
+      if (process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_ECHO_WORLD_HANDLE === "1") (window as unknown as { __world?: PlanetWorld }).__world = built;
       return list;
     },
     [chain, touch, stations, onReaction],
@@ -394,6 +397,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
       <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={pilot ? "pilot" : demo ? "demo" : "world"} />
+      <Moments world={() => world.current} chain={chain} />
       {pilot ? (
         <PilotOverlay pilot={pilot} />
       ) : (

@@ -887,6 +887,27 @@ const VERBS_TR: Record<string, string> = {
   "Plant the seed for later": "Tohumu sonrası için ek",
   "Follow the overgrown path": "Otlarla kaplı patikadan git",
   "Go and say hello": "Yanına git, selam ver",
+  // Moments and hidden things (C86).
+  "Help gather the apples": "Elmaları toplamasına yardım et",
+  "Put your shoulder to the wheel": "Omzunu tekerleğe ver",
+  "Throw it to the one on their own": "Tek başına duran çocuğa at",
+  "Throw it back to the others": "Diğerlerine geri at",
+  "Laugh it off, and roll it back": "Gülüp geç, topu geri yuvarla",
+  "Tell them to watch where they throw": "Nereye attığına dikkat etmesini söyle",
+  "Touch the rim, as they do": "Onlar gibi kuyunun taşına dokun",
+  "Wait your turn": "Sıranı bekle",
+  "Go straight to the front": "Doğrudan öne geç",
+  "Join the dance": "Halaya katıl",
+  "Stand and watch": "Durup izle",
+  "Look inside the hollow": "Kovuğun içine bak",
+  "Read the note inside": "İçindeki notu oku",
+  "Look at your reflection": "Sudaki yansımana bak",
+  "Climb up and look out": "Tırman ve etrafa bak",
+  "Sit and watch the sea": "Otur ve denizi seyret",
+  "Dig where the earth is soft": "Toprağın yumuşak olduğu yeri kaz",
+  "Help her catch the hen": "Tavuğu yakalamasına yardım et",
+  "Stop and watch the sky": "Dur ve gökyüzünü izle",
+  "Pull the door shut": "Kapıyı çekip kapat",
 };
 
 /** A verb's label in the person's language; one with no translation keeps its English. */
@@ -914,7 +935,61 @@ const BEATS_TR: Record<string, string> = {
   "You press it into the soil. It will be up by tomorrow.": "Toprağa bastırıyorsun. Yarına filizlenmiş olur.",
   "Brambles, then a narrow way, then a clearing nobody seems to know, and the whole bay below it.": "Böğürtlenler, sonra dar bir yol, sonra kimsenin bilmediği bir açıklık ve aşağıda bütün koy.",
   "They look up, surprised, and make room by the fire.": "Şaşırarak başını kaldırıyor ve ateşin yanında sana yer açıyor.",
+  // Moments (C86).
+  "You gather them back into her basket. She laughs, and thanks you twice.": "Elmaları sepetine geri topluyorsun. Gülüyor ve sana iki kez teşekkür ediyor.",
+  "It rocks, sticks, and then rolls free. The carter claps you on the back.": "Sallanıyor, takılıyor, sonra kurtulup yuvarlanıyor. Arabacı sırtına vuruyor.",
+  "The child on their own catches it, and the game is three now.": "Tek başına duran çocuk topu yakalıyor; artık oyun üç kişilik.",
+  "They are off again. The one on their own goes on watching.": "Oyun yeniden başlıyor. Tek başına duran çocuk izlemeye devam ediyor.",
+  "The child grins with relief and runs to get it.": "Çocuk rahatlayıp sırıtıyor ve topu almaya koşuyor.",
+  "The child looks at the ground, picks up the ball, and goes.": "Çocuk yere bakıyor, topu alıyor ve gidiyor.",
+  "The stone is worn smooth where the hands go.": "Ellerin değdiği yerde taş aşınıp pürüzsüzleşmiş.",
+  "The line moves along. Someone ahead nods to you.": "Sıra ilerliyor. Öndekilerden biri sana başıyla selam veriyor.",
+  "Someone mutters behind you. Nobody says anything aloud.": "Arkandan biri homurdanıyor. Kimse yüksek sesle bir şey söylemiyor.",
+  "Two hands find yours, and the ring takes you round.": "İki el seninkini buluyor ve halka seni de döndürüyor.",
+  "You stand at the edge and watch them go round.": "Kenarda durup onların dönüşünü izliyorsun.",
+  "You corner it between you. She tucks it under her arm, laughing in the dark.": "İkiniz onu köşeye sıkıştırıyorsunuz. Kadın tavuğu koltuğunun altına alıyor, karanlıkta gülerek.",
+  "One, then another, then three at once, falling into the sea.": "Önce bir, sonra bir tane daha, sonra aynı anda üç tane, denize düşüyor.",
+  "It catches, and the house goes quiet.": "Kapı yerine oturuyor ve ev sessizleşiyor.",
+  // Hidden things (C86): what is found.
+  "Inside the hollow, wrapped in a leaf: a small fish carved from bone.": "Kovuğun içinde, bir yaprağa sarılı: kemikten oyulmuş küçük bir balık.",
+  "Inside the hollow: a wooden bird, its wings worn smooth by hands.": "Kovuğun içinde: kanatları ellerden aşınıp pürüzsüzleşmiş tahta bir kuş.",
+  "Inside the hollow: a little boat cut from bark, with a mast of a twig.": "Kovuğun içinde: ağaç kabuğundan oyulmuş, direği bir dal parçası olan küçük bir kayık.",
+  "Inside the hollow: three pebbles, each with a line scratched on it.": "Kovuğun içinde: her birinin üstüne bir çizgi kazınmış üç çakıl taşı.",
+  "The note says: \"If you find this, the herons came back this year. Tell someone.\"": "Notta şöyle yazıyor: \"Bunu bulursan, balıkçıllar bu yıl geri döndü. Birine söyle.\"",
+  "The note says: \"I went across the water to see what is there. Do not wait for me.\"": "Notta şöyle yazıyor: \"Suyun öte yanında ne var diye görmeye gittim. Beni bekleme.\"",
+  "The note is a child's drawing of a house, and a dog, and the sea.": "Not bir çocuğun çizimi: bir ev, bir köpek ve deniz.",
+  "The note says only a name, and a day, a long time ago.": "Notta yalnızca bir ad ve çok eskiden kalma bir gün yazıyor.",
+  "The water is so still you can see the clouds go over your own face.": "Su o kadar durgun ki bulutların kendi yüzünün üstünden geçtiğini görüyorsun.",
+  "From up here the whole bay is laid out: the roofs, the boats, and the far shore in a haze.": "Buradan bütün koy ayaklarının altında: çatılar, kayıklar ve pusun içinde karşı kıyı.",
+  "A small box, rotten at the corners. Inside: a ring of plaited hair, and a shell.": "Köşeleri çürümüş küçük bir kutu. İçinde: örülmüş saçtan bir yüzük ve bir deniz kabuğu.",
 };
+
+/** What a moment or a hidden thing is called over it (C86), in Turkish, by its English name. */
+const NAMES_TR: Record<string, string> = {
+  "a woman whose apples have rolled everywhere": "elmaları her yere saçılmış bir kadın",
+  "a carter with a wheel stuck fast": "tekerleği çamura saplanmış bir arabacı",
+  "children playing catch": "top oynayan çocuklar",
+  "a child who threw wide": "topu yanlışlıkla sana atan bir çocuk",
+  "the well's worn rim": "kuyunun aşınmış taşı",
+  "a line at the well": "kuyunun başındaki sıra",
+  "a ring dance on the green": "meydanda bir halay",
+  "a woman with a lantern, chasing a hen": "elinde fenerle tavuğunu kovalayan bir kadın",
+  "stars falling over the sea": "denizin üstüne kayan yıldızlar",
+  "a door banging in the wind": "rüzgârda çarpıp duran bir kapı",
+  "a hollow stump": "kovuklu bir kütük",
+  "a bottle half in the sand": "kuma yarı gömülü bir şişe",
+  "a still pool": "durgun bir su birikintisi",
+  "a big rock with a flat top": "tepesi düz büyük bir kaya",
+  "a patch of soft earth": "toprağı yumuşak bir yer",
+};
+
+/** A thing's name in the person's language; one with no translation keeps its English. */
+export function nameText(lang: Lang, name: string): string {
+  return lang === "tr" ? (NAMES_TR[name] ?? name) : name;
+}
+
+/** For the test that every moment and hidden thing has a Turkish name. */
+export const NAMES_TR_FOR_TEST: Readonly<Record<string, string>> = NAMES_TR;
 
 /** A beat in the person's language. */
 export function beatText(lang: Lang, beat: string): string {

@@ -5709,3 +5709,83 @@ of friends, with one link each. Whoever opens a link asks to join, and the owner
 
 **Not built:** a message to the owner when someone asks (the page shows it on its next look), renaming
 or closing a group, and moving someone between groups.
+
+## C86 — moments and hidden things: something to do near the stranger all visit long
+
+What it answers: the owner asked whether 25 minutes in the village are worth playing, or mostly walking.
+A bot played a whole pilot visit, as a curious person would: it went to whatever was set out, walked up
+to people and animals, tried what was near, and wandered. Every 3 s it wrote down what was around it.
+Before this decision, 30% of the visit had something worth doing within reach or happening within
+15 m. The longest empty stretch was 150 s. The pilot's six were over by minute 6.6. In the 18.7 minutes
+after them, only 25% of the time had anything near, and the most frequent act was wading in or skipping
+stones.
+
+- **Moments** (`packages/planet/lib/moments.ts`, `apps/web/src/game/world/momentsLayer.ts`). About once a
+  minute, while nothing the director set out stands, something small happens 6.5–10 m ahead of the
+  stranger. Its people walk in from the side, and walk off when it is over, whatever the stranger did.
+  Each is a classic paradigm, read under a label ingest.py already has (C7: `services/ml` untouched):
+  - a woman's apples spill across the path: `help_at_cost`, or walking past, `pass_by` (H9);
+  - a handcart sticks fast, and the carter strains at it: `help_at_cost`, held as long as you push (H9);
+  - children's ball comes to your feet, and one of them is always left out: `include_marginal` /
+    `ignore_marginal` (G2, Cyberball);
+  - a child's throw goes wide and hits you: `forgive` / `retaliate`, or walking off, `withdraw` (G10);
+  - people passing the well touch its rim and bow: `conform_custom`, or passing it untouched,
+    `deviate_custom` (H4);
+  - a line at the well: `wait_in_queue` / `cut_queue` (H1);
+  - in the evening a ring dance on the green: `group_join` / `group_observe`, or walking off,
+    `group_avoid` (G4).
+
+  The night is about 40% of a world day (twelve real minutes), so it has moments of its own:
+  - a woman with a lantern chasing a hen that got out: `help_at_cost`, or walking past, `pass_by` (H9);
+  - stars falling over the sea: `gaze_reflection`, held as long as you watch (J2);
+  - a lived-in house's door banging in the wind: pulling it shut, `stack_tidy` (J5).
+- **Order and place.** Each stranger meets every moment once before any comes twice, in an order of
+  their own (the same on a reload). A moment happens only in its hours and its place: no apples at two
+  in the morning, no line at the well far from the well. Nothing begins indoors, at sea, or while the
+  stranger is within 40 m of something the director set out (they may yet go to it). Walking away from
+  one frees them of it, so one left standing for its four minutes (C75) does not hold every moment back.
+  A moment is never set within 14 m of one. None is one of the pilot's six: no bread, lending, bet,
+  seed, path or lone stranger, and no label of theirs.
+- **What is near.** Within reach, what was set out, what is happening and what is hidden come before the
+  ground's own things (`interactLayer.ts`). A tuft of grass at your feet no longer stands between you and
+  a hollow stump, or the gull (C63). Names, choices and lines are in Turkish as well as English.
+- **Hidden things**, the same for everyone in a village and found once by each stranger (kept on the
+  device):
+  - three hollow stumps with something carved inside (`egg_hollow`, I3);
+  - bottles on the shore with a note (`study_marker`, J6);
+  - a still pool (`egg_reflection`, J2);
+  - a lookout rock on the highest ground near the village (`egg_horizon_seen`, I3, and sitting there,
+    `gaze_reflection`, J2);
+  - a box someone buried (`dig_cache`, C7).
+
+  They are placed outside the village's own things, apart, each on the ground it needs. Each says what
+  was found, in English or Turkish.
+- **Never a prompt** (Law 2, as the director's): people doing something, nothing that says it is for
+  you. Leaving it is an answer and never a penalty. Walking past one is measured by the page, as a
+  staging's is.
+- **Measured.** After this decision, the same bot over the same 25 minutes:
+
+  | | Before | After |
+  |---|---|---|
+  | Something worth doing near | 30% | 54% |
+  | The same, after the pilot's six (about 18 minutes) | 25% | 52% |
+  | Longest empty stretch | 150 s | 57 s |
+  | Moments met | 0 | 17 (about one every 1.5 minutes) |
+  | Acts after the six | 15 | 25 |
+
+  "Near" means within reach (about 3 m) for things, and within 15 m for something happening. Both runs
+  were against frozen production builds, so nothing changed under them. The banging door came after
+  the measured build; it adds variety at night, not more of it.
+- **Tests.**
+  - `packages/planet/tests/moments.test.ts` (7): the rotation, hours and places (over midnight too), the
+    spot ahead, the door that bangs, walking past, the labels against ingest.py and the catalogue, and
+    the hidden things' ground.
+  - `apps/web/tests/moments.test.mts` (5): the layer on a held clock. A moment begins, is acted on and
+    plays out, and the next comes. Walking past is reported once. Nothing begins near a staging, and
+    one walked away from holds nothing back. A hidden thing is found once. Every choice, line and name
+    has its Turkish.
+  - The registry test covers the fifteen new kinds.
+  - Planet 330/330, web 520/520.
+
+**Not built:** moments for two strangers at once (each sees their own); a moment that remembers you
+from yesterday; promise-keeping (H6), which needs a moment that spans visits.

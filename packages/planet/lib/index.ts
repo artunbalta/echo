@@ -72,6 +72,8 @@ export * from "./homes.js";
 export * from "./director.js";
 // The pilot village (C75): the six paradigms' order, the tide's turn, a lent raft.
 export * from "./pilot.js";
+// Moments near the stranger and the village's hidden things (C86).
+export * from "./moments.js";
 // How people die from now on, and what a stranger can do about it (C66).
 export * from "./mortality.js";
 export * from "./fates.js";

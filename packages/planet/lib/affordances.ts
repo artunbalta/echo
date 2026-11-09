@@ -50,6 +50,9 @@ export const OTHER_THINGS = [
   "villager", "water", "dog", "goat", "hen", "land", "home", "furnishing", "netted-gull", "lost-pouch", "carved-mark", "dark-cleft",
   // The pilot's six (C75, `director.ts`).
   "hungry-stranger", "raft-borrower", "tide-fisher", "seed-offer", "overgrown-path", "lone-traveler",
+  // Moments and hidden things (C86, `moments.ts`).
+  "spilled-basket", "stuck-cart", "ball-game", "stray-ball", "well-custom", "well-queue", "village-dance", "loose-hen", "falling-stars", "banging-door",
+  "hollow-stump", "message-bottle", "still-pool", "lookout-rock", "buried-box",
 ] as const;
 export type OtherThing = (typeof OTHER_THINGS)[number];
 
@@ -319,6 +322,61 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
   "lone-traveler": [
     v({ id: "greet", label: "Go and say hello", holdS: 2, pose: "still", reachM: 3.2, stakes: "low", measure: m("G1", "initiate", "generic"), effect: null, deed: null, owner: "household", beat: "They look up, surprised, and make room by the fire." }),
   ],
+  // Moments (C86, `moments.ts`): something small happening near the stranger, a classic paradigm in the
+  // world's clothes, under the labels ingest.py already reads. Walking past one is measured by the moments
+  // layer, as each names (`pass_by`, `withdraw`, `deviate_custom`, `group_avoid`).
+  "spilled-basket": [
+    v({ id: "help", label: "Help gather the apples", holdS: 4, pose: "gather", reachM: 2.8, stakes: "low", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "You gather them back into her basket. She laughs, and thanks you twice." }),
+  ],
+  "stuck-cart": [
+    v({ id: "push", label: "Put your shoulder to the wheel", holdS: 6, pose: "push", reachM: 3, stakes: "medium", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "It rocks, sticks, and then rolls free. The carter claps you on the back." }),
+  ],
+  "ball-game": [
+    // Cyberball, in a field: the ball is yours to throw, and one of them never gets it.
+    v({ id: "to-alone", label: "Throw it to the one on their own", holdS: 1, pose: "gather", reachM: 3, stakes: "low", measure: m("G2", "include_marginal", "named"), effect: null, deed: null, owner: "household", beat: "The child on their own catches it, and the game is three now." }),
+    v({ id: "to-others", label: "Throw it back to the others", holdS: 1, pose: "gather", reachM: 3, stakes: "low", measure: m("G2", "ignore_marginal", "named"), effect: null, deed: null, owner: "household", beat: "They are off again. The one on their own goes on watching." }),
+  ],
+  "stray-ball": [
+    v({ id: "laugh", label: "Laugh it off, and roll it back", holdS: 1.2, pose: "gather", reachM: 3.2, stakes: "low", measure: m("G10", "forgive", "named"), effect: null, deed: null, owner: "household", beat: "The child grins with relief and runs to get it." }),
+    v({ id: "scold", label: "Tell them to watch where they throw", holdS: 1.2, pose: "still", reachM: 3.2, stakes: "low", measure: m("G10", "retaliate", "named"), effect: null, deed: null, owner: "household", beat: "The child looks at the ground, picks up the ball, and goes." }),
+  ],
+  "well-custom": [
+    v({ id: "touch", label: "Touch the rim, as they do", holdS: 1.5, pose: "gather", reachM: 2.8, stakes: "low", measure: m("H4", "conform_custom", "named"), effect: null, deed: null, owner: "none", beat: "The stone is worn smooth where the hands go." }),
+  ],
+  "well-queue": [
+    v({ id: "wait", label: "Wait your turn", holdS: 2.5, pose: "still", reachM: 3.2, stakes: "low", measure: m("H1", "wait_in_queue", "named"), effect: null, deed: null, owner: "household", beat: "The line moves along. Someone ahead nods to you." }),
+    v({ id: "cut", label: "Go straight to the front", holdS: 1.2, pose: "still", reachM: 3.2, stakes: "low", measure: m("H1", "cut_queue", "named"), effect: null, deed: null, owner: "household", beat: "Someone mutters behind you. Nobody says anything aloud." }),
+  ],
+  "village-dance": [
+    v({ id: "join", label: "Join the dance", holdS: 3, pose: "still", reachM: 3.6, stakes: "low", measure: m("G4", "group_join", "named"), effect: null, deed: null, owner: "household", beat: "Two hands find yours, and the ring takes you round." }),
+    v({ id: "watch", label: "Stand and watch", holdS: 3, pose: "still", reachM: 3.6, stakes: "low", measure: m("G4", "group_observe", "named"), effect: null, deed: null, owner: "household", beat: "You stand at the edge and watch them go round." }),
+  ],
+  "loose-hen": [
+    v({ id: "catch", label: "Help her catch the hen", holdS: 3.5, pose: "gather", reachM: 3, stakes: "low", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "You corner it between you. She tucks it under her arm, laughing in the dark." }),
+  ],
+  "falling-stars": [
+    v({ id: "watch-sky", label: "Stop and watch the sky", holdS: 4, pose: "still", reachM: 1, stakes: "low", measure: m("J2", "gaze_reflection", "named"), effect: null, deed: null, owner: "none", beat: "One, then another, then three at once, falling into the sea." }),
+  ],
+  "banging-door": [
+    v({ id: "shut", label: "Pull the door shut", holdS: 1.5, pose: "push", reachM: 2.6, stakes: "low", measure: m("J5", "stack_tidy", "named"), effect: null, deed: null, owner: "household", beat: "It catches, and the house goes quiet." }),
+  ],
+  // Hidden things (C86): the village's own, found once each. What is found is the moments layer's to say.
+  "hollow-stump": [
+    v({ id: "look-in", label: "Look inside the hollow", holdS: 2, pose: "study", reachM: 2.2, stakes: "low", measure: m("I3", "egg_hollow", "named"), effect: null, deed: null, owner: "none", beat: "" }),
+  ],
+  "message-bottle": [
+    v({ id: "read", label: "Read the note inside", holdS: 4, pose: "study", reachM: 2.2, stakes: "low", measure: m("J6", "study_marker", "named"), effect: null, deed: null, owner: "none", beat: "" }),
+  ],
+  "still-pool": [
+    v({ id: "look", label: "Look at your reflection", holdS: 3, pose: "kneel", reachM: 2.6, stakes: "low", measure: m("J2", "egg_reflection", "named"), effect: null, deed: null, owner: "none", beat: "" }),
+  ],
+  "lookout-rock": [
+    v({ id: "look-out", label: "Climb up and look out", holdS: 3, pose: "climb", reachM: 2.8, stakes: "low", measure: m("I3", "egg_horizon_seen", "named"), effect: null, deed: null, owner: "none", beat: "" }),
+    v({ id: "sit", label: "Sit and watch the sea", holdS: 0, pose: "sit", reachM: 2.8, stakes: "low", measure: m("J2", "gaze_reflection", "named"), effect: null, deed: null, owner: "none", beat: "" }),
+  ],
+  "buried-box": [
+    v({ id: "dig", label: "Dig where the earth is soft", holdS: 5, pose: "dig", reachM: 2.2, stakes: "low", measure: m("C7", "dig_cache", "named", "abandon_build"), effect: null, deed: null, owner: "none", beat: "" }),
+  ],
   furnishing: [
     v({ id: "lift", label: "Pick it up", holdS: 1, pose: "gather", reachM: 1.6, stakes: "low", measure: m("J5", "lift_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),
     v({ id: "turn", label: "Turn it", holdS: 1, pose: "push", reachM: 1.6, stakes: "low", measure: m("J5", "turn_furnishing", "unrouted"), effect: null, deed: null, owner: "none", beat: "" }),
@@ -355,6 +413,9 @@ export function thingName(kind: ThingKind): string {
     "shore-rock": "rock", "scree": "loose stones",
     "hungry-stranger": "stranger", "raft-borrower": "stranger with nets", "tide-fisher": "fisher", "seed-offer": "child",
     "overgrown-path": "overgrown path", "lone-traveler": "traveller",
+    "spilled-basket": "spilled basket", "stuck-cart": "stuck cart", "ball-game": "children's game", "stray-ball": "child",
+    "well-custom": "well", "well-queue": "line at the well", "village-dance": "dance", "loose-hen": "loose hen", "falling-stars": "night sky", "banging-door": "door",
+    "hollow-stump": "hollow stump", "message-bottle": "bottle", "still-pool": "still pool", "lookout-rock": "lookout rock", "buried-box": "patch of soft earth",
   };
   return NAMES[kind] ?? kind;
 }

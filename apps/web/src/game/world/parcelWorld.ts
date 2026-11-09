@@ -68,6 +68,7 @@ import { soundLayer } from "./soundLayer";
 import { marketLayer } from "./marketLayer";
 import { homeLayer } from "./homeLayer";
 import { directorLayer } from "./directorLayer";
+import { momentsLayer } from "./momentsLayer";
 import { echoBodyLayer } from "./echoBodyLayer";
 import { echoMeetingLayer } from "./echoMeetingLayer";
 import { animalsLayer } from "./animalsLayer";
@@ -184,6 +185,8 @@ export function parcelLayers({ chain, slice, inputEnabled = true, touch, clock =
   layers.push(homeLayer());
   // What the director set out for this stranger (C63): asked of by the interact layer, like the house.
   layers.push(directorLayer());
+  // Something small happening near the stranger every minute or so, and the village's hidden things (C86).
+  layers.push(momentsLayer({ clock }));
   // Your echo, waiting where it last met someone while you were away (C64).
   layers.push(echoBodyLayer());
   // Two echoes on the green, where they met while their people were away (C71).
