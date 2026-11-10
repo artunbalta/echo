@@ -165,6 +165,78 @@ export function validRating(x: unknown): { ratee: string; know: PilotRating["kno
   return { ratee: r.ratee, know: r.know as PilotRating["know"], axes, predicted };
 }
 
+/**
+ * One moment a pilot participant met (C87, migration 0039): what it was, the arm of its experiment they
+ * met, how long it was in view and how near they came, and what became of it: the verb they chose,
+ * walking past (`passed`), nothing (`none`, `left`, `expired`), or how an errand ended. Every moment they
+ * saw, acted on or not, so the analysis has its denominator: who met the nine-coin purse, not only who
+ * took from it. A research record only: it is never sent to the engine, and moves no echo.
+ */
+export interface PilotMoment {
+  subject: string;
+  ref: string;
+  circle: string | null;
+  visit: number;
+  kind: string;
+  lane: "people" | "passer" | "wayside" | "errand";
+  arm: string | null;
+  armRaw: Record<string, number | string> | null;
+  seenAt: string;
+  endedAt: string;
+  seenS: number;
+  nearestM: number | null;
+  outcome: string;
+}
+
+const MOMENT_LANES: ReadonlySet<string> = new Set(["people", "passer", "wayside", "errand"]);
+const WORD = /^[a-z][a-z-]{0,23}$/;
+
+/** One moment as the page sent it, checked; null when it is not one. Its person and visit are the server's to add. */
+export function validMoment(x: unknown, kinds: ReadonlySet<string>, now: number): Omit<PilotMoment, "subject" | "circle" | "visit"> | null {
+  if (!x || typeof x !== "object") return null;
+  const m = x as Record<string, unknown>;
+  const ref = m.ref;
+  if (typeof ref !== "string" || !/^moment:[A-Za-z0-9|:._-]{1,110}$/.test(ref)) return null;
+  if (typeof m.kind !== "string" || !kinds.has(m.kind)) return null;
+  if (typeof m.lane !== "string" || !MOMENT_LANES.has(m.lane)) return null;
+  const arm = m.arm === null || m.arm === undefined ? null : typeof m.arm === "string" && WORD.test(m.arm) ? m.arm : undefined;
+  if (arm === undefined) return null;
+  let armRaw: Record<string, number | string> | null = null;
+  if (m.armRaw !== null && m.armRaw !== undefined) {
+    if (typeof m.armRaw !== "object" || Array.isArray(m.armRaw)) return null;
+    const entries = Object.entries(m.armRaw as Record<string, unknown>);
+    if (entries.length > 6) return null;
+    armRaw = {};
+    for (const [k, v] of entries) {
+      if (!/^[a-z][a-z0-9_]{0,23}$/.test(k)) return null;
+      if (typeof v === "number" && Number.isFinite(v)) armRaw[k] = v;
+      else if (typeof v === "string" && v.length <= 24) armRaw[k] = v;
+      else return null;
+    }
+  }
+  const seen = typeof m.seenAt === "string" ? Date.parse(m.seenAt) : NaN;
+  const ended = typeof m.endedAt === "string" ? Date.parse(m.endedAt) : NaN;
+  // Met in the last day, ended after it began, and not in the future.
+  if (!Number.isFinite(seen) || !Number.isFinite(ended) || ended < seen || ended > now + 5 * 60 * 1000 || seen < now - 24 * 60 * 60 * 1000) return null;
+  const seenS = m.seenS;
+  if (typeof seenS !== "number" || !Number.isFinite(seenS) || seenS < 0 || seenS > 3600) return null;
+  const nearestM = m.nearestM === null || m.nearestM === undefined ? null : m.nearestM;
+  if (nearestM !== null && (typeof nearestM !== "number" || !Number.isFinite(nearestM) || nearestM < 0 || nearestM > 500)) return null;
+  if (typeof m.outcome !== "string" || !WORD.test(m.outcome)) return null;
+  return {
+    ref,
+    kind: m.kind,
+    lane: m.lane as PilotMoment["lane"],
+    arm,
+    armRaw,
+    seenAt: new Date(seen).toISOString(),
+    endedAt: new Date(ended).toISOString(),
+    seenS: Math.round(seenS * 10) / 10,
+    nearestM: nearestM === null ? null : Math.round(nearestM * 10) / 10,
+    outcome: m.outcome,
+  };
+}
+
 /** The visit still going on: begun, not ended, and not past its time (with ten minutes' grace for a reload). */
 export function openSession(p: PilotPerson, now: number): PilotSession | null {
   const last = p.sessions[p.sessions.length - 1];

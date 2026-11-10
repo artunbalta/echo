@@ -12,7 +12,11 @@
  * - `POST ?op=end`: the visit is over.
  * - `POST ?op=rate` `{ ratee, know, axes, predicted }`: how they place a friend, by the friend's nickname,
  *   and what they think the friend would do in each of the six (C76).
- * - `GET ?op=export` with `x-pilot-admin`: everything, for the owner's analysis.
+ * - `POST ?op=moments` `{ moments: [...] }`: the moments the caller met in this visit (C87), each with
+ *   the arm of its experiment, how long it was in view, how near they came, and what became of it: a
+ *   research record in its own table (migration 0039), the moments' analysis's denominator. Never sent to
+ *   the engine, so it moves no echo.
+ * - `GET ?op=export` with `x-pilot-admin`: everything, for the owner's analysis, the moments met included.
  * - `GET ?op=reveal`: who knew the caller best (C80), once their last visit is over, and only while the
  *   owner has switched it on (`ECHO_PILOT_REVEAL=1`). It holds their own words, their friends' median
  *   guess (two or more friends), their echo's guess, and what they did.
@@ -34,7 +38,7 @@
  *   the study: one yes is to the research, its debrief is the owner's switch, and it is in the export.
  */
 import { NextResponse } from "next/server";
-import { PILOT, PILOT_SITUATIONS, type Pack, type Staging } from "@echo/planet";
+import { MOMENT_KINDS, PILOT, PILOT_SITUATIONS, type Pack, type Staging } from "@echo/planet";
 
 import { readAllOf } from "@/lib/behavioral-store";
 import { getPersona } from "@/lib/ml";
@@ -50,6 +54,7 @@ import {
   toppedUp,
   validAxes,
   validRating,
+  validMoment,
   validStated,
   type PilotNotice,
   type PilotPerson,
@@ -66,6 +71,11 @@ export const maxDuration = 60;
 
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 const off = () => NextResponse.json({ error: "not_found" }, { status: 404 });
+
+/** The moments a visit's page may send at once, and how long after a visit ends its last are still taken (C87). */
+const MOMENTS_PER_POST = 40;
+const MOMENTS_GRACE_MS = 5 * 60 * 1000;
+const MOMENT_KIND_SET: ReadonlySet<string> = new Set(MOMENT_KINDS);
 
 type Config = NonNullable<ReturnType<typeof pilotConfig>>;
 
@@ -170,6 +180,25 @@ export async function POST(req: Request) {
   const me = caller.subject;
   const person = await store.pilotPersonOf(me);
   if (person === undefined) return bad("unreadable", 503);
+
+  // The moments a participant met in a visit (C87): a research record, written to its own table and never
+  // sent to the engine. Only for someone in, who said yes to research, in a visit (or just out of one: a
+  // visit's last moments arrive as it closes).
+  if (op === "moments") {
+    if (!person || person.waitingSince !== null || !person.researchAt) return bad("not_in_study", 403);
+    const last = person.sessions[person.sessions.length - 1];
+    const recent = last && last.endedAt && now - Date.parse(last.endedAt) < MOMENTS_GRACE_MS ? last : null;
+    const visit = openSession(person, now) ?? recent;
+    if (!visit) return bad("no_visit", 409);
+    const sent = Array.isArray(body.moments) ? (body.moments as unknown[]).slice(0, MOMENTS_PER_POST) : [];
+    const rows = sent
+      .map((x) => validMoment(x, MOMENT_KIND_SET, now))
+      .filter((m): m is NonNullable<typeof m> => m !== null)
+      .map((m) => ({ ...m, subject: me, circle: person.circle ?? null, visit: visit.n }));
+    if (!rows.length) return NextResponse.json({ ok: true, saved: 0 });
+    const saved = await store.savePilotMoments(rows);
+    return NextResponse.json({ ok: saved, saved: saved ? rows.length : 0 });
+  }
 
   if (op === "circle") {
     if (!cfg.circles) return off();
@@ -311,8 +340,9 @@ async function exportAll(req: Request, cfg: Config) {
   const pilotOnly = (list: Staging[] | null) => (list ?? []).filter((s) => (PILOT_SITUATIONS as readonly string[]).includes(s.situation));
   const each = await Promise.all(
     people.map(async (p) => {
-      const [stagings, events, echo] = await Promise.all([store.stagingsOf(p.subject), readAllOf(p.subject), getPersona(p.subject)]);
-      return [p.subject, { stagings: pilotOnly(stagings), events, echo }] as const;
+      const [stagings, events, echo, moments] = await Promise.all([store.stagingsOf(p.subject), readAllOf(p.subject), getPersona(p.subject), store.pilotMomentsOf(p.subject)]);
+      // Every moment they met (C87), acted on or not: null where it could not be read (0039 not applied).
+      return [p.subject, { stagings: pilotOnly(stagings), events, echo, moments }] as const;
     }),
   );
   return NextResponse.json({

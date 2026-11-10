@@ -22,6 +22,13 @@
   - in the raw signals: `arm`, plus the arm's own values, such as `onlookers: 2` or `coins: 9`;
   - in the context ingest.py conditions on: onlookers added to `audience_size`, `counterpart_status`,
     `time_pressure`, `stakes`, `public_or_private`.
+- **Who met what (C88).** Every moment the stranger *saw* is reported once, when it is over: within 12 m
+  and within 60° of the view for at least 1 s. The report gives its kind, the arm met, how long it was in
+  view, the nearest the stranger came, and what became of it. In a pilot visit it is kept in its own
+  table (`pilot_moments`, migration 0039) and exported. It is the denominator the analysis needs (who met
+  the nine-coin purse, not only who took from it), and it never goes to the engine.
+  `research/pilot/echo_pilot/moments.py` reads it for RQ6–RQ7, and `analysis.py` sets the echo with and
+  without the moments for RQ8.
 - **Walking past.** Walking past a moment is measured only for moments where passing is a choice, and only
   once the stranger came within 8 m and then went past 20 m. A greeting counts as passed if it is still
   unanswered when the person who gave it walks on.

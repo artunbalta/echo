@@ -449,3 +449,56 @@ test("C80: who knew you best is the owner's to switch on, and only after the las
   assert.deepEqual(two.rows.find((r) => r.paradigm === "give")!.friends, 2 / 3, "two friends: their median");
   assert.deepEqual(await (await reveal(B)).json(), { ready: false }, "someone who has not played sees nothing of anyone");
 });
+
+test("C87: the moments a participant met are kept for the study: only in a visit, only moments, once each, in the export, and erased with them", async () => {
+  await join(A, "Deniz");
+  const row = (n: number, extra: Record<string, unknown> = {}) => ({
+    ref: `moment:${A}|people|${n}`,
+    kind: "lost-purse",
+    lane: "wayside",
+    arm: "many",
+    armRaw: { coins: 9 },
+    seenAt: new Date(now - 30_000).toISOString(),
+    endedAt: new Date(now).toISOString(),
+    seenS: 6.2,
+    nearestM: 1.4,
+    outcome: "leave",
+    ...extra,
+  });
+  // Out of a visit, nothing is kept.
+  assert.equal((await pilot(A, "moments", { moments: [row(1)] })).status, 409);
+  await pilot(A, "start");
+  const res = await pilot(A, "moments", {
+    moments: [
+      row(1),
+      row(2, { kind: "no-such-kind" }),
+      row(3, { outcome: "DROP TABLE" }),
+      row(4, { seenS: -1 }),
+      row(5, { endedAt: new Date(now - 60_000).toISOString() }),
+      row(6, { lane: "errand", kind: "bread-errand", arm: "hurry", armRaw: { hurry: 1 }, outcome: "kept", nearestM: null }),
+    ],
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, saved: 2 }, "kept a row that is not a moment, or lost one that is");
+  // Sent again (a retry after a lost answer), each is still there once.
+  await pilot(A, "moments", { moments: [row(1)] });
+  const kept = (await villageStore()!.pilotMomentsOf(A))!;
+  assert.deepEqual(kept.map((m) => m.ref).sort(), [row(1).ref, row(6).ref].sort());
+  const purse = kept.find((m) => m.kind === "lost-purse")!;
+  assert.equal(purse.visit, 1);
+  assert.equal(purse.circle, "study");
+  assert.deepEqual(purse.armRaw, { coins: 9 });
+  assert.equal(purse.outcome, "leave");
+  // In the export, beside the events.
+  const data = (await (await PILOT_GET(new Request("https://echo.test/api/pilot?op=export", { headers: { "x-pilot-admin": ADMIN } }))).json()) as { byPerson: Record<string, { moments: { ref: string }[] | null }> };
+  assert.equal(data.byPerson[A]!.moments!.length, 2);
+  // Someone still waiting for the owner's yes, or not in the pilot at all, keeps nothing.
+  assert.equal((await pilot(B, "moments", { moments: [row(7)] })).status, 403);
+  // Erased with the person, here and in Supabase.
+  assert.ok(await villageStore()!.forgetSubject(A));
+  assert.deepEqual(await villageStore()!.pilotMomentsOf(A), []);
+  const erase = readFileSync(new URL("../src/app/api/account/delete/route.ts", import.meta.url), "utf8");
+  assert.ok(erase.includes('["pilot_moments", "subject"]'));
+  const migration = readFileSync(new URL("../../../db/migrations/0039_pilot_moments.sql", import.meta.url), "utf8");
+  for (const col of ["subject", "ref", "circle", "visit", "kind", "lane", "arm", "arm_raw", "seen_at", "ended_at", "seen_s", "nearest_m", "outcome"]) assert.match(migration, new RegExp(`\\n  ${col} `), `0039 has no ${col}`);
+});

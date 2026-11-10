@@ -64,7 +64,11 @@ def test_every_answer_has_a_code_and_codes_round_trip():
 
 def test_the_export_carries_what_the_analysis_reads(root):
     route = (root / "apps/web/src/app/api/pilot/route.ts").read_text()
-    assert "{ stagings: pilotOnly(stagings), events, echo }" in route
+    assert "{ stagings: pilotOnly(stagings), events, echo, moments }" in route
+    # The village's moments (C87, registration §5): every one met, with what moments.py reads of it.
+    pilot_src = (root / "apps/web/src/lib/pilot.ts").read_text()
+    for key in ("ref", "kind", "lane", "arm", "armRaw", "visit", "seenS", "outcome"):
+        assert re.search(rf"\n  {key}: ", pilot_src), key
     assert re.search(r"people,\s*ratings,\s*byPerson", route)
     # The debrief split (registration §2) reads the visit count and whether the debrief was on.
     assert re.search(r"\bvisits,\s*reveal: process\.env\.ECHO_PILOT_REVEAL === \"1\"", route)

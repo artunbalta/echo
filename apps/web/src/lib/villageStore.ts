@@ -18,7 +18,7 @@ import { WRONGS, type Deed, type Home, type Landing, type LifeChange, type Look,
 import { adminClient } from "@/lib/supabaseAdmin";
 import type { DemoVisit, EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
 import type { Bar, CellTraces, ModerationEntry, Report, Traces } from "@/lib/moderationTypes";
-import type { PilotPerson, PilotRating } from "@/lib/pilot";
+import type { PilotMoment, PilotPerson, PilotRating } from "@/lib/pilot";
 import { STUDY, circleTablesOn, type PilotCircle } from "@/lib/pilotCircles";
 
 export interface VillagerMemory {
@@ -142,6 +142,13 @@ export interface VillageStore {
   pilotGroups(): Promise<PilotCircle[] | null>;
   /** A person who asked to join a group and was told no (C85): their row, gone. False when not removed. */
   dropPilotPerson(subject: string): Promise<boolean>;
+  /**
+   * The moments a pilot participant met (C87, migration 0039), each written once by its reference:
+   * the analysis's denominator, never the engine's. False when not written (0039 not applied, say).
+   */
+  savePilotMoments(rows: PilotMoment[]): Promise<boolean>;
+  /** One person's moments, in the order they were met. Null: unreadable (0039 not applied, say). */
+  pilotMomentsOf(subject: string): Promise<PilotMoment[] | null>;
   /**
    * Everything of one person this store holds, gone (§13): in the in-process store, every map, with the
    * world's history kept and made nameless (C44, C45). Against Supabase it does nothing, because
@@ -977,6 +984,51 @@ function supabaseStore(): VillageStore | null {
       if (error) return warn("dropPilotPerson", error.message), false;
       return true;
     },
+    async savePilotMoments(rows) {
+      if (!rows.length) return true;
+      const values = rows.map((m) => ({
+        subject: m.subject,
+        ref: m.ref,
+        circle: m.circle,
+        visit: m.visit,
+        kind: m.kind,
+        lane: m.lane,
+        arm: m.arm,
+        arm_raw: m.armRaw,
+        seen_at: m.seenAt,
+        ended_at: m.endedAt,
+        seen_s: m.seenS,
+        nearest_m: m.nearestM,
+        outcome: m.outcome,
+      }));
+      const { error } = await admin.from("pilot_moments").upsert(values, { onConflict: "subject,ref" });
+      if (error) return warn("savePilotMoments", error.message), false;
+      return true;
+    },
+    async pilotMomentsOf(subject) {
+      const { data, error } = await admin
+        .from("pilot_moments")
+        .select("subject, ref, circle, visit, kind, lane, arm, arm_raw, seen_at, ended_at, seen_s, nearest_m, outcome")
+        .eq("subject", subject)
+        .order("seen_at", { ascending: true })
+        .limit(5000);
+      if (error) return warn("pilotMomentsOf", error.message), null;
+      return (data as { subject: string; ref: string; circle: string | null; visit: number; kind: string; lane: PilotMoment["lane"]; arm: string | null; arm_raw: PilotMoment["armRaw"]; seen_at: string; ended_at: string; seen_s: number; nearest_m: number | null; outcome: string }[]).map((r) => ({
+        subject: r.subject,
+        ref: r.ref,
+        circle: r.circle,
+        visit: r.visit,
+        kind: r.kind,
+        lane: r.lane,
+        arm: r.arm,
+        armRaw: r.arm_raw,
+        seenAt: r.seen_at,
+        endedAt: r.ended_at,
+        seenS: Number(r.seen_s),
+        nearestM: r.nearest_m === null ? null : Number(r.nearest_m),
+        outcome: r.outcome,
+      }));
+    },
     async forgetSubject() {
       return true;
     },
@@ -1041,6 +1093,7 @@ interface MemoryState {
   pilot?: Map<string, PilotPerson>;
   /** By `${rater}|${ratee}`, with the circle the rating was made in. */
   pilotRatings?: Map<string, PilotRating & { circle: string }>;
+  pilotMoments?: Map<string, PilotMoment>;
   circles?: Map<string, PilotCircle>;
   next: number;
 }
@@ -1347,6 +1400,13 @@ function memoryStore(): VillageStore {
       if (p?.waitingSince) memory.pilot!.delete(subject);
       return true;
     },
+    async savePilotMoments(rows) {
+      for (const m of rows) (memory.pilotMoments ??= new Map()).set(`${m.subject}|${m.ref}`, structuredClone(m));
+      return true;
+    },
+    async pilotMomentsOf(subject) {
+      return [...(memory.pilotMoments?.values() ?? [])].filter((m) => m.subject === subject).sort((a, b) => a.seenAt.localeCompare(b.seenAt)).map((m) => structuredClone(m));
+    },
     async forgetSubject(subject) {
       const mine = (k: string) => k.startsWith(`${subject}|`);
       for (const k of [...memory.memories.keys()]) if (mine(k)) memory.memories.delete(k);
@@ -1354,6 +1414,8 @@ function memoryStore(): VillageStore {
       for (const map of [memory.packs, memory.homes, memory.looks, memory.presence, memory.bars, memory.demos, memory.pilot] as (Map<string, unknown> | undefined)[]) map?.delete(subject);
       // C75: what they said of their friends, and what their friends said of them.
       for (const [k, r] of [...(memory.pilotRatings ?? new Map<string, PilotRating & { circle: string }>())]) if (r.rater === subject || r.ratee === subject) memory.pilotRatings!.delete(k);
+      // C87: every moment they met.
+      for (const k of [...(memory.pilotMoments?.keys() ?? [])]) if (mine(k)) memory.pilotMoments!.delete(k);
       // C83: a circle they started stays for its friends, no longer theirs.
       for (const c of memory.circles?.values() ?? []) if (c.createdBy === subject) c.createdBy = null;
       memory.stagings?.delete(subject);
@@ -1429,6 +1491,7 @@ export function resetMemoryStore(): void {
   memory.demos?.clear();
   memory.pilot?.clear();
   memory.pilotRatings?.clear();
+  memory.pilotMoments?.clear();
   memory.circles?.clear();
   memory.next = 1;
 }

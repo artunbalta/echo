@@ -269,11 +269,18 @@ def _engine_echo(export: dict, s: str, exact: Optional["E.Exact"], minutes) -> d
     def without(ids: set[str]):
         return lambda r: (r.get("target_json") or {}).get("id") not in ids
 
+    def bare(r) -> bool:
+        """Not one of the village's moments or hidden things (C86, C87): what the echo had without them (RQ8)."""
+        tid = str((r.get("target_json") or {}).get("id") or "")
+        return not (tid.startswith("moment:") or tid.startswith("egg:"))
+
     targets = [v for v in sorted(starts) if all(w in starts for w in watched_for(v))]
     return {
         "all": replay(lambda r: True),
         "again": {v: replay(on(watched_for(v))) for v in targets},
         "elsewhere": {p: replay(without(staged[p])) for p in PARADIGMS},
+        # RQ8 (registration §5): the same echo, never shown the village's moments.
+        "elsewhere_bare": {p: replay(lambda r, ids=staged[p]: without(ids)(r) and bare(r)) for p in PARADIGMS},
         "curve": {v: {t: replay(until(watched_for(v)[0], t)) for t in minutes} for v in targets if len(watched_for(v)) == 1},
     }
 
@@ -584,6 +591,7 @@ def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci:
                     visit=v,
                     actual=actual,
                     echo=engine_pick(engine[s]["elsewhere"][p], p),
+                    echo_bare=engine_pick(engine[s]["elsewhere_bare"][p], p),
                     echo_axes=layer_pick(s, "elsewhere", "echo_axes", p),
                     echo_2l=layer_pick(s, "elsewhere", "echo_2l", p),
                     twin=snap(p, twin_elsewhere(acts_mean, s, p)),
@@ -613,6 +621,12 @@ def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci:
             "by_paradigm": {p: {w: score([it for it in its if it["paradigm"] == p], w, False) for w in (*WITNESSES, *refs)} for p in PARADIGMS},
         }
     settings["again"]["duels"] = [duel(items["again"], a, b, ci) for a, b in DUELS]
+    # RQ8 (registration §5, estimation): what the village's moments add to the echo that never saw the paradigm.
+    village_echo = {
+        "echo": score(items["elsewhere"], "echo", ci),
+        "echo_bare": score(items["elsewhere"], "echo_bare", ci),
+        "duel": duel(items["elsewhere"], "echo", "echo_bare", ci),
+    }
     settings["again"]["duels_rps"] = [duel_rps(items["again"], a, b, ci) for a, b in DUELS_RPS]
 
     # The curve: the echoes' skill through the first visit, against the witnesses that do not wait.
@@ -703,6 +717,7 @@ def analyze(export: dict, mode: str = "exact", truth: Optional[dict] = None, ci:
         "gap": gap,
         "holier": holier,
         "retest": retest,
+        "village_echo": village_echo,
         "axes": axes,
         "profiles": profiles,
         "shares": shares,

@@ -397,7 +397,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
       <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={pilot ? "pilot" : demo ? "demo" : "world"} />
-      <Moments world={() => world.current} chain={chain} />
+      <Moments world={() => world.current} chain={chain} pilot={pilot ? { n: pilot.n } : null} />
       {pilot ? (
         <PilotOverlay pilot={pilot} />
       ) : (

@@ -84,6 +84,8 @@ export default function PilotReveal({ debrief, lang, onBack }: { debrief: Debrie
       </div>
       <p className="mt-6 text-[15px] leading-relaxed text-parchment/85">{t(lang, "pilot.reveal.tally", { echo: debrief.tally.echo, friends: debrief.tally.friends, said: debrief.tally.said })}</p>
       {looks > 0 ? <p className="mt-3 text-[13px] leading-relaxed text-parchment/60">{t(lang, "pilot.reveal.knows", { looks, share: `${Math.round(share * 100)}%` })}</p> : null}
+      {/* The village's moments were experiments too (C87): said here, at the end, as the registration's ethics asks. */}
+      <p className="mt-3 text-[13px] leading-relaxed text-parchment/60">{t(lang, "pilot.reveal.moments")}</p>
       <p className="mt-3 text-[12px] text-parchment/45">{t(lang, "pilot.reveal.private")}</p>
       {debrief.shareable && met > 0 ? (
         <div className="mt-5">

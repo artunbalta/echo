@@ -330,6 +330,7 @@ const EN = {
   "pilot.reveal.noFriend": "No friend guessed this.",
   "pilot.reveal.tally": "Closest: your echo on {echo}, your friends on {friends}, your own words on {said}. A tie counts for each.",
   "pilot.reveal.knows": "Your echo has now seen you {looks} times in each of these. That is about {share} of what can be known about how you choose there without knowing the day. Each visit adds less, and still adds.",
+  "pilot.reveal.moments": "The village held more than the six. Its everyday moments were small experiments from psychology too: a purse in the grass, a stall nobody minded, someone who slipped on the path, a greeting from the headman. A few took you for someone you were not. Nothing there was right or wrong, and nothing was a test you could fail; what you chose is part of the study, as everyone's is.",
   "pilot.reveal.private": "Only you see this page. Your friends never see what you did, and you never see what any one of them guessed.",
   // Circles (C83): "who knows you best" for any group of friends.
   "pilot.circle.title": "Who knows you best?",
@@ -684,6 +685,7 @@ const TR: Record<Key, string> = {
   "pilot.reveal.noFriend": "Bunu hiçbir arkadaşın tahmin etmedi.",
   "pilot.reveal.tally": "En yakın: yankın {echo} durumda, arkadaşların {friends}, kendi sözlerin {said}. Beraberlikte her biri sayılır.",
   "pilot.reveal.knows": "Yankın seni artık bunların her birinde {looks} kez gördü. Bu, günü bilmeden orada nasıl seçtiğin hakkında bilinebileceklerin yaklaşık {share} kadarı. Her ziyaret daha az ekler, ama yine ekler.",
+  "pilot.reveal.moments": "Köyde altı sahneden fazlası vardı. Gündelik anlar da küçük psikoloji deneyleriydi: çimenlerde bir kese, başında kimse olmayan bir tezgâh, yolda kayıp düşen biri, muhtarın selamı. Birkaçında seni başka biri sandılar. Hiçbirinin doğrusu ya da yanlışı yoktu, hiçbiri geçilecek bir sınav değildi; seçtiklerin, herkesinki gibi, çalışmanın bir parçası.",
   "pilot.reveal.private": "Bu sayfayı yalnızca sen görüyorsun. Arkadaşların ne yaptığını hiç görmez; sen de tek bir arkadaşının tahminini göremezsin.",
   "pilot.circle.title": "Seni en iyi kim tanıyor?",
   "pilot.circle.intro": "Bir arkadaş çevresi, deniz kenarındaki bir köyde birer gün arayla {visits} kez 25 dakika geçirir. İlk ziyaretinden önce altı durumda ne yapacağını söylersin; her ziyaretten sonra arkadaşlarının ne yapacağını tahmin edersin. Son ziyaretinden sonra seni en iyi kimin tanıdığını görürsün: kendi sözlerin mi, arkadaşların mı, yoksa yankın mı. Yankın, köyün yaptıklarından çıkardığı senin resmin.",

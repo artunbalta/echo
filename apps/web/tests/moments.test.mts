@@ -437,3 +437,80 @@ test("C87: the old man stops his tale before the end and tells it to whoever wai
     delete (globalThis as { window?: unknown }).window;
   }
 });
+
+test("C87: every moment the stranger saw is reported once, as it ends, with its arm and what became of it; an errand's end too", async () => {
+  const probe = village();
+  const start = startOf(probe.plan);
+  const w = world(start);
+  w.me.heading = start.heading;
+  const layer = momentsLayer({ clock: worldClock(WORLD_EPOCH) });
+  const seen: import("../src/game/world/momentsLayer").SeenMoment[] = [];
+  layer.onSeen((row) => seen.push(row));
+  try {
+    await layer.build(w.ctx as never, new AbortController().signal);
+    // A moment ahead, met and acted on: reported once, as it ends, with the verb chosen.
+    w.run(layer, 40, () => layer.things(w.me.x, w.me.y).some((t) => t.ref.startsWith("moment:") && MOMENTS[t.kind as MomentKind]?.lane === "people"));
+    const t = layer.things(w.me.x, w.me.y).find((x) => x.ref.startsWith("moment:") && MOMENTS[x.kind as MomentKind]?.lane === "people")!;
+    assert.ok(t, "nothing ahead to act on");
+    // Walk up to it, as acting needs (within reach), facing it.
+    w.me.heading = Math.atan2(t.y - w.me.y, t.x - w.me.x);
+    w.me.x = t.x - Math.cos(w.me.heading) * 2;
+    w.me.y = t.y - Math.sin(w.me.heading) * 2;
+    w.run(layer, 2);
+    const verb = verbsOf(t.kind)[0]!.id;
+    layer.acted(t.ref, verb);
+    w.run(layer, 30, () => seen.some((r) => r.ref === t.ref));
+    const row = seen.find((r) => r.ref === t.ref)!;
+    assert.ok(row, `${t.kind}, acted on, was never reported`);
+    assert.equal(row.outcome, verb);
+    assert.equal(row.kind, t.kind);
+    assert.equal(row.arm, t.arm?.id ?? null, "reported without the arm it was met in");
+    assert.ok(row.seenS >= 1 && row.nearestM !== null && row.nearestM < 12, `seen ${row.seenS} s, ${row.nearestM} m`);
+    assert.ok(Date.parse(row.endedAt) >= Date.parse(row.seenAt));
+    // Nothing is reported twice, and every report is of something seen or done.
+    w.run(layer, 120);
+    assert.equal(new Set(seen.map((r) => r.ref)).size, seen.length, "a moment reported twice");
+    for (const r of seen) assert.ok(r.seenS >= 1 || !["none", "passed", "left", "expired", "told"].includes(r.outcome), `${r.kind} reported unseen`);
+    // What is still going on when the page closes is reported as it stands.
+    const before = seen.length;
+    layer.settle();
+    assert.ok(seen.length >= before);
+    for (const r of seen.slice(before)) assert.ok(r.outcome.length > 0);
+  } finally {
+    layer.dispose?.();
+    w.restore();
+  }
+});
+
+test("C87: a moment the stranger never saw is not reported", async () => {
+  const probe = village();
+  const start = startOf(probe.plan);
+  const w = world(start);
+  w.me.heading = start.heading;
+  const layer = momentsLayer({ clock: worldClock(WORLD_EPOCH) });
+  const seen: string[] = [];
+  layer.onSeen((row) => seen.push(row.kind));
+  try {
+    await layer.build(w.ctx as never, new AbortController().signal);
+    // As each moment begins ahead, the stranger turns their back and walks away from it, fast.
+    for (let k = 0; k < 6; k++) {
+      w.run(layer, 30, () => layer.current() !== null);
+      const m = layer.current();
+      if (!m) continue;
+      w.me.heading = Math.atan2(w.me.y - m.y, w.me.x - m.x);
+      for (let i = 0; i < 20; i++) {
+        w.me.x += Math.cos(w.me.heading) * 2;
+        w.me.y += Math.sin(w.me.heading) * 2;
+        w.run(layer, 0.2);
+      }
+      w.me.x = start.x;
+      w.me.y = start.y;
+      w.me.heading = start.heading;
+    }
+    // Moments ahead are set in front of the view, so a few are glimpsed before the turn; most never are.
+    assert.ok(seen.length <= 3, `reported ${seen.length} never really seen: ${seen.join(", ")}`);
+  } finally {
+    layer.dispose?.();
+    w.restore();
+  }
+});

@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from echo_pilot import report  # noqa: E402
+from echo_pilot.moments import village  # noqa: E402
 from echo_pilot.analysis import analyze, before_debrief  # noqa: E402
 from echo_pilot.simulate import make_group  # noqa: E402
 
@@ -50,6 +51,8 @@ def main() -> int:
         export, truth = json.loads(Path(args.export).read_text()), None
     mode = "fast" if args.fast or args.simulate else "exact"
     results = analyze(export, mode=mode, truth=truth)
+    # The village's moments (registration §5, RQ6–RQ7, exploratory): what was met besides the six, and what was done.
+    results["village"] = village(export)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     stem = f"sim-{args.n}-{args.seed}" if args.simulate else "pilot"

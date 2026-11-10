@@ -88,6 +88,8 @@ const USER_KEYED: [string, string][] = [
   ["pilot_people", "subject"],
   ["pilot_ratings", "rater"],
   ["pilot_ratings", "ratee"],
+  // C87. Every moment they met in their visits, and what became of it.
+  ["pilot_moments", "subject"],
 ];
 
 // table → column to NULL rather than delete: rows that are the shared world's history now, and point
@@ -102,9 +104,9 @@ const USER_NAMED: [string, string][] = [
   // C83. A circle they started stays for the friends in it, and stops being theirs.
   ["pilot_circles", "created_by"],
 ];
-// Tables that are not there until their migration is applied (0037 for circles): absent, nothing of the
+// Tables that are not there until their migration is applied (0037 for circles, 0039 for moments): absent, nothing of the
 // person's can be in them, so a 404 is not a failure.
-const NOT_YET: ReadonlySet<string> = new Set(["pilot_circles"]);
+const NOT_YET: ReadonlySet<string> = new Set(["pilot_circles", "pilot_moments"]);
 
 /** One table's rows for one person, deleted by REST: true, or why not. */
 async function supabaseDeleteRow(table: string, col: string, uid: string): Promise<true | string> {

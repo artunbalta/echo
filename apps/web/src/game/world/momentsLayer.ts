@@ -79,6 +79,13 @@ export interface MomentsLayer extends WorldLayer {
   onPassed(fn: ((kind: MomentKind, ref: string, distM: number, arm: MomentArm | null) => void) | null): void;
   /** Called once when a promise made here came to nothing: the loaf never brought (C87). */
   onBroken(fn: ((kind: MomentKind, ref: string, arm: MomentArm | null) => void) | null): void;
+  /**
+   * Called once for every moment the stranger saw, when it is over (C87): its arm, how long it was in view,
+   * how near they came, and what became of it, acted on or not. The pilot's research record.
+   */
+  onSeen(fn: ((row: SeenMoment) => void) | null): void;
+  /** Report every moment still going on, as it stands (the page is closing). */
+  settle(): void;
   /** The moment ahead now, in the people stream (for tests and a played visit's log), or null. */
   current(): { kind: MomentKind; x: number; y: number; state: "arriving" | "live" | "ending" } | null;
   /** Every moment going on now, in every stream (C87). */
@@ -87,6 +94,22 @@ export interface MomentsLayer extends WorldLayer {
   errand(): { kind: "carry" | "escort"; from: MomentKind; x: number; y: number; since: number } | null;
   /** The hidden things, and which this stranger has found. */
   eggs(): readonly (Egg & { found: boolean })[];
+}
+
+/** One moment the stranger saw, as it ended (C87): what the pilot's research record holds of it. */
+export interface SeenMoment {
+  ref: string;
+  kind: MomentKind;
+  lane: MomentLane | "errand";
+  arm: string | null;
+  armRaw: Record<string, number | string> | null;
+  seenAt: string;
+  endedAt: string;
+  /** Seconds it was in view, near. */
+  seenS: number;
+  nearestM: number | null;
+  /** The verb chosen, `passed`, `left`, `expired`, `told`, `none`, `open`; for an errand, how it ended. */
+  outcome: string;
 }
 
 interface Live {
@@ -124,6 +147,11 @@ interface Live {
   variant: number;
   /** For a loaf to carry: the door it is carried to, fixed when it begins (so the promise can be kept). */
   errandTo: (P & { facing: number }) | null;
+  /** C87: how long it has been in view and near, since when, the nearest the stranger came, and whether it was reported. */
+  seenS: number;
+  seenAt: number | null;
+  nearest: number;
+  reported: boolean;
 }
 
 interface Errand {
@@ -147,6 +175,7 @@ interface Errand {
   away: number;
   done: { at: number; how: "kept" | "arrived" | "broken" | "gone" } | null;
   spoke: boolean;
+  reported: boolean;
 }
 
 interface Figure {
@@ -163,6 +192,10 @@ interface Figure {
 
 const WALK_MPS = 1.4;
 const RUN_MPS = 2.6;
+/** Seen (C87): within this far, within this angle either side of the way the view looks, for this long. */
+const SEEN_M = 12;
+const SEEN_HALF_ANGLE = Math.PI / 3;
+const SEEN_MIN_S = 1;
 const APPLES = 8;
 const FOUND_KEY = (cell: string) => `echo.eggs.${cell}`;
 const MET_KEY = (cell: string) => `echo.moments.${cell}`;
@@ -314,6 +347,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
   let found = new Set<string>();
   let passedFn: ((kind: MomentKind, ref: string, distM: number, arm: MomentArm | null) => void) | null = null;
   let brokenFn: ((kind: MomentKind, ref: string, arm: MomentArm | null) => void) | null = null;
+  let seenFn: ((row: SeenMoment) => void) | null = null;
   let me: P = { x: 0, y: 0 };
   let nowS = 0;
   let dark = false;
@@ -674,7 +708,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       id, kind: next.kind, lane, arm, spot, facing, entry, exit, t0: now, arrive: 0, near: false, outcome: null, aim: null, looks: [], longAt: null,
       path, at: path ? path.from : spot, stoppedAt: null, goOnAt: null, met: false,
       pressure: errand && !errand.done && errand.kind === "carry" ? (errand.arm?.context?.time_pressure ?? 0) : 0,
-      spoke: false, spokeAt: 0, step: 0, variant, errandTo,
+      spoke: false, spokeAt: 0, step: 0, variant, errandTo, seenS: 0, seenAt: null, nearest: Infinity, reported: false,
     };
     const c86People = l.kind === "village-dance" ? 6 : l.kind === "ball-game" || l.kind === "well-queue" ? 3 : l.kind === "well-custom" ? 2 : 1;
     const c87 = def.paradigm !== "C86";
@@ -699,8 +733,52 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
     else lanes[lane].live = l;
   };
 
+  /** A moment of the page's clock (seconds), as a wall-clock time. */
+  const wall = (s: number) => new Date(Date.now() - (performance.now() / 1000 - s) * 1000).toISOString();
+  const ACTED_NOT = new Set(["passed", "expired", "left", "told"]);
+
+  /** Report a moment once, when it is over (or the page closes on it): only one the stranger saw, or acted on. */
+  const report = (l: Live, now: number, open = false) => {
+    if (l.reported) return;
+    l.reported = true;
+    const acted = !!l.outcome && !ACTED_NOT.has(l.outcome.verb);
+    if (l.seenS < SEEN_MIN_S && !acted) return;
+    const armRaw: Record<string, number | string> = { ...(l.arm?.raw ?? {}) };
+    // Met while carrying a loaf someone is waiting on: under time pressure (Darley & Batson).
+    if (l.pressure > 0) armRaw.time_pressure = l.pressure;
+    seenFn?.({
+      ref: `moment:${l.id}`,
+      kind: l.kind,
+      lane: l.lane,
+      arm: l.arm?.id ?? null,
+      armRaw: Object.keys(armRaw).length ? armRaw : null,
+      seenAt: wall(l.seenAt ?? l.t0),
+      endedAt: wall(now),
+      seenS: Math.round(l.seenS * 10) / 10,
+      nearestM: Number.isFinite(l.nearest) ? Math.round(l.nearest * 10) / 10 : null,
+      outcome: l.outcome?.verb ?? (open ? "open" : "none"),
+    });
+  };
+  const reportErrand = (e: Errand, now: number) => {
+    if (e.reported) return;
+    e.reported = true;
+    seenFn?.({
+      ref: `${e.ref}|errand`,
+      kind: e.from,
+      lane: "errand",
+      arm: e.arm?.id ?? null,
+      armRaw: e.arm?.raw ? { ...e.arm.raw } : null,
+      seenAt: wall(e.since),
+      endedAt: wall(e.done?.at ?? now),
+      seenS: Math.round(((e.done?.at ?? now) - e.since) * 10) / 10,
+      nearestM: null,
+      outcome: e.done?.how ?? "open",
+    });
+  };
+
   /** End a moment of a stream: the next comes a few seconds later. */
   const close = (lane: MomentLane, now: number, l: Live) => {
+    report(l, now);
     if (lane === "wayside") {
       waysides = waysides.filter((w) => w !== l);
       waysideNextAt = Math.max(waysideNextAt, now + MOMENT.lanes.wayside.gapS[0]);
@@ -1453,6 +1531,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       away: 0,
       done: null,
       spoke: false,
+      reported: false,
     };
     if (l.kind === "bread-errand" || l.kind === "heavy-jugs") carry(true);
   };
@@ -1600,10 +1679,28 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       props.fireLight.intensity = 0;
       crowd.begin();
       let lamps = 0;
+      // The way the view looks, on the ground (C87: what is in front of it is what the stranger sees).
+      const fwd = new THREE.Vector3();
+      ctx.camera.getWorldDirection(fwd);
+      const [vx, vy] = frame.toLocalM((ctx.camera.position.x + fwd.x * 10) / frame.tileM, (ctx.camera.position.z + fwd.z * 10) / frame.tileM);
+      const [vcx, vcy] = frame.toLocalM(ctx.camera.position.x / frame.tileM, ctx.camera.position.z / frame.tileM);
+      const view = Math.atan2(vy - vcy, vx - vcx);
       for (const l of lives()) {
         const t = now - l.t0;
         const def = MOMENTS[l.kind];
         if (l.lane === "passer") stepPasser(l, dt, now);
+        // Seen: near, in front of the view, while it is going on (C87); the sky is over wherever they look.
+        if (!l.outcome) {
+          const p = l.lane === "passer" ? l.at : def.where === "sky" ? me : l.spot;
+          const d = def.where === "sky" ? 0 : dist(me, p);
+          l.nearest = Math.min(l.nearest, d);
+          const off = Math.abs(Math.atan2(Math.sin(toward({ x: vcx, y: vcy }, p) - view), Math.cos(toward({ x: vcx, y: vcy }, p) - view)));
+          const inView = def.where === "sky" || (def.where === "sea" ? off < SEEN_HALF_ANGLE : d <= SEEN_M && off < SEEN_HALF_ANGLE);
+          if (inView && t >= Math.min(l.arrive, 1)) {
+            l.seenS += dt;
+            l.seenAt ??= now;
+          }
+        }
         const thing = thingAt(l, t);
         // What its people say, once, as the stranger comes near (the child who threw wide: once it has landed).
         const ready = l.kind === "stray-ball" ? l.longAt !== null && t >= l.longAt + 0.3 : t >= l.arrive;
@@ -1621,10 +1718,12 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
               l.step = 1;
               sayLine(TALE_PAUSE);
             } else if (l.step === 1 && now - l.spokeAt > 9 + pause) {
-              // He finishes it for whoever stayed to hear; nobody is asked anything.
+              // He finishes it for whoever stayed to hear; nobody is asked anything. Heard it (`told`), or
+              // had gone by then (`left`): the curiosity read is whether they waited (C87).
               l.step = 2;
-              if (dist(me, l.spot) < 12) sayLine(TALES[l.variant % TALES.length]!.end);
-              l.outcome = { verb: "told", at: now };
+              const heard = dist(me, l.spot) < 12;
+              if (heard) sayLine(TALES[l.variant % TALES.length]!.end);
+              l.outcome = { verb: heard ? "told" : "left", at: now };
             }
           } else if (l.kind === "knucklebones" && l.step === 0 && now - l.spokeAt > 3) {
             l.step = 1;
@@ -1688,6 +1787,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         if (l.lane === "passer" && lanes.passer.live === l && now - l.t0 > 60) close("passer", now, l);
       }
       if (errand) {
+        if (errand.done) reportErrand(errand, now);
         const f = stepErrand(errand, dt, now);
         if (f) {
           const [tx, ty] = frame.fromLocalM(f.x, f.y);
@@ -1699,7 +1799,10 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
             flame.visible = true;
             lamps++;
           }
-        } else if (errand.done) errand = null;
+        } else if (errand.done) {
+          reportErrand(errand, now);
+          errand = null;
+        }
       }
       crowd.end();
     },
@@ -1765,6 +1868,16 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
 
     onBroken(fn) {
       brokenFn = fn;
+    },
+
+    onSeen(fn) {
+      seenFn = fn;
+    },
+
+    settle() {
+      const now = performance.now() / 1000;
+      for (const l of lives()) report(l, now, true);
+      if (errand) reportErrand(errand, now);
     },
 
     current() {

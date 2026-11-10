@@ -5929,3 +5929,82 @@ moments were 40–50 s of walking apart.
 - helping someone who just littered (indirect punishment);
 - self-disclosure that deepens over the three visits;
 - a promise that spans visits.
+
+## C88 — the moments as research: who met what, an analysis, the registration and the paper
+
+What it answers: the owner asked whether C87's moments are recorded in a way the paper can use, whether
+their effect on behaviour is noted, and whether the paper now covers them. The answer was "partly":
+
+- every act and every measured walk-past was stored with its arm and exported;
+- the engine echo, which the registration's "echo" witness replays from every event, already learned from
+  them;
+- but nothing recorded a moment seen and left alone, so no arm's share had a denominator;
+- and neither the paper, nor the registration, nor the debrief, nor the ethics text mentioned them.
+
+This decision adds the missing parts.
+
+- **Who met what** (`momentsLayer.ts` `onSeen`, `Moments.tsx`, `POST /api/pilot?op=moments`, migration
+  `0039_pilot_moments.sql`).
+  - **What a moment is in the record.** Every moment the stranger saw is reported once, when it is over.
+    "Seen" means within 12 m and within 60° of the view for at least 1 s. The report gives:
+    - the kind and the arm met;
+    - how long the moment was in view;
+    - the nearest the stranger came;
+    - the outcome: the verb chosen, `passed`, `left`, `expired`, `told`, `none`, or how an errand ended.
+  - **Sending.** Only in a pilot visit, the page batches the reports every 20 s, and once more as it
+    closes (`keepalive`).
+  - **Storing.** The route takes them only from someone in the study who said yes to research, in a visit
+    or just out of one. It checks each row (`validMoment`) and writes it once by its reference.
+  - **Never the engine's.** The record lives in its own table, so the ML's behaviour index and the echo
+    ledger see none of it.
+  - **Export and erasure.** It is in the export (`byPerson[s].moments`, null where unreadable) and erased
+    with the person.
+  - **The tale.** It now ends `told` only for someone who stayed to hear it, and `left` otherwise.
+- **The analysis** (`research/pilot/echo_pilot/moments.py`, `analysis.py`).
+  - **RQ6, the contrasts.** Each experiment's registered contrast is the share doing the act in one arm
+    against the other. The denominator is everyone who saw it, or, for a decision, those who chose. Each
+    contrast has a Wilson interval per arm and a people bootstrap for the difference. Effort held in the
+    two communal-work moments is read from the act's own event. Help under a loaf's time pressure is
+    compared with help otherwise.
+  - **RQ7, consistency.** Per family (help, honesty, courtesy, conformity, order, curiosity): test–retest
+    from visit to visit, and split-half across the family's kinds.
+  - **RQ8, what the village adds.** In *elsewhere*, the engine echo is set against the same echo never
+    shown a moment (`village_echo`).
+  - **Where it runs.** `analyze.py` writes the village analysis into the results.
+- **The registration** (`preregistration.template.md`).
+  - The village's design and its arms go in §2, beside the six. The six stay unmanipulated.
+  - RQ6–RQ8 and H6–H8 are added as estimation only: exploratory at pilot size, with no tests and no
+    correction. The registered directions are tabled.
+  - The moments' variables are defined, including the seen rule and the denominators.
+  - The ethics section names the mild deceptions.
+  - H1–H5, the power and the analysis of the six are untouched.
+- **The paper** (`draft.template.md`).
+  - Study 3 gains "The village around the six", ending in the question the moments let it ask: can many
+    looks at other situations stand in for one look at the situation itself?
+  - The Supplementary Information gains S5, a table of the thirty moments with their paradigm, arm, label
+    and grade.
+  - The references grow from 27 to 70.
+  - Rebuilt by `build.py`; no registered number changed.
+- **The debrief** (`PilotReveal.tsx`, `pilot.reveal.moments`, English and Turkish). After the last visit it
+  says that the everyday moments were small experiments, that a few took the person for someone they were
+  not, and that nothing was right or wrong.
+- **The ethics text** (`research/paper/ethics-moments.md`) is for the application. It covers what
+  participants meet, the mild deceptions, the emotional content, what is recorded and where, the debrief,
+  erasure, and how the moments stay apart from the six.
+- **One file for Supabase.** `~/Desktop/echo-supabase-0032-0039.sql`, verified on PG16:
+  - the schema and the ledger are identical to the runner's;
+  - a re-run refuses;
+  - an injected failure leaves 0031.
+
+  If 0032–0038 has already been applied, use `echo-supabase-0039.sql` instead.
+- **Tests.**
+  - Web `moments.test.mts` (+2): a moment seen is reported once with its arm and its outcome, and one
+    never seen is not.
+  - Web `pilot.test.mts` (+1): only in a visit, only moments, once each, in the export, erased.
+  - Research `test_moments.py` (7): shares with their denominators, contrasts, effort, time pressure,
+    consistency, an unreadable person, and the echo with and without moments.
+  - Research `test_contract.py`: the export carries what the analysis reads.
+  - Web 528/528, research 53/53.
+
+**Not decided here:** whether the moments become a study of their own, powered on the open world's numbers
+rather than twenty friends.
