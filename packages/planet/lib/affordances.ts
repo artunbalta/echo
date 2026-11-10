@@ -53,6 +53,11 @@ export const OTHER_THINGS = [
   // Moments and hidden things (C86, `moments.ts`).
   "spilled-basket", "stuck-cart", "ball-game", "stray-ball", "well-custom", "well-queue", "village-dance", "loose-hen", "falling-stars", "banging-door",
   "hollow-stump", "message-bottle", "still-pool", "lookout-rock", "buried-box",
+  // A village that is never empty (C87, `moments.ts`): people, passers-by, and things by the way.
+  "fallen-elder", "asch-boats", "looking-up", "teasing", "imece-wall", "net-haul", "musician", "wrong-basket", "tea-invite", "tangled-net",
+  "bread-errand", "bread-mother", "drunk-or-ill", "campfire", "crying-alone", "dolphins", "bench-sit", "unfinished-tale", "knucklebones",
+  "greeting", "rude-bump", "narrow-way", "ask-way", "heavy-jugs", "dark-lantern",
+  "lost-purse", "open-gate", "litter", "caught-lamb", "woodpile", "honey-stall",
 ] as const;
 export type OtherThing = (typeof OTHER_THINGS)[number];
 
@@ -70,8 +75,8 @@ export type DeedReading = "help" | "kindness" | "respect" | "harm" | "theft" | "
 
 export const WRONGS: ReadonlySet<DeedReading> = new Set(["harm", "theft", "trespass", "disrespect"]);
 
-/** `D` since C55: D11, the pet cue, is the one D-channel cue an act (not a conversation) sends. */
-export type CueChannel = "A" | "C" | "D" | "F" | "G" | "H" | "I" | "J";
+/** `D` since C55: D11, the pet cue, is the one D-channel cue an act (not a conversation) sends. `E` since C87: closing an exchange gracefully, or not at all (E4, E6). */
+export type CueChannel = "A" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J";
 
 export interface Measure {
   /** The line in cue-catalog.md. */
@@ -360,6 +365,130 @@ const OTHERS: Record<VillageThing | OtherThing, Verb[]> = {
   "banging-door": [
     v({ id: "shut", label: "Pull the door shut", holdS: 1.5, pose: "push", reachM: 2.6, stakes: "low", measure: m("J5", "stack_tidy", "named"), effect: null, deed: null, owner: "household", beat: "It catches, and the house goes quiet." }),
   ],
+  // A village that is never empty (C87, `moments.ts`): each a published experiment in the village's clothes,
+  // under a label ingest.py reads by name (C7), and none a label of the pilot's six. Walking past one is
+  // measured by the moments layer, as each names.
+  "fallen-elder": [
+    // The bystander effect: the same old man, with two onlookers standing by or nobody (the arm).
+    v({ id: "help-up", label: "Help him to his feet", holdS: 3, pose: "kneel", reachM: 2.6, stakes: "medium", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "He leans on you and gets up, and tries the ankle. \"It will hold. Thank you.\"" }),
+  ],
+  "asch-boats": [
+    // Asch: the red boat is plainly the shorter, and they are all sure it is the longer (or one of them is not).
+    v({ id: "agree", label: "Agree, the red one", holdS: 1.2, pose: "still", reachM: 3.4, stakes: "low", measure: m("H3", "conform_custom", "named"), effect: null, deed: null, owner: "household", beat: "They nod, satisfied, and go back to their nets." }),
+    v({ id: "differ", label: "Say the blue one is longer", holdS: 1.2, pose: "still", reachM: 3.4, stakes: "low", measure: m("H3", "deviate_custom", "named"), effect: null, deed: null, owner: "household", beat: "They look at the boats again. One of them shrugs." }),
+  ],
+  "looking-up": [
+    v({ id: "look-up", label: "Stop and look up with them", holdS: 2, pose: "still", reachM: 4.2, stakes: "low", measure: m("H3", "conform_custom", "named"), effect: null, deed: null, owner: "none", beat: "You look where they look. A stork, building on the roof, one stick at a time." }),
+  ],
+  teasing: [
+    v({ id: "laugh", label: "Laugh along", holdS: 1, pose: "still", reachM: 3.8, stakes: "low", measure: m("D9", "join_exclusion", "named"), effect: null, deed: null, owner: "household", beat: "They laugh louder. The small one looks at the ground." }),
+    v({ id: "stop", label: "Tell them to leave him be", holdS: 1.5, pose: "still", reachM: 3.8, stakes: "medium", measure: m("D3", "asserts", "named"), effect: null, deed: null, owner: "household", beat: "They mutter, and drift off. The small one picks up his kite." }),
+    v({ id: "stand-by", label: "Go and stand by the small one", holdS: 2, pose: "still", reachM: 3.8, stakes: "medium", measure: m("G1", "include_marginal", "named"), effect: null, deed: null, owner: "household", beat: "You stand by him. Soon they find something else to do." }),
+  ],
+  "imece-wall": [
+    // Communal work (imece), and how hard one works in a crew of four or beside one old man (the arm).
+    v({ id: "lend-hand", label: "Lend a hand with the wall", holdS: 10, pose: "build", reachM: 3.4, stakes: "medium", measure: m("C11", "work_shift", "named", "shirk_work"), effect: null, deed: null, owner: "household", beat: "Stone by stone, hand to hand. The wall stands a row higher." }),
+  ],
+  "net-haul": [
+    // Social loafing: one fisher alone at the rope, or three (the arm); how long you pull is how hard you worked.
+    v({ id: "haul", label: "Take hold of the rope and pull", holdS: 8, pose: "push", reachM: 3.4, stakes: "medium", measure: m("C11", "work_shift", "named", "shirk_work"), effect: null, deed: null, owner: "household", beat: "It comes in heavy and silver, up onto the sand. Someone claps you on the shoulder." }),
+  ],
+  musician: [
+    v({ id: "listen", label: "Sit and listen", holdS: 0, pose: "sit", reachM: 4.6, stakes: "low", measure: m("J2", "gaze_reflection", "named"), effect: null, deed: null, owner: "none", beat: "The tune goes on, and you stay for it." }),
+  ],
+  "wrong-basket": [
+    v({ id: "not-mine", label: "Tell her it is not for you", holdS: 1.2, pose: "still", reachM: 3.2, stakes: "medium", measure: m("H2", "return_cache", "named"), effect: null, deed: null, owner: "household", beat: "She laughs at herself, and looks round for the right one." }),
+    v({ id: "take-it", label: "Take it anyway", holdS: 1.2, pose: "gather", reachM: 3.2, stakes: "high", measure: m("H2", "keep_cache", "named"), effect: null, deed: null, owner: "household", raw: { taken01: 1 }, beat: "A basket of fish, meant for somebody else." }),
+  ],
+  "tea-invite": [
+    v({ id: "sit-tea", label: "Sit down with her for tea", holdS: 0, pose: "sit", reachM: 3.2, stakes: "low", measure: m("G1", "group_join", "named"), effect: null, deed: null, owner: "household", beat: "Tea in a small glass, too hot to hold. She tells you about her sons." }),
+    v({ id: "thank", label: "Thank her, and go on", holdS: 1, pose: "still", reachM: 3.2, stakes: "low", measure: m("E4", "close_graceful", "named"), effect: null, deed: null, owner: "household", beat: "\"Another time, then.\" She waves you on." }),
+  ],
+  "tangled-net": [
+    // Persistence: as long as you keep at it (the knots slip back now and then), and it is read by how long.
+    v({ id: "untangle", label: "Help him untangle it", holdS: 9, pose: "gather", reachM: 3.2, stakes: "medium", measure: m("G8", "repair", "named"), effect: null, deed: null, owner: "household", beat: "Knot after knot, and at last it lies flat." }),
+  ],
+  "bread-errand": [
+    // A promise: to take the loaf to her mother's door. Kept there (`bread-mother`), or broken by never coming.
+    v({ id: "take", label: "Take the bread to her mother", holdS: 1.5, pose: "gather", reachM: 3.2, stakes: "medium", measure: m("G7", "promise_made", "named"), effect: null, deed: null, owner: "household", beat: "\"The house just along there. She will be waiting.\"" }),
+  ],
+  "bread-mother": [
+    v({ id: "give-bread", label: "Give her the bread", holdS: 1.2, pose: "gather", reachM: 3, stakes: "low", measure: m("G7", "promise_kept", "named"), effect: null, deed: null, owner: "household", beat: "She takes it in both hands, and asks after her daughter." }),
+  ],
+  "drunk-or-ill": [
+    // Piliavin: the same man on the path, with a cane beside him or a bottle (the arm).
+    v({ id: "help-home", label: "Help him home", holdS: 4, pose: "kneel", reachM: 2.6, stakes: "medium", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "You get him up. He leans on you most of the way, and thanks you at his door." }),
+  ],
+  campfire: [
+    v({ id: "sit-fire", label: "Sit down by the fire", holdS: 0, pose: "sit", reachM: 3.8, stakes: "low", measure: m("G1", "group_join", "named"), effect: null, deed: null, owner: "household", beat: "Someone shifts along to make room. The story goes on." }),
+    v({ id: "listen-edge", label: "Stand at the edge and listen", holdS: 3, pose: "still", reachM: 4.4, stakes: "low", measure: m("A4", "group_observe", "named"), effect: null, deed: null, owner: "household", beat: "You listen from the dark, just outside the light." }),
+  ],
+  "crying-alone": [
+    v({ id: "sit-with", label: "Sit with her a while", holdS: 5, pose: "sit", reachM: 3, stakes: "medium", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "She does not say what it is. After a while she wipes her eyes and thanks you." }),
+  ],
+  dolphins: [
+    v({ id: "watch", label: "Stop and watch them", holdS: 4, pose: "still", reachM: 1, stakes: "low", measure: m("J2", "gaze_reflection", "named"), effect: null, deed: null, owner: "none", beat: "They come up together, and go under, and come up again further out." }),
+  ],
+  greeting: [
+    // Courtesy across status: the same greeting from the headman, a water-carrier, or anybody (the arm).
+    v({ id: "greet-warm", label: "Greet them warmly", holdS: 1, pose: "still", reachM: 3.6, stakes: "low", measure: m("G2", "opener_warm", "named"), effect: null, deed: null, owner: "household", beat: "They smile, and say something kind about the weather." }),
+    v({ id: "nod", label: "Nod back", holdS: 0.6, pose: "still", reachM: 3.6, stakes: "low", measure: m("G3", "opener_neutral", "named"), effect: null, deed: null, owner: "household", beat: "A nod for a nod." }),
+  ],
+  "rude-bump": [
+    v({ id: "sorry", label: "Say sorry anyway", holdS: 1, pose: "still", reachM: 3.2, stakes: "low", measure: m("G8", "cold_response_deescalate", "named"), effect: null, deed: null, owner: "household", beat: "He grunts, and goes on." }),
+    v({ id: "back", label: "Tell him to watch where he is going", holdS: 1, pose: "still", reachM: 3.2, stakes: "medium", measure: m("D8", "cold_response_persist", "named"), effect: null, deed: null, owner: "household", beat: "He stops, glares, and thinks better of it." }),
+  ],
+  "narrow-way": [
+    v({ id: "aside", label: "Step aside for her", holdS: 1, pose: "still", reachM: 3.2, stakes: "low", measure: m("H2", "let_others_ahead", "named"), effect: null, deed: null, owner: "household", beat: "She edges past with her jugs, and thanks you." }),
+    v({ id: "first", label: "Keep to your way", holdS: 1, pose: "still", reachM: 3.2, stakes: "low", measure: m("D3", "asserts", "named"), effect: null, deed: null, owner: "household", beat: "She steps off the path to let you by." }),
+  ],
+  "ask-way": [
+    v({ id: "walk", label: "Walk them to the harbour", holdS: 1.5, pose: "still", reachM: 3.6, stakes: "medium", measure: m("H9", "help_at_cost", "named"), effect: null, deed: null, owner: "household", beat: "\"This way.\" They fall in beside you." }),
+    v({ id: "point", label: "Point the way", holdS: 1, pose: "still", reachM: 3.6, stakes: "low", measure: m("G15", "transact_neutral", "named"), effect: null, deed: null, owner: "household", beat: "They thank you, and set off the way you pointed." }),
+  ],
+  "heavy-jugs": [
+    v({ id: "carry", label: "Carry a jug for her", holdS: 1.5, pose: "gather", reachM: 3.2, stakes: "medium", measure: m("H9", "help_at_cost", "named"), effect: null, deed: null, owner: "household", beat: "It is heavier than it looked. She walks beside you, talking." }),
+  ],
+  "dark-lantern": [
+    v({ id: "walk", label: "Walk her to her door", holdS: 1.5, pose: "still", reachM: 3.2, stakes: "medium", measure: m("H9", "help_at_cost", "named"), effect: null, deed: null, owner: "household", beat: "She takes your arm in the dark." }),
+  ],
+  "lost-purse": [
+    // Civic honesty (Cohn et al. 2019): two coins in it, or nine (the arm).
+    v({ id: "leave", label: "Set it on the wall for whoever lost it", holdS: 1.5, pose: "gather", reachM: 1.9, stakes: "medium", measure: m("H2", "return_cache", "named"), effect: null, deed: null, owner: "household", beat: "You set it up where it will be seen, and leave it shut." }),
+    v({ id: "take-one", label: "Take a coin", holdS: 1.5, pose: "gather", reachM: 1.9, stakes: "medium", measure: m("H2", "keep_cache", "named", "abandon_take_cache"), effect: null, deed: null, owner: "household", raw: { taken01: 0.25 }, beat: "One coin. It hardly shows." }),
+    v({ id: "take-all", label: "Take the coins", holdS: 2, pose: "gather", reachM: 1.9, stakes: "high", measure: m("H2", "keep_cache", "named", "abandon_take_cache"), effect: null, deed: null, owner: "household", raw: { taken01: 1 }, beat: "The purse is light now." }),
+  ],
+  "open-gate": [
+    v({ id: "shut-gate", label: "Shut the gate", holdS: 1.5, pose: "push", reachM: 2.6, stakes: "low", measure: m("H3", "conform_custom", "named"), effect: null, deed: null, owner: "household", beat: "The latch drops. The goats will stay where they are." }),
+  ],
+  litter: [
+    v({ id: "tidy", label: "Put it in the basket by the wall", holdS: 2, pose: "gather", reachM: 2.4, stakes: "low", measure: m("J5", "stack_tidy", "named"), effect: null, deed: null, owner: "none", beat: "Into the basket by the wall." }),
+  ],
+  "caught-lamb": [
+    v({ id: "free-lamb", label: "Free the lamb", holdS: 4, pose: "kneel", reachM: 2.4, stakes: "medium", measure: m("H9", "help_at_cost", "named", "pass_by"), effect: null, deed: null, owner: "household", beat: "It pulls its head free and bolts for its mother." }),
+  ],
+  woodpile: [
+    v({ id: "stack", label: "Stack the logs back neatly", holdS: 6, pose: "build", reachM: 2.8, stakes: "low", measure: m("J5", "stack_tidy", "named"), effect: null, deed: null, owner: "household", beat: "Square at the ends, the way a woodpile should be." }),
+  ],
+  "bench-sit": [
+    // Personal space: beside someone already on the bench, or as far from them as the bench allows.
+    v({ id: "sit-close", label: "Sit down beside them", holdS: 0, pose: "sit", reachM: 3, stakes: "low", measure: m("A1", "proxemics_close", "named"), effect: null, deed: null, owner: "household", beat: "You sit down beside them. They shift a little, and nod." }),
+    v({ id: "sit-far", label: "Sit at the far end", holdS: 0, pose: "sit", reachM: 3, stakes: "low", measure: m("A3", "proxemics_far", "named"), effect: null, deed: null, owner: "household", beat: "You take the far end. The bench is long enough for two strangers." }),
+  ],
+  "unfinished-tale": [
+    // Curiosity paid for in time: he has stopped just before the end, to light his pipe. Asking is the read.
+    v({ id: "ask-end", label: "Ask him how it ends", holdS: 1.2, pose: "still", reachM: 4.4, stakes: "low", measure: m("D2", "asks_question", "named"), effect: null, deed: null, owner: "household", beat: "He laughs, and tells you the end." }),
+  ],
+  knucklebones: [
+    // Lying for gain: the throw is not tava. Seen by the children, or under the cup where only you saw it (the arm).
+    v({ id: "say-true", label: "Tell them it is not tava", holdS: 1, pose: "still", reachM: 3.2, stakes: "low", measure: m("H2", "return_cache", "named"), effect: null, deed: null, owner: "household", beat: "\"Again!\" They take the cup back, and throw for it themselves." }),
+    v({ id: "say-tava", label: "Say it is tava", holdS: 1, pose: "still", reachM: 3.2, stakes: "low", measure: m("H2", "keep_cache", "named"), effect: null, deed: null, owner: "household", raw: { taken01: 1 }, beat: "They hand you the pomegranate, a little doubtful." }),
+  ],
+  "honey-stall": [
+    // An honesty stall (Levitt 2006), with a nazar charm over it or none (watching eyes; the arm).
+    v({ id: "one-jar", label: "Take one jar, as the board shows", holdS: 1.2, pose: "gather", reachM: 2.6, stakes: "low", measure: m("H3", "conform_custom", "named"), effect: null, deed: null, owner: "household", beat: "One jar. The honey is dark, and smells of thyme." }),
+    v({ id: "three-jars", label: "Take three jars", holdS: 1.8, pose: "gather", reachM: 2.6, stakes: "medium", measure: m("H2", "keep_cache", "named"), effect: null, deed: null, owner: "household", raw: { taken01: 0.67 }, beat: "Three jars. Nobody is minding the stall." }),
+  ],
   // Hidden things (C86): the village's own, found once each. What is found is the moments layer's to say.
   "hollow-stump": [
     v({ id: "look-in", label: "Look inside the hollow", holdS: 2, pose: "study", reachM: 2.2, stakes: "low", measure: m("I3", "egg_hollow", "named"), effect: null, deed: null, owner: "none", beat: "" }),
@@ -416,6 +545,11 @@ export function thingName(kind: ThingKind): string {
     "spilled-basket": "spilled basket", "stuck-cart": "stuck cart", "ball-game": "children's game", "stray-ball": "child",
     "well-custom": "well", "well-queue": "line at the well", "village-dance": "dance", "loose-hen": "loose hen", "falling-stars": "night sky", "banging-door": "door",
     "hollow-stump": "hollow stump", "message-bottle": "bottle", "still-pool": "still pool", "lookout-rock": "lookout rock", "buried-box": "patch of soft earth",
+    "fallen-elder": "old man", "asch-boats": "fishers", "looking-up": "people looking up", teasing: "boys", "imece-wall": "fallen wall", "net-haul": "fishers",
+    "bench-sit": "bench", "unfinished-tale": "storyteller", knucklebones: "children", musician: "musician", "wrong-basket": "fishwife", "tea-invite": "old woman", "tangled-net": "fisher", "bread-errand": "woman",
+    "bread-mother": "old woman", "drunk-or-ill": "man on the path", campfire: "fire", "crying-alone": "young woman", dolphins: "dolphins",
+    greeting: "passer-by", "rude-bump": "man with sacks", "narrow-way": "woman with jugs", "ask-way": "pedlar", "heavy-jugs": "old woman", "dark-lantern": "woman in the dark",
+    "lost-purse": "purse", "open-gate": "gate", litter: "rubbish", "caught-lamb": "lamb", woodpile: "woodpile", "honey-stall": "honey stall",
   };
   return NAMES[kind] ?? kind;
 }

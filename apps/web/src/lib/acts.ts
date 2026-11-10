@@ -18,7 +18,7 @@
  * Pure, so the tests read it directly.
  */
 import type { EventContext, TargetKind } from "@echo/shared";
-import type { ThingKind, Verb } from "@echo/planet";
+import type { MomentArmRef, ThingKind, Verb } from "@echo/planet";
 
 import type { EmitActionOptions } from "@/game/world/measure";
 
@@ -57,7 +57,12 @@ export function targetKindOf(kind: ThingKind): TargetKind {
 }
 
 /** The behavioural event a performed verb becomes. */
-export function measurementFor(verb: Verb, thing: { ref: string; kind: ThingKind }, manner: Manner, audience: number): Measurement {
+/**
+ * An act as the echo hears it. A thing that is an experiment's arm (C87) adds the arm to the raw signals
+ * (`arm` and its own, for the analysis) and to the context: its onlookers to the villagers about, who the
+ * other is, a deadline, what is at stake. The label and its route stay the verb's.
+ */
+export function measurementFor(verb: Verb, thing: { ref: string; kind: ThingKind; arm?: MomentArmRef }, manner: Manner, audience: number): Measurement {
   const { measure } = verb;
   const finished = !manner.abandoned;
   const fraction = verb.holdS > 0 ? Math.min(1, manner.heldMs / (verb.holdS * 1000)) : 1;
@@ -70,17 +75,23 @@ export function measurementFor(verb: Verb, thing: { ref: string; kind: ThingKind
   if (verb.raw && finished) Object.assign(raw, verb.raw);
   // Sitting is the one act whose whole content is its stillness (sit_still reads still_ms).
   if (verb.pose === "sit") raw.still_ms = Math.round(manner.heldMs);
+  // Held work on something that resists (C87, the tangled net): ingest.py reads it as repair_hold01.
+  if (measure.action === "repair") raw.repair_hold01 = Number(fraction.toFixed(3));
   // An approach is read by the G route only with a distance (ingest.py's G branch), so only an act meant
   // to be read by a route carries one: an unrouted act on G (the raft lent, C75) would otherwise be read
   // as an approach it never was.
   if ((measure.channel === "G" || measure.channel === "A") && measure.route !== "unrouted") raw.distance = Number(manner.distanceM.toFixed(2));
   // The pet cue's amount (C55): a stroke from someone it barely knows is a little; shooing it is nothing.
   if (measure.cue.startsWith("D11")) raw.amount = Number((measure.action === "shoo_pet" ? 0.05 : (manner.amount ?? 0.6)).toFixed(3));
+  const arm = thing.arm;
+  if (arm) Object.assign(raw, arm.raw ?? {}, { arm: arm.id });
+  const seen = audience + (arm?.context?.audience_size ?? 0);
   const context: Partial<EventContext> = {
-    stakes: verb.stakes,
-    audience_size: audience,
-    public_or_private: audience > 0 ? "public" : "private",
-    counterpart_status: verb.owner === "none" ? "none" : "stranger",
+    stakes: arm?.context?.stakes ?? verb.stakes,
+    audience_size: seen,
+    public_or_private: arm?.context?.public_or_private ?? (seen > 0 ? "public" : "private"),
+    counterpart_status: arm?.context?.counterpart_status ?? (verb.owner === "none" ? "none" : "stranger"),
+    ...(arm?.context?.time_pressure !== undefined ? { time_pressure: arm.context.time_pressure } : {}),
   };
   return {
     action: finished ? measure.action : (measure.abandon ?? measure.action),

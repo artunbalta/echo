@@ -29,6 +29,29 @@ export interface Thing {
   owners: string[];
   /** A short name for prompts and for villagers: "the Kost house", "Vamjik's grave". */
   name: string;
+  /**
+   * The arm of the experiment it is, when it is one (C87): two onlookers or none, a purse with two coins
+   * or nine. An act on it carries the arm in its raw signals and its context, beside the verb's own.
+   */
+  arm?: MomentArmRef;
+}
+
+/** What an experiment's arm adds to the context an act on it is read in (C87, `moments.ts`). */
+export interface ArmContext {
+  /** People of the moment's own who could see, added to the villagers about. */
+  audience_size?: number;
+  counterpart_status?: "high" | "peer" | "low" | "stranger" | "none";
+  /** 0 untimed .. 1 a hard deadline: an errand someone is waiting on. */
+  time_pressure?: number;
+  stakes?: "low" | "medium" | "high";
+  public_or_private?: "public" | "private";
+}
+
+/** One arm of a moment's experiment, as a thing carries it. */
+export interface MomentArmRef {
+  id: string;
+  raw?: Readonly<Record<string, number | string>>;
+  context?: ArmContext;
 }
 
 /** Who works a field on a day: the households whose nearest field it is (age thirteen and up). */

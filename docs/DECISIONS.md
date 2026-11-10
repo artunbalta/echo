@@ -5789,3 +5789,143 @@ stones.
 
 **Not built:** moments for two strangers at once (each sees their own); a moment that remembers you
 from yesterday; promise-keeping (H6), which needs a moment that spans visits.
+
+## C87 — a village that is never empty: three streams of moments, each a published experiment
+
+What it answers: the owner asked for the empty walking to go, and for the gaps to be filled with
+experiments from the literature that really show how people behave. They should fit village life, and
+be tied to the experiments themselves. After C86, 46% of a played visit still had nothing near, and
+moments were 40–50 s of walking apart.
+
+- **A literature review came first.** Three reviewers covered 71 paradigms: prosocial and moral field
+  experiments, social and group behaviour, and individual differences. They checked 420 DOIs against
+  Crossref. For each paradigm they gave:
+  - a robustness grade (robust / mixed / weak);
+  - the manipulation that makes it an experiment;
+  - a village version;
+  - the label that fits.
+
+  `docs/world-design/village-experiments.md` names the paradigm behind every moment, with its evidence,
+  its arm and its label, and the references.
+- **Three streams at once** (`MomentLane` in `packages/planet/lib/moments.ts`;
+  `apps/web/src/game/world/momentsLayer.ts`):
+  - **people.** Something happens a few strides ahead. The next begins 3–7 s after the last (C86 waited
+    20–34 s). A moment the stranger walks 25 m away from is over, so the next can begin ahead of them.
+  - **passer.** Every 12–24 s, someone comes along the way, stops to meet the stranger (a greeting, a
+    question, a curse) and goes on past.
+  - **wayside.** Something lies by the way ahead, with nobody about. There are two at most, and one is
+    always somewhere ahead.
+- **Thirty new moments** (`MOMENTS[kind].paradigm` cites each). Every label is one ingest.py reads by
+  name (C7), and none is a label of the pilot's six.
+  - **Ahead:**
+    - an old man fallen, with two onlookers or none (bystander effect);
+    - fishers sure the shorter boat is the longer, unanimous or with a dissenter (Asch);
+    - people stopped looking up, one or five (Milgram, Bickman & Berkowitz);
+    - boys teasing a smaller one (participant roles);
+    - a field wall to rebuild, one old man or a crew of four (imece; social loafing);
+    - a net to haul, one fisher or three (social loafing);
+    - an old man playing the kaval (aesthetic dwell);
+    - a fishwife holding out a basket meant for someone else (excess change);
+    - an old woman's tea on her step (answering a bid);
+    - a hopelessly tangled net (persistence);
+    - a loaf to take to someone's mother, in a hurry or not (promises; Darley & Batson);
+    - at night, a man lying on the path with a cane or a bottle (Piliavin);
+    - a fire with stories round it (group affiliation);
+    - a young woman crying, on the way or off it (Batson's ease of escape);
+    - dolphins in the bay (awe);
+    - someone at one end of a bench, an elder or a peer (personal space);
+    - an old man who stops a Nasreddin Hoca tale before its end, for 20 s or 45 s (curiosity);
+    - children with a knucklebone, the throw seen or under the cup (lying for gain);
+    - and C86's stray ball, now with a child who says sorry or does not (apology).
+  - **Coming along:**
+    - a greeting from the headman, a water-carrier or anybody (courtesy across status);
+    - a man who knocks into you and swears (insult);
+    - someone on a narrow path, an elder or a girl with jugs (giving way);
+    - a pedlar asking the way;
+    - an old woman with heavy jugs;
+    - at night, a woman whose lantern went out.
+  - **By the way:**
+    - a purse with two coins or nine (Cohn et al.);
+    - a field gate left open;
+    - rubbish, one piece or seven (Cialdini);
+    - a lamb caught in a fence;
+    - a fallen woodpile;
+    - an honesty stall with a nazar charm or without (watching eyes).
+- **Experiments, not events.**
+  - Where a paradigm has a manipulation, the moment has arms. Each stranger meets one arm first,
+    counterbalanced across strangers, then the others in turn (`armOf`). Meetings are counted per village
+    on the device, so the rotation carries over between visits.
+  - The act carries its arm (`Thing.arm`, `lib/acts.ts`). Raw signals get `arm` and the arm's values.
+    The context gets the arm's onlookers added to `audience_size`, plus `counterpart_status`,
+    `time_pressure`, `stakes` and privacy. That is everything ingest.py conditions on, and ingest.py is
+    untouched.
+  - While a loaf is carried in a hurry, a helping moment met on the way is read under time pressure.
+- **Errands.**
+  - Taking the loaf is `promise_made`. Handing it over at her mother's door is `promise_kept`. If it is
+    not brought within five minutes, that is `promise_broken`, sent once. H6 is measured at last.
+  - Carrying a jug for an old woman, or walking a woman home in the dark, is `help_at_cost`, and she
+    walks home beside you. The pedlar follows you to the harbour.
+- **Kept apart from the study.**
+  - No moment uses a label of the six, and none begins within 40 m of a staging.
+  - Awe raises generosity (Piff et al. 2015), so the dolphins, the falling stars and the kaval wait
+    eight minutes into a visit, by which time the six are over.
+  - The reviewers found that dividing a catch as the proposer is too close to the dictator item, so it
+    was removed before release.
+- **Villagers who speak.** A pedlar asks the way; a woman asks for a loaf to be taken. This is the world,
+  not a prompt (Law 2): it is what they would say to anyone. Nothing marks it as a task, nothing waits on
+  an answer, and leaving it is never a penalty. Their lines are in English and Turkish.
+- **Tested against no real data.**
+  - The frozen copy ran with no Supabase, no ML and no Claude key.
+  - Found while setting it up: on 2026-11-09, local machines wrote about 1.2k rows to `behavioral_events`
+    in the owner's Supabase. Production could not write (identity was unconfigured), so these came from
+    the owner's dev server and C86's bot runs. Reported to the owner; not deleted.
+- **Measured.** The same bot played the same 25-minute pilot visit against a frozen production copy (with
+  no Supabase, no ML and no Claude key):
+
+  | | Before C86 | C86 | C87 |
+  |---|---|---|---|
+  | Something worth doing near | 30% | 54% | 92% |
+  | The same, after the pilot's six | 25% | 52% | 95% |
+  | Longest empty stretch | 150 s | 57 s | 24 s |
+  | Moments met | 0 | 17 | 64 |
+  | Kinds met | 0 | 8 | 27 |
+
+  - **What the 64 were:** 24 moments ahead, 27 people coming along (19 of them greetings, about one every
+    80 s) and 13 things by the way.
+  - **The night** was 42% of the visit, and 91% of it had something near.
+  - **Without the escort:** not counting a pedlar walking beside the stranger as "near", the share is 89%.
+  - **Arms on the wire:** 23 of the 51 measurements sent carried an arm. The captured events show each in
+    its context:
+    - a lie the children saw went out as public;
+    - the headman's greeting went out with `counterpart_status: high`.
+  - **Changes after the measured build:**
+    - the hold round a staging went from 40 m to 60 m; this changes only the minutes the six are out;
+    - the loaf's door is now fixed when the moment begins;
+    - someone with no door to be walked to goes on their way.
+- **Tests.**
+  - `packages/planet/tests/moments.test.ts` (11):
+    - every stream's rotation;
+    - arms counterbalanced across strangers and met in turn by one;
+    - every moment citing its paradigm, and errands that can end;
+    - the shore, the sea, a house's side, a field's edge;
+    - a thing by the way set ahead and apart;
+    - a passer passing a stride to the side;
+    - an errand's door;
+    - plus C86's, updated for the night's new kinds.
+  - `apps/web/tests/moments.test.mts` (10):
+    - three streams at once in a four-minute stroll, with something near at least 80% of the time and no
+      gap over 25 s;
+    - a passer who stops, speaks, and is reported once with their arm when let go unanswered;
+    - the loaf kept at the door, or broken once after five minutes;
+    - the tale stopped before its end and finished for whoever waits;
+    - the knucklebone answerable only once thrown, with a seen lie known;
+    - every line in Turkish.
+  - The registry test covers the 31 new kinds (thirty moments and the mother at her door).
+  - Planet 334/334 (4 skipped) with `ECHO_PERF_BUDGETS=0`. The scene build's wall-clock budget fails at
+    load average 13–20, as recorded before. Web 525/525.
+
+**Not built (next):**
+- "Keep an eye on my basket?" and a thief (commitment and intervention; Moriarty 1975);
+- helping someone who just littered (indirect punishment);
+- self-disclosure that deepens over the three visits;
+- a promise that spans visits.

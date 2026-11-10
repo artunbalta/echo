@@ -159,6 +159,8 @@ export interface Pose {
   wave?: number;
   /** A lantern in the other hand (C84): that arm held out a little and steadier, and the hand's place kept for the light. */
   lantern?: boolean;
+  /** The head tipped back to look up, radians (C87: people stopped in the way, looking up at a roof). */
+  lookUp?: number;
 }
 
 // ── the crowd ───────────────────────────────────────────────────────────────────
@@ -284,6 +286,10 @@ export class Crowd {
     if (p.activity === "mourn") {
       headX = 0.42;
       torsoX += 0.05;
+    }
+    if (p.lookUp) {
+      headX -= p.lookUp;
+      torsoX -= p.lookUp * 0.15;
     }
     this.at(this.body, 0, 0.43, 0, torsoX, -Math.sin(phase) * 0.065 * amount, 0, this.spine);
     this.put("torso", this.spine, look.cloth);

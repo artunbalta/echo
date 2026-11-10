@@ -204,6 +204,16 @@ export default function Interact({
     if (text) lineTimer.current = setTimeout(() => setLine(null), ms);
   }, []);
 
+  // What the people of a moment say as the stranger comes near (C87): shown as any line is, in their language.
+  useEffect(() => {
+    const heard = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: string }>).detail?.text;
+      if (text && !actingRef.current) say(beatText(lang, text), 4800);
+    };
+    window.addEventListener("echo:moment-line", heard);
+    return () => window.removeEventListener("echo:moment-line", heard);
+  }, [lang, say]);
+
   const deedsRef = useRef<Deed[]>([]);
   /** A dog at your heel (C55): since when, and when you last did anything for it. */
   const heel = useRef<{ id: string | null; since: number; lastKind: number; told: boolean }>({ id: null, since: 0, lastKind: 0, told: false });
