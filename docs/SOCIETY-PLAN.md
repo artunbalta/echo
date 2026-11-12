@@ -15,6 +15,15 @@
 
 ### Where this stands — 2026-09-14
 
+> **2026-11-12 — `C89`–`C94`, the envelopes, and a way in.** (This banner was not kept between `C45`
+> and `C88`: the record for those is `DECISIONS.md`.) Before each moment of a village the stranger's
+> echo seals what it thinks they will do; they open the envelopes, and a friend can guess the same
+> moments from a link. It runs in the browser with nothing behind it, so it works on production as
+> production stands. The landing's first button walks into a village with people in it. The twin
+> audit is a page and a tool (`/bench`, `/audit`). Built and switched off, for the owner's yes: the
+> village's count (`C91`) and a twin from a paragraph (`C93`). Nothing here moves the society: no
+> phase of this plan is closed or opened by it. On branch `feat/echo-calls-it`; not merged.
+>
 > **2026-10-18 — `C45`, everything can be acted on.** One registry of verbs for every scatter class,
 > every village thing, the villagers and the water, and a test that stops a new thing shipping without
 > them. Acts are measured under ingest.py's own labels (no `services/ml` change), leave shared healing

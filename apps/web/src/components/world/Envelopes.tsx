@@ -130,6 +130,9 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   // moment is named with its page and with which of the page's layers it came from.
   const page = useRef("");
   const layers = useRef(0);
+  // One number a layer, for as long as the layer lives: watching stopped and begun again must not give
+  // a moment that is still going on a second name, or its ending would find no envelope.
+  const numbered = useRef(new WeakMap<object, number>());
 
   useEffect(() => {
     page.current = Date.now().toString(36);
@@ -153,7 +156,8 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
       const l = worldRef.current()?.context().layer<MomentsLayer>("moments") ?? null;
       if (!l || l === layer) return;
       layer = l;
-      const from = ++layers.current;
+      const from = numbered.current.get(l) ?? ++layers.current;
+      numbered.current.set(l, from);
       l.onBegan((m) => apply((b) => sealMoment(b, { ref: refOf(page.current, from, m.ref), kind: m.kind, arm: m.arm }, new Date().toISOString(), crowd.current)));
       l.onOver((row) => {
         if (row.lane !== "errand") apply((b) => settle(b, { ref: refOf(page.current, from, row.ref), kind: row.kind, outcome: row.outcome }));
