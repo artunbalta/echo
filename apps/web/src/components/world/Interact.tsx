@@ -887,7 +887,9 @@ export default function Interact({
           ) : null}
         </div>
       ) : near || talkHint ? (
-        <div data-interact-prompt={near?.ref ?? ""} className={`absolute bottom-28 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${coarse ? "" : "pointer-events-none"}`}>
+        // Above the consent card while it stands (C94): on arrival the nearest tuft of grass put its
+        // prompt across the card's first line.
+        <div data-interact-prompt={near?.ref ?? ""} className={`absolute left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${consent === "unset" ? "bottom-64" : "bottom-28"} ${coarse ? "" : "pointer-events-none"}`}>
           {near ? (
             <span className="rounded-full bg-ink-deep/80 px-3 py-1 text-xs text-parchment backdrop-blur-md">{nameText(lang, title(near))}</span>
           ) : null}
