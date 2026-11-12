@@ -39,6 +39,7 @@ import type { PlayerLayer } from "@/game/world/playerLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
 import { beatText, nameText, t, useLang, verbLabel } from "@/lib/i18n";
+import { closePanel, usePanel } from "@/lib/panels";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 import { tradeMeasurement, type TradeReply } from "@/lib/barter";
@@ -143,6 +144,20 @@ export default function Interact({
   packRef.current = pack;
   const [carrying, setCarrying] = useState<string | null>(null);
   const [packOpen, setPackOpen] = useState(false);
+  // The menu's line for the pack (C96): it had a key and, on a phone, a pill, and no line anywhere.
+  useEffect(() => {
+    const ask = () => setPackOpen(true);
+    window.addEventListener("echo:pack", ask);
+    return () => window.removeEventListener("echo:pack", ask);
+  }, []);
+  // One thing open over the world at a time: the pack and a panel close each other.
+  const panelOpen = usePanel() !== null;
+  useEffect(() => {
+    if (panelOpen) setPackOpen(false);
+  }, [panelOpen]);
+  useEffect(() => {
+    if (packOpen) closePanel();
+  }, [packOpen]);
   const [line, setLine] = useState<string | null>(null);
   // While a conversation is open the panel owns the keys and the bottom of the screen.
   const [talking, setTalking] = useState(false);
@@ -955,8 +970,10 @@ export default function Interact({
         <section data-pack className="hud-pop hud-in absolute bottom-28 left-1/2 z-40 w-[min(420px,92vw)] -translate-x-1/2 p-4 text-parchment">
           <header className="mb-2 flex items-baseline justify-between">
             <p className="font-serif text-lg text-parchment">{t(lang, "pack.title")}</p>
-            <button type="button" onClick={() => setPackOpen(false)} className="text-xs text-parchment/50 hover:text-parchment">
-              {coarse ? t(lang, "pack.close") : `I · ${t(lang, "pack.close")}`}
+            <button type="button" data-pack-close aria-label={t(lang, "pack.close")} title={coarse ? t(lang, "pack.close") : `I · ${t(lang, "pack.close")}`} onClick={() => setPackOpen(false)} className="hud-btn -mr-1 -mt-1 h-8 min-w-8">
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+                <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" />
+              </svg>
             </button>
           </header>
           {packCount(pack) === 0 ? <p className="text-sm italic text-parchment/45">{t(lang, "pack.empty")}</p> : null}

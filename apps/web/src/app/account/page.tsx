@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import SitePage from "@/components/site/SitePage";
 import { getPersona, type PersonaSnapshot } from "@/lib/agent";
 import { IDENTITY_TOKEN_KEY, identityHeaders, refusedUnsigned } from "@/lib/identity";
 import { eraseEnvelopes, type CountErased } from "@/lib/knowable/erase";
+import { useLang, type Lang } from "@/lib/lang";
+import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 
 interface Consent {
   world: boolean;
@@ -13,9 +17,118 @@ interface Consent {
   biometric: boolean;
 }
 
-/** Privacy & data controls (§13). Review consent, see what's been learned, erase everything. */
+const CONSENTS = ["world", "telemetry", "voice", "biometric"] as const;
+
+/**
+ * The page's words, in both languages (C96). What each permission is called and what it covers is
+ * what `/onboard` said when it was asked (the one place a person ever read it), so the switch and
+ * the question it answers read the same.
+ */
+const COPY: Record<
+  Lang,
+  {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    allow: string;
+    required: string;
+    consent: Record<keyof Consent, { name: string; what: string }>;
+    learned: string;
+    nothing: string;
+    traits: string;
+    forming: string;
+    signals: string;
+    contexts: string;
+    eraseTitle: string;
+    eraseLead: string;
+    erase: string;
+    confirm: string;
+    yes: string;
+    cancel: string;
+    notErased: string;
+    notErasedWhy: (what: string) => string;
+    erased: string;
+    erasedLine: string;
+    countLeft: string;
+    back: string;
+  }
+> = {
+  en: {
+    eyebrow: "Privacy",
+    title: "Your data",
+    lead: "What echo may learn is yours to control. Selfies are never stored, only the style derived from them.",
+    allow: "What you allow",
+    required: "required",
+    consent: {
+      world: { name: "Join the shared world", what: "Be present and visible to others." },
+      telemetry: { name: "Learn from how I behave", what: "Movement, approach and avoid, hesitation, reply timing." },
+      voice: { name: "Voice", what: "Push-to-talk conversations and the spoken narrator." },
+      biometric: { name: "Use a selfie for my character", what: "A photo is processed to derive style only, then discarded. Never stored." },
+    },
+    learned: "What your echo has learned",
+    nothing: "Nothing yet.",
+    traits: "Traits",
+    forming: "still forming",
+    signals: "Signals recorded",
+    contexts: "Autonomy contexts",
+    eraseTitle: "Erase everything",
+    eraseLead: "Your persona model, every behavioral signal, your character and all narrations, deleted for good.",
+    erase: "Erase everything",
+    confirm: "This permanently deletes your persona model, every behavioral signal, your character, and all narrations. It cannot be undone.",
+    yes: "Yes, erase",
+    cancel: "Cancel",
+    notErased: "Not erased.",
+    notErasedWhy: (what) => `Some of your data is still on the server and the erasure stopped rather than pretend otherwise. Nothing was cleared locally, so you can try again. If it keeps failing, this needs a person: ${what}`,
+    erased: "Erased.",
+    erasedLine: "No one knows you here again, not even your echo.",
+    countLeft: "One thing could not be reached: what you added to a village's count. The envelopes in a village (O) can remove it.",
+    back: "Back to the village",
+  },
+  tr: {
+    eyebrow: "Gizlilik",
+    title: "Verilerin",
+    lead: "Echo'nun ne öğrenebileceğine sen karar verirsin. Selfie'ler asla saklanmaz, yalnızca onlardan çıkarılan stil saklanır.",
+    allow: "Nelere izin veriyorsun",
+    required: "zorunlu",
+    consent: {
+      world: { name: "Ortak dünyaya katıl", what: "Orada ol ve başkalarına görün." },
+      telemetry: { name: "Davranışımdan öğren", what: "Hareket, yaklaşma ve uzak durma, duraksama, yanıt süresi." },
+      voice: { name: "Ses", what: "Bas-konuş sohbetleri ve sesli anlatıcı." },
+      biometric: { name: "Karakterim için selfie kullan", what: "Fotoğraf yalnızca stil çıkarmak için işlenir, sonra atılır. Asla saklanmaz." },
+    },
+    learned: "Yankın ne öğrendi",
+    nothing: "Henüz bir şey yok.",
+    traits: "Özellikler",
+    forming: "hâlâ oluşuyor",
+    signals: "Kaydedilen sinyal",
+    contexts: "Özerklik bağlamı",
+    eraseTitle: "Her şeyi sil",
+    eraseLead: "Kişilik modelin, bütün davranış sinyallerin, karakterin ve bütün anlatılar kalıcı olarak silinir.",
+    erase: "Her şeyi sil",
+    confirm: "Bu işlem kişilik modelini, bütün davranış sinyallerini, karakterini ve bütün anlatıları kalıcı olarak siler. Geri alınamaz.",
+    yes: "Evet, sil",
+    cancel: "Vazgeç",
+    notErased: "Silinmedi.",
+    notErasedWhy: (what) => `Verilerinin bir kısmı hâlâ sunucuda; silme işlemi, olmuş gibi yapmak yerine durdu. Bu tarayıcıda hiçbir şey temizlenmedi, yeniden deneyebilirsin. Yine olmazsa buna bir insanın bakması gerekiyor: ${what}`,
+    erased: "Silindi.",
+    erasedLine: "Burada seni yine kimse tanımıyor, yankın bile.",
+    countLeft: "Bir şeye ulaşılamadı: bir köyün sayımına eklediklerin. Köydeki zarflar (O) bunu kaldırabilir.",
+    back: "Köye dön",
+  },
+};
+
+/**
+ * Privacy & data controls (§13). Review consent, see what's been learned, erase everything.
+ *
+ * In the site's frame now (C96): its header and footer, one readable column, the serif title, the
+ * four permissions as rows with a switch each, and the site's danger button for the one thing that
+ * cannot be undone. It was a monospace card alone on a page, whose only way out said "back to your
+ * island" and led to a world that is no longer the one people walk into. WHAT IT DOES IS UNTOUCHED:
+ * the same keys, the same order, the same refusals read the same way.
+ */
 export default function Account() {
   const router = useRouter();
+  const copy = COPY[useLang()];
   const [uid, setUid] = useState("");
   const [consent, setConsent] = useState<Consent>({ world: true, telemetry: true, voice: false, biometric: false });
   const [snap, setSnap] = useState<PersonaSnapshot | null>(null);
@@ -84,93 +197,120 @@ export default function Account() {
 
   if (deleted) {
     return (
-      <main className="flex h-screen items-center justify-center bg-ink font-mono text-parchment">
-        <div className="panel rounded-lg p-8 text-center">
-          <p className="text-echo">Erased.</p>
-          <p className="mt-2 text-xs text-parchment/60">No one knows you here again — not even your echo.</p>
+      <SitePage>
+        <div className="mx-auto w-full max-w-[1200px] px-4 py-20 sm:px-8 sm:py-28 [&>*]:max-w-[640px]" role="status">
+          <h1 className="font-serif text-[clamp(2.1rem,5vw,3rem)] leading-[1.05] tracking-[-.02em] text-parchment">{copy.erased}</h1>
+          <p className="mt-4 text-[16px] leading-relaxed text-parchment/70">{copy.erasedLine}</p>
           {count === "left" ? (
-            <p className="mt-2 max-w-xs text-xs text-parchment/60" data-account-count-left>
-              One thing could not be reached: what you added to a village&apos;s count. The envelopes in a village (O) can remove it.
+            <p className="mt-4 max-w-md text-[14px] leading-relaxed text-parchment/60" data-account-count-left>
+              {copy.countLeft}
             </p>
           ) : null}
         </div>
-      </main>
+      </SitePage>
     );
   }
 
+  const learned: [string, string][] = snap && snap.behaviors > 0 ? [[copy.traits, snap.traits.join(", ") || copy.forming], [copy.signals, String(snap.behaviors)], [copy.contexts, String(Object.keys(snap.buckets).length)]] : [];
+  const h2 = "font-serif text-[1.35rem] leading-snug text-parchment";
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ink p-4 font-mono text-parchment">
-      <div className="panel w-full max-w-lg rounded-lg p-6">
-        <h1 className="mb-1 text-2xl font-bold text-echo">your data</h1>
-        <p className="mb-5 text-xs text-parchment/60">
-          What echo may learn is yours to control. Selfies are never stored — only derived style.
-        </p>
+    <SitePage>
+      {/* The site's column, and one readable measure inside it, hung from the header's left edge. */}
+      <div className="mx-auto w-full max-w-[1200px] px-4 pb-24 pt-12 sm:px-8 sm:pt-16 [&>*]:max-w-[640px]">
+        <p className="eyebrow mb-4">{copy.eyebrow}</p>
+        <h1 className="font-serif text-[clamp(2.1rem,5vw,3rem)] leading-[1.05] tracking-[-.02em] text-parchment">{copy.title}</h1>
+        <p className="mt-4 max-w-md text-[16px] leading-relaxed text-parchment/70">{copy.lead}</p>
 
-        <div className="mb-5">
-          <div className="mb-2 text-xs text-parchment/50">consent</div>
-          {(["world", "telemetry", "voice", "biometric"] as const).map((k) => (
-            <label key={k} className="mb-1 flex items-center justify-between rounded border-2 border-echo/20 px-3 py-2 text-sm">
-              <span className="capitalize">{k === "biometric" ? "selfie (biometric)" : k}</span>
-              <input
-                type="checkbox"
-                checked={!!consent[k]}
-                disabled={k === "world"}
-                onChange={(e) => updateConsent(k, e.target.checked)}
-                className="accent-echo"
-              />
-            </label>
-          ))}
-        </div>
+        <section className="mt-12" aria-labelledby="account-allow">
+          <h2 id="account-allow" className={h2}>
+            {copy.allow}
+          </h2>
+          <ul className="mt-4 divide-y divide-parchment/10 border-y border-parchment/10">
+            {CONSENTS.map((k) => (
+              <li key={k}>
+                <label className={`flex items-center justify-between gap-6 py-4 ${k === "world" ? "" : "cursor-pointer"}`}>
+                  <span>
+                    <span className="block text-[15px] text-parchment">
+                      {copy.consent[k].name}
+                      {k === "world" ? <span className="text-parchment/45"> ({copy.required})</span> : null}
+                    </span>
+                    <span className="mt-0.5 block text-[13.5px] leading-snug text-parchment/55">{copy.consent[k].what}</span>
+                  </span>
+                  {/* A real checkbox, drawn as a switch: the track is the box and the thumb is its ::before. */}
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    data-account-consent={k}
+                    checked={!!consent[k]}
+                    disabled={k === "world"}
+                    onChange={(e) => updateConsent(k, e.target.checked)}
+                    className="relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full border border-parchment/25 bg-ink-deep transition-colors before:absolute before:left-[3px] before:top-[3px] before:h-4 before:w-4 before:rounded-full before:bg-parchment/60 before:transition-transform checked:border-echo checked:bg-echo checked:before:translate-x-5 checked:before:bg-parchment focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-echo-soft disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </label>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-        <div className="mb-5 rounded border-2 border-echo/20 p-3 text-xs text-parchment/70">
-          <div className="mb-1 text-parchment/50">what your echo has learned</div>
-          {snap && snap.behaviors > 0 ? (
+        <section className="mt-12" aria-labelledby="account-learned">
+          <h2 id="account-learned" className={h2}>
+            {copy.learned}
+          </h2>
+          {learned.length ? (
+            <dl className="mt-4 divide-y divide-parchment/10 border-y border-parchment/10 text-[15px]">
+              {learned.map(([name, value]) => (
+                <div key={name} className="flex items-baseline justify-between gap-6 py-3">
+                  <dt className="text-parchment/60">{name}</dt>
+                  <dd className="text-right tabular-nums text-parchment">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="mt-3 text-[15px] text-parchment/55">{copy.nothing}</p>
+          )}
+        </section>
+
+        <section className="mt-12" aria-labelledby="account-erase">
+          <h2 id="account-erase" className={h2}>
+            {copy.eraseTitle}
+          </h2>
+
+          {eraseError ? (
+            <div role="alert" data-account-erase-failed className="mt-4 rounded-xl border border-danger/50 px-4 py-3 text-[14px] leading-relaxed text-danger">
+              <p className="font-medium">{copy.notErased}</p>
+              <p className="mt-1 text-danger/85">{copy.notErasedWhy(eraseError)}</p>
+            </div>
+          ) : null}
+
+          {!confirming ? (
             <>
-              <div>traits: {snap.traits.join(", ") || "still forming"}</div>
-              <div>signals recorded: {snap.behaviors}</div>
-              <div>autonomy contexts: {Object.keys(snap.buckets).length}</div>
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-parchment/60">{copy.eraseLead}</p>
+              <button type="button" data-account-erase onClick={() => setConfirming(true)} className="btn btn-danger mt-5">
+                {copy.erase}
+              </button>
             </>
           ) : (
-            <div className="text-parchment/40">nothing yet</div>
-          )}
-        </div>
-
-        {eraseError ? (
-          <div className="mb-3 rounded border-2 border-red-400/60 bg-red-900/20 p-3 text-xs text-red-200">
-            <p className="font-bold">Not erased.</p>
-            <p className="mt-1 text-red-200/80">
-              Some of your data is still on the server and the erasure stopped rather than pretend
-              otherwise. Nothing was cleared locally, so you can try again. If it keeps failing,
-              this needs a person: {eraseError}
-            </p>
-          </div>
-        ) : null}
-
-        {!confirming ? (
-          <button onClick={() => setConfirming(true)} className="w-full rounded border-2 border-red-400/40 px-4 py-2 text-sm text-red-200 hover:bg-red-900/20">
-            erase everything
-          </button>
-        ) : (
-          <div className="rounded border-2 border-red-400/40 p-3">
-            <p className="mb-3 text-xs text-red-200">
-              This permanently deletes your persona model, every behavioral signal, your character, and
-              all narrations. It cannot be undone.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={eraseEverything} className="flex-1 rounded bg-red-500/80 px-4 py-2 text-sm font-bold text-ink">
-                yes, erase
-              </button>
-              <button onClick={() => setConfirming(false)} className="rounded border border-echo/30 px-4 py-2 text-sm">
-                cancel
-              </button>
+            <div className="mt-4">
+              <p className="max-w-md text-[15px] leading-relaxed text-danger">{copy.confirm}</p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button type="button" data-account-erase-yes onClick={eraseEverything} className="btn btn-danger bg-danger text-ink-deep hover:bg-danger/90">
+                  {copy.yes}
+                </button>
+                <button type="button" onClick={() => setConfirming(false)} className="btn btn-ghost">
+                  {copy.cancel}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </section>
 
-        <button onClick={() => router.push("/play")} className="mt-4 text-xs text-parchment/50 hover:text-parchment">
-          ← back to your island
-        </button>
+        <p className="mt-14 text-sm">
+          <Link href={OPEN_VILLAGE_PATH} className="text-link">
+            <span aria-hidden>←</span> {copy.back}
+          </Link>
+        </p>
       </div>
-    </main>
+    </SitePage>
   );
 }

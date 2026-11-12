@@ -135,8 +135,9 @@ function download(name: string, text: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-const quiet = "rounded-full border border-parchment/20 px-4 py-2 text-[13px] text-parchment/85 transition-colors hover:border-parchment/50 hover:text-parchment disabled:opacity-40";
-const primary = "rounded-full bg-parchment px-6 py-3 text-sm font-medium text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:bg-parchment/25 disabled:text-parchment/50";
+/** The site's two buttons (globals.css, C96): the other thing to do, and the one main thing. */
+const quiet = "btn btn-sm btn-ghost";
+const primary = "btn btn-primary";
 
 export default function AuditTool() {
   const [items, setItems] = useState<Slot<Items>>(null);
@@ -281,7 +282,7 @@ export default function AuditTool() {
   return (
     <div data-audit-phase={running ? "running" : done ? "done" : "idle"}>
       <section className="pb-10 pt-12 sm:pt-16">
-        <p className="mb-5 text-[11px] uppercase tracking-[.22em] text-echo-soft">The twin audit</p>
+        <p className="eyebrow mb-5">The twin audit</p>
         <h1 className="max-w-[18ch] font-serif text-[clamp(2.1rem,5.2vw,3.6rem)] leading-[1.05] tracking-[-.025em] text-parchment">What do your twins know about a person?</h1>
         <p className="mt-6 max-w-2xl text-[16px] leading-relaxed text-parchment/75">
           Bring a panel that answered the same items twice, and your twins&rsquo; predictions of the second answers. For each twin you get its accuracy against the crowd, and its share of what is knowable about a
@@ -295,6 +296,13 @@ export default function AuditTool() {
           <span>
             <b className="font-medium">Nothing leaves this page: the audit runs in your browser.</b> <span className="text-parchment/70">Load the page, go offline, and it still runs.</span>
           </span>
+        </p>
+        {/* The way back to what the audit found on the public panel: the frame's two tabs are gone
+            (the site's header marks the page), so each page keeps one link to the other. */}
+        <p className="kn-noprint mt-5 text-sm">
+          <a className="kn-link" href="/bench">
+            See the results on Twin-2K-500
+          </a>
         </p>
       </section>
 
@@ -484,7 +492,7 @@ function Results({ done, anchor }: { done: Done; anchor: React.RefObject<HTMLDiv
   const stamp = when.slice(0, 10);
   return (
     <div ref={anchor} data-audit-results data-audit-seconds={seconds.toFixed(2)} className="mt-14 scroll-mt-20 border-t border-parchment/10 pt-10">
-      <p className="mb-3 text-[11px] uppercase tracking-[.22em] text-echo-soft">The audit</p>
+      <p className="eyebrow mb-3">The audit</p>
       <h2 className="font-serif text-[1.7rem] leading-tight text-parchment sm:text-[2.1rem]">{verdict(below, twins.length)}</h2>
       {synthetic ? (
         <p data-audit-synthetic className="mt-5 max-w-3xl rounded-xl border border-ember/50 px-4 py-3 text-[14px] leading-snug text-parchment">

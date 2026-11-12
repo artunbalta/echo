@@ -10,12 +10,14 @@
  *
  * Every word here comes from `lib/knowable/guessPage.ts`, a small catalogue, and never from the planet
  * or the app's table of strings: either one triples what a phone has to load (see that file).
+ *
+ * The frame around it (the site's header and footer, C96) is `app/guess/page.tsx`'s.
  */
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { decodeGuess, momentWords, outcomesOf, outcomeWords, say, type GuessLink } from "@/lib/knowable/guessPage";
-import { LANGS, setLang, useLang } from "@/lib/lang";
+import { useLang } from "@/lib/lang";
 import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 import { step as count } from "@/lib/steps";
 
@@ -39,28 +41,16 @@ export default function GuessClient() {
 
   if (link === undefined) return null;
   const name = link?.n || say(lang, "guess.someone");
-  const shell = "mx-auto flex min-h-full w-[min(520px,100%)] flex-col px-6 pb-16 pt-14";
-  const primary = "rounded-full bg-parchment px-5 py-2.5 text-[14px] font-medium text-ink transition-opacity hover:opacity-90";
-
-  const langs = (
-    <div className="mb-10 flex items-center justify-between">
-      <Link href="/" className="font-pixel text-[15px] tracking-wide text-parchment/70 hover:text-parchment">
-        echo
-      </Link>
-      <span className="flex overflow-hidden rounded-full border border-parchment/15 text-[11px]">
-        {LANGS.map((l) => (
-          <button key={l} type="button" data-lang={l} aria-pressed={lang === l} onClick={() => setLang(l)} className={`px-2.5 py-1 uppercase tracking-wide ${lang === l ? "bg-parchment text-ink" : "text-parchment/60 hover:text-parchment"}`}>
-            {l}
-          </button>
-        ))}
-      </span>
-    </div>
-  );
+  // One readable column under the site's header (which has the wordmark and the language this page
+  // used to carry itself), and the site's two buttons.
+  // It fills the first screen, so on a phone the question is the whole of what is seen and the
+  // footer's lists are a scroll away.
+  const shell = "mx-auto min-h-[calc(100dvh-60px)] w-full max-w-[1200px] px-4 pb-20 pt-12 sm:px-8 sm:pt-16 [&>*]:max-w-[560px]";
+  const primary = "btn btn-primary";
 
   if (link === null)
     return (
       <div className={shell}>
-        {langs}
         <p data-guess-bad className="font-serif text-[20px] leading-snug text-parchment">
           {say(lang, "guess.bad")}
         </p>
@@ -75,7 +65,6 @@ export default function GuessClient() {
   if (step < 0)
     return (
       <div className={shell}>
-        {langs}
         <h1 className="font-serif text-[34px] leading-[1.1] text-parchment">{say(lang, "guess.title", { name })}</h1>
         <p className="mt-4 text-[15px] leading-relaxed text-parchment/70">{say(lang, "guess.lead", { name })}</p>
         <button type="button" data-guess-begin onClick={() => setStep(0)} className={`${primary} mt-8 w-fit`}>
@@ -89,7 +78,6 @@ export default function GuessClient() {
     const words = momentWords(lang, it.k, it.a);
     return (
       <div className={shell}>
-        {langs}
         <p className="text-[12px] tabular-nums text-parchment/45">{say(lang, "guess.of", { i: step + 1, n })}</p>
         <div key={step} className="hud-in">
           <h2 className="mt-3 font-serif text-[26px] leading-[1.15] text-parchment">{words.name}</h2>
@@ -133,7 +121,6 @@ export default function GuessClient() {
 
   return (
     <div className={shell}>
-      {langs}
       <h1 data-guess-result className="font-serif text-[28px] leading-[1.15] text-parchment">
         {say(lang, "guess.result", { name, you, echo, n })}
       </h1>
@@ -172,7 +159,7 @@ export default function GuessClient() {
         <Link href={OPEN_VILLAGE_PATH} data-guess-yours onClick={() => count("guess_walk_in")} className={primary}>
           {say(lang, "guess.yours")}
         </Link>
-        <button type="button" data-guess-send onClick={() => void send()} className="rounded-full border border-parchment/20 px-5 py-2.5 text-[14px] text-parchment/80 transition-colors hover:border-parchment/45 hover:text-parchment">
+        <button type="button" data-guess-send onClick={() => void send()} className="btn btn-ghost">
           {sent ? say(lang, "guess.sent") : say(lang, "guess.send", { name })}
         </button>
       </div>

@@ -14,6 +14,9 @@ import { useCallback, useEffect, useState } from "react";
 import type { ConsentState } from "@/game/world/measure";
 import { t, useLang, type Key } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { openPanel, usePanel } from "@/lib/panels";
+
+import EchoPanel from "./Panel";
 
 type Pair = { id: string; name: string; since: string };
 
@@ -21,7 +24,8 @@ const ERRORS = ["no_such_code", "expired", "own_code", "already", "bad_name", "b
 
 export default function EchoPairs({ consent }: { consent: ConsentState }) {
   const lang = useLang();
-  const [open, setOpen] = useState(false);
+  // One panel at a time over the world (`lib/panels.ts`): this is the echo's "friends" page.
+  const open = usePanel() === "friends";
   const [pairs, setPairs] = useState<Pair[] | null>(null);
   const [name, setName] = useState("");
   const [code, setCode] = useState<string | null>(null);
@@ -50,17 +54,17 @@ export default function EchoPairs({ consent }: { consent: ConsentState }) {
   }, [post]);
 
   useEffect(() => {
-    const show = () => {
-      setOpen(true);
-      setSaid(null);
-      setCode(null);
-    };
+    const show = () => openPanel("friends");
     window.addEventListener("echo:pairs", show);
     return () => window.removeEventListener("echo:pairs", show);
   }, []);
 
   useEffect(() => {
-    if (open && consent === "accepted") void load().catch(() => setPairs([]));
+    if (!open) return;
+    // Opened afresh: what was said and the code made last time are not carried over.
+    setSaid(null);
+    setCode(null);
+    if (consent === "accepted") void load().catch(() => setPairs([]));
   }, [open, consent, load]);
 
   if (!open) return null;
@@ -101,21 +105,12 @@ export default function EchoPairs({ consent }: { consent: ConsentState }) {
   };
   const date = (iso: string) => new Date(iso).toLocaleDateString(lang === "tr" ? "tr-TR" : undefined, { day: "numeric", month: "short" });
   const field = "w-full rounded-lg border border-parchment/15 bg-parchment/5 px-3 py-2 text-sm text-parchment placeholder:text-parchment/35 focus:border-echo focus:outline-none";
-  const button = "rounded-full bg-parchment px-3.5 py-1.5 text-xs font-medium text-ink disabled:opacity-40";
+  const button = "btn btn-sm btn-primary";
 
   return (
-    <section
-      data-echo-pairs
-      aria-label={t(lang, "pair.title")}
-      className="hud-pop hud-in absolute left-1/2 top-14 z-40 max-h-[84vh] w-[min(440px,92vw)] -translate-x-1/2 overflow-y-auto px-5 py-4 text-sm text-parchment"
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-serif text-lg">{t(lang, "pair.title")}</h2>
-        <button type="button" onClick={() => setOpen(false)} aria-label={t(lang, "pack.close")} className="text-parchment/45 hover:text-parchment">
-          ×
-        </button>
-      </div>
+    <EchoPanel tab="friends" label={t(lang, "pair.title")} attrs={{ "data-echo-pairs": "" }} onKeyDown={(e) => e.stopPropagation()}>
+      <div className="min-h-0 overflow-y-auto px-5 pb-5 pt-4 text-sm text-parchment">
+      <h2 className="font-serif text-[20px] leading-tight">{t(lang, "pair.title")}</h2>
       {consent !== "accepted" ? (
         <p className="mt-3 text-parchment/70">{t(lang, "pair.needsConsent")}</p>
       ) : (
@@ -179,6 +174,14 @@ export default function EchoPairs({ consent }: { consent: ConsentState }) {
           </ul>
         </>
       )}
-    </section>
+      {/* The other thing a friend can do is on another page, and this is where people look for it (C96). */}
+      <p className="mt-4 border-t border-parchment/10 pt-3 text-xs text-parchment/50">
+        {t(lang, "pair.guessHint")}{" "}
+        <button type="button" data-pairs-to-guesses onClick={() => openPanel("guesses")} className="text-echo-soft underline decoration-echo-soft/40 underline-offset-2 hover:text-parchment">
+          {t(lang, "hub.guesses")}
+        </button>
+      </p>
+    </div>
+    </EchoPanel>
   );
 }

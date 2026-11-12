@@ -125,7 +125,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 function Elsewhere({ name, value, what, children }: { name: string; value: string; what: string; children: React.ReactNode }) {
   return (
     <div className="kn-surface flex flex-col rounded-xl border border-parchment/10 bg-ink-deep/55 p-5">
-      <p className="text-[11px] uppercase tracking-[.18em] text-echo-soft">{name}</p>
+      <p className="eyebrow">{name}</p>
       <p className="mt-3 text-[1.9rem] font-semibold leading-none tracking-[-.02em] text-parchment">{value}</p>
       <p className="mt-2 text-[13.5px] leading-snug text-parchment/85">{what}</p>
       <p className="mt-3 text-[13.5px] leading-relaxed text-parchment/60">{children}</p>
@@ -133,15 +133,13 @@ function Elsewhere({ name, value, what, children }: { name: string; value: strin
   );
 }
 
-const btn = "inline-flex items-center gap-1.5 rounded-full px-6 py-3 text-sm font-medium transition-colors";
-
 export default function Bench() {
   return (
-    <BenchShell active="bench">
+    <BenchShell>
       <StepBeacon name="bench" />
       {/* ── the finding ── */}
       <section className="pb-12 pt-12 sm:pb-16 sm:pt-20">
-        <p className="mb-5 text-[11px] uppercase tracking-[.22em] text-echo-soft">A twin audit of Twin-2K-500</p>
+        <p className="eyebrow mb-5">A twin audit of Twin-2K-500</p>
         <h1 className="max-w-[19ch] font-serif text-[clamp(2.15rem,5.6vw,4.1rem)] leading-[1.04] tracking-[-.025em] text-parchment">
           Every published AI twin we audited knows less about a person than a guess that knows nobody.
         </h1>
@@ -167,7 +165,7 @@ export default function Bench() {
           <Stat value={`${pct(look.lo)} to ${pct(look.hi)}`}>is where the same twins land with one earlier answer per person. The person&rsquo;s own retest knows {pct(f("t1.know.again"))}.</Stat>
         </div>
         <div className="kn-noprint mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
-          <Link href="/audit" className={`${btn} bg-parchment text-ink hover:bg-white`}>
+          <Link href="/audit" className="btn btn-primary">
             Audit your own twins <span aria-hidden>›</span>
           </Link>
           <a href="#method" className="kn-link text-sm">
@@ -329,7 +327,7 @@ export default function Bench() {
             </p>
             <p>It runs in your browser. Your panel is not uploaded, and there is nothing to sign up for.</p>
             <p className="kn-noprint pt-1">
-              <Link href="/audit" className={`${btn} bg-parchment text-ink hover:bg-white`}>
+              <Link href="/audit" className="btn btn-primary">
                 Open the twin audit <span aria-hidden>›</span>
               </Link>
             </p>
@@ -422,7 +420,7 @@ export default function Bench() {
           If you build twins and have a panel that answered twice, we will run the audit with you and tell you what one look would add. If you would rather not send anything, the audit runs on your own machine.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-3">
-          <a href={MAIL} className={`${btn} bg-echo text-ink-deep hover:bg-echo-soft`}>
+          <a href={MAIL} className="btn btn-ghost">
             Send us your twins
           </a>
           <Link href="/audit" className="kn-link text-sm">

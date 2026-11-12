@@ -51,7 +51,10 @@ import { encodeGuess, GUESS_MIN, pickForFriend } from "@/lib/knowable/guessLink"
 import { sawLines } from "@/lib/knowable/saw";
 import { momentWords, outcomeWords } from "@/lib/knowable/say";
 import { brokenAt } from "@/lib/knowable/seal";
+import { closePanel, openPanel, setWaiting, togglePanel, usePanel } from "@/lib/panels";
 import { step } from "@/lib/steps";
+
+import EchoPanel from "./Panel";
 
 /** How often to look for the layer while the world is still being built. */
 const LOOK_MS = 1500;
@@ -131,7 +134,9 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   const [twinOn, setTwinOn] = useState(false);
   const [left, setLeft] = useState(false);
   const [book, setBook] = useState<Book>(emptyBook);
-  const [open, setOpen] = useState(false);
+  // What is open over the world is one answer for every panel (`lib/panels.ts`): this one is "guesses".
+  const open = usePanel() === "guesses" && on;
+  const setOpen = useCallback((o: boolean) => (o ? openPanel("guesses") : closePanel("guesses")), []);
   // The record's keeper (`keeper.ts`): made once the page is in a browser, since it reads what was kept.
   const keeping = useRef<Keeper | null>(null);
   // A layer numbers its moments from zero, on every page and in every world a raft crosses into, so a
@@ -196,10 +201,10 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   useEffect(() => {
     if (!on) return;
     const key = (e: KeyboardEvent) => {
-      if (e.code === "KeyO" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target)) setOpen((o) => !o);
-      else if (e.code === "Escape") setOpen(false);
+      if (e.code === "KeyO" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target)) togglePanel("guesses");
+      else if (e.code === "Escape") closePanel();
     };
-    const ask = () => setOpen(true);
+    const ask = () => openPanel("guesses");
     window.addEventListener("keydown", key);
     window.addEventListener("echo:envelopes", ask);
     return () => {
@@ -331,6 +336,11 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   useEffect(() => {
     if (on && ready > 0) step("met");
   }, [on, ready]);
+  // The tab says how many are waiting, on whichever of the echo's pages is open.
+  useEffect(() => {
+    setWaiting(on ? ready : 0);
+    return () => setWaiting(0);
+  }, [on, ready]);
   return { book, ready, open, setOpen, apply, count: { on: counting, adding: counting && adding, left: left && !(counting && adding) }, stopped, twinOn, setAdding, forgetAll };
 }
 
@@ -346,14 +356,14 @@ export function EnvelopeChip({ env }: { env: Envelopes }) {
       title={t(lang, "env.chip", { n: env.ready })}
       onMouseDown={noFocus}
       onClick={() => env.setOpen(true)}
-      className="hud-in pointer-events-auto mt-0.5 flex w-fit items-center gap-1.5 rounded-full bg-ink-deep/45 px-2.5 py-1 text-[11px] tabular-nums text-parchment/80 transition-colors hover:text-parchment"
+      className="hud-in pointer-events-auto flex h-7 w-fit items-center gap-1.5 rounded-full bg-parchment px-2.5 text-[12px] font-medium tabular-nums text-ink transition-colors hover:bg-white"
     >
       <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" aria-hidden="true">
         <rect x="0.6" y="0.6" width="13.8" height="9.8" rx="1.2" />
         <path d="M0.9 1 7.5 6l6.6-5" />
         <circle cx="7.5" cy="6.4" r="1.7" fill="#a06cd5" stroke="none" />
       </svg>
-      {env.ready}
+      {t(lang, "env.chip.short", { n: env.ready })}
     </button>
   );
 }
@@ -577,16 +587,8 @@ export function EnvelopesPanel({ env, consent }: { env: Envelopes; consent: Cons
   const offer = "rounded-full border border-parchment/25 px-3.5 py-1.5 text-[12px] text-parchment/85 transition-colors hover:border-parchment/50 hover:text-parchment";
 
   return (
-    <div data-envelopes-panel className="absolute left-1/2 top-14 z-[45] flex max-h-[calc(100%-5rem)] w-[min(540px,94vw)] -translate-x-1/2 flex-col">
-      <div className="hud-pop hud-in flex min-h-0 flex-col">
-        <div className="flex items-start justify-between gap-4 px-5 pt-4">
-          <h2 className="font-serif text-[20px] leading-tight text-parchment">{t(lang, view === "words" ? "env.words.title" : view === "twin" ? "env.twin.title" : "env.title")}</h2>
-          <button type="button" data-envelopes-close aria-label={t(lang, "env.close")} onMouseDown={noFocus} onClick={() => setOpen(false)} className="hud-btn -mr-1.5 -mt-1 h-8 min-w-8">
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
-              <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" />
-            </svg>
-          </button>
-        </div>
+    <EchoPanel tab="guesses" label={t(lang, "env.title")} attrs={{ "data-envelopes-panel": "" }}>
+        <h2 className="px-5 pt-4 font-serif text-[20px] leading-tight text-parchment">{t(lang, view === "words" ? "env.words.title" : view === "twin" ? "env.twin.title" : "env.title")}</h2>
 
         {view === "twin" ? (
           <TwinWords
@@ -821,8 +823,7 @@ export function EnvelopesPanel({ env, consent }: { env: Envelopes; consent: Cons
             </p>
           </div>
         )}
-      </div>
-    </div>
+    </EchoPanel>
   );
 }
 

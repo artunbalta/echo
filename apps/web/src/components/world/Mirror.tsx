@@ -23,8 +23,12 @@ import { useCallback, useEffect, useState } from "react";
 import { PERSONA_AXIS_KEYS, type PersonaAxisKey } from "@echo/shared";
 
 import type { ConsentState } from "@/game/world/measure";
+import { t, useLang } from "@/lib/i18n";
 import { identityHeaders, identityToken, peekUserId, refusedUnsigned } from "@/lib/identity";
 import { eraseEnvelopes } from "@/lib/knowable/erase";
+import { closePanel, openPanel, togglePanel, usePanel } from "@/lib/panels";
+
+import EchoPanel from "./Panel";
 import type { Contributor, MirrorView, Move, SetOut } from "@/lib/mirror";
 import { cloudWanted, setCloudWanted } from "@/lib/villagerVoice";
 
@@ -46,7 +50,13 @@ const when = (iso: string) => {
 };
 
 export default function Mirror({ consent, onAccept, onRevoke }: { consent: ConsentState; onAccept: () => void; onRevoke: () => void }) {
-  const [open, setOpen] = useState(false);
+  // Two of the echo's pages are this component's (C96): how it sees you, and your say over all of it.
+  // The second used to be the foot of the first, so the one place to stop the watching or erase
+  // everything was under eight lines of a reading most visitors do not have yet.
+  const panel = usePanel();
+  const open = panel === "portrait" || panel === "privacy";
+  // Your say over the echo is said in the visitor's language (C96); the reading itself is still English (⚑58).
+  const lang = useLang();
   const [view, setView] = useState<Loaded | null>(null);
   const [trouble, setTrouble] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,19 +89,20 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
     }
   }, []);
 
-  const close = useCallback(() => {
-    setOpen(false);
-    setErasing("no");
-  }, []);
+  const close = useCallback(() => closePanel(), []);
+  // Closed, or turned to another page: the question about erasing is put back.
+  useEffect(() => {
+    if (!open) setErasing("no");
+  }, [open]);
 
   // `Y` opens and closes it, unless a field is being typed in; Esc closes; the meter asks by event.
   useEffect(() => {
     const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "KeyY" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target)) setOpen((o) => !o);
+      if (e.code === "KeyY" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target)) togglePanel("portrait");
       else if (e.code === "Escape" && open) close();
     };
-    const onAsk = () => setOpen(true);
+    const onAsk = () => openPanel("portrait");
     window.addEventListener("keydown", onKey);
     window.addEventListener("echo:mirror", onAsk);
     return () => {
@@ -103,8 +114,8 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
   useEffect(() => {
     if (!open) return;
     setCloud(cloudWanted());
-    void look();
-  }, [open, look]);
+    if (panel === "portrait") void look();
+  }, [open, panel, look]);
 
   const erase = useCallback(async () => {
     setErasing("going");
@@ -112,7 +123,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
     // server's own erasure: the first was only ever in this browser, the second is under an id the
     // delete route never saw. One helper does both, for every page that erases.
     const count = await eraseEnvelopes();
-    const counted = count === "left" ? " What you added to the village's count could not be reached, so it is still there: the envelopes in a village (O) can remove it." : "";
+    const counted = count === "left" ? ` ${t(lang, "priv.said.count")}` : "";
     const uid = peekUserId();
     // With no id there is nothing on the server to ask about.
     let server: "erased" | "nothing" | "failed" = uid ? "failed" : "nothing";
@@ -136,7 +147,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
     }
     if (server === "failed") {
       setAfter("again");
-      setErasing(`Not everything on the server could be erased${tables}. What your echo sealed in this browser is gone.${counted} Your id is kept here so that you can ask again.`);
+      setErasing(t(lang, "priv.said.failed", { tables, counted }));
       return;
     }
     // One thing is not gone: the page stops watching before it says so, since the identity it watched under is.
@@ -150,42 +161,40 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
     }
     if (count === "left") {
       setAfter("leave");
-      setErasing(`Everything else is erased.${counted}`);
+      setErasing(t(lang, "priv.said.left", { counted }));
       return;
     }
     window.location.assign("/");
-  }, [onRevoke]);
+  }, [onRevoke, lang]);
 
   if (!open) return null;
   const watching = consent === "accepted";
   const sel = axis ? view?.axes.find((a) => a.key === axis) : null;
 
   return (
-    <section
-      data-mirror={view ? (view.live ? "live" : "record") : "empty"}
-      aria-label="The mirror"
-      className="absolute inset-x-0 top-14 z-40 mx-auto max-h-[84vh] w-[min(900px,94vw)] overflow-y-auto hud-pop hud-in text-parchment"
-      onMouseDown={(e) => {
-        // The world keeps its keys: nothing here takes focus, except a button, and your id to copy.
-        if (!(e.target instanceof HTMLButtonElement) && !(e.target instanceof Element && e.target.closest("[data-mirror-id]"))) e.preventDefault();
-      }}
-    >
-      <header className="flex items-baseline justify-between gap-3 px-6 pt-5">
+    <EchoPanel tab={panel === "privacy" ? "privacy" : "portrait"} label="The mirror" wide={panel !== "privacy"} attrs={{ "data-mirror": view ? (view.live ? "live" : "record") : "empty" }}>
+      <div
+        className="min-h-0 overflow-y-auto"
+        onMouseDown={(e) => {
+          // The world keeps its keys: nothing here takes focus, except a button, and your id to copy.
+          if (!(e.target instanceof HTMLButtonElement) && !(e.target instanceof Element && e.target.closest("[data-mirror-id]"))) e.preventDefault();
+        }}
+      >
+      {panel === "privacy" ? null : (
+      <header className="flex items-baseline justify-between gap-3 px-6 pt-4">
         <div>
-          <h2 className="font-serif text-xl text-parchment">The mirror</h2>
-          <p className="text-xs text-white/50">How your echo sees you, and what it saw that made it so.</p>
+          <h2 className="font-serif text-[20px] leading-tight text-parchment">How your echo sees you</h2>
+          <p className="mt-0.5 text-xs text-white/50">Where it puts you, and what it saw that made it so.</p>
         </div>
-        <div className="flex shrink-0 items-baseline gap-4 text-xs text-white/50">
-          <button type="button" onClick={() => void look()} disabled={loading} data-mirror-again className="hover:text-white disabled:opacity-40">
-            {loading ? "Looking…" : "Look again"}
-          </button>
-          <button type="button" onClick={close} className="hover:text-white">
-            Esc · close
-          </button>
-        </div>
+        <button type="button" onClick={() => void look()} disabled={loading} data-mirror-again className="shrink-0 text-xs text-white/50 hover:text-white disabled:opacity-40">
+          {loading ? "Looking…" : "Look again"}
+        </button>
       </header>
+      )}
 
       <div className="px-6 pb-5 pt-3 text-sm">
+        {panel === "privacy" ? null : (
+        <>
         {trouble ? <p className="mb-3 italic text-ember/85">{trouble}</p> : null}
         {!watching ? (
           <p className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-white/70">
@@ -196,7 +205,7 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
           // The route's reason rides in the title, for whoever is looking for it (C68); the sentence is
           // what it means for the person reading.
           <p className="mb-3 rounded-lg bg-white/5 px-3 py-2 text-white/70" data-mirror-offline title={view.reason ?? undefined}>
-            Your echo cannot hear you just now. This is the record alone, without where it puts you.
+            Your echo&apos;s engine is not answering right now, so these lines are empty. What you did is still kept, and its guesses still work.
           </p>
         ) : null}
         {view?.restarted ? (
@@ -308,78 +317,105 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
           </div>
         ) : null}
 
-        {/* Your say. */}
-        <div className="mt-6 border-t border-white/10 pt-4">
-          <h3 className="mb-2 text-xs uppercase tracking-wide text-white/45">Your say</h3>
-          <div className="space-y-2 text-[13px]">
-            <p className="flex flex-wrap items-baseline gap-x-3">
-              <span className="text-white/80">Watching you: {watching ? "yes" : "no"}.</span>
+        </>
+        )}
+
+        {/* Your say: its own page. */}
+        {panel !== "privacy" ? (
+          <p className="mt-6 border-t border-white/10 pt-3 text-xs text-white/50">
+            {t(lang, "priv.pointer")}{" "}
+            <button type="button" data-mirror-to-privacy onClick={() => openPanel("privacy")} className="text-echo-soft underline decoration-echo-soft/40 underline-offset-2 hover:text-white">
+              {t(lang, "hub.privacy")}
+            </button>
+          </p>
+        ) : (
+        <div data-mirror-say>
+          <h2 className="mb-3 font-serif text-[20px] leading-tight text-parchment">{t(lang, "menu.privacy")}</h2>
+          {/* Three things a person may want to do, each a line with its own button (C96): they were three
+              underlined phrases in a paragraph. */}
+          <div className="divide-y divide-white/10 text-[13px]">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-white/90">{t(lang, watching ? "priv.watching.yes" : "priv.watching.no")}</p>
+                <p className="mt-0.5 text-[12px] text-white/45">{t(lang, "priv.watching.note")}</p>
+              </div>
               {watching ? (
-                <button type="button" data-mirror-stop onClick={onRevoke} className="text-ember underline decoration-ember/40 hover:text-white">
-                  Stop watching me
+                <button type="button" data-mirror-stop onClick={onRevoke} className="btn btn-sm btn-ghost">
+                  {t(lang, "priv.stop")}
                 </button>
               ) : (
-                <button type="button" data-mirror-watch onClick={onAccept} className="text-ember underline decoration-ember/40 hover:text-white">
-                  {consent === "unset" ? "Let it watch" : "Let it watch again"}
+                <button type="button" data-mirror-watch onClick={onAccept} className="btn btn-sm btn-primary">
+                  {t(lang, consent === "unset" ? "consent.yes" : "priv.watchAgain")}
                 </button>
               )}
-              <span className="text-[11px] text-white/40">Stopping ends anything new reaching it; what it already saw stays until you erase it.</span>
-            </p>
-            <p className="flex flex-wrap items-baseline gap-x-3">
-              <span className="text-white/80">Villagers&apos; voices through ElevenLabs: {cloud === true ? "yes" : cloud === false ? "no" : "never asked"}.</span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
+              <p className="min-w-0 flex-1 text-white/90">{t(lang, "priv.voices", { state: t(lang, cloud === true ? "priv.yes" : cloud === false ? "priv.no" : "priv.never") })}</p>
               {cloud ? (
-                <button type="button" data-mirror-voices-off onClick={() => (setCloudWanted(false), setCloud(false))} className="text-ember underline decoration-ember/40 hover:text-white">
-                  Stop using ElevenLabs
+                <button type="button" data-mirror-voices-off onClick={() => (setCloudWanted(false), setCloud(false))} className="btn btn-sm btn-ghost">
+                  {t(lang, "priv.voicesOff")}
                 </button>
               ) : null}
-            </p>
+            </div>
+            <div className="py-3">
             {erasing === "no" ? (
-              <button type="button" data-mirror-erase onClick={() => setErasing("asking")} className="text-danger underline decoration-danger/40 hover:text-white">
-                Erase everything
-              </button>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p className="min-w-0 flex-1 text-white/90">{t(lang, "priv.erase.line")}</p>
+                <button type="button" data-mirror-erase onClick={() => setErasing("asking")} className="btn btn-sm btn-danger">
+                  {t(lang, "priv.erase")}
+                </button>
+              </div>
             ) : erasing === "asking" ? (
-              <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2">
-                <p className="text-white/85">
-                  This erases your echo and everything it was told, this record, what villagers remember of you, what you did in their villages,
-                  what you carry, your house and your look. Villages&apos; own histories keep what happened, without your name. It cannot be undone.
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <button type="button" data-mirror-erase-yes onClick={() => void erase()} className="rounded-full bg-danger px-3 py-1 text-xs font-medium text-ink-deep">
-                    Erase it all
+              <div className="rounded-lg border border-danger/30 bg-danger/10 px-3.5 py-3">
+                <p className="text-white/85">{t(lang, "priv.erase.sure")}</p>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" data-mirror-erase-yes onClick={() => void erase()} className="btn btn-sm bg-danger text-ink-deep hover:opacity-90">
+                    {t(lang, "priv.erase.yes")}
                   </button>
-                  <button type="button" onClick={() => setErasing("no")} className="rounded-full border border-white/20 px-3 py-1 text-xs">
-                    Keep it
+                  <button type="button" onClick={() => setErasing("no")} className="btn btn-sm btn-ghost">
+                    {t(lang, "priv.erase.keep")}
                   </button>
                 </div>
               </div>
             ) : erasing === "going" ? (
-              <p className="italic text-white/60">Erasing…</p>
+              <p className="italic text-white/60">{t(lang, "priv.erasing")}</p>
             ) : (
               <div>
-                <p className="italic text-danger" data-mirror-erase-failed>
+                <p className="text-danger" data-mirror-erase-failed>
                   {erasing}
                 </p>
-                <button
-                  type="button"
-                  data-mirror-erase-after={after}
-                  onClick={() => (after === "leave" ? window.location.assign("/") : setErasing("asking"))}
-                  className="mt-1.5 underline decoration-white/30 hover:text-white"
-                >
-                  {after === "leave" ? "Leave the village" : "Ask again"}
+                <button type="button" data-mirror-erase-after={after} onClick={() => (after === "leave" ? window.location.assign("/") : setErasing("asking"))} className="btn btn-sm btn-ghost mt-2.5">
+                  {t(lang, after === "leave" ? "priv.erase.leave" : "priv.erase.again")}
                 </button>
               </div>
             )}
+            </div>
           </div>
           <p className="mt-3 text-[11px] text-white/35" data-mirror-id>
-            Your id here: <span className="select-all font-mono">{peekUserId() || "none yet"}</span>
+            {t(lang, "priv.id")} <span className="select-all font-mono">{peekUserId() || t(lang, "priv.idNone")}</span>
           </p>
           <p className="mt-1 text-[11px] leading-snug text-white/40">
-            The record keeps ninety days; your echo keeps its read of you until you erase it. Nothing here is a score: it does not go up for doing
-            more, and there is no right place to be on any line.
+            {t(lang, "priv.note")}
+          </p>
+          <p className="mt-3 border-t border-white/10 pt-3 text-xs text-white/50">
+            {t(lang, "priv.inspect")}{" "}
+            <button
+              type="button"
+              data-mirror-inspect
+              onClick={() => {
+                closePanel();
+                window.dispatchEvent(new Event("echo:inspector"));
+              }}
+              className="text-echo-soft underline decoration-echo-soft/40 underline-offset-2 hover:text-white"
+            >
+              {t(lang, "menu.inspector")}
+            </button>
           </p>
         </div>
+        )}
       </div>
-    </section>
+      </div>
+    </EchoPanel>
   );
 }
 

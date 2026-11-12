@@ -294,6 +294,8 @@ test("erasing everything in the mirror, where the server knows nobody, clears th
   expect(await page.evaluate(() => localStorage.getItem("echo.identityToken")), "this browser holds a signature: the test is of one that holds none").toBeNull();
 
   await page.keyboard.press("y");
+  // Your say over it is the echo's own page now (C96), one tab along from how it sees you.
+  await page.locator("[data-echo-tab='privacy']").click();
   await page.locator("[data-mirror-erase]").click();
   await page.locator("[data-mirror-erase-yes]").click();
   // It used to stop at the refusal, keep every key and say "try again".
@@ -313,6 +315,8 @@ test("where the count cannot be reached, the mirror says that one thing is left,
   await arriveOnce(page, { "echo.calls.visitor": "abcdefghij0123456789", "echo.calls.crowd": "1" });
 
   await page.keyboard.press("y");
+  // Your say over it is the echo's own page now (C96), one tab along from how it sees you.
+  await page.locator("[data-echo-tab='privacy']").click();
   await page.locator("[data-mirror-erase]").click();
   await page.locator("[data-mirror-erase-yes]").click();
   const said = page.locator("[data-mirror-erase-failed]");
@@ -335,9 +339,11 @@ test("where the count cannot be reached, the mirror says that one thing is left,
   await expect(left).toHaveCount(0);
   expect(await keptKeys(page)).toEqual([]);
 
-  // Asked again from the mirror (closing it puts the question back), with nothing left anywhere, it leaves.
+  // Asked again (closing the page puts the question back), with nothing left anywhere, it leaves.
   await page.keyboard.press("Escape");
   await page.keyboard.press("y");
+  // Your say over it is the echo's own page now (C96), one tab along from how it sees you.
+  await page.locator("[data-echo-tab='privacy']").click();
   await page.locator("[data-mirror-erase]").click();
   await page.locator("[data-mirror-erase-yes]").click();
   await page.waitForURL((u) => u.pathname === "/", { timeout: 30_000 });

@@ -2421,7 +2421,7 @@ not the class:
 **Status:** OPEN, all of it.
 
 
-## ⚑ 67. What C89–C95 do not do yet, and what they trust (2026-11-12)
+## ⚑ 67. What C89–C96 do not do yet, and what they trust (2026-11-12)
 
 - **The echo's stabilities are assumed** (C89): 0.6, one half, one third. Nobody has measured how steady a
   person is at a village moment, or across a family's. The pilot's RQ7 will; until then the echo's speed
@@ -2478,6 +2478,9 @@ not the class:
 - **The erasing pages are tested in parts** (C95). The helper, the rule for an unsigned refusal and the
   mirror's path on a deployment with no identity are run; the mirror against a server that erases, and
   `/account` at all, are read and not run.
+- **The simpler interface (C96) was judged from screenshots, by the one who made it.** Whether a person
+  who has never seen the village now finds the envelopes, the privacy page and the way out without being
+  told is the thing it was for, and nobody has watched one try.
 - **The open village is one village.** Everyone who walks in meets in Drurnscree; what a crowd of strangers
   does to one village's memory of strangers (C44, C45) is unmeasured.
 

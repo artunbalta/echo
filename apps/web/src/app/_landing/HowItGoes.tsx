@@ -18,6 +18,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import audit from "@/lib/knowable/data/twin2k-audit.json";
 import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 import { step } from "@/lib/steps";
+import { SECTION, SectionHead, WRAP } from "./Section";
 
 const twins = Object.values(audit.twins as Record<string, { vs_crowd_ci95: number[]; one_look_gain_ci95: number[] }>);
 /** Twins whose whole interval sits below the crowd, and twins one earlier answer reliably lifted. */
@@ -59,7 +60,7 @@ const ART = [
 /** The section's words, in both languages; a browser set to Turkish reads Turkish. */
 const COPY: Record<Lang, { eyebrow: string; h2: [string, string]; steps: { title: string; body: string }[]; walkIn: string; quote: (below: number, n: number, lifted: boolean) => string; caption: string; evidence: string }> = {
   en: {
-    eyebrow: "Who knows you best",
+    eyebrow: "How it works",
     h2: ["You, a friend, or something that", "watched you walk?"],
     steps: [
       { title: "It seals a guess", body: "Things happen in the village: a purse in the grass, a stranger asking the way, children who want you to lie for them. Before each one, your echo writes down what you will do, and seals it." },
@@ -72,7 +73,7 @@ const COPY: Record<Lang, { eyebrow: string; h2: [string, string]; steps: { title
     evidence: "See the evidence",
   },
   tr: {
-    eyebrow: "Seni en iyi kim tanıyor",
+    eyebrow: "Nasıl çalışır",
     h2: ["Sen mi, bir arkadaşın mı, yoksa", "yürüyüşünü izleyen bir şey mi?"],
     steps: [
       { title: "Bir tahmin mühürler", body: "Köyde bir şeyler olur: otların arasında bir kese, yol soran bir yabancı, kendileri için yalan söylemeni isteyen çocuklar. Her birinden önce yankın ne yapacağını yazar ve mühürler." },
@@ -89,19 +90,24 @@ const COPY: Record<Lang, { eyebrow: string; h2: [string, string]; steps: { title
 export default function HowItGoes() {
   const copy = COPY[useLang()];
   return (
-    <section id="how" className="border-t border-parchment/10 bg-ink px-5 py-16 sm:px-8 sm:py-24">
-      <div className="mx-auto max-w-5xl">
-        <p className="text-center font-pixel text-xs uppercase tracking-[0.25em] text-parchment/35">{copy.eyebrow}</p>
-        <h2 className="mx-auto mt-5 max-w-2xl text-center font-serif text-[clamp(1.9rem,3.4vw,2.9rem)] leading-[1.08] tracking-[-.02em] text-parchment">
-          {copy.h2[0]} <span className="italic text-echo-soft">{copy.h2[1]}</span>
-        </h2>
+    <section id="how" className={SECTION}>
+      <div className={WRAP}>
+        <SectionHead
+          eyebrow={copy.eyebrow}
+          className="max-w-2xl"
+          title={
+            <>
+              {copy.h2[0]} <span className="italic text-echo-soft">{copy.h2[1]}</span>
+            </>
+          }
+        />
 
-        <ol className="mt-12 grid gap-10 sm:mt-14 sm:grid-cols-3 sm:gap-8">
+        <ol className="mt-12 grid gap-10 sm:mt-14 md:grid-cols-3 md:gap-10 lg:gap-14">
           {copy.steps.map((s, i) => (
-            <li key={s.title} className="text-parchment/80">
+            <li key={s.title}>
               <div className="flex items-center gap-4 text-parchment/70">
                 {ART[i]}
-                <span className="font-pixel text-xs text-parchment/30">0{i + 1}</span>
+                <span className="text-[12px] tabular-nums tracking-[.12em] text-parchment/35">0{i + 1}</span>
               </div>
               <h3 className="mt-4 font-serif text-xl text-parchment">{s.title}</h3>
               <p className="mt-2 text-[15px] leading-relaxed text-parchment/60">{s.body}</p>
@@ -109,17 +115,17 @@ export default function HowItGoes() {
           ))}
         </ol>
 
-        <div className="mt-12 flex justify-center sm:mt-14">
-          <Link href={OPEN_VILLAGE_PATH} onClick={() => step("walk_in")} className="rounded-full bg-parchment px-7 py-3.5 text-sm font-medium text-ink transition-colors hover:bg-white">
+        <div className="mt-12 sm:mt-14">
+          <Link href={OPEN_VILLAGE_PATH} onClick={() => step("walk_in")} className="btn btn-primary">
             {copy.walkIn} <span aria-hidden>›</span>
           </Link>
         </div>
 
-        <figure className="mx-auto mt-16 max-w-3xl border-l-2 border-echo/60 pl-6 sm:mt-20">
+        <figure className="mt-16 max-w-3xl border-l-2 border-echo/60 pl-6 sm:mt-20">
           <blockquote className="font-serif text-[clamp(1.25rem,2.1vw,1.6rem)] leading-snug text-parchment">{copy.quote(below, twins.length, lifted === twins.length)}</blockquote>
-          <figcaption className="mt-4 text-sm text-parchment/50">
+          <figcaption className="mt-4 text-sm leading-relaxed text-parchment/55">
             {copy.caption}{" "}
-            <Link href="/bench" className="text-echo-soft underline decoration-echo-soft/40 underline-offset-4 hover:decoration-echo-soft">
+            <Link href="/bench" className="text-link">
               {copy.evidence}
             </Link>
           </figcaption>

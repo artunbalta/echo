@@ -50,14 +50,16 @@ export default function ConsentCard({ consent, onAccept, onDecline, crowd = fals
           <button
             type="button"
             onClick={onAccept}
-            className="rounded-full bg-parchment px-4 py-2 text-[13px] font-medium text-ink transition-opacity hover:opacity-90"
+            data-consent-yes
+            className="btn btn-sm btn-primary"
           >
             {t(lang, "consent.yes")}
           </button>
           <button
             type="button"
             onClick={onDecline}
-            className="rounded-full border border-parchment/20 px-4 py-2 text-[13px] text-parchment/75 transition-colors hover:border-parchment/40 hover:text-parchment"
+            data-consent-no
+            className="btn btn-sm btn-ghost"
           >
             {t(lang, "consent.no")}
           </button>

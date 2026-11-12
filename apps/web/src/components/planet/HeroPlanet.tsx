@@ -19,6 +19,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useReducedMotion } from "@/components/planet/motion";
+import { useLang, type Lang } from "@/lib/lang";
 import type { PickedParcel } from "@/game/planet/PlanetGlobe";
 
 // Sampling terrain for the inset pulls in the whole planet package, which the hero already loads,
@@ -255,39 +256,77 @@ function useVillage(cell: string): VillageSummary | null {
   return village;
 }
 
+/**
+ * The picked parcel's card, in both languages and in the site's own buttons (C96). It was the one thing
+ * on the landing still in English with a hand-made pill, and its close button turned green on hover.
+ */
+const PICK: Record<Lang, { label: string; live: string; close: string; place: string; ocean: string; abandoned: (graves: number) => string; lives: (kind: string, n: number, households: number) => string; village: string; land: string; sea: string; go: string; stay: string }> = {
+  en: {
+    label: "Selected parcel",
+    live: "Live world · arrival view",
+    close: "Close parcel preview",
+    place: "A place in the world.",
+    ocean: "The open ocean.",
+    abandoned: (graves) => `An abandoned village · ${graves} graves`,
+    lives: (kind, n, households) => `A ${kind} · ${n} ${n === 1 ? "person lives" : "people live"} here · ${households} households`,
+    village: "You arrive at the edge of the village. Everyone in it has lived a life here, and the houses, the boats and the graves are theirs.",
+    land: "Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.",
+    sea: "Choose a patch of land to begin exploring.",
+    go: "Explore this place",
+    stay: "Keep exploring",
+  },
+  tr: {
+    label: "Seçilen toprak",
+    live: "Canlı dünya · varış görüntüsü",
+    close: "Önizlemeyi kapat",
+    place: "Dünyada bir yer.",
+    ocean: "Açık deniz.",
+    abandoned: (graves) => `Terk edilmiş bir köy · ${graves} mezar`,
+    lives: (kind, n, households) => `${kind === "village" ? "Bir köy" : kind === "hamlet" ? "Bir mezra" : kind === "town" ? "Bir kasaba" : kind} · burada ${n} kişi yaşıyor · ${households} hane`,
+    village: "Köyün kıyısına varırsın. İçindeki herkes burada bir ömür yaşadı; evler, kayıklar ve mezarlar onların.",
+    land: "Bu manzaranın içine gir. Burada gördüğün zemin, bitkiler ve varış noktası, gezeceğin yerin kendisi.",
+    sea: "Gezmeye başlamak için bir toprak parçası seç.",
+    go: "Burayı gez",
+    stay: "Bakmaya devam et",
+  },
+};
+
 function DemoPrompt({ parcel, world, onDismiss }: {
   parcel: PickedParcel; world: World; onDismiss: () => void;
 }) {
+  const copy = PICK[useLang()];
   const canEnter = parcel.assignable || !!parcel.commonsName;
   const village = useVillage(parcel.cell);
   return (
-    <section aria-label="Selected parcel" className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-white/25 bg-ink/95 text-parchment shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
+    <section aria-label={copy.label} className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-parchment/15 bg-ink/95 text-parchment shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
       {canEnter ? (
         <div className="relative h-[230px] sm:h-[300px]" data-preview-cell={parcel.cell}>
           <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} commons={Object.keys(world.commons)} />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent" />
-          <span className="absolute left-5 top-4 rounded-full bg-ink/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">Live world · arrival view</span>
+          <span className="absolute left-5 top-4 rounded-full bg-ink/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">{copy.live}</span>
         </div>
       ) : null}
-      <button type="button" aria-label="Close parcel preview" onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-ink/80 text-xl hover:bg-[#324638]">×</button>
+      <button type="button" aria-label={copy.close} title={copy.close} onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-parchment/15 bg-ink/80 text-parchment/80 transition-colors hover:bg-ink-deep hover:text-parchment">
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+          <path d="M1.5 1.5l8 8M9.5 1.5l-8 8" />
+        </svg>
+      </button>
       <div className="relative px-6 pb-6 pt-4">
         <p className="text-[10px] uppercase tracking-[.24em] text-echo-soft">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
-        <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? village?.name ?? (canEnter ? 'A place in the world.' : 'The open ocean.')}</h2>
+        <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? village?.name ?? (canEnter ? copy.place : copy.ocean)}</h2>
         {village ? (
           <p data-village={village.name} className="mt-1 text-sm text-ember">
-            {village.kind === 'abandoned village'
-              ? `An abandoned village · ${village.graves} graves`
-              : `A ${village.kind} · ${village.population} ${village.population === 1 ? 'person lives' : 'people live'} here · ${village.households} households`}
+            {village.kind === 'abandoned village' ? copy.abandoned(village.graves) : copy.lives(village.kind, village.population, village.households)}
           </p>
         ) : null}
         <p className="mt-2 max-w-md text-sm leading-relaxed text-white/65">
           {village && village.population > 0
-            ? 'You arrive at the edge of the village. Everyone in it has lived a life here, and the houses, the boats and the graves are theirs.'
-            : canEnter ? 'Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.' : 'Choose a patch of land to begin exploring.'}
+            ? copy.village
+            : canEnter ? copy.land : copy.sea}
         </p>
         <div className="mt-5 flex items-center gap-4">
-          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="rounded-full bg-parchment px-6 py-3 text-sm font-medium text-ink hover:bg-white">Explore this place <span aria-hidden>↗</span></a> : null}
-          <button type="button" onClick={onDismiss} className="py-3 text-sm text-white/65 hover:text-white">Keep exploring</button>
+          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="btn btn-primary">{copy.go} <span aria-hidden>›</span></a> : null}
+          <button type="button" onClick={onDismiss} className="btn btn-ghost">{copy.stay}</button>
         </div>
       </div>
     </section>

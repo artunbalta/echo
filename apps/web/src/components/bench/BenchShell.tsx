@@ -12,9 +12,17 @@
  *
  * One palette (ink, parchment, the echo's violet; a warm step of `danger` for a twin below the
  * crowd), serif for titles, sans for reading. No green.
+ *
+ * THE HEADER AND THE FOOTER are the site's (`components/site`, C96). The frame had its own: a
+ * wordmark and two tabs, with no way to the village or to anything else. The site's header marks
+ * which of the two pages this is, and each page keeps one link to the other in its own first screen.
+ * Neither prints (`kn-noprint`), so the line that names the method and the code is said once more
+ * for paper, at the foot of the page.
  */
 import type { ReactNode } from "react";
-import Link from "next/link";
+
+import SiteFooter from "@/components/site/SiteFooter";
+import SiteHeader from "@/components/site/SiteHeader";
 
 const CSS = `
 html, body { height: auto; overflow: visible; }
@@ -44,48 +52,45 @@ html { scroll-padding-top: 4.5rem; }
   .kn, .kn * { color: #1c1326 !important; border-color: rgba(28, 19, 38, 0.22) !important; box-shadow: none !important; }
   .kn-surface { background: transparent !important; }
   .kn-noprint { display: none !important; }
+  .kn-printonly { display: block !important; }
   .kn-row { break-inside: avoid; }
 }
 `;
 
-export function BenchShell({ active, children }: { active: "bench" | "audit"; children: ReactNode }) {
-  const tab = (on: boolean) => `rounded-full px-3 py-1.5 text-[13px] transition-colors ${on ? "bg-parchment/10 text-parchment" : "text-parchment/60 hover:text-parchment"}`;
+const REPO = (
+  <>
+    The twin audit, by ECHO. Method and code:{" "}
+    <a className="kn-link" href="https://github.com/artunbalta/echo" rel="noreferrer">
+      github.com/artunbalta/echo
+    </a>
+    , <code className="text-[12px]">research/deeds</code>.
+  </>
+);
+
+export function BenchShell({ children }: { children: ReactNode }) {
   return (
-    <div className="kn min-h-[100dvh] bg-ink font-sans text-parchment antialiased">
+    <div className="kn flex min-h-[100dvh] flex-col bg-ink font-sans text-parchment antialiased">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
-      <header className="kn-noprint sticky top-0 z-40 border-b border-parchment/10 bg-ink/90 backdrop-blur">
-        <nav className="mx-auto flex max-w-[1200px] items-center justify-between gap-3 px-4 py-2.5 sm:px-8" aria-label="Twin audit">
-          <Link href="/" className="flex shrink-0 items-center gap-2.5">
-            <img src="/logo.png" alt="" width={28} height={28} draggable={false} className="h-7 w-7 select-none rounded" />
-            <span className="font-pixel text-lg font-bold lowercase tracking-wide text-parchment">echo</span>
-          </Link>
-          <div className="flex items-center gap-1">
-            <Link href="/bench" aria-current={active === "bench" ? "page" : undefined} className={tab(active === "bench")}>
-              Results
-            </Link>
-            <Link href="/audit" aria-current={active === "audit" ? "page" : undefined} className={tab(active === "audit")}>
-              Audit your twins
-            </Link>
+      <SiteHeader />
+      {/* 60px for the header, which is fixed; on paper there is none. `lang`: these two pages are
+          written in English only, and under a Turkish header their small capitals would otherwise be
+          capitalised the Turkish way ("TWİN AUDİT"). */}
+      <main lang="en" className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-24 pt-[60px] sm:px-8 print:pt-0">
+        {children}
+        <p className="kn-printonly mt-10 hidden border-t border-parchment/10 pt-6 text-[13px] text-parchment/55">{REPO}</p>
+      </main>
+      <SiteFooter
+        note={
+          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+            <p>{REPO}</p>
+            <p>
+              <a className="kn-link" href="mailto:artun.balta@outlook.com?subject=Twin%20audit">
+                artun.balta@outlook.com
+              </a>
+            </p>
           </div>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-[1200px] px-4 pb-24 sm:px-8">{children}</main>
-      <footer className="border-t border-parchment/10">
-        <div className="mx-auto flex max-w-[1200px] flex-wrap items-baseline justify-between gap-x-8 gap-y-2 px-4 py-8 text-[13px] text-parchment/55 sm:px-8">
-          <p>
-            The twin audit, by ECHO. Method and code:{" "}
-            <a className="kn-link" href="https://github.com/artunbalta/echo" rel="noreferrer">
-              github.com/artunbalta/echo
-            </a>
-            , <code className="text-[12px]">research/deeds</code>.
-          </p>
-          <p className="kn-noprint">
-            <a className="kn-link" href="mailto:artun.balta@outlook.com?subject=Twin%20audit">
-              artun.balta@outlook.com
-            </a>
-          </p>
-        </div>
-      </footer>
+        }
+      />
     </div>
   );
 }
@@ -94,7 +99,7 @@ export function BenchShell({ active, children }: { active: "bench" | "audit"; ch
 export function Section({ id, eyebrow, title, children, wide = false }: { id?: string; eyebrow?: string; title: string; children: ReactNode; wide?: boolean }) {
   return (
     <section id={id} className="border-t border-parchment/10 py-12 sm:py-16">
-      {eyebrow ? <p className="mb-3 text-[11px] uppercase tracking-[.22em] text-echo-soft">{eyebrow}</p> : null}
+      {eyebrow ? <p className="eyebrow mb-3">{eyebrow}</p> : null}
       <h2 className="max-w-3xl font-serif text-[1.7rem] leading-tight tracking-[-.01em] text-parchment sm:text-[2.1rem]">{title}</h2>
       <div className={`mt-5 space-y-4 text-[15px] leading-relaxed text-parchment/75 ${wide ? "" : "max-w-3xl"}`}>{children}</div>
     </section>

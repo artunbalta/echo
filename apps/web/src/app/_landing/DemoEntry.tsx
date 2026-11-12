@@ -1,8 +1,16 @@
 "use client";
 
+import { useLang, type Lang } from "@/lib/lang";
+import { SECTION, SectionHead, SPLIT, WRAP } from "./Section";
+
 /**
  * The demo entry (landing §1c). The trailer. Stays last: it is below the waitlist and deliberately
  * does not compete with it.
+ *
+ * It says what it is now (C96). It was the word "Demo", a film, and a square violet button in the
+ * pixel face beside the hero's parchment pill: a third way in, with nothing saying where it went.
+ * So the section has a title, one sentence saying what the film is and where the button goes, and
+ * the button is the site's quiet one: the page's main action is still "Walk in".
  *
  * The "Walk the demo" link into /play was removed, and a different one has taken its place. What
  * was removed pointed at an older world that competed with the planet at the top of the page for
@@ -58,15 +66,38 @@
  * Both `type`s carry an explicit `codecs=`, read back out of the files' own `avcC`/`av1C` boxes
  * rather than guessed, so a browser neither claims a source it cannot decode nor skips one it can.
  */
-export default function DemoEntry() {
-  return (
-    <section id="demo" className="border-t border-parchment/10 bg-ink px-5 py-16 sm:px-8 sm:py-24">
-      <div className="mx-auto max-w-3xl">
-        <p className="text-center font-pixel text-xs uppercase tracking-[0.25em] text-parchment/35">
-          Demo
-        </p>
+const COPY: Record<Lang, { eyebrow: string; title: string; lead: string; walk: string; fallback: string }> = {
+  en: {
+    eyebrow: "Demo",
+    title: "A short film of the shore",
+    lead: "A few seconds of it. The button opens the demo: another shore, with a cave and a campfire. It is rough, and it is not the whole thing.",
+    walk: "Walk the demo",
+    fallback: "Your browser cannot play this video. The planet at the top of the page is walkable.",
+  },
+  tr: {
+    eyebrow: "Demo",
+    title: "Kıyıdan kısa bir film",
+    lead: "Yalnızca birkaç saniye. Düğme demoyu açar: mağarası ve kamp ateşi olan başka bir kıyı. Henüz ham, ve hepsi bu değil.",
+    walk: "Demoyu gez",
+    fallback: "Tarayıcın bu videoyu oynatamıyor. Sayfanın başındaki gezegende yürüyebilirsin.",
+  },
+};
 
-        <div className="mx-auto mt-8 overflow-hidden rounded-sm border-2 border-[#2a2340] bg-ink-deep shadow-[0_8px_0_#0d0812]">
+export default function DemoEntry() {
+  const copy = COPY[useLang()];
+  return (
+    <section id="demo" className={SECTION}>
+      <div className={`${WRAP} ${SPLIT}`}>
+        <div>
+          <SectionHead eyebrow={copy.eyebrow} title={copy.title}>
+            {copy.lead}
+          </SectionHead>
+          <a href="/demo" data-demo-walk className="btn btn-ghost mt-7">
+            {copy.walk} <span aria-hidden>›</span>
+          </a>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-parchment/15 bg-ink-deep">
           <video
             controls
             muted
@@ -80,22 +111,8 @@ export default function DemoEntry() {
             <source src="/echo-trailer.av1.mp4" type='video/mp4; codecs="av01.0.08M.08, mp4a.40.2"' />
             <source src="/echo-trailer.mp4" type='video/mp4; codecs="avc1.64001F, mp4a.40.2"' />
             {/* Real fallback text, not a shrug: the planet at the top of the page is the way in. */}
-            Your browser cannot play this video. The planet at the top of the page is walkable.
+            {copy.fallback}
           </video>
-        </div>
-
-        <p className="mx-auto mt-8 max-w-sm text-center text-[15px] leading-relaxed text-parchment/55">
-          Part of the world is already walkable. It is rough, and it is not the whole thing, but the
-          shore is real and your echo is already watching.
-        </p>
-
-        <div className="mt-6 flex justify-center">
-          <a
-            href="/demo"
-            className="rounded bg-echo px-4 py-2 font-pixel text-xs text-ink transition-opacity hover:opacity-90"
-          >
-            Walk the demo
-          </a>
         </div>
       </div>
     </section>

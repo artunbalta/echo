@@ -1,11 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLang, type Lang } from "@/lib/lang";
 import { BEATS, COVER, LEGEND_INTRO } from "./legend";
+import { SECTION, SectionHead, SPLIT, WRAP } from "./Section";
 
 /**
  * The legend book (landing §1a). A bespoke pixel-art book: cover, then seven spreads, each one
- * mythic line and one illustration. The hero of the page.
+ * mythic line and one illustration.
+ *
+ * Around it (C96): a title and one sentence saying it is a story with pages, two buttons with words
+ * on them, a count, and a dot a page from `sm` up. The pixel face is kept for what is INSIDE the
+ * book, which is the book's own voice; everything around it is the site's serif and sans.
  *
  * WHAT THIS IS NOT, and why:
  *  - Not react-pageflip. It renders <div></div> on the server, so every legend line would be absent
@@ -42,8 +48,49 @@ const SWAP_AT = 2;
 /** Weight, not speed. ~95ms a frame reads as a page with mass; faster reads as a UI transition. */
 const FRAME_MS = 95;
 
+/** The cover and the spreads: what "1 / 8" counts. */
+const PAGES = BEATS.length + 1;
+
+/**
+ * The section's own words, in both languages (C96). The story's pages stay as they were written
+ * (`legend.ts`); these are what stands around the book: what it is, and how to turn it.
+ *
+ * WHY THE BOOK NOW SAYS WHAT IT IS. It was a frame inside a frame showing the word "echo", with a
+ * faint chevron at one edge and eight dots under it. Nobody could tell it was a story with pages. So
+ * the section has a title and one sentence, the two ways to turn are buttons with words on them,
+ * and the count says how far along you are.
+ */
+const COPY: Record<Lang, { eyebrow: string; title: string; lead: (pages: number) => string; book: string; back: string; next: string; open: string; prev: string; nextPage: string; page: (i: number, n: number) => string; cover: string }> = {
+  en: {
+    eyebrow: "The story",
+    title: `${LEGEND_INTRO}.`,
+    lead: (pages) => `A short legend the villagers tell, ${pages} pages long. Turn them with the buttons, the arrow keys, or a swipe.`,
+    book: "The legend of echo",
+    back: "Back",
+    next: "Next",
+    open: "Open the book",
+    prev: "Previous page",
+    nextPage: "Next page",
+    page: (i, n) => `Page ${i} of ${n}`,
+    cover: "the cover",
+  },
+  tr: {
+    eyebrow: "Hikâye",
+    title: "Şöyle anlatırlar.",
+    lead: (pages) => `Köylülerin anlattığı ${pages} sayfalık kısa bir efsane. Düğmelerle, ok tuşlarıyla ya da kaydırarak çevir.`,
+    book: "Echo efsanesi",
+    back: "Geri",
+    next: "İleri",
+    open: "Kitabı aç",
+    prev: "Önceki sayfa",
+    nextPage: "Sonraki sayfa",
+    page: (i, n) => `Sayfa ${i} / ${n}`,
+    cover: "kapak",
+  },
+};
 
 export default function LegendBook() {
+  const copy = COPY[useLang()];
   // -1 = cover, 0..BEATS.length-1 = spreads.
   const [page, setPage] = useState(-1);
   const [frame, setFrame] = useState(0);
@@ -118,56 +165,79 @@ export default function LegendBook() {
   const scale = turning ? TURN_FRAMES[frame] : 1;
   const atEnd = page === BEATS.length - 1;
 
+  const cover = page === -1;
+  const said = copy.page(page + 2, PAGES);
+
   return (
-    <section id="legend" className="relative bg-ink px-4 pb-16 pt-24 sm:px-8 sm:pb-24 sm:pt-32">
-      <div className="mx-auto max-w-4xl">
-        {/* Not a heading (no <h2>): it is a caption on the book, and an <h2> here would announce
-            itself as a section title competing with the hero. Quiet by construction. */}
-        <p className="mb-6 text-center font-pixel text-[10px] uppercase tracking-[0.35em] text-parchment/30 sm:mb-8 sm:text-xs">
-          {LEGEND_INTRO}
-        </p>
-        <div
-          role="group"
-          aria-roledescription="book"
-          aria-label="The legend of echo"
-          tabIndex={0}
-          onKeyDown={onKey}
-          onTouchStart={(e) => {
-            touchX.current = e.touches[0]?.clientX ?? null;
-          }}
-          onTouchEnd={(e) => {
-            const start = touchX.current;
-            const end = e.changedTouches[0]?.clientX ?? null;
-            touchX.current = null;
-            if (start === null || end === null) return;
-            const dx = end - start;
-            if (Math.abs(dx) < 40) return; // a tap is not a swipe
-            if (dx < 0) next();
-            else prev();
-          }}
-          className="relative mx-auto rounded-sm outline-none ring-offset-4 ring-offset-ink focus-visible:ring-2 focus-visible:ring-parchment/40"
-        >
-          <Book scale={scale} beat={beat} page={page} />
+    <section id="legend" className={SECTION}>
+      <div className={`${WRAP} ${SPLIT}`}>
+        <SectionHead eyebrow={copy.eyebrow} title={copy.title}>
+          {copy.lead(PAGES)}
+        </SectionHead>
 
-          {/* Click targets on the page edges, as Appendix A asks. Buttons, not divs: they are real
-              controls and must be reachable and announced. */}
-          <PageEdge side="left" onClick={prev} disabled={page === -1 || turning} label="Previous page" />
-          <PageEdge side="right" onClick={next} disabled={atEnd || turning} label="Next page" />
+        <div className="min-w-0">
+          {/* The book and its controls are one group, so the arrow keys turn the page from the book
+              or from either button, and a swipe that starts anywhere on it counts. */}
+          <div
+            role="group"
+            aria-roledescription="book"
+            aria-label={copy.book}
+            tabIndex={0}
+            onKeyDown={onKey}
+            onTouchStart={(e) => {
+              touchX.current = e.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(e) => {
+              const start = touchX.current;
+              const end = e.changedTouches[0]?.clientX ?? null;
+              touchX.current = null;
+              if (start === null || end === null) return;
+              const dx = end - start;
+              if (Math.abs(dx) < 40) return; // a tap is not a swipe
+              if (dx < 0) next();
+              else prev();
+            }}
+            className="rounded-xl outline-none ring-offset-4 ring-offset-ink focus-visible:ring-2 focus-visible:ring-echo-soft/70"
+          >
+            <div className="relative">
+              <Book scale={scale} beat={beat} page={page} said={said} />
+
+              {/* The page's own edges turn it too, for a pointer. They are not announced and not
+                  tab stops: the two buttons under the book are the controls, with words on them, and
+                  a second pair saying the same thing would only be said twice. The cover opens
+                  wherever it is clicked. */}
+              <PageEdge side="left" onClick={prev} disabled={cover || turning} />
+              <PageEdge side="right" onClick={next} disabled={atEnd || turning} whole={cover} />
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <button type="button" data-legend-prev onClick={prev} disabled={cover || turning} aria-label={copy.prev} className="btn btn-sm btn-ghost">
+                <span aria-hidden>‹</span> {copy.back}
+              </button>
+              <div className="flex items-center gap-4">
+                <Progress page={page} onGoTo={goTo} turning={turning} label={(n) => (n === -1 ? `${copy.page(1, PAGES)}, ${copy.cover}` : copy.page(n + 2, PAGES))} />
+                <p data-legend-count className="text-[13px] tabular-nums text-parchment/60" aria-hidden>
+                  {page + 2} / {PAGES}
+                </p>
+              </div>
+              <button type="button" data-legend-next onClick={next} disabled={atEnd || turning} aria-label={copy.nextPage} className="btn btn-sm btn-ghost">
+                {cover ? copy.open : copy.next} <span aria-hidden>›</span>
+              </button>
+            </div>
+          </div>
+
+          {/* The whole legend, always in the DOM, for no-JS and for anything that does not run our
+              script. Hidden from sighted users only because the book above already presents it. */}
+          <noscript>
+            <ol className="mt-10 max-w-lg list-none space-y-5">
+              {BEATS.map((b) => (
+                <li key={b.id} className="font-pixel text-sm leading-relaxed text-parchment/70">
+                  {b.line}
+                </li>
+              ))}
+            </ol>
+          </noscript>
         </div>
-
-        <Progress page={page} onGoTo={goTo} turning={turning} />
-
-        {/* The whole legend, always in the DOM, for no-JS and for anything that does not run our
-            script. Hidden from sighted users only because the book above already presents it. */}
-        <noscript>
-          <ol className="mx-auto mt-10 max-w-lg list-none space-y-5 text-center">
-            {BEATS.map((b) => (
-              <li key={b.id} className="font-pixel text-sm leading-relaxed text-parchment/70">
-                {b.line}
-              </li>
-            ))}
-          </ol>
-        </noscript>
       </div>
     </section>
   );
@@ -175,17 +245,15 @@ export default function LegendBook() {
 
 /* ── the book itself ─────────────────────────────────────────────────────────────────────────── */
 
-function Book({ scale, beat, page }: { scale: number; beat: (typeof BEATS)[number] | null; page: number }) {
+function Book({ scale, beat, page, said }: { scale: number; beat: (typeof BEATS)[number] | null; page: number; said: string }) {
   const cover = page < 0;
   return (
-    <div
-      className="relative mx-auto flex w-full max-w-[560px] items-stretch justify-center rounded-sm border-2 border-[#2a2340] bg-ink-deep p-2 shadow-[0_10px_0_#0d0812] sm:max-w-[720px] sm:p-3"
-      style={{
-        // The turning leaf squashes horizontally. transition:none is load-bearing — the instant a
-        // browser tweens this, the discrete frame sequence becomes a smooth animation.
-        transition: "none",
-      }}
-    >
+    // ONE frame (C96). It was a bordered board with a hard shadow, padded, holding a cover that drew
+    // a second rule inside itself: a frame in a frame around one word. The book is an object, so it
+    // gets one hairline and one radius, and the pages run to it.
+    // `lang`: the story is told in English whatever the page's language, and a page in Turkish would
+    // otherwise capitalise the cover's line the Turkish way ("EXİST").
+    <div lang="en" className="relative flex w-full items-stretch justify-center overflow-hidden rounded-xl border border-parchment/15 bg-ink-deep">
       {/* The binding, and it is HIDDEN ON THE COVER. A closed book shows no spine from the front,
           and more to the point: the cover's type is centred, so a spine down the middle would run
           straight through the wordmark. Text must never cross the spine. Revealing the binding on
@@ -193,13 +261,14 @@ function Book({ scale, beat, page }: { scale: number; beat: (typeof BEATS)[numbe
       {!cover && (
         <div
           aria-hidden
-          className="absolute inset-y-2 left-1/2 z-20 hidden w-[10px] -translate-x-1/2 bg-bark shadow-[inset_2px_0_0_#5d3a22,inset_-2px_0_0_#5d3a22] sm:block sm:w-3"
+          className="absolute inset-y-0 left-1/2 z-20 hidden w-[10px] -translate-x-1/2 bg-bark shadow-[inset_2px_0_0_#5d3a22,inset_-2px_0_0_#5d3a22] sm:block sm:w-3"
         />
       )}
-      <div
-        className="flex w-full origin-center"
-        style={{ transform: `scaleX(${scale})`, transition: "none" }}
-      >
+      {/* The turning leaf squashes horizontally. transition:none is load-bearing — the instant a
+          browser tweens this, the discrete frame sequence becomes a smooth animation. The page is
+          said as it changes: which one it is, then (in a spread) its line. */}
+      <div aria-live="polite" aria-atomic="true" className="flex w-full origin-center" style={{ transform: `scaleX(${scale})`, transition: "none" }}>
+        <span className="sr-only">{said}.</span>
         {cover ? <Cover /> : <Spread beat={beat!} />}
       </div>
     </div>
@@ -211,17 +280,13 @@ function Book({ scale, beat, page }: { scale: number; beat: (typeof BEATS)[numbe
  * sm:min-h-[420px] while a spread was sized by its own content — so the whole book visibly changed
  * size on the very first turn. The cover's proportions are the reference; everything matches it.
  */
-const LEAF_H = "h-[300px] sm:h-[420px]";
+const LEAF_H = "h-[420px]";
 
 function Cover() {
   return (
     <div
       className={`${LEAF_H} relative flex w-full flex-col items-center justify-center gap-5 bg-[#150e1f] px-6`}
     >
-      {/* A debossed rule, the way a bound board is tooled. Pixel-art: a hard 2px line, no bevel.
-          Bark, kept from the leather cover — one warm line, so the board is not a plain black box. */}
-      <div className="pointer-events-none absolute inset-4 border-2 border-[#3a2f50] sm:inset-6" />
-
       {/* CREAM TYPE, VIOLET GLOW — not violet fill. Echo-violet is the rarest thing on this page and
           it belongs on an EDGE: here it is light coming off the letters, not the letters themselves.
           Centred on a single board with no spine behind it, so nothing crosses the binding.
@@ -252,12 +317,12 @@ function Spread({ beat }: { beat: (typeof BEATS)[number] }) {
     <div className={`${LEAF_H} grid w-full grid-cols-1 bg-parchment sm:grid-cols-2`}>
       {/* Left leaf: the plate. Degrades to a quiet panel if the art is missing — the line still
           carries the beat, which is exactly why the text is never baked into the image. */}
-      <div className="flex items-center justify-center overflow-hidden border-b-2 border-[#cdb88e] bg-[#e8d3a0] p-4 sm:border-b-0 sm:border-r-2 sm:p-6">
+      <div className="flex items-center justify-center overflow-hidden border-b-2 border-[#cdb88e] bg-[#e8d3a0] p-3 sm:border-b-0 sm:border-r-2 md:p-6">
         <Plate beat={beat} />
       </div>
       {/* Right leaf: the line. Real DOM text. */}
-      <div className="flex items-center justify-center overflow-hidden p-5 sm:p-10">
-        <p className="max-w-[26ch] text-balance font-pixel text-sm leading-relaxed text-ink/85 sm:text-lg">
+      <div className="flex items-center justify-center overflow-hidden p-5 sm:p-7 md:p-10">
+        <p className="max-w-[26ch] text-balance font-pixel text-base leading-relaxed text-ink/85 sm:text-lg">
           {beat.line}
         </p>
       </div>
@@ -271,18 +336,20 @@ function Plate({ beat }: { beat: (typeof BEATS)[number] }) {
   if (failed) {
     // Never a broken slot: an absent plate leaves a quiet parchment panel, and the legend line
     // beside it still carries the whole beat.
-    return <div aria-hidden className="h-[86px] w-[128px] rounded-sm bg-[#cdb88e]/40 sm:h-[172px] sm:w-[256px]" />;
+    return <div aria-hidden className="h-[172px] w-[256px] rounded-sm bg-[#cdb88e]/40" />;
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element -- pixel art must not be resampled by
     // next/image. `pixel` + an integer scale is the whole point.
     //
-    // Integer scale only: 1x on phones, 2x from sm. `max-w-none` is LOAD-BEARING, and so is the
-    // rule that each size must actually FIT its leaf. An earlier version stepped up to 3x, which did
-    // not fit, so the stylesheet's `img { max-width: 100% }` quietly clamped it and the plate
-    // rendered at 2.31x — a fractional scale that smears the pixel grid. 1x on phones is not
-    // timidity either: the leaf is now a FIXED height shared with the cover, and a 2x plate plus its
-    // line does not fit inside it on a stacked mobile layout.
+    // Integer scale only: 2x everywhere. `max-w-none` is LOAD-BEARING, and so is the rule that the
+    // size must actually FIT its leaf. An earlier version stepped up to 3x, which did not fit, so the
+    // stylesheet's `img { max-width: 100% }` quietly clamped it and the plate rendered at 2.31x — a
+    // fractional scale that smears the pixel grid. Phones used to get 1x, because the leaf was 300px
+    // and a 2x plate plus its line did not fit a stacked page; the leaf is 420px at every width now
+    // (C96), which holds both, and a plate 128px wide on a phone was too small to read as a picture.
+    // The leaf's padding steps down where the leaf is narrowest (a 320px phone; two leaves at 640px)
+    // so 256px always fits.
     <img
       src={beat.plate}
       alt={beat.alt}
@@ -290,7 +357,7 @@ function Plate({ beat }: { beat: (typeof BEATS)[number] }) {
       height={86}
       draggable={false}
       onError={() => setFailed(true)}
-      className="pixel box-content block w-[128px] max-w-none select-none sm:w-[256px]"
+      className="pixel box-content block w-[256px] max-w-none select-none"
       style={{ imageRendering: "pixelated" }}
     />
   );
@@ -298,60 +365,27 @@ function Plate({ beat }: { beat: (typeof BEATS)[number] }) {
 
 /* ── controls ────────────────────────────────────────────────────────────────────────────────── */
 
-function PageEdge({
-  side,
-  onClick,
-  disabled,
-  label,
-}: {
-  side: "left" | "right";
-  onClick: () => void;
-  disabled: boolean;
-  label: string;
-}) {
+function PageEdge({ side, onClick, disabled, whole = false }: { side: "left" | "right"; onClick: () => void; disabled: boolean; whole?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={label}
-      className={`absolute inset-y-0 z-30 w-12 cursor-pointer select-none outline-none transition-opacity disabled:pointer-events-none disabled:opacity-0 sm:w-16 ${
-        side === "left" ? "-left-2 sm:-left-8" : "-right-2 sm:-right-8"
-      }`}
-    >
-      <span
-        aria-hidden
-        className="mx-auto block font-pixel text-2xl text-parchment/25 transition-colors hover:text-parchment/70"
-      >
-        {side === "left" ? "‹" : "›"}
-      </span>
-    </button>
+      tabIndex={-1}
+      aria-hidden
+      className={`absolute inset-y-0 z-30 cursor-pointer select-none outline-none disabled:pointer-events-none ${whole ? "inset-x-0" : `w-10 sm:w-14 ${side === "left" ? "left-0" : "right-0"}`}`}
+    />
   );
 }
 
-function Progress({
-  page,
-  onGoTo,
-  turning,
-}: {
-  page: number;
-  onGoTo: (n: number) => void;
-  turning: boolean;
-}) {
+/** One dot a page; the lit one is where you are, and any of them goes there. */
+function Progress({ page, onGoTo, turning, label }: { page: number; onGoTo: (n: number) => void; turning: boolean; label: (n: number) => string }) {
   return (
-    <div className="mt-8 flex items-center justify-center gap-2">
+    <div className="hidden items-center sm:flex">
       {[-1, ...BEATS.map((_, i) => i)].map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onGoTo(n)}
-          disabled={turning}
-          aria-label={n === -1 ? "Cover" : `Page ${n + 1} of ${BEATS.length}`}
-          aria-current={page === n ? "true" : undefined}
-          className={`h-1.5 rounded-full transition-all ${
-            page === n ? "w-6 bg-parchment/70" : "w-1.5 bg-parchment/20 hover:bg-parchment/40"
-          }`}
-        />
+        <button key={n} type="button" onClick={() => onGoTo(n)} disabled={turning} aria-label={label(n)} aria-current={page === n ? "true" : undefined} className="group grid h-6 w-4 place-items-center">
+          <span className={`block h-1.5 rounded-full transition-all ${page === n ? "w-3 bg-parchment/80" : "w-1.5 bg-parchment/25 group-hover:bg-parchment/50"}`} />
+        </button>
       ))}
     </div>
   );

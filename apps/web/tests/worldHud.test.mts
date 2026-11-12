@@ -69,6 +69,24 @@ test("every thing the old cards and buttons offered is still a line of the menu"
   for (const hook of ["data-sound-toggle", "data-hud-mirror", "data-touch-inspector", "data-hud-meet", "data-hud-controls", "data-report-open", "data-lang", "data-here"]) {
     assert.ok(src.includes(hook), `the menu lost ${hook}`);
   }
+  // And what had only a key, or was under something else, has a line too (C96): the envelopes, the
+  // pack, and your say over the echo, which was the foot of the mirror.
+  for (const hook of ["data-hud-envelopes", "data-hud-pack", "data-hud-privacy"]) assert.ok(src.includes(hook), `the menu has no line for ${hook}`);
+});
+
+test("the three buttons say what they are, and the menu is in two named groups (C96)", () => {
+  const html = draw();
+  for (const word of ["Map", "Menu", "Exit"]) assert.match(html, new RegExp(`>${word}<`), `a button does not say "${word}"`);
+  const src = readFileSync(new URL("../src/components/world/WorldHud.tsx", import.meta.url), "utf8");
+  const echo = src.indexOf('"menu.group.echo"');
+  const place = src.indexOf('"menu.group.place"');
+  assert.ok(echo > 0 && place > echo, "the menu's two groups are not there, or not in that order");
+  // The echo's things are under the echo's heading, the place's under the place's.
+  for (const hook of ["data-hud-envelopes", "data-hud-mirror", "data-hud-meet", "data-hud-privacy"]) assert.ok(src.indexOf(hook) > echo && src.indexOf(hook) < place, `${hook} is not under "Your echo"`);
+  for (const hook of ["data-hud-pack", "data-sound-toggle", "data-hud-controls", "data-report-open"]) assert.ok(src.indexOf(hook) > place, `${hook} is not under "This place"`);
+  // A pilot visit shows nothing of the echo (C75): the whole group is behind that one question.
+  const gate = src.lastIndexOf("{study ? null : (", echo);
+  assert.ok(gate > 0 && echo - gate < 200, "the echo's group is drawn in a pilot visit");
 });
 
 test("the HUD's entrance animates `translate`, so it cannot undo a centring transform", () => {

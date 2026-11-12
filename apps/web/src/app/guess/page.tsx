@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 
 import GuessClient from "@/components/guess/GuessClient";
+import SitePage from "@/components/site/SitePage";
 
 export const metadata: Metadata = {
   title: "Who knows them best? · echo.",
@@ -21,9 +22,11 @@ export const metadata: Metadata = {
 };
 
 export default function Guess() {
+  // The site's header and footer (C96): a friend who arrives by a link can see where they are, change
+  // the language, and go on to the village or anywhere else. The page had a wordmark and nothing more.
   return (
-    <main className="h-[100dvh] w-screen overflow-y-auto bg-ink">
+    <SitePage>
       <GuessClient />
-    </main>
+    </SitePage>
   );
 }

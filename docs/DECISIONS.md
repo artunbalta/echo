@@ -6448,3 +6448,73 @@ erases from another tab; a new one erases from the mirror with the server answer
 whether an erasure in one tab should also end the *watching* in another, which today goes on until that
 tab is reloaded.
 
+## C96 — said in words, in one place: one header for the pages, one panel for the echo, a menu in two groups
+
+What it answers: the owner showed the site to people and they understood nothing. "Complicated everywhere",
+"getting from one place to another is very hard", "it looks machine-made". Screenshots of every surface,
+taken before anything was changed, showed why, and none of it was a missing feature:
+
+- **Five page frames.** The landing, the evidence pages, a friend's link, `/account` and the village each
+  had their own header, their own type and their own button. The landing's nav was in the pixel face and
+  went to three places on that page; the evidence had two tabs and no way to the village; `/account` was
+  a monospace card that offered a way "back to your island", which no longer exists.
+- **In the village the main thing was the hardest to find.** Top left, a pill of eight dots over a dashed
+  line, with a bare number under it once there was something to open. The menu was seven lines of one
+  weight ("What your echo sealed", "How your echo sees you", "What is being measured"…). The envelopes,
+  the mirror, the friends' panel and the report had four frames, four places and three ways to close,
+  and two could be open at once (the mirror under the inspector). The inspector, which says
+  "ML_SERVICE_URL is unset" and cites this file, was a menu line of the same weight as the rest.
+  Stopping the watching and erasing everything were the foot of the mirror, under eight empty lines.
+  The keys were two lines of text that left after nine seconds; the pack had a key and no line at all.
+
+**Decision: nothing is removed, and everything is said in words, in fewer places.**
+
+- **One header and one footer for every document page** (`components/site/SiteHeader.tsx`,
+  `SiteFooter.tsx`): the same five places in the same order (how it works, the story, the evidence, the
+  twin audit, the waitlist), the language, and one filled button, "Walk in". Under it on a phone, a sheet
+  with the same. The footer lists every place on the site in three short lists.
+- **One set of controls** (`globals.css`, `@layer components`): `.btn` with `-primary`, `-ghost`,
+  `-danger`; `.field`; `.eyebrow`; `.text-link`. Sans for what is read or pressed, serif for titles, the
+  pixel face for the wordmark and for the pages of the legend's book, which is that book's own voice.
+- **One answer to "what is open" over the world** (`lib/panels.ts`) and **one frame** for it
+  (`components/world/Panel.tsx`). The four that are about the echo are its four pages, under one row of
+  tabs: Guesses (the envelopes), How it sees you (the mirror), Friends (two echoes meeting), Privacy.
+  Opening one closes the rest; the inspector and the pack close a panel and are closed by one.
+  - **Privacy is a page of its own.** Watching on or off, the villagers' cloud voices, erasing
+    everything, your id: each a line with its own button. The mirror's page says where they went, and
+    the privacy page has the line to the inspector ("what is measured, in detail").
+  - Every hook a test or a key used is where it was: `O`, `Y`, `` ` ``, `Esc`, the `echo:*` events, and
+    each panel's own `data-` names.
+- **The HUD says what things are.** The echo's mark carries its name ("Your echo"); what is waiting says
+  what it is ("2 to open"); the three buttons are Map, Menu, Exit.
+- **The menu is in two groups under two small headings.** Your echo: its guesses (with how many wait),
+  how it sees you, meet a friend's echo, privacy and your data. This place: your pack, sound, how to
+  play, report a problem. Then the language, and at the foot, quietly, what is measured in detail and
+  the cell's code. A pilot visit has no group for the echo at all (C75).
+- **How to play is a small card**, with one sentence for what there is to do here and the keys as keys.
+  It is shown once after the consent question, closed by the person, and opened again from the menu.
+  It takes no pointer but its one button's, so the world behind it can still be dragged.
+
+**What moved, so it can be found.** Stopping the watching and "erase everything": the mirror's foot →
+the echo's Privacy page (menu, "Privacy and your data"). The inspector: a menu line among the others →
+the menu's foot and the Privacy page; `` ` `` still opens it. The way back, "Planet" → "Exit". The
+evidence pages' two tabs → the site header's "Evidence" and "Twin audit".
+
+**Tests.** `tests/panels.test.mts` (4): one panel at a time and a panel closing only itself by name; the
+frame's four tabs and one cross, and the report's title; every panel asking the one answer and wearing
+the one frame; the privacy page holding every control the mirror's foot had. `tests/worldHud.test.mts`
+(+1): the buttons' names, the two groups and what is under each, the pilot's gate. The chip's test now
+reads "4 to open". In a browser, the mirror's erasure tests go by the Privacy tab.
+
+- **The landing, section by section** (done by a second pair of hands, to this design): the hero keeps
+  its composition and offers two things, the filled "Walk in" and a link to how it works; every section
+  hangs from the header's left edge with its object on the right; the legend's book has one frame, Back
+  and Next, and "1 / 8"; the waitlist's form is beside the roster and reachable on a phone without
+  scrolling past nine portraits; the demo's button is the quiet one. `/account` is the same page in the
+  site's type, with its logic untouched. The card for a parcel picked on the planet is in both
+  languages and in the site's buttons.
+- **The privacy page is in both languages**; the reading on the page before it is still English (⚑58).
+
+**Not decided here:** the reading's own words in Turkish (⚑58); the villager conversation, the demo's and
+the pilot's overlays were looked at and left as they are; `/bench` and `/audit` stay English.
+

@@ -88,6 +88,7 @@ import { carryHandoff } from "@/game/world/crossTo";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { step } from "@/lib/steps";
+import { closePanel, usePanel } from "@/lib/panels";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { WalkLayer } from "@/game/world/walkLayer";
@@ -137,6 +138,21 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
   const coarse = useCoarsePointer();
   // The inspector's open state lives here now, so a backtick and a thumb reach ONE piece of state.
   const [inspecting, setInspecting] = useState(false);
+  // One thing open over the world at a time (C96): the inspector used to open over the mirror, each
+  // with its own way of closing. A panel opening closes it, and it opening closes the panel.
+  const panelOpen = usePanel() !== null;
+  useEffect(() => {
+    if (panelOpen) setInspecting(false);
+  }, [panelOpen]);
+  useEffect(() => {
+    if (inspecting) closePanel();
+  }, [inspecting]);
+  // The privacy page's line to it ("what is measured, in detail").
+  useEffect(() => {
+    const ask = () => setInspecting(true);
+    window.addEventListener("echo:inspector", ask);
+    return () => window.removeEventListener("echo:inspector", ask);
+  }, []);
 
   // Both of these stay empty for the life of an ordinary parcel: only the slice emits them, and
   // there is no slice unless the server said there could be one.

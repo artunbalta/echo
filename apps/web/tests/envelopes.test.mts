@@ -72,7 +72,8 @@ test("the envelope under the meter counts what is waiting, and is not there when
   const b = await visited();
   const html = renderToStaticMarkup(createElement(EnvelopeChip, { env: env(b) }));
   assert.match(html, /data-envelopes-chip="4"/);
-  assert.match(html, />4<\/button>/);
+  // It says what the number is (C96): a bare "4" under a pill of dots told nobody anything.
+  assert.match(html, />4 to open<\/button>/);
   // Opened, nothing waits; the one never seen never did.
   assert.equal(renderToStaticMarkup(createElement(EnvelopeChip, { env: env(openAll(b)) })), "");
 });

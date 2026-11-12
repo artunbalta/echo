@@ -9,6 +9,9 @@ import { useEffect, useState } from "react";
 
 import { t, useLang } from "@/lib/i18n";
 import { identityHeaders, identityToken } from "@/lib/identity";
+import { closePanel, openPanel, usePanel } from "@/lib/panels";
+
+import EchoPanel from "./Panel";
 
 const REASONS = [
   { id: "ruining", label: "report.ruining" },
@@ -18,14 +21,15 @@ const REASONS = [
 
 export default function ReportPanel({ cell }: { cell: string }) {
   const lang = useLang();
-  const [open, setOpen] = useState(false);
+  // One panel at a time over the world (`lib/panels.ts`).
+  const open = usePanel() === "report";
   const [reason, setReason] = useState<(typeof REASONS)[number]["id"]>("ruining");
   const [note, setNote] = useState("");
   const [state, setState] = useState<"form" | "sending" | "sent" | "failed">("form");
 
   useEffect(() => {
     const show = () => {
-      setOpen(true);
+      openPanel("report");
       setState("form");
     };
     window.addEventListener("echo:report", show);
@@ -46,18 +50,8 @@ export default function ReportPanel({ cell }: { cell: string }) {
   };
 
   return (
-    <section
-      data-report
-      aria-label={t(lang, "menu.report")}
-      className="hud-pop hud-in absolute bottom-6 left-1/2 z-40 w-[min(420px,92vw)] -translate-x-1/2 px-5 py-4 text-sm text-parchment"
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-serif text-lg text-parchment">{t(lang, "report.title")}</h2>
-        <button type="button" onClick={() => setOpen(false)} aria-label={t(lang, "pack.close")} className="text-parchment/45 hover:text-parchment">
-          ×
-        </button>
-      </div>
+    <EchoPanel tab="report" label={t(lang, "report.title")} attrs={{ "data-report": "" }} onKeyDown={(e) => e.stopPropagation()}>
+      <div className="min-h-0 overflow-y-auto px-5 pb-5 pt-1 text-sm text-parchment">
       {state === "sent" ? (
         <p className="mt-3 text-white/80" data-report-sent>
           {t(lang, "report.sent")}
@@ -82,15 +76,16 @@ export default function ReportPanel({ cell }: { cell: string }) {
           />
           {state === "failed" ? <p className="mt-1 text-xs text-danger">{t(lang, "report.failed")}</p> : null}
           <div className="mt-3 flex justify-end gap-2">
-            <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-parchment/20 px-3.5 py-1.5 text-xs text-parchment/75">
+            <button type="button" onClick={() => closePanel("report")} className="btn btn-sm btn-ghost">
               {t(lang, "report.cancel")}
             </button>
-            <button type="button" data-report-send disabled={state === "sending"} onClick={() => void send()} className="rounded-full bg-parchment px-3.5 py-1.5 text-xs font-medium text-ink disabled:opacity-50">
+            <button type="button" data-report-send disabled={state === "sending"} onClick={() => void send()} className="btn btn-sm btn-primary">
               {state === "sending" ? t(lang, "report.sending") : t(lang, "report.send")}
             </button>
           </div>
         </>
       )}
-    </section>
+    </div>
+    </EchoPanel>
   );
 }

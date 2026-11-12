@@ -100,8 +100,11 @@ export default function RecognitionMeter({ posterior, log, consent, onInspect, s
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => setExpanded((v) => !v)}
     >
-      {/* A small chip, because the world behind it is sometimes a bright sky and the dots are faint. */}
-      <div className={`flex w-[92px] flex-col gap-1.5 rounded-full bg-ink-deep/45 px-2.5 py-[7px] backdrop-blur-md ${rising ? "recognition-rise" : ""}`}>
+      {/* A small chip, because the world behind it is sometimes a bright sky and the dots are faint.
+          It carries its name (C96): eight dots over a line told nobody what they were looking at. */}
+      <div className={`flex h-7 cursor-pointer items-center gap-2 rounded-full bg-ink-deep/55 pl-2.5 pr-3 backdrop-blur-md ${rising ? "recognition-rise" : ""}`}>
+        <span className="text-[12px] leading-none text-parchment/85">{t(lang, "meter.short")}</span>
+        <div className="flex w-[64px] flex-col gap-1">
         {/* The eight axes. Lit = the service would name it; see namedAxes. */}
         <div className="flex items-center justify-between" title={measured ? namedTitle(measured.named) : undefined}>
           {PERSONA_AXIS_KEYS.map((key, i) => (
@@ -127,6 +130,7 @@ export default function RecognitionMeter({ posterior, log, consent, onInspect, s
           // track is a bar at zero, and zero is a measurement. A dashed rule is not.
           <div className="h-0 w-full border-t border-dashed border-parchment/30" />
         )}
+        </div>
       </div>
 
       {expanded && (

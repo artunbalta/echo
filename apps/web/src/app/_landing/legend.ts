@@ -85,12 +85,12 @@ export const COVER = {
 } as const;
 
 /**
- * The line above the book. It has one job: tell you the thing below is a story and can be read,
- * without ever saying "click" or "scroll" or "learn more".
+ * The section's title. It has one job: tell you the thing below is a story and can be read, without
+ * ever saying "click" or "scroll" or "learn more".
  *
  * In the legend's own voice, so it belongs to the myth rather than to the page furniture: this is
- * how the island's story is passed on, and you are being handed it. Deliberately not a heading and
- * not a call to action, because the hero above it already made the only claim this page makes; this
- * is quieter than both, and it competes with neither.
+ * how the story is passed on, and you are being handed it. It was a faint caption over the book;
+ * it is the section's heading now (C96, `LegendBook.tsx`), with one plain sentence under it saying
+ * what the book is and how to turn it, because the caption alone told nobody there were pages.
  */
 export const LEGEND_INTRO = "They tell it like this";

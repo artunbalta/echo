@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function Audit() {
   return (
-    <BenchShell active="audit">
+    <BenchShell>
       {/* Counted as the page opens, before any panel is in it; nothing is sent after that (C92). */}
       <StepBeacon name="audit" />
       <AuditTool />

@@ -4,13 +4,22 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "r
 import AvatarPreview from "@/components/AvatarPreview";
 import { createFromPremade, type CharacterResult } from "@/lib/character";
 import { resolveUserId } from "@/lib/identity";
+import { useLang, type Lang } from "@/lib/lang";
 import { EMPTY_INDEX, EMPTY_SLOT, GRID, GRID_COLS, type RosterEntry } from "./roster";
+import { SECTION, SectionHead, WRAP } from "./Section";
 import { VACANCY } from "./vacancy";
 import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 
 /**
- * JOIN WAITLIST — the character select (§1b). A fighting-game roster with a hole in the middle:
- * the empty centre slot is you, and filling it is the primary call to action.
+ * The waitlist — the character select (§1b). A roster with a hole in the middle: the empty centre
+ * slot is you.
+ *
+ * LAID OUT AS A FORM WITH A ROSTER BESIDE IT (C96). It was a spaced pixel title, nine large portraits
+ * and then, a screen and a half down, the form they were for. Now the title, the one sentence and
+ * the form stand on the left and the roster on the right; on a narrow screen the roster is nine
+ * small tiles between the title and the form, so the fields are on the first screen of the section.
+ * Nothing it does changed: the same picks, the same two ways to fill the empty slot, the same
+ * checks with the same words, the same POST.
  *
  * Reuses the world's character pipeline rather than duplicating it: tiles are art, but picking one
  * calls createFromPremade(id) — the same function /onboard calls — so the character a person is
@@ -24,6 +33,151 @@ import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 
 type Selection = RosterEntry | typeof EMPTY_SLOT | null;
 type Fill = "photo" | "premade" | null;
+
+/**
+ * The section's words, in both languages (C96): the server's own refusals arrive in English and are
+ * shown as they come. The English of every check is word for word what it was.
+ */
+interface Copy {
+  eyebrow: string;
+  title: string;
+  lead: string;
+  left: (remaining: string, cap: string) => string;
+  taken: (cap: string) => string;
+  group: string;
+  emptySlot: string;
+  you: string;
+  chosen: string;
+  pickHint: string;
+  fill: { title: string; photo: string; photoOn: string; photoOff: string; premade: string; premadeHint: string; choose: string; change: string; alt: string; consent: string; note: string };
+  err: { type: string; size: string; read: string; small: string; large: string; notImage: string; pick: string; fill: string; photo: string; consent: string; save: string; reach: string };
+  name: string;
+  namePh: string;
+  email: string;
+  emailPh: string;
+  join: string;
+  joining: string;
+  full: string;
+  note: string;
+  joined: { kept: string; yours: string; arrival: (seat: number) => string; pending: string; already: string; fresh: string; open: string; walkIn: string };
+}
+
+const COPY: Record<Lang, Copy> = {
+  en: {
+    eyebrow: "Waitlist",
+    title: "Join the waitlist",
+    lead: "Every figure here is someone who already arrived. The space in the middle is yours. Pick one, or take the empty place, and leave your name.",
+    left: (remaining, cap) => `${remaining} of ${cap} places left`,
+    taken: (cap) => `All ${cap} places taken`,
+    group: "Choose your character",
+    emptySlot: "The empty slot: this one is you",
+    you: "You",
+    chosen: "Your character",
+    pickHint: "Pick a figure first, or take the empty place.",
+    fill: {
+      title: "Fill the empty slot",
+      photo: "Use a photo",
+      photoOn: "Your face, drawn in the world's hand.",
+      photoOff: "Not open yet. Pick someone from the roster for now.",
+      premade: "Pick someone already here",
+      premadeHint: "Choose any figure from the roster.",
+      choose: "Choose a photo",
+      change: "Choose a different photo",
+      alt: "The photo you chose",
+      consent: "Send my photo to an image service outside the EU and UK to draw my character. It is deleted once the character is drawn. The character is kept, the photo is not. My own photo only.",
+      note: "JPEG or PNG, at least 384px, under 10MB. Your place is kept the moment you join. The character is drawn afterwards and arrives by email.",
+    },
+    err: {
+      type: "That photo must be a JPEG or PNG.",
+      size: "That photo is over 10MB.",
+      read: "Could not read that file.",
+      small: "That photo is too small. It needs to be at least 384px on each side.",
+      large: "That photo is too large. Keep it under 5000px on a side.",
+      notImage: "That file is not an image we can read.",
+      pick: "Choose a character first, or take the empty slot.",
+      fill: "Choose how to fill your slot.",
+      photo: "Choose a photo first.",
+      consent: "We need your say-so before sending your photo.",
+      save: "Could not save that. Please try again.",
+      reach: "Could not reach the waitlist. Check your connection and try again.",
+    },
+    name: "Your name",
+    namePh: "What should people call you?",
+    email: "Your email",
+    emailPh: "Where do we find you?",
+    join: "Join",
+    joining: "Joining…",
+    full: "Full",
+    note: "Name and email only. We write to you when there is something to see.",
+    joined: {
+      kept: "Kept your place",
+      yours: "The slot is yours",
+      arrival: (seat) => `Arrival ${seat}`,
+      pending: "Your character is being drawn from your photo. It will reach you by email shortly. Your place is already kept, whatever the drawing does.",
+      already: "We already had you. Your character is updated, and your place is unchanged.",
+      fresh: "No one knows you here yet. That is the point. We will write when there is more to see.",
+      open: "A village is already open.",
+      walkIn: "Walk in",
+    },
+  },
+  tr: {
+    eyebrow: "Bekleme listesi",
+    title: "Bekleme listesine katıl",
+    lead: "Buradaki her figür çoktan gelmiş biri. Ortadaki boşluk senin. Birini seç ya da boş yeri al, sonra adını bırak.",
+    left: (remaining, cap) => `${cap} yerden ${remaining} tanesi boş`,
+    taken: (cap) => `${cap} yerin hepsi doldu`,
+    group: "Karakterini seç",
+    emptySlot: "Boş yer: bu sensin",
+    you: "Sen",
+    chosen: "Karakterin",
+    pickHint: "Önce bir figür seç ya da boş yeri al.",
+    fill: {
+      title: "Boş yeri doldur",
+      photo: "Fotoğraf kullan",
+      photoOn: "Yüzün, bu dünyanın eliyle çizilir.",
+      photoOff: "Henüz açık değil. Şimdilik listeden birini seç.",
+      premade: "Buradakilerden birini seç",
+      premadeHint: "Listeden istediğin figürü seç.",
+      choose: "Fotoğraf seç",
+      change: "Başka bir fotoğraf seç",
+      alt: "Seçtiğin fotoğraf",
+      consent: "Karakterimi çizmesi için fotoğrafımı AB ve Birleşik Krallık dışındaki bir görsel servisine gönder. Karakter çizilince fotoğraf silinir. Karakter saklanır, fotoğraf saklanmaz. Yalnızca kendi fotoğrafım.",
+      note: "JPEG ya da PNG, en az 384 piksel, 10 MB'tan küçük. Katıldığın anda yerin ayrılır. Karakter sonra çizilir ve e-postayla gelir.",
+    },
+    err: {
+      type: "Fotoğraf JPEG ya da PNG olmalı.",
+      size: "Fotoğraf 10 MB'tan büyük.",
+      read: "Dosya okunamadı.",
+      small: "Fotoğraf çok küçük. Her kenarı en az 384 piksel olmalı.",
+      large: "Fotoğraf çok büyük. Bir kenarı 5000 pikseli geçmesin.",
+      notImage: "Bu dosya okuyabildiğimiz bir görsel değil.",
+      pick: "Önce bir karakter seç ya da boş yeri al.",
+      fill: "Yerini nasıl dolduracağını seç.",
+      photo: "Önce bir fotoğraf seç.",
+      consent: "Fotoğrafını göndermeden önce onayın gerekiyor.",
+      save: "Kaydedilemedi. Lütfen yeniden dene.",
+      reach: "Bekleme listesine ulaşılamadı. Bağlantını kontrol edip yeniden dene.",
+    },
+    name: "Adın",
+    namePh: "Sana ne diyelim?",
+    email: "E-postan",
+    emailPh: "Seni nereden bulalım?",
+    join: "Katıl",
+    joining: "Katılıyorsun…",
+    full: "Dolu",
+    note: "Yalnızca ad ve e-posta. Görülecek bir şey olduğunda sana yazarız.",
+    joined: {
+      kept: "Yerin duruyor",
+      yours: "Yer senin",
+      arrival: (seat) => `Geliş sırası: ${seat}`,
+      pending: "Karakterin fotoğrafından çiziliyor. Kısa süre içinde e-postayla ulaşacak. Çizime ne olursa olsun yerin ayrıldı.",
+      already: "Seni zaten tanıyorduk. Karakterin güncellendi, yerin değişmedi.",
+      fresh: "Burada seni henüz kimse tanımıyor. Mesele de bu. Görülecek yeni bir şey olduğunda yazarız.",
+      open: "Bir köy şimdiden açık.",
+      walkIn: "İçeri gir",
+    },
+  },
+};
 
 /** The real seat count from GET /api/waitlist. `available: false` means we could not read it, and
  *  in that case the UI says nothing rather than inventing a number. */
@@ -41,7 +195,8 @@ type Seats = {
  * Portraits are 72x107 (pipeline/process-roster-portraits.py). Scale is INTEGER ONLY, and sizing
  * steps between whole multiples at breakpoints rather than interpolating — a fractional scale would
  * smear the pixel grid (Appendix A). Width alone is set; height follows the image's own aspect, so
- * the multiple stays exact. Tiles: 1x on phones, 2x from sm. Hero: 2x on phones, 3x from md.
+ * the multiple stays exact. Tiles: 1x under `lg`, where the roster sits between the title and the
+ * form and must not push the form off the screen; 2x from `lg`, where it stands beside them.
  *
  * `box-content` is LOAD-BEARING, not decoration. Tailwind defaults to box-border, so on a bordered
  * element `w-[144px]` is the border-box width and the 2px border on each side eats into the image:
@@ -49,10 +204,11 @@ type Seats = {
  * art. content-box makes the declared width the image's width and pushes the border outside it, so
  * these stay exact 1x/2x/3x. Never drop box-content from an element carrying one of these.
  */
-const TILE_SIZE = "box-content w-[72px] sm:w-[144px]";
-const HERO_SIZE = "box-content w-[144px] md:w-[216px]";
+const TILE_SIZE = "box-content w-[72px] lg:w-[144px]";
 
 export default function CharacterSelect() {
+  const lang = useLang();
+  const copy = COPY[lang];
   const [selected, setSelected] = useState<Selection>(null);
   const [fill, setFill] = useState<Fill>(null);
   const [focusIndex, setFocusIndex] = useState(EMPTY_INDEX);
@@ -148,20 +304,20 @@ export default function CharacterSelect() {
     setError(null);
 
     if (!selected) {
-      setError("Choose a character first, or take the empty slot.");
+      setError(copy.err.pick);
       return;
     }
     if (isEmpty && fill === null) {
-      setError("Choose how to fill your slot.");
+      setError(copy.err.fill);
       return;
     }
     if (isEmpty && fill === "photo") {
       if (!selfie) {
-        setError("Choose a photo first.");
+        setError(copy.err.photo);
         return;
       }
       if (!consent) {
-        setError("We need your say-so before sending your photo.");
+        setError(copy.err.consent);
         return;
       }
     }
@@ -196,7 +352,7 @@ export default function CharacterSelect() {
       };
       if (!res.ok) {
         // Keep name, email AND the chosen character — never lose the selection on a failed submit.
-        setError(data.error ?? "Could not save that. Please try again.");
+        setError(data.error ?? copy.err.save);
         // A 409 means the last seat went while this form was open. Reflect the truth immediately
         // rather than leaving a stale "N left" on screen above a form that can no longer succeed.
         if (data.full) setSeats({ cap: data.cap ?? 0, taken: data.taken ?? 0, remaining: 0, available: true });
@@ -211,7 +367,7 @@ export default function CharacterSelect() {
         portraitPending: Boolean(data.portraitPending),
       });
     } catch {
-      setError("Could not reach the waitlist. Check your connection and try again.");
+      setError(copy.err.reach);
     } finally {
       setBusy(false);
     }
@@ -220,6 +376,7 @@ export default function CharacterSelect() {
   if (done)
     return (
       <Joined
+        copy={copy}
         already={done.already}
         seat={done.seat}
         entry={entry}
@@ -230,81 +387,73 @@ export default function CharacterSelect() {
   const full = seats?.available === true && seats.remaining === 0;
 
   return (
-    <section id="waitlist" className="relative bg-ink px-5 py-20 sm:px-8 sm:py-24">
-      <div className="mx-auto max-w-5xl">
-        <header className="text-center">
-          <h2 className="font-pixel text-3xl font-bold uppercase tracking-[0.3em] text-parchment sm:text-4xl">
-            Join Waitlist
-          </h2>
-          <Scarcity seats={seats} />
-          <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-parchment/60 sm:text-base">
-            Every figure here is someone who already arrived. The space in the middle is yours.
-          </p>
-        </header>
+    <section id="waitlist" className={SECTION}>
+      {/* Three blocks in reading order: the words, the roster, the form. Stacked on a phone; from
+          `sm` the roster takes the right column for the height of the other two, small until `lg`
+          and at twice the size from there. */}
+      <div className={`${WRAP} grid items-start gap-x-10 gap-y-10 sm:grid-cols-[minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1fr)_640px] lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_720px] xl:gap-x-16`}>
+        <div className="sm:col-start-1 sm:row-start-1">
+          <SectionHead eyebrow={copy.eyebrow} title={copy.title}>
+            {copy.lead}
+          </SectionHead>
+          <Scarcity seats={seats} copy={copy} lang={lang} />
+        </div>
 
-        {/* The roster is the hero of this section, so it sits dead-centre on the page and the large
-            portrait hangs beside it. Previously the two were centred as a PAIR, which pushed the
-            grid visibly right of centre; `md:absolute` takes the preview out of flow so the grid
-            centres on the section itself and the preview occupies the space that was dead anyway. */}
-        <div className="relative mt-12 flex flex-col items-center gap-10">
-          <div className="md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2">
-            <Hero selected={selected} entry={entry} />
-          </div>
-
-          <div>
-            <div
-              role="radiogroup"
-              aria-label="Choose your character"
-              className="mx-auto grid w-max grid-cols-3 gap-2 sm:gap-3"
-            >
-              {GRID.map((cell, i) =>
-                cell === EMPTY_SLOT ? (
-                  <EmptyTile
-                    key="empty"
-                    ref={(el) => {
-                      tileRefs.current[i] = el;
-                    }}
-                    selected={isEmpty}
-                    tabIndex={focusIndex === i ? 0 : -1}
-                    onSelect={() => choose(EMPTY_SLOT, i)}
-                    onKeyDown={(e) => onGridKey(e, i)}
-                  />
-                ) : (
-                  <Tile
-                    key={cell.id}
-                    ref={(el) => {
-                      tileRefs.current[i] = el;
-                    }}
-                    entry={cell}
-                    selected={entry?.id === cell.id}
-                    tabIndex={focusIndex === i ? 0 : -1}
-                    onSelect={() => choose(cell, i)}
-                    onKeyDown={(e) => onGridKey(e, i)}
-                  />
-                ),
-              )}
-            </div>
-
-            {isEmpty && (
-              <FillChoice
-                fill={fill}
-                onPick={setFill}
-                formRef={formRef}
-                photoEnabled={seats?.photoPath !== false}
-                selfie={selfie}
-                onSelfie={(uri, e) => {
-                  setSelfie(uri);
-                  if (e) setError(null);
-                }}
-                consent={consent}
-                onConsent={setConsent}
-              />
+        <div className="sm:col-start-2 sm:row-span-2 sm:row-start-1">
+          <div role="radiogroup" aria-label={copy.group} className="mx-auto grid w-max grid-cols-3 gap-2 lg:gap-3">
+            {GRID.map((cell, i) =>
+              cell === EMPTY_SLOT ? (
+                <EmptyTile
+                  key="empty"
+                  ref={(el) => {
+                    tileRefs.current[i] = el;
+                  }}
+                  selected={isEmpty}
+                  tabIndex={focusIndex === i ? 0 : -1}
+                  label={copy.emptySlot}
+                  you={copy.you}
+                  onSelect={() => choose(EMPTY_SLOT, i)}
+                  onKeyDown={(e) => onGridKey(e, i)}
+                />
+              ) : (
+                <Tile
+                  key={cell.id}
+                  ref={(el) => {
+                    tileRefs.current[i] = el;
+                  }}
+                  entry={cell}
+                  selected={entry?.id === cell.id}
+                  tabIndex={focusIndex === i ? 0 : -1}
+                  onSelect={() => choose(cell, i)}
+                  onKeyDown={(e) => onGridKey(e, i)}
+                />
+              ),
             )}
           </div>
         </div>
 
-        <div ref={formRef} className="mt-12">
+        <div ref={formRef} className="w-full max-w-md sm:col-start-1 sm:row-start-2">
+          <Chosen selected={selected} entry={entry} copy={copy} />
+
+          {isEmpty && (
+            <FillChoice
+              copy={copy}
+              fill={fill}
+              onPick={setFill}
+              formRef={formRef}
+              photoEnabled={seats?.photoPath !== false}
+              selfie={selfie}
+              onSelfie={(uri, e) => {
+                setSelfie(uri);
+                if (e) setError(null);
+              }}
+              consent={consent}
+              onConsent={setConsent}
+            />
+          )}
+
           <Form
+            copy={copy}
             name={name}
             email={email}
             website={website}
@@ -341,44 +490,37 @@ export default function CharacterSelect() {
  *  - No countdown, no decay, no "1,247 people joined", no urgency verbs. The line states a fact in
  *    the world's register and stops. The pull is that the place is small, not that a clock is running.
  */
-function Scarcity({ seats }: { seats: Seats | null }) {
+function Scarcity({ seats, copy, lang }: { seats: Seats | null; copy: Copy; lang: Lang }) {
   if (!seats?.available || seats.remaining === null || seats.taken === null) return null;
-  const { remaining, cap } = seats;
-  return (
-    <p className="mt-5 font-pixel text-xs uppercase tracking-[0.25em] text-parchment/45 sm:text-sm">
-      {remaining === 0 ? (
-        <>All {cap} places taken</>
-      ) : (
-        <>
-          <span className="text-parchment/80">{remaining}</span> of {cap} places left
-        </>
-      )}
-    </p>
-  );
+  // The same two numbers, written the way the reader's language writes a large one.
+  const n = (x: number) => x.toLocaleString(lang === "tr" ? "tr-TR" : "en-US");
+  return <p className="mt-4 text-[13px] tabular-nums text-parchment/55">{seats.remaining === 0 ? copy.taken(n(seats.cap)) : copy.left(n(seats.remaining), n(seats.cap))}</p>;
 }
 
-/* ── the large selected portrait ─────────────────────────────────────────────────────────────── */
+/* ── what is picked ──────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The large preview of whatever is currently selected.
+ * Who is picked, by name, at the head of the form.
  *
- * It renders NOTHING until something is selected. The previous version always drew the framed
- * rectangle and filled it with "No one yet." / "CHOOSE" — a large empty box sitting next to the
- * empty slot, which both wasted the space and competed with the one deliberate vacancy on the page.
- * A preview of nothing is not a preview.
+ * It was a large portrait hung beside the roster. With the roster beside the form the picked tile is
+ * already in view, lit, at twice its size; what the form still needs is the NAME, and a line that
+ * says what to do first while nothing is picked (the Join button is off until something is, and a
+ * button that is off with no reason given is a dead end).
+ *
+ * The face is the tile's own portrait at its own 1x, cropped to the head by the frame, never scaled:
+ * a fractional scale would smear the pixel grid (see TILE_SIZE).
  */
-function Hero({ selected, entry }: { selected: Selection; entry: RosterEntry | null }) {
-  if (!selected) return null;
+function Chosen({ selected, entry, copy }: { selected: Selection; entry: RosterEntry | null; copy: Copy }) {
+  if (!selected) return <p className="mb-5 text-[14px] text-parchment/55">{copy.pickHint}</p>;
   return (
-    <div className="shrink-0">
-      <div
-        className={`${HERO_SIZE} relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded-lg border-2 border-echo/20 bg-ink-deep`}
-      >
-        {entry ? <Portrait entry={entry} /> : <Silhouette />}
+    <div className="mb-5 flex items-center gap-4">
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-parchment/15 bg-ink-deep">
+        <div className="mx-auto w-[72px] -translate-x-2">{entry ? <Portrait entry={entry} fallbackScale={2} /> : <Silhouette breathing={false} />}</div>
       </div>
-      <p className="mt-3 text-center font-pixel text-xs uppercase tracking-[0.2em] text-parchment/50">
-        {entry ? entry.name : "You"}
-      </p>
+      <div>
+        <p className="eyebrow">{copy.chosen}</p>
+        <p className="mt-0.5 font-serif text-2xl leading-tight text-parchment">{entry ? entry.name : copy.you}</p>
+      </div>
     </div>
   );
 }
@@ -438,10 +580,10 @@ const Tile = forwardRef<
       onClick={onSelect}
       onFocus={onSelect}
       onKeyDown={onKeyDown}
-      className={`${TILE_SIZE} relative block overflow-hidden rounded border-2 bg-ink-deep outline-none transition-colors ${
+      className={`${TILE_SIZE} relative block overflow-hidden rounded-md border-2 bg-ink-deep outline-none transition-colors ${
         selected
-          ? "border-parchment/70"
-          : "border-echo/15 hover:border-parchment/40 focus-visible:border-parchment/60"
+          ? "border-parchment/80"
+          : "border-parchment/[0.07] hover:border-parchment/40 focus-visible:border-parchment/60"
       }`}
     >
       <Portrait entry={entry} fallbackScale={2} />
@@ -462,22 +604,24 @@ const EmptyTile = forwardRef<
   {
     selected: boolean;
     tabIndex: number;
+    label: string;
+    you: string;
     onSelect: () => void;
     onKeyDown: (e: React.KeyboardEvent) => void;
   }
->(function EmptyTile({ selected, tabIndex, onSelect, onKeyDown }, ref) {
+>(function EmptyTile({ selected, tabIndex, label, you, onSelect, onKeyDown }, ref) {
   return (
     <button
       ref={ref}
       type="button"
       role="radio"
       aria-checked={selected}
-      aria-label="The empty slot — this one is you"
+      aria-label={label}
       tabIndex={tabIndex}
       onClick={onSelect}
       onFocus={onSelect}
       onKeyDown={onKeyDown}
-      className={`${TILE_SIZE} group relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded border-2 border-dashed bg-[#0d0812] outline-none transition-all ${
+      className={`${TILE_SIZE} group relative flex aspect-[72/108] items-end justify-center overflow-hidden rounded-md border-2 border-dashed bg-ink-deep outline-none transition-all ${
         selected
           ? "border-echo border-solid shadow-[0_0_30px_rgba(160,108,213,0.5),inset_0_0_22px_rgba(160,108,213,0.18)]"
           : "border-echo/45 shadow-[0_0_16px_rgba(160,108,213,0.18)] hover:border-echo/75 hover:shadow-[0_0_26px_rgba(160,108,213,0.35)] focus-visible:border-echo"
@@ -489,11 +633,11 @@ const EmptyTile = forwardRef<
           label any lower would be buried inside the shape. A dashed border marks the slot out as a
           vacancy rather than a lit frame; it goes solid only once claimed. */}
       <span
-        className={`pointer-events-none absolute inset-x-0 top-1 text-center font-pixel text-[8px] uppercase tracking-[0.18em] transition-colors sm:top-2 sm:text-[10px] ${
-          selected ? "text-echo" : "text-echo/60 group-hover:text-echo/90"
+        className={`pointer-events-none absolute inset-x-0 top-1 text-center text-[9px] font-medium uppercase tracking-[0.18em] transition-colors lg:top-2 lg:text-[11px] ${
+          selected ? "text-echo-soft" : "text-echo-soft/70 group-hover:text-echo-soft"
         }`}
       >
-        You
+        {you}
       </span>
     </button>
   );
@@ -551,6 +695,7 @@ function Silhouette({ breathing = true }: { breathing?: boolean }) {
  * rather than after.
  */
 function FillChoice({
+  copy,
   fill,
   onPick,
   formRef,
@@ -560,6 +705,7 @@ function FillChoice({
   consent,
   onConsent,
 }: {
+  copy: Copy;
   fill: Fill;
   onPick: (f: Fill) => void;
   formRef: React.RefObject<HTMLDivElement | null>;
@@ -576,13 +722,13 @@ function FillChoice({
     setErr(null);
     onSelfie(null);
     if (!/^image\/(jpeg|jpg|png)$/.test(file.type)) {
-      const m = "That photo must be a JPEG or PNG.";
+      const m = copy.err.type;
       setErr(m);
       onSelfie(null, m);
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      const m = "That photo is over 10MB.";
+      const m = copy.err.size;
       setErr(m);
       onSelfie(null, m);
       return;
@@ -594,20 +740,20 @@ function FillChoice({
       r.readAsDataURL(file);
     }).catch(() => null);
     if (!dataUri) {
-      setErr("Could not read that file.");
+      setErr(copy.err.read);
       return;
     }
     // Dimensions and alpha are checked from the decoded image, not from the file name.
     const img = new Image();
     img.onload = () => {
       if (Math.min(img.width, img.height) < 384) {
-        const m = "That photo is too small. It needs to be at least 384px on each side.";
+        const m = copy.err.small;
         setErr(m);
         onSelfie(null, m);
         return;
       }
       if (Math.max(img.width, img.height) > 5000) {
-        const m = "That photo is too large. Keep it under 5000px on a side.";
+        const m = copy.err.large;
         setErr(m);
         onSelfie(null, m);
         return;
@@ -615,61 +761,47 @@ function FillChoice({
       onSelfie(dataUri);
     };
     img.onerror = () => {
-      const m = "That file is not an image we can read.";
+      const m = copy.err.notImage;
       setErr(m);
       onSelfie(null, m);
     };
     img.src = dataUri;
   }
 
+  // Two choices and, under the first, what it needs. No box around the group: it is part of the
+  // form, and the two choices are the only things here that are objects.
+  const option = (on: boolean, off = false) =>
+    `w-full rounded-xl border px-4 py-3 text-left text-[14px] transition-colors disabled:cursor-not-allowed ${
+      off ? "border-parchment/[0.08] text-parchment/30" : on ? "border-parchment/60 text-parchment" : "border-parchment/15 text-parchment/85 hover:border-parchment/40"
+    }`;
+  const hint = "mt-0.5 block text-[12.5px] leading-snug text-parchment/45";
+
   return (
-    <div className="mt-6 rounded-lg border-2 border-echo/25 bg-ink-deep p-4">
-      <p className="mb-3 text-center font-pixel text-xs uppercase tracking-[0.2em] text-echo">
-        Fill the empty slot
-      </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="mb-6">
+      <p className="eyebrow mb-3">{copy.fill.title}</p>
+      <div className="flex flex-col gap-2">
         {/* Not offered when it cannot deliver. A disabled button that says why beats a live one that
             takes a photo, takes a seat, and returns nothing. */}
-        <button
-          type="button"
-          disabled={!photoEnabled}
-          onClick={() => onPick("photo")}
-          className={`flex-1 rounded border-2 px-4 py-3 text-left font-pixel text-sm transition-colors disabled:cursor-not-allowed ${
-            !photoEnabled
-              ? "border-echo/10 text-parchment/25"
-              : fill === "photo"
-                ? "border-parchment/60 text-parchment"
-                : "border-echo/25 text-parchment/80 hover:border-parchment/40"
-          }`}
-        >
-          Use a photo
-          <span className="mt-1 block text-[11px] leading-snug text-parchment/40">
-            {photoEnabled
-              ? "Your face, drawn in the world's hand."
-              : "Not open yet. Pick someone from the roster for now."}
-          </span>
+        <button type="button" disabled={!photoEnabled} aria-pressed={fill === "photo"} onClick={() => onPick("photo")} className={option(fill === "photo", !photoEnabled)}>
+          {copy.fill.photo}
+          <span className={hint}>{photoEnabled ? copy.fill.photoOn : copy.fill.photoOff}</span>
         </button>
         <button
           type="button"
+          aria-pressed={fill === "premade"}
           onClick={() => {
             onPick("premade");
             formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
           }}
-          className={`flex-1 rounded border-2 px-4 py-3 text-left font-pixel text-sm transition-colors ${
-            fill === "premade"
-              ? "border-parchment/60 text-parchment"
-              : "border-echo/25 text-parchment/80 hover:border-parchment/40"
-          }`}
+          className={option(fill === "premade")}
         >
-          Pick someone already here
-          <span className="mt-1 block text-[11px] leading-snug text-parchment/40">
-            Choose any figure from the roster.
-          </span>
+          {copy.fill.premade}
+          <span className={hint}>{copy.fill.premadeHint}</span>
         </button>
       </div>
 
       {fill === "photo" && (
-        <div className="mt-4 border-t border-echo/15 pt-4">
+        <div className="mt-4">
           <input
             ref={fileRef}
             type="file"
@@ -681,48 +813,28 @@ function FillChoice({
             }}
           />
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="rounded border-2 border-parchment/25 px-3 py-2 font-pixel text-xs text-parchment/80 transition-colors hover:border-parchment/60"
-            >
-              {selfie ? "Choose a different photo" : "Choose a photo"}
+            <button type="button" onClick={() => fileRef.current?.click()} className="btn btn-sm btn-ghost">
+              {selfie ? copy.fill.change : copy.fill.choose}
             </button>
             {selfie && (
               // eslint-disable-next-line @next/next/no-img-element -- a local data URI preview
-              <img
-                src={selfie}
-                alt="The photo you chose"
-                className="h-12 w-12 rounded object-cover"
-              />
+              <img src={selfie} alt={copy.fill.alt} className="h-12 w-12 rounded-lg object-cover" />
             )}
           </div>
 
           {/* CONSENT AT THE POINT OF UPLOAD, not buried in a footer link. It says where the photo
               goes, what is kept, and for how long, in the same breath as the button that sends it. */}
           <label className="mt-4 flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={consent}
-              onChange={(e) => onConsent(e.target.checked)}
-              className="mt-0.5 accent-echo"
-            />
-            <span className="text-xs leading-relaxed text-parchment/50">
-              Send my photo to an image service outside the EU and UK to draw my character. It is
-              deleted once the character is drawn. The character is kept, the photo is not. My own
-              photo only.
-            </span>
+            <input type="checkbox" checked={consent} onChange={(e) => onConsent(e.target.checked)} className="mt-0.5 accent-echo" />
+            <span className="text-[13px] leading-relaxed text-parchment/60">{copy.fill.consent}</span>
           </label>
 
           {err && (
-            <p role="alert" className="mt-3 text-xs text-danger">
+            <p role="alert" className="mt-3 text-[13px] text-danger">
               {err}
             </p>
           )}
-          <p className="mt-3 text-xs leading-relaxed text-parchment/30">
-            JPEG or PNG, at least 384px, under 10MB. Your place is kept the moment you join. The
-            character is drawn afterwards and arrives by email.
-          </p>
+          <p className="mt-3 text-[12.5px] leading-relaxed text-parchment/40">{copy.fill.note}</p>
         </div>
       )}
     </div>
@@ -732,6 +844,7 @@ function FillChoice({
 /* ── the form ────────────────────────────────────────────────────────────────────────────────── */
 
 function Form({
+  copy,
   name,
   email,
   website,
@@ -744,6 +857,7 @@ function Form({
   onWebsite,
   onSubmit,
 }: {
+  copy: Copy;
   name: string;
   email: string;
   website: string;
@@ -756,37 +870,19 @@ function Form({
   onWebsite: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
 }) {
-  // Parchment, not echo-violet. The violet budget on this page is spent entirely on the empty slot
-  // (§1b, art-bible §2: "sacred and rare … target <= ~5% of any frame"). A solid violet submit
-  // button and a violet focus ring would dwarf the slot's glow and kill the one accent that matters.
-  // Parchment is the bible's "human/warm" family, which is what a form field actually is.
-  const input =
-    "w-full rounded border-2 border-parchment/20 bg-ink px-3 py-2.5 text-[15px] text-parchment outline-none placeholder:text-parchment/30 focus:border-parchment/60";
+  // The site's own field and its one filled button (C96). Parchment, not echo-violet: the violet on
+  // this section is spent on the empty slot, and a violet submit would dwarf the one accent that
+  // matters.
   return (
-    <form onSubmit={onSubmit} noValidate className="mx-auto max-w-md">
+    <form onSubmit={onSubmit} noValidate>
       <div className="flex flex-col gap-3">
         <label className="block">
-          <span className="sr-only">Your name</span>
-          <input
-            value={name}
-            onChange={(e) => onName(e.target.value)}
-            placeholder="What should people call you?"
-            autoComplete="name"
-            maxLength={80}
-            className={input}
-          />
+          <span className="sr-only">{copy.name}</span>
+          <input value={name} onChange={(e) => onName(e.target.value)} placeholder={copy.namePh} autoComplete="name" maxLength={80} className="field" />
         </label>
         <label className="block">
-          <span className="sr-only">Your email</span>
-          <input
-            value={email}
-            onChange={(e) => onEmail(e.target.value)}
-            placeholder="Where do we find you?"
-            type="email"
-            autoComplete="email"
-            maxLength={254}
-            className={input}
-          />
+          <span className="sr-only">{copy.email}</span>
+          <input value={email} onChange={(e) => onEmail(e.target.value)} placeholder={copy.emailPh} type="email" autoComplete="email" maxLength={254} className="field" />
         </label>
 
         {/* Honeypot. Hidden from people and from assistive tech; only a bot fills it in. Not
@@ -805,7 +901,7 @@ function Form({
         </div>
 
         {error && (
-          <p role="alert" className="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <p role="alert" data-waitlist-error className="rounded-xl border border-danger/40 px-4 py-2.5 text-[13px] leading-snug text-danger">
             {error}
           </p>
         )}
@@ -813,16 +909,10 @@ function Form({
         {/* When the list is full the button says so and stops. The form is not hidden and the
             endpoint still refuses with a 409 — hiding it would leave the cap unenforced and make
             the scarcity a UI trick rather than a fact (§8). */}
-        <button
-          type="submit"
-          disabled={busy || disabled || full}
-          className="mt-1 w-full rounded bg-parchment px-4 py-3 font-pixel font-bold uppercase tracking-[0.2em] text-ink transition-opacity hover:bg-parchment/90 disabled:cursor-not-allowed disabled:opacity-25"
-        >
-          {full ? "Full" : busy ? "Joining…" : "Join"}
+        <button type="submit" disabled={busy || disabled || full} className="btn btn-primary mt-1 w-full">
+          {full ? copy.full : busy ? copy.joining : copy.join}
         </button>
-        <p className="text-center text-xs leading-relaxed text-parchment/35">
-          Name and email only. We write to you when there is something to see.
-        </p>
+        <p className="text-[12.5px] leading-relaxed text-parchment/45">{copy.note}</p>
       </div>
     </form>
   );
@@ -831,46 +921,45 @@ function Form({
 /* ── confirmation ────────────────────────────────────────────────────────────────────────────── */
 
 function Joined({
+  copy,
   already,
   seat,
   entry,
   portraitPending,
 }: {
+  copy: Copy;
   already: boolean;
   seat: number | null;
   entry: RosterEntry | null;
   portraitPending: boolean;
 }) {
   return (
-    <section id="waitlist" className="bg-ink px-5 py-24 sm:px-8 sm:py-32">
-      <div className="mx-auto flex max-w-md flex-col items-center text-center">
-        <div className="box-content w-[144px] overflow-hidden rounded-lg border-2 border-echo/20 bg-ink-deep">
+    <section id="waitlist" className={SECTION}>
+      <div className={`${WRAP} flex flex-col gap-8 sm:flex-row sm:items-center sm:gap-12`}>
+        <div className="box-content w-[144px] shrink-0 overflow-hidden rounded-xl border border-parchment/15 bg-ink-deep">
           {entry ? <Portrait entry={entry} fallbackScale={4} /> : <Silhouette breathing={false} />}
         </div>
-        <h2 className="mt-8 font-pixel text-2xl font-bold uppercase tracking-[0.25em] text-parchment">
-          {already ? "Kept your place" : "The slot is yours"}
-        </h2>
-        {/* A real seat number, assigned by the database, not a flourish. It is the one number here
-            that means something, so it is the one number shown. No confetti. */}
-        {seat !== null && (
-          <p className="mt-4 font-pixel text-xs uppercase tracking-[0.25em] text-parchment/45">
-            Arrival {seat}
+        <div className="max-w-md">
+          {/* A real seat number, assigned by the database, not a flourish. It is the one number here
+              that means something, so it is the one number shown. No confetti. */}
+          {seat !== null && <p className="eyebrow mb-4">{copy.joined.arrival(seat)}</p>}
+          <h2 data-waitlist-joined className="font-serif text-[clamp(1.85rem,3.2vw,2.6rem)] leading-[1.08] tracking-[-.02em] text-parchment">{already ? copy.joined.kept : copy.joined.yours}</h2>
+          <p className="mt-4 text-[16px] leading-relaxed text-parchment/65">
+            {portraitPending
+              ? // Honest about the wait AND about the seat: the place is already theirs, the drawing
+                // is the only thing outstanding. No progress bar, because we cannot honestly promise
+                // a time — generation is someone else's queue.
+                copy.joined.pending
+              : already
+                ? copy.joined.already
+                : copy.joined.fresh}
           </p>
-        )}
-        <p className="mt-4 text-[15px] leading-relaxed text-parchment/60">
-          {portraitPending
-            ? // Honest about the wait AND about the seat: the place is already theirs, the drawing
-              // is the only thing outstanding. No progress bar, because we cannot honestly promise
-              // a time — generation is someone else's queue.
-              "Your character is being drawn from your photo. It will reach you by email shortly. Your place is already kept, whatever the drawing does."
-            : already
-              ? "We already had you. Your character is updated, and your place is unchanged."
-              : "No one knows you here yet. That is the point. We will write when there is more to see."}
-        </p>
-        {/* The world is open (C89): a place kept is no reason to wait outside it. */}
-        <a href={OPEN_VILLAGE_PATH} className="mt-6 inline-block rounded-full bg-parchment px-6 py-3 text-sm font-medium text-ink transition-colors hover:bg-white">
-          A village is already open. Walk in <span aria-hidden>›</span>
-        </a>
+          {/* The world is open (C89): a place kept is no reason to wait outside it. */}
+          <p className="mt-6 text-[14px] text-parchment/55">{copy.joined.open}</p>
+          <a href={OPEN_VILLAGE_PATH} className="btn btn-primary mt-3">
+            {copy.joined.walkIn} <span aria-hidden>›</span>
+          </a>
+        </div>
       </div>
     </section>
   );

@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import { SITE_COPY } from "@/components/site/SiteHeader";
+import { useLang } from "@/lib/lang";
+
 // First-load reveal for the landing route. The wordmark blooms in one letter at a
 // time — e → ec → ech → echo — the tagline follows, then we dwell ~1s and fade away.
+// The tagline is the site's own (the footer says the same line), in the reader's language.
 const WORD = "echo";
-const TAGLINE = "A country that does not exist.";
 
 const STAGGER = 0.3; // s between letters (keep in sync with .splash-letter timing)
 const LETTER_ANIM = 0.6; // s per letter (matches the @keyframes duration)
@@ -28,6 +31,7 @@ let began = 0;
 const SAME_ARRIVAL_MS = 1000;
 
 export default function Splash() {
+  const tagline = SITE_COPY[useLang()].tagline;
   const [exiting, setExiting] = useState(false);
   const [gone, setGone] = useState(false);
 
@@ -79,7 +83,7 @@ export default function Splash() {
         ))}
       </div>
       <p className="splash-tagline" aria-hidden style={{ animationDelay: `${TAGLINE_DELAY}s` }}>
-        {TAGLINE}
+        {tagline}
       </p>
     </div>
   );
