@@ -2,179 +2,127 @@
 
 > *"You've arrived in a country that does not exist. It is your first day. No one knows you here — not even you."*
 
-ECHO is a persistent 2D virtual world where, while you explore and talk to people, your
-AI **agent** quietly learns who you are — from what you say and, more importantly, from
-how you behave — and progressively earns the right to act on your behalf. It is **not a
-game**: no scores, XP, levels, or win states. The engagement loop is the *mirror effect*
-and a faithful "echo" of yourself that grows over time.
+ECHO is a world in the browser where an AI learns to predict one person, you, by watching what you
+do, and tells you how well it knows you.
 
-This repo is a runnable monorepo. It is being built in phases (§15 of the spec); each
-phase leaves the app runnable.
+You walk into a village. Small things happen around you: a purse lies in the grass, an old man has
+slipped and cannot get up, children ask you to lie about a throw. Before each one, your **echo**
+seals a guess about what you will do. Afterwards you open the envelopes. Then a friend tries to do
+better.
 
-## Repository
+It is not a game: no score, no levels, nothing to win. The live site is
+[echovirtualworld.com](https://echovirtualworld.com).
 
-The canonical repository we use is **https://github.com/artunbalta/echo** — push work here:
+## Why
 
-```bash
-git push echo main
-```
+Companies now sell "digital twins" of people, built from what those people say about themselves.
+On the largest public benchmark (Twin-2K-500: 2,058 people, 13 twins released by its authors) we
+found that **all 13 twins know less about a person than a guess that knows nobody**: the crowd's
+median answer. Given one earlier answer by the same person, each twin rises to 54–58% of what can
+be known about them, above the person's own retest.
 
-(The `git remote` config also has `origin` → `echo-virtual-world` and `vercelrepo` →
-`echovirtualworld`, kept around historically; `echo` is the one to use.)
+What a person will do is mostly not in what they say. It is in what they did the last time they
+were in the same situation. So the scarce thing is repeated observation of the same person in the
+same kind of moment, and a world people come back to produces that as play.
 
-## Status
+- The result, the method and its limits: [`/bench`](https://echovirtualworld.com/bench)
+- The same audit on your own twins, in your browser: [`/audit`](https://echovirtualworld.com/audit)
+- The research code and every number: [`research/deeds/`](research/deeds/) (four public datasets:
+  Twin-2K-500, the Basel–Berlin Risk Study, the Self-Regulation Ontology, and 31.5 million Moral
+  Machine decisions). The paper is under review.
 
-| Phase | Subsystem | State |
-|------|-----------|-------|
-| 1 | Foundation: monorepo, shared protocol, PixiJS world, Colyseus server, Supabase schema | ✅ runnable & verified |
-| 2 | Authoritative multiplayer: prediction, reconciliation, interpolation, reconnect; live player↔player chat + presence | ✅ prediction + snapshot-interpolation buffer + 20s reconnection window; verified 2-client. Player↔player chat, "live now" roster + glow markers, echo-to-echo past the autonomy threshold ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)) |
-| 3 | Asset pipeline: consent → selfie→attributes→avatar / premade gallery, Fal+Higgsfield (verified contracts) | ✅ no-key paths verified |
-| 4 | NPCs: spanning probe set, movement AI, event-driven LLM dialogue, telemetry, DB persistence | ✅ 100-NPC spanning set, wander AI, dialogue, telemetry; room loads from Supabase→JSON→generation |
-| 5 | ML learning engine (§9): persona posterior, reward model, autonomy gate, BALD | ✅ 25 tests + live e2e |
-| 6 | Agency UX: copilot/supervised/auto, transparency, outcome surfacing | ✅ verified (copilot→auto promotion in-UI) |
-| 7 | TTS narrator: grounded debrief + voice | ✅ verified (grounded caption, stays silent, voice fallback) |
-| 8 | Privacy, security, cost, observability, tests, load test | ◑ deletion cascade + cost meter + `/metrics` + privacy page verified; rate-limit/moderation/load-test are documented follow-ups |
+We have a stake in this result: ECHO builds twins from behaviour. The code and the analysis plans
+are here so that anyone can rerun it.
 
-**Run all three services** (web :3000, realtime :2567, ML :8000):
-```bash
-npm run dev:realtime &   # forwards telemetry/observations to ML (reads repo-root .env)
-npm run dev:ml &         # the learning engine
-npm run dev:web          # the client
-```
-In the world: walk to anyone, **"let my echo answer"** drafts your reply with a "why it
-said that" trace; approve/edit/reject teaches the agent. Open **your echo** to see what it
-has learned and which contexts it has earned autonomy in; **connections** surfaces who to
-actually meet.
+## What is in the world
 
-## Architecture
+| | |
+|---|---|
+| **A planet** | Procedural, 284,004 cells on an H3 grid; 28,305 of them hold a village. |
+| **People** | Every village's people are a closed-form function of a seed and the world's clock: they are born, marry, work, age and die, and their children inherit. Nobody stores them. |
+| **Moments** | 41 kinds of small event near whoever is walking. 30 are published psychology experiments in village clothes, 17 with counterbalanced arms (two coins in the purse or nine; bystanders or none). |
+| **The echo** | Two layers. A Bayesian engine that places you on eight axes from how you move and choose (`services/ml`). And the envelopes: a call sealed before each moment, from what you did at moments like it, in your browser. |
+| **The envelopes** | Each call is hashed with the one before it, so none can be changed afterwards. You open them; a friend can guess the same moments from a link that no server ever sees. |
+| **The study** | A pilot in which friends predict each other, play twice or three times, and see who knew them best: themselves, their friends, or their echo. Off unless switched on. |
 
-```
-apps/web        Next.js + Tailwind + PixiJS client (renders the world, captures telemetry)
-apps/realtime   Colyseus authoritative WorldRoom (positions, presence, NPC AI, dialogue broker)
-services/ml     Python FastAPI — the learning engine (§9). [Phase 5]
-packages/shared TS contract: world constants, wire protocol, sprite spec, persona axes, NPC generator
-db              Supabase migrations (Postgres + pgvector) + NPC seed
-pipeline/assets selfie → sprite generation scripts (Higgsfield/Fal). [Phase 3]
-infra           deploy configs
-```
+## Run it
 
-The realtime server is a **long-lived process** — deploy it to Fly/Railway/Render, never
-serverless. The web app deploys to Vercel. The DB is Supabase.
-
-## Quick start (zero external keys)
-
-Everything runs locally with **no API keys** — providers fall back to mocks (procedural
-art, in-character mock dialogue, in-memory persistence).
+Node 22 or newer. No keys are needed: every outside service has a stand-in.
 
 ```bash
 npm install
-npm run build:shared          # build the shared packages first (@echo/shared, @echo/planet)
-npm run seed                  # generate db/seed/npcs.generated.json (100-NPC spanning set)
-
-# two terminals (or `npm run dev` to run both):
-npm run dev:realtime          # Colyseus on :2567
-npm run dev:web               # Next.js on :3000
+npm run build:shared      # the two shared packages; needed before anything else
+npm run dev:web           # http://localhost:3000
 ```
 
-Open <http://localhost:3000>, pick a name, **Step through**. Move with **WASD / arrows**,
-walk up to anyone and press **E** to talk. Open a **second browser tab** to play live with
-yourself: each tab is a separate player — they spawn near each other, carry a glow marker +
-a "live now" roster entry, and can walk up and chat in real time. Once your echo has earned
-autonomy, two live players can even talk **echo-to-echo**. To put two *real people on two
-devices* in one world, see **[docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)** (deploy the
-realtime server + set `NEXT_PUBLIC_REALTIME_URL`).
+Open the page and press **Walk in**. WASD to walk, E to use what is near, O to open what your echo
+sealed.
 
-## Enabling real services
+The engine and the shared-world server are optional:
 
-Copy `.env.example` → `.env` (and the `NEXT_PUBLIC_*` vars into `apps/web/.env.local`) and
-fill in keys. Each provider is independently swappable:
+```bash
+npm run dev:ml            # the Bayesian engine (Python; see services/ml)
+npm run dev:realtime      # the old shared room (Colyseus)
+```
 
-- **Supabase** (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) → persistence of
-  telemetry/interactions/persona turns on; run `db/migrations/0001_init.sql`, then `npm run seed`.
-- **Anthropic** (`ANTHROPIC_API_KEY`) → NPCs speak via Claude (cheap model for ambient
-  turns, strong model for sustained conversations). Falls back to mock otherwise.
-- **Higgsfield/Fal** (`ART_PROVIDER`, keys) → real selfie→sprite generation [Phase 3].
-- **ElevenLabs/OpenAI TTS** (`TTS_PROVIDER`, keys) → narrator voice [Phase 7].
+Copy `.env.example` to `.env` and `apps/web/.env.local` to turn real services on (Supabase,
+Anthropic for villagers who talk, ElevenLabs for their voices). `npm run check:env` says whether the
+two files agree.
 
-## Documented assumptions (§18)
+## Check it
 
-| Parameter | Value | Where |
-|-----------|-------|-------|
-| Tile size | 16 px (×3 render scale) | `packages/shared/src/world.ts` |
-| Map | 64 × 64 tiles, procedural seed=7 | `world.ts`, `apps/web/src/game/tilemap.ts` |
-| Net tick | 20 Hz | `world.ts` |
-| Move speed | 4 tiles/s | `world.ts` |
-| Interaction radius | 1.5 tiles | `world.ts` |
-| Room capacity / shard | 150 | `world.ts` |
-| Sprite frame | 16×24, 4 frames × 4 facings | `packages/shared/src/sprite.ts` |
-| Persona latent dim `d` | 8 (bipolar axes) | `packages/shared/src/persona.ts` |
-| Persona posterior covariance | full `Σ (8×8)` (was diagonal) | `services/ml/echo_ml/persona.py` |
-| Context/action embedding | 256-d, multilingual (Voyage `voyage-3.5`) | `db/migrations`, `.env`, `embeddings.py` |
-| Raw feature dim `F` | 62 = 32 emb-proj + 14 stylometry + 16 telemetry/behavioral | `persona.FEATURE_DIM` |
-| Behavioral block (Phase 0 spine, §3.2) | 12 dims: time-share[5] + save_rate + risk_index + solitude_tol + pet_attach + decision_latency + persistence + consistency | `persona.TELEMETRY_FEATURE_NAMES` |
-| Learned measurement matrix `W` | `(8×F)` FA + anchoring, committed | `echo_ml/artifacts/measurement.npz` |
-| Robust update | Student-t `ν=4`, χ² gate `q=0.99`, 3 IRLS iters | `persona.robust_kalman_update` |
-| Trait/state split | `K_state=4` transient directions `V` | `persona_model.fit_state_factors` |
-| Reconstruction regularizer `γ` | 0.5 (KL to posterior in CEM) | `reconstruct.refine_latent` |
-| NPC spanning set | 100, deterministic seed=1337 | `packages/shared/src/npcgen.ts` |
+```bash
+npm run check:register    # every defect reference in the docs resolves
+npm run typecheck
+npm test                  # shared, planet, realtime, web
+cd services/ml && .venv/bin/python -m pytest -q
+```
 
-The persona posterior is now a full-covariance linear-Gaussian inverse problem `φ = W·z + ε`
-with a **learned** loading matrix `W` (Factor Analysis + anchoring), **language-independent**
-features (multilingual embedding + stylometry, no English token lists), **robust** Student-t
-updates, **trait/state** separation, and a black-box **reconstruction** objective. The full
-hyperparameter set (`HYPER`) lives in `services/ml/echo_ml/config.py`; promotion thresholds
-`(α*, n*, e*)`, hysteresis, and stakes/cost values are in `services/ml` (Phase 5). To rebuild
-the measurement artifact: `services/ml/scripts/train_measurement.py`.
+The research has its own tests: see [`research/deeds/README.md`](research/deeds/README.md) and
+[`research/pilot/README.md`](research/pilot/README.md).
 
-**Phase 0 axis-semantics decision (§3.3 / open-decision D4).** The 8 axis *names* are kept
-(`warmth, dominance, openness, energy, formality, intellect, pace, affect`) — renaming would
-break the order-synced `persona_axes.py`, the committed `measurement.npz`, and the 100 seeded
-NPCs. Instead the sim's value-dimensions are mapped onto existing axes via the `train_measurement`
-behavioral *anchors* (semantics, not labels): **save-rate → −pace** (future-orientation),
-**risk → +dominance**, **persistence → +formality** (conscientiousness), **pet-attach →
-+warmth/+affect**, **solitude-tolerance → −energy/−warmth** (social need), and time-share
-social/learn/build/leisure onto warmth/intellect/dominance/energy. Reversible if Phase 0
-validation fails specifically on risk/future-orientation.
+## Where things are
 
-## Privacy
+```
+apps/web          Next.js: the world (three.js), every page, every route
+apps/realtime     Colyseus: the older shared room
+packages/planet   the planet, the villages, their people, the moments: pure TypeScript
+packages/shared   types and logic both servers use
+services/ml       the echo's engine: FastAPI, a Bayesian persona on eight axes
+research/deeds    the four public-data studies, the twin audit
+research/pilot    the pilot's analysis, written before any participant
+research/paper    the manuscript and what builds it
+db/migrations     Postgres, forward only
+docs              the decisions, the open defects, the plans
+```
 
-Selfies are biometric data: they are processed to derive *style attributes only* and then
-discarded — never stored (Phase 3). Behavioral telemetry is minimized and consented.
-Account deletion cascades a hard delete across all derived state (Phase 8). KVKK + GDPR.
+Three documents are the record, and they are long on purpose:
 
-## THY brand-stand demo (`/venue` + `/dashboard`)
+- [`docs/DECISIONS.md`](docs/DECISIONS.md): every decision, what it answered, what was measured.
+- [`docs/known-gaps.md`](docs/known-gaps.md): every known defect and limit, numbered.
+- [`docs/SOCIETY-PLAN.md`](docs/SOCIETY-PLAN.md): how an empty planet becomes one shared, peopled world.
 
-A self-contained brand-activation scene inside the ECHO world: a **concert venue** with a
-**Turkish Airlines stand** where a salesperson stand-agent qualifies visitors like a real
-airline rep (*nereye? ne zaman? bütçe?*), an **autonomous crowd** of visitor NPCs that walk
-up, converse, and either book or defect through a portal "to another island," and a
-**research dashboard** that captures who came, what was discussed, who booked, and **why
-people didn't buy**.
+## The rules the work is held to
 
-**Runs with zero keys.** `npm run dev:web`, open <http://localhost:3000/venue> — visitors
-spawn, queue at the stand, hold scripted Turkish conversations, and resolve; the dashboard
-fills with synthetic-but-coherent data. Walk up (WASD / click) and press **E** to be
-qualified yourself. A badge shows **mock / live** mode.
+- A number is measured, or it is not a number.
+- The seed is the prior; the database holds only what changed.
+- Who lives in a village is a function of the seed and the clock, never of who visited.
+- Nothing in the world is a prompt: a moment is people doing something, and leaving is an answer.
+- No score, no XP, no levels.
+- Behaviour is read only with a yes; typed words are never read into the echo; everything a person
+  left can be erased.
 
-**Graceful degradation by capability (`lib/venue/capabilities.ts`).** Each subsystem has a
-live + mock implementation behind one interface, selected from env — a missing key changes
-behavior, never breaks the build:
+## Where it stands
 
-| Subsystem | Key | Live | Mock (no key) |
-|---|---|---|---|
-| Dialogue (sales + visitor sim) | `ANTHROPIC_API_KEY` | Claude (`live-engine`) | scripted state machine (`mock-engine`) |
-| Art (stand/stage/portal/plaza) | `HIGGSFIELD_API_KEY` / CLI | `npm run gen:assets` (Higgsfield) | committed PNGs → procedural |
-| Voice | `TTS_API_KEY` | spoken salesperson | text only |
-| Persistence | `DATABASE_URL` | (optional) | in-memory `Store` |
+Honest, as of November 2026:
 
-**Generated art.** The stand, stage, portal and plaza floor are produced with the
-**Higgsfield CLI** (`npm run gen:assets` → `pipeline/generate-venue-assets.mjs`), chroma-keyed
-and downscaled into `apps/web/public/assets/venue/`, and **committed** so the demo needs no
-keys. Visitor/player characters reuse the world's procedural sprite system (every NPC must
-match the 16×24 sprite spec). The "TURKISH AIRLINES" wordmark is a UI overlay, never baked
-into the art (text fidelity + brand/IP). Salesperson figures are labeled *temsili*.
+- Nobody has played it yet beyond its builder and bots. The pilot has not run.
+- The production deployment renders the world but its engine and its database are not fully
+  provisioned, so the eight-axis echo is silent there. The envelopes need none of that and work.
+- The envelope echo's speed of learning rests on assumed stabilities until the pilot measures them.
+- Choices in the world have not yet been tied to behaviour outside it.
 
-**Layout:** `lib/venue/{capabilities,store,types}`, `lib/venue/dialogue/*` (engine +
-mock/live + orchestrator), `lib/venue/npc/*` (traveler profiles + weighted outcomes),
-`lib/venue/research/aggregate`; `game/venue/*` (PixiJS scene + art); routes under
-`app/api/venue/*`; pages `app/venue` and `app/dashboard`.
+Built by [Artun Balta](mailto:artun.balta@outlook.com).
+
+*An earlier README, from when the world was two-dimensional, is kept at
+[`docs/README-2026-09.md`](docs/README-2026-09.md).*
