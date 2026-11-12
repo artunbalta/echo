@@ -554,6 +554,7 @@ const env = (book: Book, over: Partial<Env> = {}): Env => ({
   setOpen: () => undefined,
   apply: () => undefined,
   count: { on: false, adding: false, left: false },
+  stopped: false,
   twinOn: false,
   setAdding: async () => true,
   forgetAll: async () => true,

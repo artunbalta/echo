@@ -75,6 +75,21 @@ export function keeper(onChange: (b: Book) => void, storage: Store | null = brow
   };
 }
 
+/**
+ * One number a layer, for as long as the layer lives. Watching stopped and begun again hooks the same
+ * layer a second time: counted again, a moment still going on would end under a name no envelope had.
+ */
+export function numberer(): (layer: object) => number {
+  const given = new WeakMap<object, number>();
+  let n = 0;
+  return (layer) => {
+    const had = given.get(layer);
+    if (had !== undefined) return had;
+    given.set(layer, ++n);
+    return n;
+  };
+}
+
 /** A moment's name for the record: the page, the layer it came from, and the layer's own name for it. */
 export const refOf = (page: string, layer: number, ref: string): string => `${page}.${layer}:${ref}`;
 

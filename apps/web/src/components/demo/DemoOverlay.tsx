@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ShownMeeting } from "@/lib/echoMeeting";
 import { t, useLang } from "@/lib/i18n";
 import { identityHeaders, peekUserId } from "@/lib/identity";
+import { eraseEnvelopes } from "@/lib/knowable/erase";
 import { recorder } from "@/lib/villagerVoice";
 
 export interface DemoSettings {
@@ -129,13 +130,14 @@ export default function DemoOverlay({ demo }: { demo: DemoSettings }) {
       // Forgotten in this browser only once it is gone everywhere: a retry needs the identity to ask with.
       if (a.ok && b.ok) {
         try {
-          for (const k of ["echo.userId", "echo.identityToken", "echo.consent", "echo.calls"]) localStorage.removeItem(k);
-          // The envelopes are kept by the page while it is open (`keeper.ts`): removing the key is not
-          // enough, the keeper has to be told, or the next moment writes the record back.
-          window.dispatchEvent(new Event("echo:envelopes-forget"));
+          for (const k of ["echo.userId", "echo.identityToken", "echo.consent"]) localStorage.removeItem(k);
         } catch {
           // nothing kept to clear
         }
+        // The envelopes, by the one helper every erasing page uses (`lib/knowable/erase.ts`): the page's
+        // keeper is told, or the next moment writes the record back. Not the count: a demo adds nothing
+        // to it, and the rows under this browser's id are the machine's owner's, not the guest's.
+        await eraseEnvelopes({ count: false });
       }
       setEnd(a.ok && b.ok ? "erased" : "failed");
     } catch {

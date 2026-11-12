@@ -14,7 +14,7 @@
  */
 import type { MomentKind } from "@echo/planet";
 
-import { callFor, outcomeClass, wordsCall, type Look, type Opened, type Words } from "./calls";
+import { callFor, known, outcomeClass, wordsCall, type Look, type Opened, type Words } from "./calls";
 import { crowdCall, priorOf, type CountRow, type Crowd } from "./crowd";
 import { GENESIS, seal, type Sealed } from "./seal";
 import { readTwin, twinCall, type Twin } from "./twin";
@@ -26,6 +26,13 @@ export interface Envelope extends Sealed {
   open: boolean;
   /** Whether it has been added to the village's count (C91); only ever by someone who said yes to that. */
   sent?: boolean;
+  /** The parcel it was sealed in: a raft may have crossed since, and the count asks where it happened. */
+  cell?: string;
+  /**
+   * Sealed in a visit that adds nothing to the count (a demo, on someone else's machine): never sent,
+   * whoever later says yes in this browser.
+   */
+  here?: boolean;
 }
 
 export interface Book {
@@ -45,7 +52,7 @@ export const emptyBook = (): Book => ({ v: 1, chain: [], words: null, twin: null
 
 /** Every moment settled so far, oldest first: what the next call is made from. */
 export function looksOf(book: Book): Look[] {
-  return book.chain.filter((e) => e.did !== null).map((e) => ({ kind: e.kind, outcome: e.did! }));
+  return book.chain.filter((e) => e.did !== null && known(e.kind)).map((e) => ({ kind: e.kind, outcome: e.did! }));
 }
 
 /**
@@ -54,7 +61,13 @@ export function looksOf(book: Book): Look[] {
  * people did there is sealed beside the call, as the count stood. So is what the person's own words
  * said, and what a twin built from their paragraph said (C93), as each stood: neither moves the call.
  */
-export async function sealMoment(book: Book, m: { ref: string; kind: MomentKind; arm: string | null }, at: string, crowd: Crowd | null = null): Promise<Book> {
+export async function sealMoment(
+  book: Book,
+  m: { ref: string; kind: MomentKind; arm: string | null },
+  at: string,
+  crowd: Crowd | null = null,
+  where: { cell?: string; here?: boolean } = {},
+): Promise<Book> {
   if (book.chain.some((e) => e.ref === m.ref)) return book;
   // A kind that names no outcome a call could be held to (the errand's far end) gets no envelope.
   if (outcomeClass(m.kind, "none") === null) return book;
@@ -76,7 +89,10 @@ export async function sealMoment(book: Book, m: { ref: string; kind: MomentKind;
     looks: call.looks,
     at,
   });
-  return { ...book, chain: [...book.chain, { ...sealed, did: null, open: false }].slice(-KEEP) };
+  // Where it was sealed is beside the seal and not under it: the seal is of the call, and a record kept
+  // before these were written must still check whole.
+  const env: Envelope = { ...sealed, did: null, open: false, ...(where.cell ? { cell: where.cell } : {}), ...(where.here ? { here: true } : {}) };
+  return { ...book, chain: [...book.chain, env].slice(-KEEP) };
 }
 
 /** A seen moment is over: its envelope learns what was done. One with no envelope, or no outcome to hold a call to, changes nothing. */
@@ -87,9 +103,9 @@ export function settle(book: Book, row: { ref: string; kind: MomentKind; outcome
 }
 
 /** Settled and not yet opened: what is waiting for the visitor. */
-export const waiting = (book: Book): Envelope[] => book.chain.filter((e) => e.did !== null && !e.open);
+export const waiting = (book: Book): Envelope[] => book.chain.filter((e) => e.did !== null && !e.open && known(e.kind));
 /** Everything opened, oldest first. */
-export const opened = (book: Book): Envelope[] => book.chain.filter((e) => e.did !== null && e.open);
+export const opened = (book: Book): Envelope[] => book.chain.filter((e) => e.did !== null && e.open && known(e.kind));
 
 /** Open every envelope that is waiting. */
 export function openAll(book: Book): Book {
@@ -102,8 +118,8 @@ export const asOpened = (e: Envelope): Opened => ({ kind: e.kind, call: e.call, 
 /** Settled envelopes not yet added to the village's count, as the rows it takes (C91). */
 export function unsent(book: Book, cell: string): CountRow[] {
   return book.chain
-    .filter((e) => e.did !== null && !e.sent)
-    .map((e) => ({ seal: e.hash, cell, kind: e.kind, arm: e.arm, call: e.call, did: e.did!, same: e.looks.same, family: e.looks.family, at: e.at }));
+    .filter((e) => e.did !== null && !e.sent && !e.here && known(e.kind))
+    .map((e) => ({ seal: e.hash, cell: e.cell ?? cell, kind: e.kind, arm: e.arm, call: e.call, did: e.did!, same: e.looks.same, family: e.looks.family, at: e.at }));
 }
 
 /** Those rows were taken. */

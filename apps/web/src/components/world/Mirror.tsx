@@ -23,17 +23,19 @@ import { useCallback, useEffect, useState } from "react";
 import { PERSONA_AXIS_KEYS, type PersonaAxisKey } from "@echo/shared";
 
 import type { ConsentState } from "@/game/world/measure";
-import { identityHeaders, identityToken, peekUserId } from "@/lib/identity";
+import { identityHeaders, identityToken, peekUserId, refusedUnsigned } from "@/lib/identity";
+import { eraseEnvelopes } from "@/lib/knowable/erase";
 import type { Contributor, MirrorView, Move, SetOut } from "@/lib/mirror";
 import { cloudWanted, setCloudWanted } from "@/lib/villagerVoice";
 
 type Loaded = MirrorView & { capped?: boolean; source?: string; setOut?: SetOut[] };
 
-/** What erasing everything removes from this browser, besides what the server erases. */
-/** Tell the page's keeper of the envelopes that they are erased (`lib/knowable/keeper.ts`): it empties the record and keeps nothing more. */
-const forgetEnvelopes = () => window.dispatchEvent(new Event("echo:envelopes-forget"));
-
-const LOCAL_KEYS = ["echo.userId", "echo.name", "echo.consent", "echo.character", "echo.identityToken", "echo.voiceCloud", "echo.villagerVoice", "echo.email", "echo.calls", "echo.calls.crowd", "echo.calls.visitor"];
+/**
+ * What erasing everything removes from this browser, besides what the server erases. The envelopes'
+ * own keys are not in this list: `eraseEnvelopes` clears them, for every page that erases, and keeps
+ * the count's id for as long as rows are still under it (`lib/knowable/erase.ts`).
+ */
+const LOCAL_KEYS = ["echo.userId", "echo.name", "echo.consent", "echo.character", "echo.identityToken", "echo.voiceCloud", "echo.villagerVoice", "echo.email"];
 
 const ARROW = (m: { amount: number }) => (m.amount > 0 ? "→" : "←");
 const pct = (x: number) => `${Math.round(((Math.max(-1, Math.min(1, x)) + 1) / 2) * 100)}%`;
@@ -51,6 +53,8 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
   const [axis, setAxis] = useState<PersonaAxisKey | null>(null);
   const [cloud, setCloud] = useState<boolean | null>(null);
   const [erasing, setErasing] = useState<"no" | "asking" | "going" | string>("no");
+  // What can be done about what the erasure said: ask again, or (everything here being gone) leave.
+  const [after, setAfter] = useState<"again" | "leave">("again");
 
   const look = useCallback(async () => {
     setLoading(true);
@@ -104,53 +108,53 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
 
   const erase = useCallback(async () => {
     setErasing("going");
-    try {
-      const res = await fetch("/api/account/delete", {
-        method: "POST",
-        headers: identityHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ userId: peekUserId() }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; supabaseTablesFailed?: string[] };
-      if (!res.ok || !data.ok) {
-        // What the echo sealed is kept in this browser and nowhere else (C89), so it does not wait on
-        // the server: it is erased here and now, and the page keeps nothing more of it. Everything
-        // else stays, so that the erasure can be asked for again with the same identity.
-        forgetEnvelopes();
-        setErasing(`Not everything could be erased${data.supabaseTablesFailed?.length ? ` (${data.supabaseTablesFailed.join(", ")})` : ""}. What your echo sealed was only ever in this browser, and is gone. Nothing else here was cleared; try again.`);
-        return;
-      }
-      forgetEnvelopes();
-      // What they added to the village's count (C91) is under an id of its own, which the delete
-      // route never saw. It is removed by that id before the id is cleared: an id cleared first
-      // would leave rows nobody could ever ask to have removed.
-      let visitor: string | null = null;
+    // What the echo sealed, and what was added to the village's count (C89, C91), do not wait on the
+    // server's own erasure: the first was only ever in this browser, the second is under an id the
+    // delete route never saw. One helper does both, for every page that erases.
+    const count = await eraseEnvelopes();
+    const counted = count === "left" ? " What you added to the village's count could not be reached, so it is still there: the envelopes in a village (O) can remove it." : "";
+    const uid = peekUserId();
+    // With no id there is nothing on the server to ask about.
+    let server: "erased" | "nothing" | "failed" = uid ? "failed" : "nothing";
+    let tables = "";
+    if (uid) {
       try {
-        visitor = localStorage.getItem("echo.calls.visitor");
+        const res = await fetch("/api/account/delete", {
+          method: "POST",
+          headers: identityHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ userId: uid }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; supabaseTablesFailed?: string[] };
+        if (res.ok && data.ok) server = "erased";
+        // Nothing was ever kept there under this browser's id (`refusedUnsigned`): what there is of this
+        // person is here, and is erased here. The mirror used to tell them to try again, for ever.
+        else if (refusedUnsigned(data.error)) server = "nothing";
+        else if (data.supabaseTablesFailed?.length) tables = ` (${data.supabaseTablesFailed.join(", ")})`;
       } catch {
-        // a private window: no id was kept, so nothing was added
+        // Not sent: the same as refused. The id is kept to ask again with.
       }
-      if (visitor) {
-        const gone = await fetch("/api/calls", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ visitor }) })
-          .then((r) => r.ok)
-          .catch(() => false);
-        if (!gone) {
-          setErasing("What you added to the village's count could not be removed. Nothing in this browser was cleared; try again.");
-          return;
-        }
-      }
-      for (const k of LOCAL_KEYS) {
-        try {
-          localStorage.removeItem(k);
-        } catch {
-          // a private window: nothing was kept to remove
-        }
-      }
-      window.location.assign("/");
-    } catch {
-      forgetEnvelopes();
-      setErasing("The erasure could not be sent. What your echo sealed was only ever in this browser, and is gone. Nothing else was erased; try again.");
     }
-  }, []);
+    if (server === "failed") {
+      setAfter("again");
+      setErasing(`Not everything on the server could be erased${tables}. What your echo sealed in this browser is gone.${counted} Your id is kept here so that you can ask again.`);
+      return;
+    }
+    // One thing is not gone: the page stops watching before it says so, since the identity it watched under is.
+    if (count === "left") onRevoke();
+    for (const k of LOCAL_KEYS) {
+      try {
+        localStorage.removeItem(k);
+      } catch {
+        // a private window: nothing was kept to remove
+      }
+    }
+    if (count === "left") {
+      setAfter("leave");
+      setErasing(`Everything else is erased.${counted}`);
+      return;
+    }
+    window.location.assign("/");
+  }, [onRevoke]);
 
   if (!open) return null;
   const watching = consent === "accepted";
@@ -351,9 +355,19 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
             ) : erasing === "going" ? (
               <p className="italic text-white/60">Erasing…</p>
             ) : (
-              <p className="italic text-danger" data-mirror-erase-failed>
-                {erasing}
-              </p>
+              <div>
+                <p className="italic text-danger" data-mirror-erase-failed>
+                  {erasing}
+                </p>
+                <button
+                  type="button"
+                  data-mirror-erase-after={after}
+                  onClick={() => (after === "leave" ? window.location.assign("/") : setErasing("asking"))}
+                  className="mt-1.5 underline decoration-white/30 hover:text-white"
+                >
+                  {after === "leave" ? "Leave the village" : "Ask again"}
+                </button>
+              </div>
             )}
           </div>
           <p className="mt-3 text-[11px] text-white/35" data-mirror-id>

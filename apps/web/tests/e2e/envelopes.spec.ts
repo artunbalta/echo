@@ -14,7 +14,17 @@
  *   - someone who said no has no envelopes, and is told why;
  *   - a moment that happens ON THIS PAGE is sealed as it begins and settled once it is over, under a
  *     name with the page and the layer in it; and after an erasure the page keeps nothing more, though
- *     the world goes on (the defect a review found: the next moment wrote the erased record back).
+ *     the world goes on (the defect a review found: the next moment wrote the erased record back);
+ *   - the same when the erasure happened in ANOTHER TAB of this browser (a second review's find: a
+ *     village left open there held the record in memory and wrote it back).
+ *
+ * Both of the last two wait until a moment has BEGUN after the erasure before they look. Without that
+ * they could pass with the defect in place: a moment begun before it writes nothing when it ends.
+ *
+ *   - "Erase everything" in the mirror, with the server answering as production does today (no identity
+ *     configured, so it refuses): this browser is cleared and the page leaves. It used to keep every key
+ *     and say "try again". And where the count cannot be reached, the page says that one thing is left,
+ *     keeps the id it is under, and the panel removes it once the count answers.
  *
  * The record is made by the app's own code (`envelopeBook.mts`), never spelled out here.
  */
@@ -185,6 +195,22 @@ async function meetOne(page: Page): Promise<boolean> {
   return false;
 }
 
+/** The kinds going on now: what a moment that begins later is told apart from. */
+const goingOn = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    const w = (window as unknown as { __world: { context(): { layer(n: string): unknown } } }).__world;
+    const layer = w.context().layer("moments") as { all(): { kind: string; lane: string }[] } | undefined;
+    return (layer?.all() ?? []).filter((m) => m.lane !== "errand").map((m) => m.kind);
+  });
+
+/** Wait until a moment that was not going on `before` has begun, and long enough for its seal to have been written. */
+async function aMomentBegins(page: Page, before: string[]): Promise<void> {
+  await expect
+    .poll(async () => (await goingOn(page)).some((k) => !before.includes(k)), { timeout: 240_000, intervals: [1000], message: "no new moment began in four minutes" })
+    .toBe(true);
+  await page.waitForTimeout(5000);
+}
+
 test("a moment met on this page is sealed and settled under its own name, and after an erasure nothing more is kept", async ({ page }) => {
   test.setTimeout(480_000);
   await arrive(page, { consent: true });
@@ -209,9 +235,110 @@ test("a moment met on this page is sealed and settled under its own name, and af
   await expect.poll(() => page.evaluate(() => localStorage.getItem("echo.calls"))).toBeNull();
   await expect(page.locator("[data-envelopes-chip]")).toHaveCount(0);
 
-  // The world goes on. Another moment is met and acted on, and long enough passes for it to end.
-  expect(await meetOne(page), "no second moment could be met").toBe(true);
-  await page.waitForTimeout(20_000);
+  // The world goes on: a moment that was not there at the erasure begins, which is when a seal is made.
+  await aMomentBegins(page, await goingOn(page));
   expect(await page.evaluate(() => localStorage.getItem("echo.calls")), "a moment after the erasure wrote the record back").toBeNull();
   await expect(page.locator("[data-envelopes-chip]")).toHaveCount(0);
+  // And the page no longer says it seals.
+  await page.keyboard.press("o");
+  await expect(page.locator("[data-envelopes-empty]")).toContainText("Nothing more is sealed on this page");
+});
+
+test("an erasure in another tab of this browser is heard here: the record goes, and the next moment does not write it back", async ({ page, context }) => {
+  test.setTimeout(480_000);
+  await arrive(page, { book: bookOf("whole"), consent: true });
+  test.skip(!(await page.evaluate(() => "__world" in window)), "this build has no handle to see the moments with");
+  await expect(page.locator("[data-envelopes-chip]")).toBeVisible();
+
+  // Another tab on this site clears the record, as the mirror's erasure there would.
+  const other = await context.newPage();
+  await other.goto("/guess", { waitUntil: "domcontentloaded" });
+  await other.evaluate(() => localStorage.removeItem("echo.calls"));
+  await other.close();
+
+  // This tab hears it: what it held in memory goes too.
+  await expect(page.locator("[data-envelopes-chip]")).toHaveCount(0);
+  await aMomentBegins(page, await goingOn(page));
+  expect(await page.evaluate(() => localStorage.getItem("echo.calls")), "the tab left open wrote the erased record back at its next moment").toBeNull();
+  await expect(page.locator("[data-envelopes-chip]")).toHaveCount(0);
+});
+
+/** A browser that said yes, with a record kept, seeded once: a page arrived at after an erasure is not seeded again. */
+async function arriveOnce(page: Page, extra: Record<string, string> = {}): Promise<void> {
+  // The server as production has it today: no identity is configured, so nothing is minted and an erasure is refused.
+  const unconfigured = { status: 503, contentType: "application/json", body: JSON.stringify({ error: "identity_unconfigured" }) };
+  await page.route("**/api/identity/session", (r) => r.fulfill(unconfigured));
+  await page.route("**/api/account/delete", (r) => r.fulfill(unconfigured));
+  await page.addInitScript(
+    ({ book, extra }) => {
+      if (sessionStorage.getItem("e2e.seeded")) return;
+      sessionStorage.setItem("e2e.seeded", "1");
+      localStorage.setItem("echo.consent", JSON.stringify({ telemetry: true }));
+      localStorage.setItem("echo.lang", "en");
+      localStorage.setItem("echo.controls.seen", "1");
+      localStorage.setItem("echo.calls", book);
+      for (const [k, v] of Object.entries(extra)) localStorage.setItem(k, v);
+    },
+    { book: bookOf("whole"), extra },
+  );
+  await page.goto(OPEN_VILLAGE, { waitUntil: "domcontentloaded" });
+  await page.locator("[data-phase='ready']").waitFor({ timeout: 180_000 });
+  await expect(page.locator("[data-envelopes-chip]")).toBeVisible();
+}
+
+const keptKeys = (page: Page): Promise<string[]> => page.evaluate(() => Object.keys(localStorage).filter((k) => /^echo\.(calls|userId|consent|identityToken|name)/.test(k)).sort());
+
+test("erasing everything in the mirror, where the server knows nobody, clears this browser and leaves", async ({ page }) => {
+  test.setTimeout(300_000);
+  await arriveOnce(page);
+  expect(await page.evaluate(() => localStorage.getItem("echo.identityToken")), "this browser holds a signature: the test is of one that holds none").toBeNull();
+
+  await page.keyboard.press("y");
+  await page.locator("[data-mirror-erase]").click();
+  await page.locator("[data-mirror-erase-yes]").click();
+  // It used to stop at the refusal, keep every key and say "try again".
+  await page.waitForURL((u) => u.pathname === "/", { timeout: 30_000 });
+  expect(await keptKeys(page)).toEqual([]);
+});
+
+test("where the count cannot be reached, the mirror says that one thing is left, and the panel removes it once it answers", async ({ page }) => {
+  test.setTimeout(300_000);
+  let answers = false;
+  const asked: string[] = [];
+  await page.route("**/api/calls", (r) => {
+    if (r.request().method() !== "DELETE") return r.continue();
+    asked.push(r.request().postData() ?? "");
+    return r.fulfill({ status: answers ? 200 : 503, contentType: "application/json", body: answers ? '{"removed":2}' : '{"error":"unavailable"}' });
+  });
+  await arriveOnce(page, { "echo.calls.visitor": "abcdefghij0123456789", "echo.calls.crowd": "1" });
+
+  await page.keyboard.press("y");
+  await page.locator("[data-mirror-erase]").click();
+  await page.locator("[data-mirror-erase-yes]").click();
+  const said = page.locator("[data-mirror-erase-failed]");
+  await expect(said).toContainText("Everything else is erased");
+  await expect(said).toContainText("village's count could not be reached");
+  await expect(page.locator("[data-mirror-erase-after='leave']")).toBeVisible();
+  // Everything is gone but the id the rows are under: cleared, nobody could ever ask for them to go.
+  expect(await keptKeys(page)).toEqual(["echo.calls.visitor"]);
+  expect(asked).toEqual([JSON.stringify({ visitor: "abcdefghij0123456789" })]);
+  await expect(page.locator("[data-envelopes-chip]")).toHaveCount(0);
+
+  // The envelopes' panel says the rows are still there, and removes them once the count answers.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("o");
+  await expect(page.locator("[data-envelopes-empty]")).toContainText("Nothing more is sealed on this page");
+  const left = page.locator("[data-envelopes-counting='left']");
+  await expect(left).toContainText("still in it");
+  answers = true;
+  await left.locator("[data-envelopes-adding]").click();
+  await expect(left).toHaveCount(0);
+  expect(await keptKeys(page)).toEqual([]);
+
+  // Asked again from the mirror (closing it puts the question back), with nothing left anywhere, it leaves.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("y");
+  await page.locator("[data-mirror-erase]").click();
+  await page.locator("[data-mirror-erase-yes]").click();
+  await page.waitForURL((u) => u.pathname === "/", { timeout: 30_000 });
 });

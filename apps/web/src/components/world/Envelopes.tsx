@@ -44,8 +44,9 @@ import { t, useLang, type Key, type Lang } from "@/lib/i18n";
 import { FAMILY_NAMES, tally, type Family, type Said, type Words } from "@/lib/knowable/calls";
 import { ROWS_MAX, type Crowd } from "@/lib/knowable/crowd";
 import { readTwin, TWIN_TEXT, type Twin } from "@/lib/knowable/twin";
-import { asOpened, emptyBook, markSent, openAll, opened, sealMoment, settle, unsent, waiting, type Book, type Envelope } from "@/lib/knowable/envelopes";
-import { FORGET_EVENT, keeper, refOf, type Keeper } from "@/lib/knowable/keeper";
+import { asOpened, BOOK_KEY, emptyBook, markSent, openAll, opened, sealMoment, settle, unsent, waiting, type Book, type Envelope } from "@/lib/knowable/envelopes";
+import { ADDING_KEY, eraseFromCount, VISITOR_KEY } from "@/lib/knowable/erase";
+import { FORGET_EVENT, keeper, numberer, refOf, type Keeper } from "@/lib/knowable/keeper";
 import { encodeGuess, GUESS_MIN, pickForFriend } from "@/lib/knowable/guessLink";
 import { sawLines } from "@/lib/knowable/saw";
 import { momentWords, outcomeWords } from "@/lib/knowable/say";
@@ -59,9 +60,7 @@ const NUDGE_AT = 4;
 const NUDGE_MS = 9000;
 /** Waiting envelopes that make the way out stop and ask. */
 const LEAVING_AT = 3;
-/** The village's count (C91): this browser's yes to adding to it, the id it adds under, and how long new rows wait to go. */
-const ADDING_KEY = "echo.calls.crowd";
-const VISITOR_KEY = "echo.calls.visitor";
+/** The village's count (C91): how long new rows wait to go. Its two keys are `erase.ts`'s, which is what clears them. */
 const SEND_MS = 15_000;
 
 const kept = (key: string): string | null => {
@@ -95,14 +94,20 @@ export interface Envelopes {
   apply: (step: (b: Book) => Book | Promise<Book>) => void;
   /**
    * The village's count (C91): whether the owner has it on, whether this person adds to it, and whether
-   * rows of theirs are still in it though it has since been switched off (`left`): theirs to remove.
+   * rows of theirs are still in it though they add no more (`left`): the count was switched off since,
+   * or could not be reached when they asked for them to go. Theirs to remove, for as long as the id is kept.
    */
   count: { on: boolean; adding: boolean; left: boolean };
+  /** An erasure ended the keeping on this page: nothing more is sealed until it is walked into again. */
+  stopped: boolean;
   /** A twin from the person's words (C93): whether there is a model here to build one. */
   twinOn: boolean;
   /** Say yes or no to adding to the count; no also removes what was added. False if it could not be removed. */
   setAdding: (yes: boolean) => Promise<boolean>;
-  /** Erase everything: the envelopes and words here, and this person's rows in the count. False if those could not be removed. */
+  /**
+   * Erase everything: the envelopes and words here, and this person's rows in the count. The record here
+   * goes either way; false if the count's rows could not be removed (`count.left` then says so).
+   */
   forgetAll: () => Promise<boolean>;
 }
 
@@ -117,6 +122,9 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   worldRef.current = world;
   const cellRef = useRef(cell);
   cellRef.current = cell;
+  const countableRef = useRef(countable);
+  countableRef.current = countable;
+  const [stopped, setStopped] = useState(false);
   const [counting, setCounting] = useState(false);
   const [adding, setAddingState] = useState(false);
   const crowd = useRef<Crowd | null>(null);
@@ -129,10 +137,7 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   // A layer numbers its moments from zero, on every page and in every world a raft crosses into, so a
   // moment is named with its page and with which of the page's layers it came from.
   const page = useRef("");
-  const layers = useRef(0);
-  // One number a layer, for as long as the layer lives: watching stopped and begun again must not give
-  // a moment that is still going on a second name, or its ending would find no envelope.
-  const numbered = useRef(new WeakMap<object, number>());
+  const [numberOf] = useState(numberer);
 
   useEffect(() => {
     page.current = Date.now().toString(36);
@@ -140,9 +145,22 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
     keeping.current = k;
     setBook(k.book());
     // An erasure anywhere on the page (the mirror, the demo's end): the record goes, and nothing more is kept.
-    const erased = () => void k.forget({ stop: true });
+    const erased = () => {
+      setStopped(true);
+      void k.forget({ stop: true });
+    };
+    // And one in another tab of this browser. A village left open there held the whole record in memory
+    // and wrote it back at its next moment, so an erasure lasted until something happened elsewhere.
+    // The record's key going (or the whole store being cleared, which names no key) is how this tab hears of it.
+    const elsewhere = (e: StorageEvent) => {
+      if (e.key === BOOK_KEY ? e.newValue === null : e.key === null && kept(BOOK_KEY) === null) erased();
+    };
     window.addEventListener(FORGET_EVENT, erased);
-    return () => window.removeEventListener(FORGET_EVENT, erased);
+    window.addEventListener("storage", elsewhere);
+    return () => {
+      window.removeEventListener(FORGET_EVENT, erased);
+      window.removeEventListener("storage", elsewhere);
+    };
   }, []);
 
   const apply = useCallback((step: (b: Book) => Book | Promise<Book>) => {
@@ -156,9 +174,11 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
       const l = worldRef.current()?.context().layer<MomentsLayer>("moments") ?? null;
       if (!l || l === layer) return;
       layer = l;
-      const from = numbered.current.get(l) ?? ++layers.current;
-      numbered.current.set(l, from);
-      l.onBegan((m) => apply((b) => sealMoment(b, { ref: refOf(page.current, from, m.ref), kind: m.kind, arm: m.arm }, new Date().toISOString(), crowd.current)));
+      const from = numberOf(l);
+      // Where it is sealed goes with it: a raft may cross before it is sent, and a demo's are never sent.
+      l.onBegan((m) =>
+        apply((b) => sealMoment(b, { ref: refOf(page.current, from, m.ref), kind: m.kind, arm: m.arm }, new Date().toISOString(), crowd.current, { cell: cellRef.current, here: !countableRef.current })),
+      );
       l.onOver((row) => {
         if (row.lane !== "errand") apply((b) => settle(b, { ref: refOf(page.current, from, row.ref), kind: row.kind, outcome: row.outcome }));
       });
@@ -170,7 +190,7 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
       layer?.onBegan(null);
       layer?.onOver(null);
     };
-  }, [on, consent, apply]);
+  }, [on, consent, apply, numberOf]);
 
   // `O`, the menu's line, and anything else that asks.
   useEffect(() => {
@@ -196,14 +216,19 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { on?: boolean; crowd?: Crowd } | null) => {
         if (!live) return;
-        // Switched off since this person added to it: their rows are still theirs to remove.
-        if (!d?.on) return setLeft(!!kept(VISITOR_KEY));
+        // An id still kept means rows may still be in the count: theirs to remove, whether the count
+        // has been switched off since or a removal they asked for never reached it.
+        const id = !!kept(VISITOR_KEY);
+        if (!d?.on) return setLeft(id);
+        const yes = id && kept(ADDING_KEY) === "1";
         crowd.current = d.crowd ?? null;
         setCounting(true);
-        setAddingState(kept(ADDING_KEY) === "1" && !!kept(VISITOR_KEY));
+        setAddingState(yes);
+        setLeft(id && !yes);
       })
       .catch(() => {
         // No count: every call is made as it would be with nobody before you.
+        if (live) setLeft(!!kept(VISITOR_KEY));
       });
     return () => {
       live = false;
@@ -230,6 +255,8 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   const send = useCallback(
     (closing = false) => {
       const visitor = kept(VISITOR_KEY);
+      // Only on a yes that still stands in the browser: another tab may have taken it back since.
+      if (kept(ADDING_KEY) !== "1") return;
       const rows = unsent(keeping.current?.book() ?? emptyBook(), cellRef.current).slice(0, ROWS_MAX);
       if (!visitor || rows.length === 0) return;
       void fetch("/api/calls", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ visitor, rows }), keepalive: closing })
@@ -247,7 +274,7 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   );
 
   // New settled envelopes go a little after they settle, and once more as the page closes.
-  const waitingToGo = useMemo(() => book.chain.filter((e) => e.did !== null && !e.sent).length, [book]);
+  const waitingToGo = useMemo(() => unsent(book, "").length, [book]);
   useEffect(() => {
     if (!on || !counting || !adding || consent !== "accepted" || waitingToGo === 0) return;
     const id = setTimeout(() => send(), SEND_MS);
@@ -264,18 +291,11 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
    * cleared first would leave rows nobody could ask to have removed. Adding stops either way.
    */
   const remove = useCallback(async (): Promise<boolean> => {
-    keep(ADDING_KEY, null);
     setAddingState(false);
-    const visitor = kept(VISITOR_KEY);
-    if (!visitor) return true;
-    const gone = await fetch("/api/calls", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ visitor }) })
-      .then((r) => r.ok)
-      .catch(() => false);
-    if (gone) {
-      keep(VISITOR_KEY, null);
-      setLeft(false);
-    }
-    return gone;
+    const left = (await eraseFromCount()) === "left";
+    // Still there: the panel goes on saying so, and offering to remove them, until they are gone.
+    setLeft(left);
+    return !left;
   }, []);
 
   const setAdding = useCallback(
@@ -289,17 +309,21 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
       if (!kept(VISITOR_KEY)) keep(VISITOR_KEY, newVisitor());
       keep(ADDING_KEY, "1");
       setAddingState(true);
+      setLeft(false);
       return true;
     },
     [apply, remove],
   );
 
   const forgetAll = useCallback(async (): Promise<boolean> => {
-    // The count first: if its rows cannot be removed, nothing here is cleared, so it can be tried again.
-    if (!(await remove())) return false;
-    // The record goes, here and in the browser; the echo goes on watching, and starts again from nothing.
+    // The count first, while its id is in hand. If it cannot be reached the id is kept, so the rows can
+    // still be removed, and the panel says they are there.
+    const gone = await remove();
+    // The record goes either way, here and in the browser: it was only ever here, and holding it back
+    // until a server answers would make an erasure wait on something it never depended on. The echo
+    // goes on watching, and starts again from nothing.
     await keeping.current?.forget();
-    return true;
+    return gone;
   }, [remove]);
 
   const ready = useMemo(() => waiting(book).length, [book]);
@@ -307,7 +331,7 @@ export function useEnvelopes(world: () => PlanetWorld | null, consent: ConsentSt
   useEffect(() => {
     if (on && ready > 0) step("met");
   }, [on, ready]);
-  return { book, ready, open, setOpen, apply, count: { on: counting, adding: counting && adding, left }, twinOn, setAdding, forgetAll };
+  return { book, ready, open, setOpen, apply, count: { on: counting, adding: counting && adding, left: left && !(counting && adding) }, stopped, twinOn, setAdding, forgetAll };
 }
 
 /** The small envelope under the meter: how many are waiting. It counts only moments already over. */
@@ -617,7 +641,7 @@ export function EnvelopesPanel({ env, consent }: { env: Envelopes; consent: Cons
           <div className="min-h-0 overflow-y-auto px-5 pb-4">
             {all.length === 0 ? (
               <p data-envelopes-empty className="mt-2 pb-2 text-[13px] leading-relaxed text-parchment/60">
-                {t(lang, consent === "accepted" ? "env.none" : "env.off")}
+                {t(lang, env.stopped ? "env.stopped" : consent === "accepted" ? "env.none" : "env.off")}
               </p>
             ) : (
               <>
@@ -718,8 +742,9 @@ export function EnvelopesPanel({ env, consent }: { env: Envelopes; consent: Cons
               </p>
             ) : null}
 
-            {!env.count.on && env.count.left ? (
-              // The count was switched off after this person added to it: what they added is still theirs to remove.
+            {env.count.left ? (
+              // Rows of theirs are in the count and they add no more (it was switched off, or could not be
+              // reached when they asked): what they added is still theirs to remove, and this says so.
               <p data-envelopes-counting="left" className="mt-3 text-[12px] leading-relaxed text-parchment/60">
                 {t(lang, "env.crowd.left")}{" "}
                 <button type="button" data-envelopes-adding onClick={() => void env.setAdding(false).then((ok) => setNote(ok ? null : t(lang, "env.crowd.stuck")))} className={link}>
@@ -728,7 +753,7 @@ export function EnvelopesPanel({ env, consent }: { env: Envelopes; consent: Cons
               </p>
             ) : null}
 
-            {env.count.on ? (
+            {env.count.on && !env.count.left ? (
               <p data-envelopes-counting={env.count.adding ? "adding" : "asked"} className="mt-3 text-[12px] leading-relaxed text-parchment/60">
                 {t(lang, env.count.adding ? "env.crowd.on" : "env.crowd.offer")}{" "}
                 <button
@@ -777,8 +802,8 @@ export function EnvelopesPanel({ env, consent }: { env: Envelopes; consent: Cons
                         onClick={() =>
                           void env.forgetAll().then((ok) => {
                             setSure(false);
-                            if (ok) setFresh([]);
-                            setNote(ok ? null : t(lang, "env.crowd.stuck"));
+                            setFresh([]);
+                            setNote(ok ? null : t(lang, "env.forget.left"));
                           })
                         }
                         className={`${link} text-danger`}

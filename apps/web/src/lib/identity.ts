@@ -121,6 +121,17 @@ export function outboundIdentityToken(): string {
   return identityToken();
 }
 
+/**
+ * Whether a refused erasure means there was nothing on the server to erase: refused for want of a
+ * signature, by a browser that holds none. Every write under an id asks for the same signature, so the
+ * server never took anything under this one, and what there is of the person is in the browser. That
+ * is every visitor to a deployment whose identity is not configured; both erasing pages used to tell
+ * them it had failed, and kept everything.
+ */
+export function refusedUnsigned(error: unknown): boolean {
+  return !identityToken() && (error === "identity_unconfigured" || error === "identity_required");
+}
+
 /** Store an id and its signature together. Used by the sign-in path, which mints its own. */
 export function storeIdentity(userId: string, token: string): void {
   if (typeof window === "undefined" || !userId) return;

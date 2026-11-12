@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getPersona, type PersonaSnapshot } from "@/lib/agent";
-import { IDENTITY_TOKEN_KEY, identityHeaders } from "@/lib/identity";
+import { IDENTITY_TOKEN_KEY, identityHeaders, refusedUnsigned } from "@/lib/identity";
+import { eraseEnvelopes, type CountErased } from "@/lib/knowable/erase";
 
 interface Consent {
   world: boolean;
@@ -22,6 +23,8 @@ export default function Account() {
   const [deleted, setDeleted] = useState(false);
   // What the server said went wrong, when erasure was only partial. Null means it was clean.
   const [eraseError, setEraseError] = useState<string | null>(null);
+  // What became of what this browser added to a village's count (C91): "left" is said, not hidden.
+  const [count, setCount] = useState<CountErased>("none");
 
   useEffect(() => {
     const id = localStorage.getItem("echo.userId") ?? "";
@@ -45,14 +48,20 @@ export default function Account() {
     // claims someone's data is gone has to have been told that it is. On a partial wipe say which
     // tables held, and do NOT clear the local id: it is the only handle left to retry with.
     let failed: string[] = [];
+    // The envelopes and the village's count (C89, C91) go first and whatever the server answers: this
+    // page cleared five keys, none of them theirs, and then said "not even your echo".
+    const counted = await eraseEnvelopes();
+    setCount(counted);
     try {
-      const res = await fetch("/api/account/delete", {
+      // With no id there is nothing on the server to ask about (and the route would answer 400).
+      const res = !uid ? null : await fetch("/api/account/delete", {
         method: "POST",
         headers: identityHeaders(),
         body: JSON.stringify({ userId: uid }),
       });
-      const body = (await res.json().catch(() => ({}))) as { supabaseTablesFailed?: string[] };
-      if (!res.ok) failed = body.supabaseTablesFailed?.length ? body.supabaseTablesFailed : [`server ${res.status}`];
+      const body = res ? ((await res.json().catch(() => ({}))) as { error?: string; supabaseTablesFailed?: string[] }) : {};
+      // Refused for want of a signature this browser never had: nothing was kept there to erase.
+      if (res && !res.ok && !refusedUnsigned(body.error)) failed = body.supabaseTablesFailed?.length ? body.supabaseTablesFailed : [`server ${res.status}`];
     } catch (err) {
       failed = [(err as Error).message];
     }
@@ -69,7 +78,8 @@ export default function Account() {
     // and leaving a credential behind after "erase everything" was never right on its own terms.
     ["echo.userId", "echo.name", "echo.consent", "echo.character", IDENTITY_TOKEN_KEY].forEach((k) => localStorage.removeItem(k));
     setDeleted(true);
-    setTimeout(() => router.push("/"), 1800);
+    // Long enough to read the one thing that could not be reached, where there is one.
+    setTimeout(() => router.push("/"), counted === "left" ? 9000 : 1800);
   }
 
   if (deleted) {
@@ -78,6 +88,11 @@ export default function Account() {
         <div className="panel rounded-lg p-8 text-center">
           <p className="text-echo">Erased.</p>
           <p className="mt-2 text-xs text-parchment/60">No one knows you here again — not even your echo.</p>
+          {count === "left" ? (
+            <p className="mt-2 max-w-xs text-xs text-parchment/60" data-account-count-left>
+              One thing could not be reached: what you added to a village&apos;s count. The envelopes in a village (O) can remove it.
+            </p>
+          ) : null}
         </div>
       </main>
     );

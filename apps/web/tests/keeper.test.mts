@@ -9,7 +9,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { BOOK_KEY, emptyBook, sealMoment, settle, type Book } from "../src/lib/knowable/envelopes";
-import { keeper, refOf } from "../src/lib/knowable/keeper";
+import { keeper, numberer, refOf } from "../src/lib/knowable/keeper";
 import { brokenAt } from "../src/lib/knowable/seal";
 
 const storage = () => {
@@ -106,4 +106,23 @@ test("a moment is named by its layer as well as its page: after a raft crossing,
   await same.apply((b) => sealMoment(b, { ref: `page:${first}`, kind: "lost-purse", arm: "few" }, at(1)));
   await same.apply((b) => sealMoment(b, { ref: `page:${first}`, kind: "greeting", arm: "peer" }, at(20)));
   assert.equal(same.book().chain.length, 1);
+});
+
+test("a layer keeps one number for as long as it lives, however often it is asked (the defect: a second name mid-moment)", async () => {
+  const numberOf = numberer();
+  const village = {};
+  const across = {};
+  // Watching stopped and begun again hooks the same layer a second time.
+  assert.equal(numberOf(village), 1);
+  assert.equal(numberOf(village), 1);
+  assert.equal(numberOf(across), 2);
+  assert.equal(numberOf(village), 1);
+  // Another page counts for itself.
+  assert.equal(numberer()(across), 1);
+
+  // What it protects: a moment sealed before the watching stopped is settled after it began again.
+  const k = keeper(() => undefined, storage());
+  await k.apply(sealed(refOf("p", numberOf(village), "moment:0"), "spilled-basket", 1));
+  await k.apply((b) => settle(b, { ref: refOf("p", numberOf(village), "moment:0"), kind: "spilled-basket", outcome: "help" }));
+  assert.equal(k.book().chain[0]!.did, "help", "the moment ended under a name no envelope had");
 });

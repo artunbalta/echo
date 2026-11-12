@@ -6388,3 +6388,63 @@ nothing tested the place they lived in.
 **Not decided here:** whether the audit's share for a twin with partial coverage should use a ceiling on
 its own cells (the paper's to decide, with its numbers); and whether these routes should take an identity
 after all, once there is one on production to take.
+
+## C95 — the same code read a second time: what an erasure still left behind, and one helper for all of it
+
+What it answers: after C94 a second reviewer, who had written none of it and had not seen the first
+reading, read C89 to C94 again. Tests and types were clean. Ten findings; none is live on production as
+it stands (the count is off, there is no identity there), one would be the day either is switched on.
+Seven of the ten were about erasing. The first reading had fixed two erasing pages; the third was missed
+because each page kept its own list of what to clear.
+
+- **`/account` erased a person and left their envelopes** (and their rows in the count). Its list had five
+  keys, none of them the envelopes', and the page then said "not even your echo".
+  - There is now one helper, `lib/knowable/erase.ts`: the count's rows are removed by their id, the id is
+    let go only once they are gone, the page's keeper is told, the keys go. The mirror, `/account`, the
+    demo's end and the panel's own "remove mine" all go through it, and a test reads the three pages'
+    sources to see that none keeps a list of its own (L5).
+  - A demo's end passes `count: false`: a guest on someone else's machine must not remove the owner's rows.
+- **An erasure lasted until something happened in another tab.** A village left open in a second tab held
+  the whole record in memory and wrote it back at its next moment. The page now listens for the record's
+  key going from the browser's store, and ends its keeping as it does for an erasure of its own.
+- **On production the mirror could never erase anything.** With no identity configured the delete route
+  answers 503, and the mirror stopped there and kept every key, telling the visitor to try again.
+  - A refusal for want of a signature, by a browser that holds none, now means what it is: the server
+    never took anything under this browser's id, so what there is of the person is here, and is erased
+    here (`refusedUnsigned` in `lib/identity.ts`; the same rule on `/account`). A signature the server
+    will not take is still a failure, and the id is kept to ask again with.
+  - The mirror's sentences were not true ("only ever in this browser" where rows had gone to the count;
+    "nothing was cleared" after the envelopes had been). They now say what happened. A failed erasure
+    has a way to ask again; one that erased everything but the count's rows stops the watching, says so,
+    and offers the way out.
+- **A removal that never reached the count hid the rows it had failed to remove.** "Stop, and remove mine"
+  stopped the adding, failed to delete, and the panel went back to offering "add mine". The panel now says
+  rows are still in the count for as long as the id is kept, whatever the count's switch, and offers to
+  remove them. "Forget all of this" erases the record here either way: it was only ever here, and no
+  longer waits on a server it never depended on.
+- **A demo guest's envelopes could be sent later under the owner's id.** An envelope sealed in a visit
+  that does not count is marked (`here`) and never sent, whoever says yes in that browser afterwards.
+- **A row went to the count under the village the raft had landed in.** An envelope now carries the parcel
+  it was sealed in. Both marks sit beside the seal, not under it, so older records still check whole.
+- **An envelope for a moment a later build has dropped threw in the panel.** Such an envelope is neither
+  shown, counted nor sent (`known`).
+- **After an erasure the page went on saying it seals.** The panel and the meter now say that nothing more
+  is sealed on this page.
+- **The reveal on the landing never played for anyone running the site locally** (React runs an effect
+  twice in development; the first pass set the "seen" key and the second read it).
+- **A friend's link arrived in a chat as a bare address.** `robots.txt` disallowed `/guess`, which stops
+  the fetch that reads a page's title and picture. The page says `noindex` itself; the disallow is gone.
+
+**Tests.** `tests/erase.test.mts` (7): the helper against a browser made of three fakes (reached, not
+reached, never added, a demo's end), the helper and the keeper joined as the page joins them, the three
+pages' sources, the refusal rule. `keeper.test.mts` (+1): one number a layer. `envelopes.test.mts` (+3):
+where an envelope was sealed and a demo's never sent; a dropped moment; the panel's two new lines. Four
+defects put back one at a time each failed exactly one test. In a browser (`tests/e2e/envelopes.spec.ts`):
+the erasure tests now wait until a moment has BEGUN after the erasure before they look, since one begun
+before it writes nothing when it ends and the old test could pass with the defect in place; a new one
+erases from another tab; a new one erases from the mirror with the server answering as production does.
+
+**Not decided here:** two tabs of the village open at once keep one record, the last to write (⚑67); and
+whether an erasure in one tab should also end the *watching* in another, which today goes on until that
+tab is reloaded.
+

@@ -399,7 +399,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         meter={
           // Handed the same chain state the inspector gets, so the glance and the panel cannot
           // disagree; what it may say about it is decided in recognitionReading.ts. None in a pilot visit.
-          pilot ? null : <RecognitionMeter posterior={posterior} log={log} consent={consent} onInspect={() => setInspecting((v) => !v)} />
+          pilot ? null : <RecognitionMeter posterior={posterior} log={log} consent={consent} sealing={!envelopes.stopped} onInspect={() => setInspecting((v) => !v)} />
         }
       />
 

@@ -25,7 +25,9 @@ require_.cache[SERVER_ONLY] = { id: SERVER_ONLY, filename: SERVER_ONLY, path: SE
 
 import { ARM_WORDS_FOR_TEST, armWords } from "../src/lib/knowable/armWords";
 import { ON, outcomesOf } from "../src/lib/knowable/calls";
-import { emptyBook, openAll, sealMoment, settle, type Book } from "../src/lib/knowable/envelopes";
+import { emptyBook, openAll, opened, sealMoment, settle, unsent, waiting, type Book } from "../src/lib/knowable/envelopes";
+import { brokenAt } from "../src/lib/knowable/seal";
+import { t } from "../src/lib/i18n";
 import { encodeGuess, GUESS_MAX, pickForFriend, type GuessLink } from "../src/lib/knowable/guessLink";
 import { decodeGuess } from "../src/lib/knowable/guessPage";
 import { momentWords, outcomeWords } from "../src/lib/knowable/say";
@@ -42,6 +44,7 @@ const env = (book: Book, over: Partial<Env> = {}): Env => ({
   setOpen: () => undefined,
   apply: () => undefined,
   count: { on: false, adding: false, left: false },
+  stopped: false,
   twinOn: false,
   setAdding: async () => true,
   forgetAll: async () => true,
@@ -219,4 +222,58 @@ test("a newcomer walks into a village with people in it, and not the study's", (
   const pilotCell = /DEFAULT_CELL\s*=\s*"([0-9a-f]{15})"|"(8[0-9a-f]{14})"/.exec(pilot);
   assert.ok(pilotCell, "the pilot's default cell could not be read");
   assert.notEqual(OPEN_VILLAGE, pilotCell![1] ?? pilotCell![2], "strangers would be let into the study's village");
+});
+
+test("an envelope carries where it was sealed, and one from a demo is never sent to the count", async () => {
+  const at = (s: number) => `2026-11-12T05:10:${String(s).padStart(2, "0")}.000Z`;
+  let b = emptyBook();
+  // Sealed in one village; the raft crosses before it is sent.
+  b = await sealMoment(b, { ref: "p.1:moment:0", kind: "spilled-basket", arm: null }, at(1), null, { cell: "84dcee5ffffffff" });
+  b = settle(b, { ref: "p.1:moment:0", kind: "spilled-basket", outcome: "help" });
+  // Sealed in a demo, on someone else's machine.
+  b = await sealMoment(b, { ref: "p.1:moment:1", kind: "woodpile", arm: null }, at(9), null, { cell: "84dcee5ffffffff", here: true });
+  b = settle(b, { ref: "p.1:moment:1", kind: "woodpile", outcome: "passed" });
+  // Sealed before any of this was written down: it goes under wherever the page stands.
+  b = await sealMoment(b, { ref: "p.2:moment:0", kind: "litter", arm: null }, at(20));
+  b = settle(b, { ref: "p.2:moment:0", kind: "litter", outcome: "passed" });
+
+  const rows = unsent(b, "84aaaaaffffffff");
+  assert.deepEqual(rows.map((r) => [r.kind, r.cell]), [["spilled-basket", "84dcee5ffffffff"], ["litter", "84aaaaaffffffff"]], "a row went to the count under the village the raft landed in, or a demo guest's row went at all");
+  // The demo's envelope is still the visitor's own to open, and still counts as a look for the next call.
+  assert.equal(waiting(b).length, 3);
+  // Where it was sealed is beside the seal, not under it: the chain checks whole with or without.
+  assert.equal(await brokenAt(b.chain), null);
+  assert.equal("cell" in b.chain[2]!, false);
+  assert.equal("here" in b.chain[0]!, false);
+});
+
+test("an envelope for a moment this build no longer has is neither shown, counted nor sent, and breaks nothing", async () => {
+  const b = await visited();
+  // A record kept across visits, read by a later build that dropped a moment.
+  const old: Book = { ...b, chain: b.chain.map((e, i) => (i === 0 ? { ...e, kind: "a-moment-since-removed" as Book["chain"][number]["kind"] } : e)) };
+  assert.equal(waiting(old).length, waiting(b).length - 1);
+  assert.equal(unsent(old, "84dcee5ffffffff").length, unsent(b, "84dcee5ffffffff").length - 1);
+  // The next call is made from the looks that still mean something, and making it does not throw.
+  const next = await sealMoment(old, { ref: "p:moment:z", kind: "woodpile", arm: null }, "2026-11-12T05:20:00.000Z");
+  assert.equal(next.chain[next.chain.length - 1]!.looks.anywhere, 3);
+  // The panel used to throw on its first row: there are no words for a moment that is not there.
+  const html = renderToStaticMarkup(createElement(EnvelopesPanel, { env: env(openAll(old), { open: true }), consent: "accepted" }));
+  assert.equal((html.match(/data-envelope="/g) ?? []).length, 3);
+  assert.equal(opened(openAll(old)).length, 3);
+});
+
+test("rows still in the count are said to be there whatever the count's switch, and an erased page stops saying it seals", async () => {
+  const b = openAll(await visited());
+  // "Stop, and remove mine" that never reached the count: adding has stopped, the rows have not gone.
+  const stuck = renderToStaticMarkup(createElement(EnvelopesPanel, { env: env(b, { open: true, count: { on: true, adding: false, left: true } }), consent: "accepted" }));
+  assert.match(stuck, /data-envelopes-counting="left"/);
+  assert.match(stuck, /still in it/);
+  assert.match(stuck, /Remove mine/);
+  assert.doesNotMatch(stuck, /data-envelopes-counting="asked"|Add mine/, "it offered to add to a count it had just failed to remove them from, and hid that they were there");
+  assert.doesNotMatch(stuck, /Kept in this browser only/);
+  // Erased, with the page still open: nothing more is sealed here, and the panel says that and not "walk a little".
+  const erased = renderToStaticMarkup(createElement(EnvelopesPanel, { env: env(emptyBook(), { open: true, stopped: true }), consent: "accepted" }));
+  assert.match(erased, /Nothing more is sealed on this page/);
+  assert.doesNotMatch(erased, /Walk a little/);
+  for (const lang of ["en", "tr"] as const) for (const key of ["env.stopped", "env.forget.left", "env.crowd.stuck"] as const) assert.ok(t(lang, key).length > 20, `${lang} ${key}`);
 });

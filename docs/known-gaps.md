@@ -2421,7 +2421,7 @@ not the class:
 **Status:** OPEN, all of it.
 
 
-## ⚑ 67. What C89–C94 do not do yet, and what they trust (2026-11-12)
+## ⚑ 67. What C89–C95 do not do yet, and what they trust (2026-11-12)
 
 - **The echo's stabilities are assumed** (C89): 0.6, one half, one third. Nobody has measured how steady a
   person is at a village moment, or across a family's. The pilot's RQ7 will; until then the echo's speed
@@ -2469,6 +2469,15 @@ not the class:
 - **The four open routes take no identity** (`/api/calls`, `/api/steps`, `/api/twin`, `/api/v1/audit`).
   They refuse another site's page (C94) and count presses by address where they spend; a script can still
   call them as often as their limits allow.
+- **Two tabs of the village open at once keep one record** (C95): each holds the whole of it in memory and
+  writes the whole of it, so the last to write wins and the other's envelopes are gone at the next load.
+  An erasure is heard across tabs; an ordinary seal is not.
+- **An erasure in one tab ends the sealing in another, not the watching** (C95). The other tab's echo goes
+  on measuring under the consent it has in memory until it is reloaded. That was so before the envelopes
+  and is not theirs to fix alone.
+- **The erasing pages are tested in parts** (C95). The helper, the rule for an unsigned refusal and the
+  mirror's path on a deployment with no identity are run; the mirror against a server that erases, and
+  `/account` at all, are read and not run.
 - **The open village is one village.** Everyone who walks in meets in Drurnscree; what a crowd of strangers
   does to one village's memory of strangers (C44, C45) is unmeasured.
 

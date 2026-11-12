@@ -19,6 +19,13 @@ const EXIT_MS = 650; // fade-out duration (matches .splash transition)
 
 /** Set once the reveal has played in this tab: coming back from the world goes straight to the page. */
 const SEEN_KEY = "echo.splash";
+/**
+ * When this load's reveal began. In development React runs an effect, undoes it and runs it again at
+ * once: the first pass set the key and the second read it, so the reveal never played for anyone running
+ * the site locally. A key set within this moment is this same arrival, not an earlier one.
+ */
+let began = 0;
+const SAME_ARRIVAL_MS = 1000;
 
 export default function Splash() {
   const [exiting, setExiting] = useState(false);
@@ -28,10 +35,11 @@ export default function Splash() {
     // Once a tab (C89). The reveal is an arrival; someone stepping back out of the village has
     // already arrived, and should not wait four seconds to see the page again.
     try {
-      if (sessionStorage.getItem(SEEN_KEY)) {
+      if (sessionStorage.getItem(SEEN_KEY) && Date.now() - began > SAME_ARRIVAL_MS) {
         setGone(true);
         return;
       }
+      began = Date.now();
       sessionStorage.setItem(SEEN_KEY, "1");
     } catch {
       // no session storage: it plays, as it always did

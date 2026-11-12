@@ -62,6 +62,12 @@ export const ON = "on";
 export const STABILITY = { same: 0.6, family: 0.5, anywhere: 1 / 3 } as const;
 const worth = (rho: number) => (1 - rho) / rho;
 
+/**
+ * Whether a kind is one this build has. A record is kept across visits, and a later build may have
+ * dropped a moment an old envelope names: such an envelope is neither shown nor counted.
+ */
+export const known = (kind: string): kind is MomentKind => Object.hasOwn(MOMENTS, kind);
+
 export function familyOf(kind: MomentKind): Family | null {
   for (const f of FAMILY_NAMES) if (kind in FAMILIES[f]) return f;
   return null;

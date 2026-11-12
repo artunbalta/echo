@@ -55,6 +55,8 @@ export interface RecognitionMeterProps {
   consent: ConsentState;
   /** Opens the inspector, where every number behind this one is shown. */
   onInspect?: () => void;
+  /** False once an erasure has ended the sealing on this page (C94): the meter stops saying it seals. */
+  sealing?: boolean;
 }
 
 /** The rise the glow fires on. Copied from the /play meter so both tick at the same movement. */
@@ -63,7 +65,7 @@ const RISE_MS = 1400;
 
 const pctOf = (v: number) => Math.round(v * 100);
 
-export default function RecognitionMeter({ posterior, log, consent, onInspect }: RecognitionMeterProps) {
+export default function RecognitionMeter({ posterior, log, consent, onInspect, sealing = true }: RecognitionMeterProps) {
   const lang = useLang();
   const reading = recognitionReading({ consent, posterior, log });
   const measured = reading.kind === "measured" ? reading : null;
@@ -134,7 +136,7 @@ export default function RecognitionMeter({ posterior, log, consent, onInspect }:
           {measured ? <p className="mt-1.5 text-[11px] text-parchment/50">{t(lang, "meter.explain")}</p> : null}
           {/* The engine behind the eight is not answering, and the envelopes need no engine (C89): say so,
               or a visitor reads "cannot hear you" as nothing here watching them at all. */}
-          {reading.kind === "offline" ? <p data-meter-seals className="mt-1.5 text-[11px] text-parchment/60">{t(lang, "meter.offlineSeals")}</p> : null}
+          {reading.kind === "offline" && sealing ? <p data-meter-seals className="mt-1.5 text-[11px] text-parchment/60">{t(lang, "meter.offlineSeals")}</p> : null}
           <div className="mt-2.5 flex flex-col gap-1 text-[12px]">
             {reading.kind === "offline" ? (
               <button
