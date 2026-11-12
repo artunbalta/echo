@@ -14,14 +14,16 @@ const pixel = Pixelify_Sans({
 export const metadata: Metadata = {
   // Absolute base so the file-based icon/opengraph-image URLs resolve correctly in prod.
   metadataBase: new URL("https://echovirtualworld.com"),
-  title: "echo.",
-  description: "A country that does not exist. It is your first day.",
+  title: "echo. A world that learns you.",
+  description: "Walk into a village where small things happen. Before each one, your echo seals a guess about what you will do. Then you open them, and see who knows you best.",
   openGraph: {
-    title: "echo.",
-    description: "A country that does not exist. It is your first day.",
+    title: "echo. A world that learns you.",
+    description: "A country that does not exist. Your echo seals a guess before each thing you do there. Then you open them.",
     type: "website",
   },
-  // icon.png / apple-icon.png / opengraph-image.png in src/app are auto-detected by Next.
+  twitter: { card: "summary_large_image" },
+  // icon.png / apple-icon.png / opengraph-image.jpg in src/app are auto-detected by Next. The share
+  // picture is the landing's own hero (C89), so a link looks like the page it opens.
 };
 
 /**

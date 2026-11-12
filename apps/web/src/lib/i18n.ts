@@ -11,66 +11,11 @@
  * browser's first language if it is Turkish, and English otherwise. The server always renders English
  * and the page switches on the client, so the first paint is never a guess the server made.
  */
-import { useEffect, useSyncExternalStore } from "react";
+import type { Lang } from "./lang";
 
-export type Lang = "en" | "tr";
-export const LANGS: readonly Lang[] = ["en", "tr"];
-export const LANG_NAME: Record<Lang, string> = { en: "English", tr: "Türkçe" };
-
-const KEY = "echo.lang";
-
-/** The browser's first choice, read as a language we have. */
-export function detectLang(languages: readonly string[]): Lang {
-  for (const l of languages) {
-    const base = l.toLowerCase().split("-")[0];
-    if (base === "tr") return "tr";
-    if (base === "en") return "en";
-  }
-  return "en";
-}
-
-let current: Lang | null = null;
-const listeners = new Set<() => void>();
-
-function read(): Lang {
-  if (current) return current;
-  let kept: string | null = null;
-  try {
-    kept = localStorage.getItem(KEY);
-  } catch {
-    // nothing kept
-  }
-  current = kept === "tr" || kept === "en" ? kept : detectLang(typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
-  return current;
-}
-
-export function setLang(lang: Lang): void {
-  current = lang;
-  try {
-    localStorage.setItem(KEY, lang);
-  } catch {
-    // kept for this page only
-  }
-  if (typeof document !== "undefined") document.documentElement.lang = lang;
-  for (const l of listeners) l();
-}
-
-/** The language, for a component. English on the server and during hydration. */
-export function useLang(): Lang {
-  const lang = useSyncExternalStore<Lang>(
-    (on) => {
-      listeners.add(on);
-      return () => listeners.delete(on);
-    },
-    read,
-    () => "en",
-  );
-  // The page says which language it is in, for a screen reader's voice and the browser's hyphenation.
-  useEffect(() => {
-    document.documentElement.lang = lang;
-  }, [lang]);
-  return lang;
-}
+// Which language, and the hook that says so, live in `lib/lang.ts` (so that a page with its own words
+// does not carry this table); they are still found here by everything that always found them here.
+export { LANG_NAME, LANGS, detectLang, setLang, useLang, type Lang } from "./lang";
 
 const EN = {
   "hud.back": "Planet",
@@ -92,7 +37,8 @@ const EN = {
   "controls.desk2": "E use what is near · T talk · I pack · Y your echo · M sound",
   "controls.touch": "Left thumb walks · drag to look · pinch to zoom",
   "consent.title": "Your echo can learn from how you move here.",
-  "consent.body": "It notices where you go and what you choose, never what you type. Stop it any time from the menu. Saying no changes nothing here.",
+  "consent.body": "It notices where you go and what you choose, never what you type. Before each thing you meet, it seals a guess about what you will do, for you to open later. Stop it any time from the menu. Saying no changes nothing here.",
+  "consent.crowd": "With no name on it, what you choose is also added to the count of what people do here.",
   "consent.yes": "Let it watch",
   "consent.no": "Not this time",
   "meter.label": "How well your echo knows you",
@@ -107,6 +53,7 @@ const EN = {
   "meter.offUnset": "off · nothing is read until you say yes",
   "meter.waiting": "listening",
   "meter.offline": "your echo cannot hear you just now",
+  "meter.offlineSeals": "It still seals a guess before each thing you meet.",
   "meter.noVariance": "your echo heard you, but cannot say how sure it is",
   "meter.explain": "It is how sure your echo is of you, not how much of you it can put into words. Walking makes it surer within seconds; the words take longer.",
   "prompt.talk": "Talk to {name}",
@@ -118,6 +65,8 @@ const EN = {
   "pack.count": "{n}/{of} in your pack",
   "pack.open": "I to open it",
   "pack.launch": "R to launch your raft",
+  "pack.putAwayTouch": "Put it away",
+  "pack.launchTouch": "Launch your raft",
   "pack.title": "Your pack",
   "pack.close": "Close",
   "pack.empty": "Nothing yet. Pick things up as you go.",
@@ -423,6 +372,113 @@ const EN = {
   "pilot.hi.pace": "Fast",
   "pilot.lo.affect": "Reserved",
   "pilot.hi.affect": "Expressive",
+  // The envelopes (C89): what the echo sealed before each moment, opened afterwards.
+  "menu.envelopes": "What your echo sealed",
+  "env.chip": "{n} sealed guesses about you are ready to open",
+  "env.nudge.desk": "Your echo sealed a guess before each of those · O opens them",
+  "env.nudge.touch": "Your echo sealed a guess before each of those · tap the envelope",
+  "env.title": "What your echo sealed",
+  "env.lead": "Before each thing you met here, it wrote down what you would do, and sealed it. This is how it did.",
+  "env.none": "Nothing is sealed yet. Walk a little: things happen here, and your echo guesses before each one.",
+  "env.off": "Your echo is not watching, so it seals nothing.",
+  "env.said": "It said",
+  "env.did": "You",
+  "env.on": "walk on",
+  "env.told": "stay to hear the end",
+  "env.first": "Its first time at this: a coin's guess.",
+  "env.same1": "It had seen you here once.",
+  "env.same": "It had seen you here {n} times.",
+  "env.family1": "It had seen you at one moment like this.",
+  "env.family": "It had seen you at {n} moments like this.",
+  "env.anywhere": "It had only seen you elsewhere.",
+  "env.sealedAt": "sealed {time}",
+  "env.count": "{echo} of {n} right. A guess that knows nothing would expect about {chance}.",
+  "env.count.few": "{echo} of {n} right.",
+  "env.curve": "Its first time at a moment: {a} of {b}. Where it had seen you before: {c} of {d}.",
+  "env.words.count": "Where your own words made a call ({n}): your words {words}, your echo {echo}.",
+  "env.words.offer": "Next, go first: say what you would do, and your echo will be held against your own words.",
+  "env.words.open": "Say what I would do",
+  "env.words.title": "What would you do?",
+  "env.words.lead": "Six lines about yourself. From here on they are sealed beside your echo's guesses, and opened with them.",
+  "env.words.help": "When someone near me is in trouble, I stop.",
+  "env.words.honesty": "When something is not mine, I leave it for whoever it belongs to.",
+  "env.words.courtesy": "I am courteous to strangers, even rude ones.",
+  "env.words.conformity": "When everyone around me does something, I do it too.",
+  "env.words.order": "I put right what is out of place, even when it is not mine.",
+  "env.words.curiosity": "When a story stops before its end, I stay for the end.",
+  "env.words.yes": "Yes",
+  "env.words.no": "No",
+  "env.words.depends": "It depends",
+  "env.words.save": "Seal my words",
+  "env.words.given": "Your words are sealed beside its guesses from here on.",
+  "env.earlier": "Earlier ({n})",
+  "env.all": "Everything so far: {echo} of {n}.",
+  "env.again": "Walk on. The next time it meets one of these, it will have seen you there.",
+  "env.kept": "Kept in this browser only. Each seal carries the one before it, so none can be changed afterwards.",
+  "env.check": "Check the seals",
+  "env.whole": "All {n} seals are whole: nothing was changed after it was written.",
+  "env.broken": "The chain breaks at seal {n}.",
+  "env.forget": "Forget all of this",
+  "env.forget.sure": "Erase every guess and your words from this browser?",
+  "env.forget.yes": "Erase",
+  "env.friend": "Let a friend guess you",
+  "env.friend.name": "Your name, for the link",
+  "env.friend.copied": "Link copied. Whoever opens it guesses what you did, then sees.",
+  "env.friend.few": "Open at least three first.",
+  "env.saw": "What it has seen of you",
+  "env.most": "Most people",
+  "env.crowd.count": "Where enough people have been before you ({n}): what most people do was right {crowd} times, your echo {echo}.",
+  "env.crowd.offer": "Add what you did to the village's count? No name goes with it, and you can take it back.",
+  "env.crowd.add": "Add mine",
+  "env.crowd.on": "What you do here is added to the village's count, with no name.",
+  "env.crowd.stop": "Stop, and remove mine",
+  "env.crowd.left": "What you added to the village's count is still in it.",
+  "env.crowd.remove": "Remove mine",
+  "env.crowd.stuck": "What you added to the village's count could not be removed just now. Nothing was erased; try again.",
+  "env.kept.count": "The envelopes are kept in this browser; only the count above leaves it. Each seal carries the one before it, so none can be changed afterwards.",
+  "env.twin.offer": "You can also write a paragraph about yourself: a twin built from it guesses beside your echo.",
+  "env.twin.open": "Write a paragraph",
+  "env.twin.title": "A twin from your words",
+  "env.twin.lead": "Write a few lines about yourself: what you are like, and what you do when something needs doing. A language model builds a twin of you from them, and guesses what you will do at each thing you can meet here. From then on its guesses are sealed beside your echo's, and opened with them.",
+  "env.twin.placeholder": "I am the kind of person who…",
+  "env.twin.short": "At least {min} characters.",
+  "env.twin.consent": "When you press the button, this paragraph is sent once to a language model run by Anthropic, to make the guesses. ECHO does not store it. Only the twin's guesses are kept, in this browser. Your echo never reads it.",
+  "env.twin.send": "Send it, and seal the twin's guesses",
+  "env.twin.sending": "The twin is being made…",
+  "env.twin.back": "Not now",
+  "env.twin.given": "A twin is made from your words. From here on its guesses are sealed beside your echo's.",
+  "env.twin.failed": "The twin could not be made just now. Nothing was kept.",
+  "env.twin.limit": "No more twins can be made this hour. Try again later.",
+  "env.twin.on": "A twin built from your words has been guessing beside your echo since {time}.",
+  "env.twin.remove": "Remove the twin",
+  "env.twin.removed": "The twin is removed. What it had already sealed stays in its envelopes.",
+  "env.twin.said": "A twin from your words: {what}",
+  "env.twin.count": "Where a twin built from your words made a call ({n}): the twin {twin}, your echo {echo}.",
+  "env.close": "Close",
+  "demo.sealed": "See what it sealed about you",
+  "env.leaving": "Before you go: your echo sealed {n} guesses about you.",
+  "env.leaving.open": "Open them",
+  "env.leaving.go": "Leave",
+  // The friend's page (C89): guess what someone did, then see.
+  "guess.title": "What did {name} do?",
+  "guess.someone": "your friend",
+  "guess.lead": "{name} walked through a village where small things happen. Before each one, their echo sealed a guess. Now you guess, and see who knows them better.",
+  "guess.bad": "This link does not open. Ask for a new one.",
+  "guess.begin": "Begin",
+  "guess.of": "{i} of {n}",
+  "guess.q": "What did {name} do?",
+  "guess.result": "You knew {name}: {you} of {n}. Their echo: {echo} of {n}.",
+  "guess.you": "You said",
+  "guess.echo": "Their echo said",
+  "guess.did": "{name}",
+  "guess.won": "You know {name} better than their echo does. For now: it has only just met them.",
+  "guess.lost": "Their echo knows {name} better than you do, after one walk.",
+  "guess.tie": "A tie between you and an echo that has only just met {name}.",
+  "guess.yours": "Let an echo watch you",
+  "guess.yours.lead": "It takes a few minutes, in your browser, with no account.",
+  "guess.send": "Send {name} your score",
+  "guess.sent": "Copied.",
+  "guess.score": "I guessed what you did in the village: {you} of {n}. Your echo got {echo}.",
 } as const;
 
 export type Key = keyof typeof EN;
@@ -447,7 +503,8 @@ const TR: Record<Key, string> = {
   "controls.desk2": "E yakındakini kullan · T konuş · I çanta · Y yankın · M ses",
   "controls.touch": "Sol başparmak yürütür · sürükleyip bak · iki parmakla yakınlaş",
   "consent.title": "Yankın burada nasıl hareket ettiğinden öğrenebilir.",
-  "consent.body": "Nereye gittiğini ve neyi seçtiğini fark eder; yazdıklarını asla okumaz. İstediğin an menüden durdurabilirsin. Hayır demek burada hiçbir şeyi değiştirmez.",
+  "consent.body": "Nereye gittiğini ve neyi seçtiğini fark eder; yazdıklarını asla okumaz. Karşılaştığın her şeyden önce ne yapacağına dair bir tahmin mühürler; sonra sen açarsın. İstediğin an menüden durdurabilirsin. Hayır demek burada hiçbir şeyi değiştirmez.",
+  "consent.crowd": "Seçtiklerin, adın olmadan, buradaki insanların ne yaptığının sayımına da eklenir.",
   "consent.yes": "İzlesin",
   "consent.no": "Bu sefer değil",
   "meter.label": "Yankın seni ne kadar tanıyor",
@@ -462,6 +519,7 @@ const TR: Record<Key, string> = {
   "meter.offUnset": "kapalı · evet diyene kadar hiçbir şey okunmuyor",
   "meter.waiting": "dinliyor",
   "meter.offline": "yankın şu an seni duyamıyor",
+  "meter.offlineSeals": "Yine de karşılaştığın her şeyden önce bir tahmin mühürlüyor.",
   "meter.noVariance": "yankın seni duydu ama ne kadar emin olduğunu söyleyemiyor",
   "meter.explain": "Bu, yankının senden ne kadar emin olduğu; seni ne kadar kelimeye dökebildiği değil. Yürüdükçe saniyeler içinde emin olur; kelimeler daha geç gelir.",
   "prompt.talk": "{name} ile konuş",
@@ -473,6 +531,8 @@ const TR: Record<Key, string> = {
   "pack.count": "Çantanda {n}/{of}",
   "pack.open": "açmak için I",
   "pack.launch": "salını denize indirmek için R",
+  "pack.putAwayTouch": "Kaldır",
+  "pack.launchTouch": "Salını denize indir",
   "pack.title": "Çantan",
   "pack.close": "Kapat",
   "pack.empty": "Henüz bir şey yok. Yolda gördüklerini topla.",
@@ -777,6 +837,111 @@ const TR: Record<Key, string> = {
   "pilot.hi.pace": "Hızlı",
   "pilot.lo.affect": "Ölçülü",
   "pilot.hi.affect": "Dışavurumcu",
+  "menu.envelopes": "Yankının mühürledikleri",
+  "env.chip": "Hakkında {n} mühürlü tahmin açılmayı bekliyor",
+  "env.nudge.desk": "Yankın bunların her birinden önce bir tahmin mühürledi · O ile aç",
+  "env.nudge.touch": "Yankın bunların her birinden önce bir tahmin mühürledi · zarfa dokun",
+  "env.title": "Yankının mühürledikleri",
+  "env.lead": "Burada karşılaştığın her şeyden önce ne yapacağını yazdı ve mühürledi. Ne kadar bildiği burada.",
+  "env.none": "Henüz mühürlenen bir şey yok. Biraz yürü: burada bir şeyler olur, yankın da her birinden önce tahmin eder.",
+  "env.off": "Yankın izlemiyor, o yüzden hiçbir şey mühürlemiyor.",
+  "env.said": "Dedi ki",
+  "env.did": "Sen",
+  "env.on": "yürüyüp geçmek",
+  "env.told": "sonunu dinlemek için kalmak",
+  "env.first": "Bununla ilk karşılaşması: yazı tura kadar bir tahmin.",
+  "env.same1": "Seni burada bir kez görmüştü.",
+  "env.same": "Seni burada {n} kez görmüştü.",
+  "env.family1": "Seni buna benzer bir anda görmüştü.",
+  "env.family": "Seni buna benzer {n} anda görmüştü.",
+  "env.anywhere": "Seni yalnızca başka yerlerde görmüştü.",
+  "env.sealedAt": "mühür {time}",
+  "env.count": "{n} tahminin {echo} tanesi doğru. Hiçbir şey bilmeyen bir tahmin yaklaşık {chance} tutturur.",
+  "env.count.few": "{n} tahminin {echo} tanesi doğru.",
+  "env.curve": "Bir anla ilk karşılaşmasında: {b} tahminde {a}. Seni daha önce gördüğü yerde: {d} tahminde {c}.",
+  "env.words.count": "Kendi sözlerinin de tahmin yürüttüğü {n} anda: sözlerin {words}, yankın {echo}.",
+  "env.words.offer": "Sıradaki için önce sen söyle: ne yapacağını yaz, yankın senin kendi sözlerinle yarışsın.",
+  "env.words.open": "Ne yapacağımı söyleyeyim",
+  "env.words.title": "Sen ne yapardın?",
+  "env.words.lead": "Kendin hakkında altı cümle. Bundan sonra yankının tahminlerinin yanına mühürlenir, onlarla birlikte açılır.",
+  "env.words.help": "Yakınımda biri zor durumdaysa dururum.",
+  "env.words.honesty": "Benim olmayan bir şeyi sahibine bırakırım.",
+  "env.words.courtesy": "Yabancılara, kaba olanlara bile, nazik davranırım.",
+  "env.words.conformity": "Çevremdeki herkes bir şey yapıyorsa ben de yaparım.",
+  "env.words.order": "Benim olmasa da dağınık duran şeyi düzeltirim.",
+  "env.words.curiosity": "Bir hikâye sonuna gelmeden kesilirse sonunu beklerim.",
+  "env.words.yes": "Evet",
+  "env.words.no": "Hayır",
+  "env.words.depends": "Duruma göre",
+  "env.words.save": "Sözlerimi mühürle",
+  "env.words.given": "Sözlerin bundan sonra yankının tahminlerinin yanına mühürleniyor.",
+  "env.earlier": "Öncekiler ({n})",
+  "env.all": "Şimdiye kadar hepsi: {n} tahminde {echo}.",
+  "env.again": "Yürümeye devam et. Bunlardan biriyle yine karşılaştığında seni orada görmüş olacak.",
+  "env.kept": "Yalnızca bu tarayıcıda durur. Her mühür bir öncekini taşır; bu yüzden hiçbiri sonradan değiştirilemez.",
+  "env.check": "Mühürleri denetle",
+  "env.whole": "{n} mührün hepsi sağlam: yazıldıktan sonra hiçbir şey değişmemiş.",
+  "env.broken": "Zincir {n}. mühürde kopuyor.",
+  "env.forget": "Bunların hepsini unut",
+  "env.forget.sure": "Bütün tahminler ve sözlerin bu tarayıcıdan silinsin mi?",
+  "env.forget.yes": "Sil",
+  "env.friend": "Bir arkadaşın seni tahmin etsin",
+  "env.friend.name": "Bağlantı için adın",
+  "env.friend.copied": "Bağlantı kopyalandı. Açan kişi ne yaptığını tahmin eder, sonra görür.",
+  "env.friend.few": "Önce en az üç zarf aç.",
+  "env.saw": "Senden gördükleri",
+  "env.most": "Çoğu kişi",
+  "env.crowd.count": "Senden önce yeterince kişinin geçtiği {n} anda: çoğunluğun yaptığı {crowd} kez tuttu, yankın {echo} kez.",
+  "env.crowd.offer": "Yaptıkların köyün sayımına eklensin mi? Adın eklenmez, istediğinde geri alırsın.",
+  "env.crowd.add": "Benimkini ekle",
+  "env.crowd.on": "Burada yaptıkların, adın olmadan, köyün sayımına ekleniyor.",
+  "env.crowd.stop": "Durdur ve benimkileri sil",
+  "env.crowd.left": "Köyün sayımına eklediklerin hâlâ orada duruyor.",
+  "env.crowd.remove": "Benimkileri sil",
+  "env.crowd.stuck": "Köyün sayımına eklediklerin şu an silinemedi. Hiçbir şey silinmedi; yeniden dene.",
+  "env.kept.count": "Zarflar bu tarayıcıda durur; buradan yalnızca yukarıdaki sayım çıkar. Her mühür bir öncekini taşır; bu yüzden hiçbiri sonradan değiştirilemez.",
+  "env.twin.offer": "Kendin hakkında bir paragraf da yazabilirsin: ondan kurulan bir ikiz, yankının yanında tahmin eder.",
+  "env.twin.open": "Bir paragraf yaz",
+  "env.twin.title": "Sözlerinden bir ikiz",
+  "env.twin.lead": "Kendin hakkında birkaç cümle yaz: nasıl birisin, yapılması gereken bir şey olduğunda ne yaparsın. Bir dil modeli bunlardan senin bir ikizini kurar ve burada karşılaşabileceğin her şeyde ne yapacağını tahmin eder. Tahminleri bundan sonra yankınınkilerin yanına mühürlenir, onlarla birlikte açılır.",
+  "env.twin.placeholder": "Ben şöyle biriyim…",
+  "env.twin.short": "En az {min} karakter.",
+  "env.twin.consent": "Düğmeye bastığında bu paragraf, tahminleri yapması için Anthropic'in işlettiği bir dil modeline bir kez gönderilir. ECHO onu saklamaz. Yalnızca ikizin tahminleri saklanır, bu tarayıcıda. Yankın onu asla okumaz.",
+  "env.twin.send": "Gönder ve ikizin tahminlerini mühürle",
+  "env.twin.sending": "İkiz kuruluyor…",
+  "env.twin.back": "Şimdi değil",
+  "env.twin.given": "Sözlerinden bir ikiz kuruldu. Tahminleri bundan sonra yankınınkilerin yanına mühürleniyor.",
+  "env.twin.failed": "İkiz şu an kurulamadı. Hiçbir şey saklanmadı.",
+  "env.twin.limit": "Bu saat için başka ikiz kurulamaz. Daha sonra yeniden dene.",
+  "env.twin.on": "Sözlerinden kurulan bir ikiz {time} itibarıyla yankının yanında tahmin ediyor.",
+  "env.twin.remove": "İkizi kaldır",
+  "env.twin.removed": "İkiz kaldırıldı. Daha önce mühürledikleri zarflarında kalır.",
+  "env.twin.said": "Sözlerinden kurulan ikiz: {what}",
+  "env.twin.count": "Sözlerinden kurulan bir ikizin de tahmin yürüttüğü {n} anda: ikiz {twin}, yankın {echo}.",
+  "env.close": "Kapat",
+  "demo.sealed": "Hakkında neleri mühürlediğine bak",
+  "env.leaving": "Gitmeden önce: yankın, senin hakkında {n} tahmin mühürledi.",
+  "env.leaving.open": "Aç",
+  "env.leaving.go": "Çık",
+  "guess.title": "{name} ne yaptı?",
+  "guess.someone": "arkadaşın",
+  "guess.lead": "{name}, küçük şeylerin olduğu bir köyde yürüdü. Her birinden önce yankısı bir tahmin mühürledi. Şimdi sen tahmin et; kim daha iyi tanıyor, görelim.",
+  "guess.bad": "Bu bağlantı açılmıyor. Yenisini iste.",
+  "guess.begin": "Başla",
+  "guess.of": "{n} sorunun {i}.",
+  "guess.q": "{name} ne yaptı?",
+  "guess.result": "{name} hakkında {n} tahminde {you} bildin. Yankısı: {n} tahminde {echo}.",
+  "guess.you": "Sen dedin ki",
+  "guess.echo": "Yankısı dedi ki",
+  "guess.did": "{name}",
+  "guess.won": "{name} hakkında yankısından daha çok şey biliyorsun. Şimdilik: yankı onunla daha yeni tanıştı.",
+  "guess.lost": "Yankısı, tek bir yürüyüşten sonra {name} hakkında senden daha çok şey biliyor.",
+  "guess.tie": "Seninle, {name} ile daha yeni tanışmış bir yankı arasında beraberlik.",
+  "guess.yours": "Bir yankı da seni izlesin",
+  "guess.yours.lead": "Birkaç dakika sürer; tarayıcında, hesap açmadan.",
+  "guess.send": "Skorunu {name} ile paylaş",
+  "guess.sent": "Kopyalandı.",
+  "guess.score": "Köyde ne yaptığını tahmin ettim: {n} soruda {you}. Yankın {echo} bildi.",
 };
 
 const STRINGS: Record<Lang, Record<Key, string>> = { en: EN, tr: TR };

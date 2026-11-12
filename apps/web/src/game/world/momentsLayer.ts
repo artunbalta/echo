@@ -84,6 +84,13 @@ export interface MomentsLayer extends WorldLayer {
    * how near they came, and what became of it, acted on or not. The pilot's research record.
    */
   onSeen(fn: ((row: SeenMoment) => void) | null): void;
+  /**
+   * Called once as a moment begins, before the stranger can have seen it (C89): where the echo's call for
+   * it is sealed. It says which moment, never anything on the screen.
+   */
+  onBegan(fn: ((m: { ref: string; kind: MomentKind; lane: MomentLane; arm: string | null }) => void) | null): void;
+  /** As `onSeen`, for a second listener (C89): the open world's envelopes, beside the pilot's record. */
+  onOver(fn: ((row: SeenMoment) => void) | null): void;
   /** Report every moment still going on, as it stands (the page is closing). */
   settle(): void;
   /** The moment ahead now, in the people stream (for tests and a played visit's log), or null. */
@@ -348,6 +355,8 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
   let passedFn: ((kind: MomentKind, ref: string, distM: number, arm: MomentArm | null) => void) | null = null;
   let brokenFn: ((kind: MomentKind, ref: string, arm: MomentArm | null) => void) | null = null;
   let seenFn: ((row: SeenMoment) => void) | null = null;
+  let beganFn: ((m: { ref: string; kind: MomentKind; lane: MomentLane; arm: string | null }) => void) | null = null;
+  let overFn: ((row: SeenMoment) => void) | null = null;
   let me: P = { x: 0, y: 0 };
   let nowS = 0;
   let dark = false;
@@ -731,6 +740,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
     } else l.arrive = lane === "people" ? 0.5 : 0;
     if (lane === "wayside") waysides.push(l);
     else lanes[lane].live = l;
+    beganFn?.({ ref: `moment:${l.id}`, kind: l.kind, lane, arm: l.arm?.id ?? null });
   };
 
   /** A moment of the page's clock (seconds), as a wall-clock time. */
@@ -746,7 +756,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
     const armRaw: Record<string, number | string> = { ...(l.arm?.raw ?? {}) };
     // Met while carrying a loaf someone is waiting on: under time pressure (Darley & Batson).
     if (l.pressure > 0) armRaw.time_pressure = l.pressure;
-    seenFn?.({
+    const row: SeenMoment = {
       ref: `moment:${l.id}`,
       kind: l.kind,
       lane: l.lane,
@@ -757,7 +767,9 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       seenS: Math.round(l.seenS * 10) / 10,
       nearestM: Number.isFinite(l.nearest) ? Math.round(l.nearest * 10) / 10 : null,
       outcome: l.outcome?.verb ?? (open ? "open" : "none"),
-    });
+    };
+    seenFn?.(row);
+    overFn?.(row);
   };
   const reportErrand = (e: Errand, now: number) => {
     if (e.reported) return;
@@ -1872,6 +1884,14 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
 
     onSeen(fn) {
       seenFn = fn;
+    },
+
+    onBegan(fn) {
+      beganFn = fn;
+    },
+
+    onOver(fn) {
+      overFn = fn;
     },
 
     settle() {

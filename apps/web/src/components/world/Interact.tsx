@@ -922,7 +922,26 @@ export default function Interact({
           ) : null}
         </div>
       ) : null}
-      {carrying || packCount(pack) > 0 ? (
+      {(carrying || packCount(pack) > 0) && coarse ? (
+        // A thumb has no I, G or R (⚑57): what the keys do, as things to tap. On the right, above the
+        // jump button: the walking pad owns the bottom left of the screen, and takes any tap that lands there.
+        <div data-carrying className="absolute bottom-[6.75rem] right-4 z-[31] flex flex-col items-end gap-1.5 whitespace-nowrap">
+          <button type="button" data-pack-open onClick={() => setPackOpen((o) => !o)} className="rounded-full bg-ink-deep/65 px-3 py-1.5 text-[11px] text-parchment/85 backdrop-blur-md">
+            {carrying ? `${t(lang, "pack.hand", { item: ITEMS[carrying]?.name ?? carrying })} · ` : ""}
+            {t(lang, "pack.count", { n: packCount(pack), of: PACK_SIZE })}
+          </button>
+          {carrying ? (
+            <button type="button" data-pack-putaway onClick={drop} className="rounded-full bg-ink-deep/65 px-3 py-1.5 text-[11px] text-parchment/85 backdrop-blur-md">
+              {t(lang, "pack.putAwayTouch")}
+            </button>
+          ) : null}
+          {canLaunch ? (
+            <button type="button" data-pack-launch onClick={launch} className="rounded-full bg-parchment px-3 py-1.5 text-[11px] font-medium text-ink shadow">
+              {t(lang, "pack.launchTouch")}
+            </button>
+          ) : null}
+        </div>
+      ) : carrying || packCount(pack) > 0 ? (
         <p data-carrying className="hud-shadow pointer-events-none absolute bottom-6 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap text-[11px] text-parchment/60">
           {carrying ? `${t(lang, "pack.hand", { item: ITEMS[carrying]?.name ?? carrying })}${coarse ? "" : ` · ${t(lang, "pack.putAway")}`} · ` : ""}
           {t(lang, "pack.count", { n: packCount(pack), of: PACK_SIZE })}

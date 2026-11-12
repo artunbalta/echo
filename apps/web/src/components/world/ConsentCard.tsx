@@ -26,9 +26,14 @@ export interface ConsentCardProps {
   consent: ConsentState;
   onAccept: () => void;
   onDecline: () => void;
+  /**
+   * The village's count is on (C91): the card says so in its own sentence, because a yes given here is
+   * also a yes to that, and a promise is only kept if it was made.
+   */
+  crowd?: boolean;
 }
 
-export default function ConsentCard({ consent, onAccept, onDecline }: ConsentCardProps) {
+export default function ConsentCard({ consent, onAccept, onDecline, crowd = false }: ConsentCardProps) {
   const lang = useLang();
   if (consent !== "unset") return null;
   return (
@@ -36,6 +41,11 @@ export default function ConsentCard({ consent, onAccept, onDecline }: ConsentCar
       <div className="hud-pop hud-in pointer-events-auto w-[min(420px,100%)] px-5 py-4">
         <p className="font-serif text-[17px] leading-snug text-parchment">{t(lang, "consent.title")}</p>
         <p className="mt-1.5 text-[13px] leading-relaxed text-parchment/60">{t(lang, "consent.body")}</p>
+        {crowd ? (
+          <p data-consent-crowd className="mt-1.5 text-[13px] leading-relaxed text-parchment/60">
+            {t(lang, "consent.crowd")}
+          </p>
+        ) : null}
         <div className="mt-4 flex gap-2">
           <button
             type="button"

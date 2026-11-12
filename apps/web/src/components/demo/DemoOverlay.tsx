@@ -129,7 +129,10 @@ export default function DemoOverlay({ demo }: { demo: DemoSettings }) {
       // Forgotten in this browser only once it is gone everywhere: a retry needs the identity to ask with.
       if (a.ok && b.ok) {
         try {
-          for (const k of ["echo.userId", "echo.identityToken", "echo.consent"]) localStorage.removeItem(k);
+          for (const k of ["echo.userId", "echo.identityToken", "echo.consent", "echo.calls"]) localStorage.removeItem(k);
+          // The envelopes are kept by the page while it is open (`keeper.ts`): removing the key is not
+          // enough, the keeper has to be told, or the next moment writes the record back.
+          window.dispatchEvent(new Event("echo:envelopes-forget"));
         } catch {
           // nothing kept to clear
         }
@@ -215,6 +218,10 @@ export default function DemoOverlay({ demo }: { demo: DemoSettings }) {
               <h2 className="font-serif text-xl">{t(lang, "demo.endTitle")}</h2>
               <p className="mt-2 text-[13px] leading-relaxed text-parchment/65">{t(lang, "demo.endBody")}</p>
               <div className="mt-4 flex flex-col items-center gap-2">
+                {/* What it learned, shown rather than said (C89): the guesses it sealed, and what you did. */}
+                <button type="button" data-demo-sealed onClick={() => window.dispatchEvent(new Event("echo:envelopes"))} className={button}>
+                  {t(lang, "demo.sealed")}
+                </button>
                 <button type="button" data-demo-erase disabled={end === "erasing"} onClick={() => void erase()} className={button}>
                   {end === "erasing" ? t(lang, "demo.erasing") : t(lang, "demo.erase")}
                 </button>

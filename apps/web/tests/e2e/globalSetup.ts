@@ -14,8 +14,9 @@
  * 1.4–3.8 s measured and cannot be warmed from here — and nothing needs it to be.
  *
  * The list is every route the specs navigate to. `/` (smoke, globePick), `/demo` (stations, and it
- * compiles separately from the parcel it redirects to), `/dev/goldens` (goldens), and the two parcel
- * URLs, which share one `/parcel/[cell]` route entry so the other cells cost nothing.
+ * compiles separately from the parcel it redirects to), `/dev/goldens` (goldens), the two parcel
+ * URLs, which share one `/parcel/[cell]` route entry so the other cells cost nothing, and `/guess`
+ * (envelopes).
  *
  * IT NEVER THROWS. A route that will not answer is the specs' business to report, in their own
  * words; failing here would replace fourteen readable failures with one unreadable one.
@@ -28,6 +29,8 @@ const ROUTES = [
   "/dev/goldens",
   "/parcel/8482589ffffffff",
   "/parcel/847b949ffffffff?stations=slice",
+  // The friend's page (envelopes.spec.ts, C89): its own route entry, so it compiles separately.
+  "/guess",
 ];
 
 export default async function globalSetup(_config: FullConfig) {

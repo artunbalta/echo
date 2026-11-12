@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 
 // First-load reveal for the landing route. The wordmark blooms in one letter at a
-// time — e → ec → ech → echo — the tagline follows, then we dwell ~1s so the hero
-// photo is decoded before we fade away onto a ready scene.
+// time — e → ec → ech → echo — the tagline follows, then we dwell ~1s and fade away.
 const WORD = "echo";
 const TAGLINE = "A country that does not exist.";
 
@@ -18,41 +17,36 @@ const REVEAL_DONE_MS = (TAGLINE_DELAY + TAGLINE_ANIM) * 1000;
 const HOLD_MS = 1000; // requested 1s dwell once everything is on screen
 const EXIT_MS = 650; // fade-out duration (matches .splash transition)
 
+/** Set once the reveal has played in this tab: coming back from the world goes straight to the page. */
+const SEEN_KEY = "echo.splash";
+
 export default function Splash() {
   const [exiting, setExiting] = useState(false);
   const [gone, setGone] = useState(false);
 
   useEffect(() => {
-    // Preload the landing hero image so the reveal lands on a ready photo, not a blank.
-    let imgReady = false;
-    const img = new window.Image();
-    const ready = () => {
-      imgReady = true;
-    };
-    img.onload = ready;
-    img.onerror = ready; // never hang on a 404
-    img.src = "/landing-back.png";
-    if (img.complete) imgReady = true;
+    // Once a tab (C89). The reveal is an arrival; someone stepping back out of the village has
+    // already arrived, and should not wait four seconds to see the page again.
+    try {
+      if (sessionStorage.getItem(SEEN_KEY)) {
+        setGone(true);
+        return;
+      }
+      sessionStorage.setItem(SEEN_KEY, "1");
+    } catch {
+      // no session storage: it plays, as it always did
+    }
 
-    let pollTimer = 0;
     let goneTimer = 0;
-
-    const beginExit = () => {
+    // After the reveal + 1s dwell, leave. It used to wait here for /landing-back.png, a picture the
+    // hero stopped showing when the planet replaced it: 770 KB fetched to hold a door shut.
+    const exitTimer = window.setTimeout(() => {
       setExiting(true);
       goneTimer = window.setTimeout(() => setGone(true), EXIT_MS);
-    };
-
-    // After the reveal + 1s dwell, leave — but wait briefly for the photo if it's
-    // still in flight, so we never fade onto an empty hero.
-    const gate = () => {
-      if (imgReady) beginExit();
-      else pollTimer = window.setTimeout(gate, 100);
-    };
-    const exitTimer = window.setTimeout(gate, REVEAL_DONE_MS + HOLD_MS);
+    }, REVEAL_DONE_MS + HOLD_MS);
 
     return () => {
       window.clearTimeout(exitTimer);
-      window.clearTimeout(pollTimer);
       window.clearTimeout(goneTimer);
     };
   }, []);

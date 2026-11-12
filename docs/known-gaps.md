@@ -2419,3 +2419,57 @@ not the class:
   incentivised and task behaviour. Transfer from the world to choices outside it is not yet measured.
 
 **Status:** OPEN, all of it.
+
+
+## ⚑ 67. What C89–C94 do not do yet, and what they trust (2026-11-12)
+
+- **The echo's stabilities are assumed** (C89): 0.6, one half, one third. Nobody has measured how steady a
+  person is at a village moment, or across a family's. The pilot's RQ7 will; until then the echo's speed
+  of learning is a choice, and the table in C89 is a rehearsal on simulated strangers.
+- **A seal shows the record is whole, not when it was written.** The chain is in the visitor's own
+  browser. Someone with the storage open could rebuild all of it. A time nobody could have made up needs
+  a witness outside the browser: the server countersigning each seal's hash as it is made, once it has a
+  key. Not built.
+- **Nobody has played it.** A bot met moments and opened envelopes. Whether a person finds the opening
+  worth their five minutes, and whether being told a guess is sealed changes what they do, is unmeasured.
+  The second is a real question: the open world is not the study, and the study has it off.
+- **A first visit is mostly first looks.** The echo says so line by line, and the count's bar is honest,
+  but a visitor who meets ten different moments once each sees an echo that guessed. The opening shows
+  "first time against seen before" only once both exist.
+- **One visit does not say which is better, the twin or the echo** (C93). A handful of moments, most of
+  them first looks: the count beside the twin is one person's afternoon, never a result. The twin is one
+  model at one setting from one paragraph; the products the audit measures are built from far more.
+- **A press costs money and has no ceiling of its own** beyond five an hour an address. It is off on a
+  deployment until switched on. The limiter was not run against the real database for this bucket.
+- **A seal's spelling has changed twice in one night** (the crowd's call, the twin's). A record sealed
+  under an older spelling reads as broken. Nobody has one; the next change to what a seal fixes needs a
+  version in the seal, or it will break records people do have.
+- **The friend's link is as private as the message it is sent in.** Anyone with the link reads what the
+  sender chose to show. It carries no id, and is never stored.
+- **The village's count can be stuffed** (C91). Rows carry no identity on purpose, so a script can add
+  made-up ones. Ten people per cell and a rate limit are the only guards. It is a starting point and a bar
+  on a page; it must not be cited, and must not enter the study, as it stands.
+- **The count is personal data.** A visitor's rows hang together under their random id. The consent
+  sentence names the count; a data-protection assessment has not been written. It is off.
+- **The steps can be inflated** (C92). Anyone can post a step's name to the route, and a reload counts
+  again. They are for a rough read of how far people come, never for a claim about how many people.
+- **On a phone, seen through a touch-emulating browser only.** At 390 px the landing, the consent card, the
+  thumb's walk, the tap on what is near, the small envelope and the panel all worked, and the friend's page
+  and the evidence pages have no sideways scroll. Nobody has held it in a hand. The pack, the raft and
+  putting things away still have no touch control (⚑57).
+- **The landing's hero and its first section read Turkish in a Turkish browser; the legend, the waitlist
+  and the demo section below them do not** (⚑58).
+- **The mirror is still English only** (⚑58). The envelopes and the friend's page are in both languages.
+- **A twin with partial coverage gets an approximate share** (C90, C94). Its crowd is on the cells it
+  answered and its ceiling is the whole panel's (`audit.py:124`, ported as it is). Three of the thirteen
+  on `/bench` answered for fewer than all the people. Their differences from the crowd are like for like;
+  their shares are not exactly.
+- **A demo guest who keeps their visit keeps their envelopes in that browser** until the next demo starts
+  there (C72's "erased within a day" is the server's; the browser's record has no clock).
+- **The four open routes take no identity** (`/api/calls`, `/api/steps`, `/api/twin`, `/api/v1/audit`).
+  They refuse another site's page (C94) and count presses by address where they spend; a script can still
+  call them as often as their limits allow.
+- **The open village is one village.** Everyone who walks in meets in Drurnscree; what a crowd of strangers
+  does to one village's memory of strangers (C44, C45) is unmeasured.
+
+**Status:** OPEN, all of it, written down rather than discovered.

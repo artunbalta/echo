@@ -6008,3 +6008,383 @@ This decision adds the missing parts.
 
 **Not decided here:** whether the moments become a study of their own, powered on the open world's numbers
 rather than twenty friends.
+
+## C89 — the envelopes: the echo calls each moment before you meet it, and you open them
+
+What it answers: the owner asked for a leap, not features: whether the game plays well enough, what is
+missing, and what would make a stranger (or an investor) stop. Looked at cold, on 2026-11-12:
+
+- **A visit ended with nothing.** No summary, no takeaway, no reason to return. The echo learned in
+  silence; the only place it ever said what it expected of a person was the pilot's debrief, three visits
+  in, behind four switches.
+- **The landing asked a stranger to wait for a world that was already open.** Its one button was the
+  waitlist. About nine globe clicks in ten land on empty land (C15). The village with everything in it was
+  reachable only through two gated routes.
+- **Production records nothing.** Measured the same night: the identity mint answers 503
+  `identity_unconfigured`, `/pilot` and `/api/pilot` answer 404, and the engine's host answers 503
+  `suspend-by-user`. Everything a visitor could be shown of their echo needed all three.
+- **The thesis was nowhere a visitor could feel it.** The paper says one look at what a person did beats
+  everything they say. Nothing in the world let a person see that about themselves.
+
+This decision makes the paper's claim on the visitor, in one visit, with nothing behind the page.
+
+- **A call before every moment** (`apps/web/src/lib/knowable/calls.ts`). The village's moments (C86, C87)
+  each end in one of a few ways: one of the moment's verbs, or walking on. As a moment begins, before the
+  stranger can have seen it, the echo says which. It knows three things, each shrunk toward the one before:
+  - how often this person does anything at all at a moment they saw;
+  - how often at moments of the same family (help, honesty, courtesy, conformity, order, curiosity: the
+    registered analysis's families, held to `research/pilot/echo_pilot/moments.py` by a test), and, where
+    the family's moments are decisions, which way they go;
+  - what they did the times they met this very moment.
+
+  The shrinkage is the debrief's (`pilotReveal.echoGuess`, C80): after n looks with stability ρ the echo
+  moves nρ / (nρ + 1 − ρ) of the way.
+- **What is assumed** (L6). The stabilities are not measured: 0.6 for the same moment again is the
+  debrief's registered value; one third for "anywhere" is Laplace's rule of succession (a uniform prior on
+  a person's share is worth two looks); one half for the family sits between. The pilot's RQ7 measures the
+  family's. They set how fast the echo trusts what it saw, never what it saw.
+- **Sealed** (`seal.ts`). Each call is hashed with the hash before it (SHA-256 over a fixed spelling of its
+  fields: the moment, the arm met, the call, how sure, what the person's own words said, the looks behind
+  it, the time). Changing a call afterwards, dropping a miss or moving an hour breaks every seal after it,
+  and the panel's "check the seals" says where. The chain shows the record is whole. It does not show
+  when it was written: it lives in the visitor's browser (⚑67).
+- **Settled only if seen** (`envelopes.ts`). The layer's rule (C88: near and in view for a second) decides.
+  A moment never seen leaves its envelope sealed for good and is never shown. The record is also the
+  echo's whole memory here: the next call is made from envelopes already settled, so nothing is counted
+  that was not first sealed.
+- **Opened by the visitor** (`components/world/Envelopes.tsx`): a small envelope under the meter that counts
+  only moments already over, `O`, a line in the menu, or the way out (leaving with three or more unopened
+  asks once). Each envelope says what the echo said, what they did, and what stood behind the call ("its
+  first time at this: a coin's guess", "it had seen you here twice"). Then:
+  - how many right, and what a guess that knows nothing would expect (one in however many ways each could
+    end);
+  - its first time at a moment against moments it had seen them at before: the research's claim, on the
+    reader;
+  - everything so far, across visits.
+- **The person's own words.** Six lines, one a family ("When someone near me is in trouble, I stop": yes,
+  no, it depends). Once given they are sealed beside each later call and opened with it, and the count
+  holds words and echo to the same moments and the same question (did they do the family's act). Words
+  given after a call cannot reach back into its seal. They are asked for at the first opening, not at the
+  door: arriving stays one question long.
+- **A friend guesses** (`guessLink.ts`, `/guess`). One button makes a link. Its fragment (the part after
+  `#`, which no server receives) carries up to eight of the visitor's moments, one of each kind, with the
+  arm met, the echo's call and what was done. Whoever opens it guesses each, then sees their count beside
+  the echo's, and is offered the village. Friends are the human bar the research needs (C76) and the way a
+  second person arrives; here neither needs an account or a server.
+- **Never a prompt** (Law 2). Nothing marks a moment as it begins: the seal is silent, and nothing on the
+  screen changes until a moment is over. The page speaks of the envelopes unasked twice: a line at the
+  foot once four are waiting, and on the way out.
+- **Not in the study** (C75). A pilot visit seals nothing and shows nothing. The six stay unmanipulated,
+  and what a participant sees of themselves afterwards cannot shape what they did before.
+- **Nothing leaves the browser.** Calls, outcomes and words are in localStorage (`echo.calls`), erased
+  from the panel, and erased with everything else from the mirror. So the whole loop works with the engine
+  down, the store down and no identity secret: it is what a visitor gets today, on production as it stands.
+- **The consent card says so.** One sentence added, every earlier promise kept word for word: "Before each
+  thing you meet, it seals a guess about what you will do, for you to open later."
+- **The way in** (`lib/openVillage.ts`, `app/page.tsx`, `_landing/HowItGoes.tsx`).
+  - The landing's first button is "Walk in", into Drurnscree (`84dcee5ffffffff`): a fishing village with
+    the sea beside it and another shore a raft can reach (C57's fixture). Not Senstrand: that is the
+    pilot's, and a village remembers what strangers do in it (C44, C45).
+  - A section says what happens in there in three steps, then the one finding it rests on, with the count
+    of twins read from the audit's own record.
+  - The waitlist is the second thing offered. Its confirmation and its email no longer say the island is
+    not open.
+  - The splash plays once a tab, and no longer waits on a 770 KB picture the hero stopped showing.
+- **The demo's end** (C72) opens the envelopes instead of saying "your echo learned this much" beside
+  nothing.
+- **A rehearsal, not a result.** On simulated strangers (400 each, 30 moments; a share for doing something
+  at each family's moments), how often the sealed call was right, by the looks behind it:
+
+  | Strangers | No look | 1–2 | 3–5 | 6 or more | A know-nothing guess |
+  |---|---|---|---|---|---|
+  | Steady (each family .12 or .88) | .54 | .69 | .75 | .82 | .41–.48 |
+  | Mild (.35 or .65) | .49 | .48 | .51 | .55 | .41–.48 |
+  | Coins (.5 everywhere) | .49 | .44 | .46 | .49 | .41–.48 |
+
+  It learns where there is something to learn and not where there is not. What real people are, nobody has
+  measured.
+- **Seen in the browser** (the open village in daylight, a bot meeting moments for 150 s on a development
+  build): eight calls sealed, five settled, the chip counted them, the panel opened them, "all 8 seals are
+  whole", six lines said and kept, a link made, and the friend's page counted its guesses against the echo.
+- **Tests.**
+  - `apps/web/tests/calls.test.mts` (14): the families against the Python, verb for verb; every ending read;
+    a coin's call with nothing seen; one look moving ρ of the way; a family's looks carrying to a moment
+    never met; a decision's direction learned; the rehearsal's bounds; words; the count; a chain broken
+    where it was changed (the call, the crowd's, the hour, a miss dropped, a false start) and whole from the
+    first seal kept; an envelope's life; the record kept, survived and forgotten.
+  - `apps/web/tests/envelopes.test.mts` (9): the chip, the panel closed, empty, unwatched and opened, the
+    asides, every arm's words and every ending in both languages, the link whole and refused, the open
+    village a village and not the study's.
+  - Proved to fail when the defect returns: a seal that leaves the call out; an envelope settled twice; a
+    family's act changed on one side only.
+
+**Not decided here:** whether the stagings of the director (C63) get envelopes too; whether a call's time
+should be witnessed by the server once it has a key; and what the envelopes mean for the study, where
+they are off.
+
+## C90 — the twin audit as a page and a tool: `/bench`, `/audit`, one request
+
+What it answers: the first thing ECHO can sell is an audit of someone else's twins (C81), and it was a
+command-line script (⚑66: "a concierge product with no web upload"). A twin company could not try it, and
+the result it rests on was in a paper under review and nowhere a buyer could look.
+
+- **`/bench`: the result, on a page.** The thirteen twins released with Twin-2K-500 on one axis, with the
+  crowd at zero and the ceiling at a hundred: thirteen of thirteen below the crowd (−77% to −33% of the
+  knowable), and each of them at 54–58% once given one earlier answer per person, above the person's own
+  retest (52%). Then the same laws on the other three datasets, the looks curve, the way to the tool, and
+  what it does and does not show.
+- **Every number is the research's own.** The page reads two files and types none: a byte-for-byte copy of
+  `research/deeds/runs/twin2k-audit.json`, and the handful of `facts.json` values it quotes
+  (`apps/web/scripts/knowable-facts.mjs` writes them). A test fails if either drifts from the research
+  record.
+- **`/audit`: the same audit on anyone's panel, in their browser.** Three files (items, the earlier answers,
+  the later ones) and one or more twins' predictions, or a synthetic panel to see it run. The audit is
+  computed on the page: with the connection cut it still runs, and made no request (checked in a browser).
+  It gives the same table as `/bench`, the ceiling by group, and a report to save. A synthetic panel is
+  marked synthetic wherever it appears, including when its template files are dropped back in.
+- **The arithmetic is the paper's** (`apps/web/src/lib/knowable/{stats,theory,ceiling,audit}.ts`), ported
+  from `research/deeds/audit.py` and held to it: on a fixture written by the Python with numpy's own folds,
+  every point estimate agrees within 1e-9.
+- **One request** (`POST /api/v1/audit`): the same audit for a script, JSON or CSV text in, the audit out.
+  Nothing is stored and no body is logged. It refuses more than 4 MB, 5,000 people, 400 items or 20 twins.
+- **What it says about itself** (after a check of what others had published, 2026-11-12):
+  - The floor-and-ceiling form is not ours: Netzer & Sambandam (arXiv:2609.13995, September 2026) write
+    it with a modal-answer floor and a retest ceiling. Ours takes the crowd's out-of-fold median as the
+    floor, and as the ceiling the best any guess could do given each item's reliability, which is why a
+    person's own retest sits near the middle and not at the top. Park et al. and Toubia et al. divided by
+    the retest alone.
+  - Others have reported simple baselines matching or beating twins for individuals (Peng, Toubia et al.;
+    Chen, Zhu & Zheng). The page says what was measured, and never "first".
+  - It is about knowing individuals. It says nothing against a panel's accuracy on population averages,
+    and no product was measured but the dataset authors' released twins.
+  - ECHO builds twins from behaviour and has a stake in the result; the page says so. It is not called a
+    standard, a certification or independent, and not "ECHO Index" (a research firm has one).
+  - The analysis plans were committed before each analysis, not registered with anyone.
+- **Measured.** A 2,000 × 120 panel with three twins audits in 0.64–0.72 s in a headless browser on a
+  development build, about 1.1 s from the press to the table. No horizontal scroll from 320 to 1,440 px.
+  The public repository and the three files the page points to answered 200 without signing in.
+- **A check that could not fail, caught.** The first planted leak (the crowd reading its own fold) passed
+  every test: a median over three hundred people barely moves. A knife-edge item was added to the fixture
+  and a test of the crowd cell by cell; planted again, three tests fail.
+- **Tests** (`apps/web/tests/knowable.test.mts`, 25): the theory's landmarks; the normal curve and its
+  inverse; the quadrature exact on x² and x⁴; the ceiling and the whole audit against the Python; the
+  Python tests' own assertions (the crowd as a twin knows nothing, the truth scores one, the retest equals
+  itself and one look beats it); the two files against the research record; the CSV reader; the request's
+  limits.
+
+**Not decided here:** a price; whether a vendor's result may be shown beside the thirteen, and on whose
+say; and a limit on how often the request may be made (it has caps on size, and none on rate).
+
+## C91 — the village's count: what people do here, as the echo's starting point and its bar
+
+What it answers: the paper's first finding is that a guess which knows nobody, the crowd's typical answer,
+beats every twin built from words. So the crowd is the bar a watching echo must clear. The open world had
+no crowd: a first call was a coin's, and the opening could only say what chance would expect. And nothing
+a visitor did in the open world reached anywhere it could add up.
+
+- **Off until the owner switches it on.** `ECHO_OPEN_CROWD=1` and migration 0040. Without both,
+  `GET /api/calls` says `on: false`, nothing is sent, and every call is made as in C89. The switch is the
+  owner's yes to the sentence below; it was built, not decided.
+- **What a row is** (`db/migrations/0040_open_moments.sql`, `lib/knowable/crowd.ts`). One settled envelope:
+  the moment, the arm met, the echo's call, what was done, the looks behind the call, when it was sealed.
+  It is kept under a random id the browser makes for the count alone: not the echo's subject, in no other
+  table and no other request. The seal is the envelope's own hash, so a row is written once.
+- **Who adds.** Only someone who said yes to words that name it. Where the count is on, the consent card
+  gains its own sentence ("With no name on it, what you choose is also added to the count of what people
+  do here"), and a yes given to that card covers it. Someone who said yes before the count was on is
+  asked in the panel instead. "Stop, and remove mine" deletes their rows and the id.
+- **What the page is given.** For each moment, pooled over its arms and for each arm: how often it ended
+  each way, and among how many people. A cell fewer than ten people have met says nothing (`CROWD_MIN`).
+  Read at most every five minutes.
+- **Where a call starts** (`callFor`'s third argument). From what people do at that moment (how often
+  anything, and which thing), read by the arm about to be met. The echo then moves by how this person has
+  DIFFERED from people so far: anywhere, in the family, here. This is the paper's echo, crowd + κ(own −
+  crowd), three times over. Helping where few help says more than doing what everyone does. With no count
+  it is exactly C89's arithmetic (a test holds the two equal).
+- **The bar.** What most people did there is sealed beside the echo's call, as the count stood, and opened
+  with it: "where enough people have been before you: what most people do was right 6 times, your echo 7".
+- **Never the engine's, never the study's.** A row moves no echo and is in no export. A pilot visit adds
+  nothing. Nothing here is registered.
+- **Its first migration did not apply, and only a real Postgres said so** (⚑59's class, again). Every test
+  here runs on the in-process store, and all of them passed. On PostgreSQL 16.15 the first
+  `0040_open_moments.sql` failed: `subquery uses ungrouped column "m.arm" from outer query` (the view
+  grouped by `coalesce(arm, '-')` and counted people in a correlated subquery). It was caught by the
+  dry-run before anyone applied it, and the file was corrected in place, since it had never run anywhere.
+  As it stands (sha256 `b7aeaacd…c696`), on PostgreSQL 16.15:
+  - the schema and the ledger from the one-file SQL are identical to the runner's over 0001–0041;
+  - a second run refuses; a failure injected mid-way leaves the ledger at 0031 and neither new table;
+  - the count gives the right people per arm, takes a row once, refuses a bad visitor, seal or cell, and
+    removes exactly one visitor's rows;
+  - with Supabase's default grants emulated, `anon` and `authenticated` read nothing from the table or the
+    view. The view's `security_invoker` is what keeps that true: without it `anon` read the counts. It
+    needs PostgreSQL 15 or newer.
+  - Not run: PostgREST itself, so the service role's reach rests on Supabase's defaults, emulated.
+- **One file for Supabase.** `~/Desktop/echo-supabase-0032-0041.sql` (ten migrations; refuses unless 0031
+  is recorded and none of 0032–0041 is), and `echo-supabase-0040-0041.sql` for a database already at 0039.
+- **Tests** (`apps/web/tests/crowd.test.mts`, 9): a row taken only if every part is real; nothing said of
+  a moment until ten people have met it, by arm and pooled; the crowd's call by arm, then by moment, then
+  not at all; a call starting from the count and moving by the difference, equal to C89's with no count,
+  and a share staying a share however far a person is from people; the crowd's call under the seal; the
+  route off, on, taking a row once, keeping an answer five minutes, giving a visitor's rows back, and
+  refusing what is not a visitor or not rows; the consent card naming the count only where it is on, with
+  every earlier promise still made.
+
+**Not decided here** (the owner's): whether to switch it on, and with which words; whether the open
+world's moments become a study of their own (C88 left this open, and it needs its own consent and its own
+ethics); and what would make the count trustworthy enough to cite (⚑67).
+
+## C92 — how far people come: a number a day for each step of the way in
+
+What it answers: with a way in and something at the end of it (C89), the first question is how many who
+arrive open an envelope, and how many of those bring a friend. Nothing measured it. The only funnel in the
+code was the old /play's, kept in localStorage and sent nowhere.
+
+- **What is counted** (`apps/web/src/lib/steps.ts`): a closed list of fourteen steps. The landing opened;
+  "Walk in" pressed; the open world arrived in; yes or no to being watched; a first moment met; envelopes
+  opened; the six lines given; a friend's link made; a friend's link opened, finished, and walked in from;
+  the evidence opened; the audit opened. Running an audit is deliberately not a step: the tool's promise
+  is that nothing leaves the page once a panel is in it, and a count sent then would be a request,
+  however empty.
+- **What is kept** (`db/migrations/0041_steps.sql`): a day, a step's name, a number. No id, no address, no
+  agent string, and nothing in the browser. A page counts each step once for as long as it is open, so the
+  numbers are page loads that got that far, and a reload counts again: the price of keeping nothing.
+- **It cannot break the page.** `POST /api/steps` answers 204 whatever happens, and the page never waits
+  for it. Before migration 0041, or with no database, a step is simply not counted.
+- **Whose numbers.** `GET /api/steps` gives the last sixty days to whoever holds the pilot's admin token
+  (`ECHO_PILOT_ADMIN`, `x-pilot-admin`); to anyone else there is no such page.
+- **Not counted:** a pilot visit and a demo visit (they are not the way in), and nothing inside the world
+  beyond the steps above. What a person does there is the echo's and the envelopes', under their own
+  consent.
+- **Tests** (`apps/web/tests/steps.test.mts`, 5): the list closed and storable; 204 for anything sent; the
+  owner's door (no token, a short one, a wrong one, the right one with nowhere to read from); a page
+  counting a step once, sending only its name and surviving a dead network; the table holding three
+  columns and nothing that could say who.
+
+**Not decided here:** whether to add a page that draws the numbers (they are a table of days today), and
+what counts as a returning visitor without keeping anything that could say so.
+
+## C93 — a twin from your words: the kind of twin the field sells, built from a paragraph, held against the echo
+
+What it answers: the paper says a twin built from what people say loses to watching. The six lines (C89)
+are that twin at its plainest: they take a person at their word. Nobody could try the real thing on
+themselves: a language model's twin, made from their own description, the way the products the audit
+measures are made.
+
+- **A paragraph, one press** (`apps/web/src/lib/knowable/twin.ts`, `lib/twinModel.ts`, `/api/twin`). Twenty
+  to six hundred characters go once to a language model, which picks one ending for each of 58 situations:
+  every moment that can begin, once for each arm of its experiment.
+- **Only choices come back.** The model answers into a schema of each situation's own endings, and the
+  server checks every one again against what that moment can end in (`readTwinCalls`). Anything else is
+  dropped. Nothing the model wrote but those ids reaches the page.
+- **Sealed and counted like the rest.** The twin's call for a moment is under the seal beside the echo's.
+  A twin made mid-visit applies only to envelopes sealed afterwards. The count holds the twin and the echo
+  to the same moments: the ones the twin called.
+- **A contestant, never an input.** `callFor` does not read it. The friend's link does not carry it.
+- **The consent card says the echo notices "never what you type", and that still holds.** The paragraph is
+  typed, so the view says above the button where it goes (once, to a language model run by Anthropic),
+  that ECHO does not keep it, that only the twin's guesses are kept, in this browser, and that the echo
+  never reads it. It is sent on the press and not before. It is not stored, not logged and not returned.
+  What Anthropic keeps is theirs to say, and the view does not promise for them.
+- **It spends, so it is the owner's to switch on.** A press is a paid call a stranger with no account can
+  make. On a deployment there is no twin until `ECHO_TWIN=1`, a key, and a counter to count presses on:
+  five an hour from one address, and a press that cannot be counted is refused. A key set for the
+  villagers does not, by being there, open a second way to spend it. Under `next dev` a key is enough.
+- **The model.** `claude-opus-5-5` at low effort unless `ECHO_TWIN_MODEL` names another: the claim the twin
+  is held against is that words lose to watching, and a weak twin would prove nothing.
+- **Measured** (2026-11-12, two paragraphs through the route, the repo's own key): 7.8 s and 6.7 s; 58 of 58
+  situations answered with a real ending both times; about five cents the first press and under two once
+  the unchanging part was read from the cache. A warm, helpful paragraph and a blunt, self-interested one
+  differed at 53 of 58: the old man with onlookers (help, walk on), the nine-coin purse (leave it, take
+  all), the wrong basket (not mine, take it), the rude man (sorry, answer back).
+- **Tests** (`apps/web/tests/twin.test.mts`, 17): every situation and arm asked once with only its real
+  endings; unknown situations and endings dropped; the twin's call under the seal; given after, it cannot
+  reach back, and it never moves the echo; the count; kept and forgotten with the envelopes and absent
+  from a friend's link; the prompt's promises; off without a key; on a deployment, off without the switch
+  and off without a counter; the length checked before anything is spent; one call a press; only ids
+  back, never the paragraph; a model that refuses or answers in prose makes no twin; the limit; the panel
+  silent where no twin can be made, and the sentence above the button in both languages. Proved to fail:
+  with the server's check skipped, two tests fail.
+
+**Not decided here** (the owner's): whether to switch it on, and at what cost a press; and whether the
+words of visitors who agree should ever be kept for research, which they are not.
+
+## C94 — C89 to C93, read by someone who did not write them: two promises that were not kept, and what changed
+
+What it answers: C89 to C93 were written, tested and browsed in one night by the same hands. A reviewer who
+had written none of it read the diff against what the decisions promise, and proved what it found with
+small scripts. Two findings broke a promise made to a visitor. Neither was caught by a test, because
+nothing tested the place they lived in.
+
+- **Erasing did not erase the envelopes.** The page kept the record in memory and wrote the whole of it to
+  the browser after every change. So removing the key from storage (the demo's "erase everything now", the
+  mirror's "erase everything") erased nothing: the next moment to begin wrote it all back. The harness
+  showed six envelopes back in storage after an erase. And on production as it stands the mirror's erasure
+  stops at the server's refusal, before any key is cleared.
+  - The keeping is now its own module (`lib/knowable/keeper.ts`), where a test can hold it. An erasure
+    anywhere on the page tells it (`echo:envelopes-forget`): the record goes from memory and from the
+    browser, and nothing more is sealed, kept or written on that page, though the world goes on.
+  - The mirror erases the envelopes whether or not the server answers: they were only ever in the
+    browser, and do not wait on it. Its message says so, and says the rest is still to be tried again.
+  - "Forget all of this" in the panel is the other thing: the record goes, the echo goes on watching and
+    starts again from nothing.
+- **After a raft crossing, outcomes settled the wrong envelopes.** A layer numbers its moments from zero
+  in every world a page builds, and the page named a moment by the page alone. The second village's first
+  moment got no envelope, and its outcome settled the first village's never-seen purse: "a purse lying in
+  the grass: answered warmly", with every seal whole. A moment is now named by the page, by which of the
+  page's layers it came from, and by the layer's own name (`refOf`).
+- **The count said "on" with no table to count in** (the switch set, migration 0040 not applied). The
+  consent card then carried the count's sentence, an id was made for rows that could not be added, and an
+  erasure refused for want of the table. `GET /api/calls` now says `on: false` whenever the count cannot be
+  read.
+- **One bad row refused a whole batch, and the page sent the same batch again for ever.** The route takes
+  what it can and names what it will not; the page stops offering those.
+- **A demo guest added to the count on the machine owner's yes.** A demo visit no longer counts at all.
+- **A yes could cover the count's sentence unread.** Whether the count is on is asked of the server, and
+  the answer can land a moment before the click. A yes covers the count only if its sentence had been on
+  the card two seconds; otherwise the panel asks, in its own words.
+- **Switched off after someone added to it, the count hid their rows from them.** The panel now says they
+  are still there and offers to remove them, and no longer says "kept in this browser only" beside them.
+- **Any site could make its visitors call the routes.** They take no identity on purpose, so a form on
+  another site could post to them as `text/plain`, and on `/api/twin` each visitor would spend a paid call
+  under their own five an hour. The four routes now hear only a request declared as JSON that a browser
+  does not say came from elsewhere (`lib/fromHere.ts`): a browser will not send that across sites without
+  permission this site never gives. A script with no browser behind it is still served.
+- **A cell that was not a number took 26 seconds to refuse** (`lib/knowable/csv.ts`): a long run of digits
+  with a letter at the end made the pattern try every split. Anyone could send one to the audit's endpoint.
+  The pattern now reads each character one way; 160 KB is refused in under half a second.
+- **Smaller.** A name every object has (`constructor`) passed for a moment's kind and threw further on. At
+  an even heat the echo called "walk on" and was recorded as expecting the family's act. Pointing a pedlar
+  the way twice read "you walked past both"; the line now says what the family's act is (giving one's
+  time). The touch buttons for the pack sat under the walking pad, which takes every tap there. The
+  Turkish for "your echo sealed n guesses about you" read as guesses about the echo.
+- **The friend's page carried the whole planet.** To name a handful of moments it loaded every string of
+  the app and all of `@echo/planet`: 290 kB of script before a friend, often on a phone, could read a
+  word. It now reads a small catalogue written out from the same sources and held to them by a test
+  (`scripts/moment-catalogue.mjs`, `lib/knowable/guessPage.ts`): 115 kB, of which 103 is shared by every
+  page. The old reading of a link and the new agreed on 300,540 made-up links before the old was removed.
+  The landing no longer carries the app's strings either (`lib/lang.ts`): 234 kB to 205.
+- **Not changed, and said instead.** A twin that answers only some of a panel gets its crowd on its own
+  cells and its ceiling from the whole panel, so its share of the knowable is approximate (in a made-up
+  case, 68% where 57% was right). The arithmetic is `audit.py`'s, and the paper's numbers are made with
+  it; changing it is the research's decision, not a port's. `/bench` now says so where it says what was
+  scored (⚑67).
+- **Tests that could not fail, replaced or added.**
+  - `tests/keeper.test.mts` (5): changes in order; forgetting; an erasure while a seal is under way and
+    others wait, and moments after it; a moment named by its layer; a request from our own page.
+  - `tests/e2e/envelopes.spec.ts` (+1, 5 in all): a moment that happens on the page is sealed and
+    settled under its own name; after an erasure another is met and nothing is written.
+  - The count: a route that cannot read; a batch with bad rows; another site's request; the panel with
+    rows left behind. The twin and the audit: another site's request. The audit: the interval's width
+    held to 95 of 100 (a 90% one fails); eighteen people fitting nothing and sixty fitting; the long cell.
+  - Proved to fail when the defect returns: the keeper without its stop; the count answering "on" unread;
+    the panel's mount cut (the browser spec says "O reached nothing").
+- **Measured after the changes**, on a production build with no secret set and nothing behind it (the live
+  site's own state: the identity mint answers 503, `/pilot` 404): from the landing, "Walk in"; twelve calls
+  sealed, ten settled, six right where a know-nothing guess would expect four; fourteen seals whole; six
+  lines kept; a link made; the friend's page counted three of eight against the echo's five. With the
+  count switched on over an in-process store: the sentence on the card, the rows sent, what most people
+  did beside each call, and "stop, and remove mine" leaving nothing.
+
+**Not decided here:** whether the audit's share for a twin with partial coverage should use a ceiling on
+its own cells (the paper's to decide, with its numbers); and whether these routes should take an identity
+after all, once there is one on production to take.

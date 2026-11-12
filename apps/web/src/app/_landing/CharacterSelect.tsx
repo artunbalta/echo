@@ -6,6 +6,7 @@ import { createFromPremade, type CharacterResult } from "@/lib/character";
 import { resolveUserId } from "@/lib/identity";
 import { EMPTY_INDEX, EMPTY_SLOT, GRID, GRID_COLS, type RosterEntry } from "./roster";
 import { VACANCY } from "./vacancy";
+import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 
 /**
  * JOIN WAITLIST — the character select (§1b). A fighting-game roster with a hole in the middle:
@@ -864,8 +865,12 @@ function Joined({
               "Your character is being drawn from your photo. It will reach you by email shortly. Your place is already kept, whatever the drawing does."
             : already
               ? "We already had you. Your character is updated, and your place is unchanged."
-              : "No one knows you here yet. That is the point. We will write when the island is ready."}
+              : "No one knows you here yet. That is the point. We will write when there is more to see."}
         </p>
+        {/* The world is open (C89): a place kept is no reason to wait outside it. */}
+        <a href={OPEN_VILLAGE_PATH} className="mt-6 inline-block rounded-full bg-parchment px-6 py-3 text-sm font-medium text-ink transition-colors hover:bg-white">
+          A village is already open. Walk in <span aria-hidden>›</span>
+        </a>
       </div>
     </section>
   );

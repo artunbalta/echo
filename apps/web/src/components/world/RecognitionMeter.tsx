@@ -132,7 +132,26 @@ export default function RecognitionMeter({ posterior, log, consent, onInspect }:
           <p className="text-[10px] uppercase tracking-[0.14em] text-parchment/45">{t(lang, "meter.label")}</p>
           <p className="mt-1">{line}</p>
           {measured ? <p className="mt-1.5 text-[11px] text-parchment/50">{t(lang, "meter.explain")}</p> : null}
+          {/* The engine behind the eight is not answering, and the envelopes need no engine (C89): say so,
+              or a visitor reads "cannot hear you" as nothing here watching them at all. */}
+          {reading.kind === "offline" ? <p data-meter-seals className="mt-1.5 text-[11px] text-parchment/60">{t(lang, "meter.offlineSeals")}</p> : null}
           <div className="mt-2.5 flex flex-col gap-1 text-[12px]">
+            {reading.kind === "offline" ? (
+              <button
+                type="button"
+                data-open-envelopes
+                tabIndex={-1}
+                onMouseDown={(e) => e.preventDefault()}
+                className="text-left text-echo-soft hover:text-parchment"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.dispatchEvent(new Event("echo:envelopes"));
+                }}
+              >
+                {t(lang, "menu.envelopes")}
+                {coarse ? "" : <span className="ml-1.5 text-parchment/35">O</span>}
+              </button>
+            ) : null}
             {/* The mirror (C61): what this number is made of, act by act. */}
             <button
               type="button"

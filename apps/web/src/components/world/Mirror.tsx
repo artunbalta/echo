@@ -30,7 +30,10 @@ import { cloudWanted, setCloudWanted } from "@/lib/villagerVoice";
 type Loaded = MirrorView & { capped?: boolean; source?: string; setOut?: SetOut[] };
 
 /** What erasing everything removes from this browser, besides what the server erases. */
-const LOCAL_KEYS = ["echo.userId", "echo.name", "echo.consent", "echo.character", "echo.identityToken", "echo.voiceCloud", "echo.villagerVoice", "echo.email"];
+/** Tell the page's keeper of the envelopes that they are erased (`lib/knowable/keeper.ts`): it empties the record and keeps nothing more. */
+const forgetEnvelopes = () => window.dispatchEvent(new Event("echo:envelopes-forget"));
+
+const LOCAL_KEYS = ["echo.userId", "echo.name", "echo.consent", "echo.character", "echo.identityToken", "echo.voiceCloud", "echo.villagerVoice", "echo.email", "echo.calls", "echo.calls.crowd", "echo.calls.visitor"];
 
 const ARROW = (m: { amount: number }) => (m.amount > 0 ? "→" : "←");
 const pct = (x: number) => `${Math.round(((Math.max(-1, Math.min(1, x)) + 1) / 2) * 100)}%`;
@@ -109,8 +112,31 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; supabaseTablesFailed?: string[] };
       if (!res.ok || !data.ok) {
-        setErasing(`Not everything could be erased${data.supabaseTablesFailed?.length ? ` (${data.supabaseTablesFailed.join(", ")})` : ""}. Nothing in this browser was cleared; try again.`);
+        // What the echo sealed is kept in this browser and nowhere else (C89), so it does not wait on
+        // the server: it is erased here and now, and the page keeps nothing more of it. Everything
+        // else stays, so that the erasure can be asked for again with the same identity.
+        forgetEnvelopes();
+        setErasing(`Not everything could be erased${data.supabaseTablesFailed?.length ? ` (${data.supabaseTablesFailed.join(", ")})` : ""}. What your echo sealed was only ever in this browser, and is gone. Nothing else here was cleared; try again.`);
         return;
+      }
+      forgetEnvelopes();
+      // What they added to the village's count (C91) is under an id of its own, which the delete
+      // route never saw. It is removed by that id before the id is cleared: an id cleared first
+      // would leave rows nobody could ever ask to have removed.
+      let visitor: string | null = null;
+      try {
+        visitor = localStorage.getItem("echo.calls.visitor");
+      } catch {
+        // a private window: no id was kept, so nothing was added
+      }
+      if (visitor) {
+        const gone = await fetch("/api/calls", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ visitor }) })
+          .then((r) => r.ok)
+          .catch(() => false);
+        if (!gone) {
+          setErasing("What you added to the village's count could not be removed. Nothing in this browser was cleared; try again.");
+          return;
+        }
       }
       for (const k of LOCAL_KEYS) {
         try {
@@ -121,7 +147,8 @@ export default function Mirror({ consent, onAccept, onRevoke }: { consent: Conse
       }
       window.location.assign("/");
     } catch {
-      setErasing("The erasure could not be sent. Nothing was erased; try again.");
+      forgetEnvelopes();
+      setErasing("The erasure could not be sent. What your echo sealed was only ever in this browser, and is gone. Nothing else was erased; try again.");
     }
   }, []);
 

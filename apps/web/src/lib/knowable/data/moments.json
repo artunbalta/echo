@@ -1,0 +1,1072 @@
+{
+ "source": "apps/web/scripts/moment-catalogue.mjs",
+ "items": {
+  "min": 3,
+  "max": 8
+ },
+ "moments": {
+  "spilled-basket": {
+   "name": {
+    "en": "A woman whose apples have rolled everywhere",
+    "tr": "Elmaları her yere saçılmış bir kadın"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "help",
+     "en": "Help gather the apples",
+     "tr": "Elmaları toplamasına yardım et"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "stuck-cart": {
+   "name": {
+    "en": "A carter with a wheel stuck fast",
+    "tr": "Tekerleği çamura saplanmış bir arabacı"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "push",
+     "en": "Put your shoulder to the wheel",
+     "tr": "Omzunu tekerleğe ver"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "ball-game": {
+   "name": {
+    "en": "Children playing catch",
+    "tr": "Top oynayan çocuklar"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "to-alone",
+     "en": "Throw it to the one on their own",
+     "tr": "Tek başına duran çocuğa at"
+    },
+    {
+     "id": "to-others",
+     "en": "Throw it back to the others",
+     "tr": "Diğerlerine geri at"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "stray-ball": {
+   "name": {
+    "en": "A child who threw wide",
+    "tr": "Topu yanlışlıkla sana atan bir çocuk"
+   },
+   "arms": {
+    "apology": {
+     "en": "the child says sorry",
+     "tr": "çocuk özür diliyor"
+    },
+    "no-apology": {
+     "en": "the child says nothing",
+     "tr": "çocuk hiçbir şey demiyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "laugh",
+     "en": "Laugh it off, and roll it back",
+     "tr": "Gülüp geç, topu geri yuvarla"
+    },
+    {
+     "id": "scold",
+     "en": "Tell them to watch where they throw",
+     "tr": "Nereye attığına dikkat etmesini söyle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "well-custom": {
+   "name": {
+    "en": "The well's worn rim",
+    "tr": "Kuyunun aşınmış taşı"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "touch",
+     "en": "Touch the rim, as they do",
+     "tr": "Onlar gibi kuyunun taşına dokun"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "well-queue": {
+   "name": {
+    "en": "A line at the well",
+    "tr": "Kuyunun başındaki sıra"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "wait",
+     "en": "Wait your turn",
+     "tr": "Sıranı bekle"
+    },
+    {
+     "id": "cut",
+     "en": "Go straight to the front",
+     "tr": "Doğrudan öne geç"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "village-dance": {
+   "name": {
+    "en": "A ring dance on the green",
+    "tr": "Meydanda bir halay"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "join",
+     "en": "Join the dance",
+     "tr": "Halaya katıl"
+    },
+    {
+     "id": "watch",
+     "en": "Stand and watch",
+     "tr": "Durup izle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "loose-hen": {
+   "name": {
+    "en": "A woman with a lantern, chasing a hen",
+    "tr": "Elinde fenerle tavuğunu kovalayan bir kadın"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "catch",
+     "en": "Help her catch the hen",
+     "tr": "Tavuğu yakalamasına yardım et"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "falling-stars": {
+   "name": {
+    "en": "Stars falling over the sea",
+    "tr": "Denizin üstüne kayan yıldızlar"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "watch-sky",
+     "en": "Stop and watch the sky",
+     "tr": "Dur ve gökyüzünü izle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "banging-door": {
+   "name": {
+    "en": "A door banging in the wind",
+    "tr": "Rüzgârda çarpıp duran bir kapı"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "shut",
+     "en": "Pull the door shut",
+     "tr": "Kapıyı çekip kapat"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "fallen-elder": {
+   "name": {
+    "en": "An old man who has slipped and cannot get up",
+    "tr": "Kayıp düşmüş, kalkamayan yaşlı bir adam"
+   },
+   "arms": {
+    "alone": {
+     "en": "nobody else is about",
+     "tr": "etrafta başka kimse yok"
+    },
+    "onlookers": {
+     "en": "two others stand by, watching",
+     "tr": "iki kişi durmuş, bakıyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "help-up",
+     "en": "Help him to his feet",
+     "tr": "Ayağa kalkmasına yardım et"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "asch-boats": {
+   "name": {
+    "en": "Fishers sure the red boat is the longer",
+    "tr": "Kırmızı kayığın daha uzun olduğundan emin balıkçılar"
+   },
+   "arms": {
+    "unanimous": {
+     "en": "all three of them agree",
+     "tr": "üçü de aynı fikirde"
+    },
+    "dissenter": {
+     "en": "one of them is not so sure",
+     "tr": "içlerinden biri pek emin değil"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "agree",
+     "en": "Agree, the red one",
+     "tr": "Hak ver: kırmızı olan"
+    },
+    {
+     "id": "differ",
+     "en": "Say the blue one is longer",
+     "tr": "Mavinin daha uzun olduğunu söyle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "looking-up": {
+   "name": {
+    "en": "People stopped in the way, looking up",
+    "tr": "Yolda durmuş, yukarı bakan insanlar"
+   },
+   "arms": {
+    "one": {
+     "en": "one person, looking up",
+     "tr": "tek kişi yukarı bakıyor"
+    },
+    "five": {
+     "en": "five people, looking up",
+     "tr": "beş kişi yukarı bakıyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "look-up",
+     "en": "Stop and look up with them",
+     "tr": "Dur ve onlarla birlikte yukarı bak"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "teasing": {
+   "name": {
+    "en": "Boys teasing a smaller one",
+    "tr": "Küçük bir çocuğa sataşan oğlanlar"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "laugh",
+     "en": "Laugh along",
+     "tr": "Sen de gül"
+    },
+    {
+     "id": "stop",
+     "en": "Tell them to leave him be",
+     "tr": "Onu rahat bırakmalarını söyle"
+    },
+    {
+     "id": "stand-by",
+     "en": "Go and stand by the small one",
+     "tr": "Gidip küçüğün yanında dur"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "imece-wall": {
+   "name": {
+    "en": "A field wall fallen, and stones to lift",
+    "tr": "Yıkılmış bir tarla duvarı ve kaldırılacak taşlar"
+   },
+   "arms": {
+    "alone": {
+     "en": "one old man at it alone",
+     "tr": "yaşlı bir adam tek başına uğraşıyor"
+    },
+    "crew": {
+     "en": "four already at it",
+     "tr": "dört kişi zaten çalışıyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "lend-hand",
+     "en": "Lend a hand with the wall",
+     "tr": "Duvara el ver"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "net-haul": {
+   "name": {
+    "en": "Fishers hauling a heavy net up the beach",
+    "tr": "Ağır bir ağı kumsala çeken balıkçılar"
+   },
+   "arms": {
+    "alone": {
+     "en": "one fisher at the rope alone",
+     "tr": "halatta tek bir balıkçı var"
+    },
+    "crew": {
+     "en": "three already hauling",
+     "tr": "üç kişi zaten çekiyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "haul",
+     "en": "Take hold of the rope and pull",
+     "tr": "Halata sarılıp çek"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "musician": {
+   "name": {
+    "en": "An old man playing the kaval",
+    "tr": "Kaval çalan yaşlı bir adam"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "listen",
+     "en": "Sit and listen",
+     "tr": "Otur ve dinle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "wrong-basket": {
+   "name": {
+    "en": "A busy fishwife holding out a basket meant for someone else",
+    "tr": "Başkasına ait bir sepeti sana uzatan telaşlı bir balıkçı kadın"
+   },
+   "arms": {
+    "one-basket": null
+   },
+   "outcomes": [
+    {
+     "id": "not-mine",
+     "en": "Tell her it is not for you",
+     "tr": "Bunun senin için olmadığını söyle"
+    },
+    {
+     "id": "take-it",
+     "en": "Take it anyway",
+     "tr": "Yine de al"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "tea-invite": {
+   "name": {
+    "en": "An old woman on her step, beckoning you to sit for tea",
+    "tr": "Kapısının önünde seni çaya çağıran yaşlı bir kadın"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "sit-tea",
+     "en": "Sit down with her for tea",
+     "tr": "Oturup onunla çay iç"
+    },
+    {
+     "id": "thank",
+     "en": "Thank her, and go on",
+     "tr": "Teşekkür et ve yoluna devam et"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "tangled-net": {
+   "name": {
+    "en": "A fisher working at a hopelessly tangled net",
+    "tr": "Umutsuzca dolanmış bir ağla uğraşan bir balıkçı"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "untangle",
+     "en": "Help him untangle it",
+     "tr": "Ağı çözmesine yardım et"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "bread-errand": {
+   "name": {
+    "en": "A woman at her door with a loaf for her mother",
+    "tr": "Kapısında annesi için bir somun tutan bir kadın"
+   },
+   "arms": {
+    "hurry": {
+     "en": "she says her mother has been waiting",
+     "tr": "annesinin beklediğini söylüyor"
+    },
+    "no-hurry": {
+     "en": "she says there is no hurry",
+     "tr": "acelesi olmadığını söylüyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "take",
+     "en": "Take the bread to her mother",
+     "tr": "Ekmeği annesine götür"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "drunk-or-ill": {
+   "name": {
+    "en": "A man lying on the path in the dark",
+    "tr": "Karanlıkta yolda yatan bir adam"
+   },
+   "arms": {
+    "ill": {
+     "en": "a cane lies beside him",
+     "tr": "yanında bir baston duruyor"
+    },
+    "drunk": {
+     "en": "a bottle lies beside him",
+     "tr": "yanında bir şişe duruyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "help-home",
+     "en": "Help him home",
+     "tr": "Evine gitmesine yardım et"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "campfire": {
+   "name": {
+    "en": "Villagers round a fire, telling stories",
+    "tr": "Ateşin başında hikâye anlatan köylüler"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "sit-fire",
+     "en": "Sit down by the fire",
+     "tr": "Ateşin başına otur"
+    },
+    {
+     "id": "listen-edge",
+     "en": "Stand at the edge and listen",
+     "tr": "Kenarda durup dinle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "crying-alone": {
+   "name": {
+    "en": "A young woman sitting alone, crying",
+    "tr": "Tek başına oturmuş ağlayan genç bir kadın"
+   },
+   "arms": {
+    "on-the-way": {
+     "en": "right on the way",
+     "tr": "tam yolun üstünde"
+    },
+    "aside": {
+     "en": "off to one side",
+     "tr": "yolun kenarında, uzakta"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "sit-with",
+     "en": "Sit with her a while",
+     "tr": "Bir süre yanında otur"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "dolphins": {
+   "name": {
+    "en": "Dolphins in the bay",
+    "tr": "Koyda yunuslar"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "watch",
+     "en": "Stop and watch them",
+     "tr": "Dur ve onları izle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "bench-sit": {
+   "name": {
+    "en": "Someone sitting at one end of a bench",
+    "tr": "Bankın bir ucunda oturan biri"
+   },
+   "arms": {
+    "elder": {
+     "en": "an elder",
+     "tr": "yaşlı biri"
+    },
+    "peer": {
+     "en": "someone of your own age",
+     "tr": "senin yaşında biri"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "sit-close",
+     "en": "Sit down beside them",
+     "tr": "Yanına otur"
+    },
+    {
+     "id": "sit-far",
+     "en": "Sit at the far end",
+     "tr": "Bankın öbür ucuna otur"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "unfinished-tale": {
+   "name": {
+    "en": "An old man telling children a Nasreddin Hoca tale",
+    "tr": "Çocuklara Nasreddin Hoca fıkrası anlatan yaşlı bir adam"
+   },
+   "arms": {
+    "short-pause": {
+     "en": "he stops a short while before the end",
+     "tr": "sona gelmeden kısa bir süre duruyor"
+    },
+    "long-pause": {
+     "en": "he stops a long while before the end",
+     "tr": "sona gelmeden uzun süre duruyor"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "ask-end",
+     "en": "Ask him how it ends",
+     "tr": "Fıkranın sonunu sor"
+    },
+    {
+     "id": "told",
+     "en": "Stay to hear the end",
+     "tr": "Sonunu dinlemek için kalmak"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "knucklebones": {
+   "name": {
+    "en": "Two children with a knucklebone, a cup and a pomegranate",
+    "tr": "Aşık kemiği, bir kap ve bir narla oynayan iki çocuk"
+   },
+   "arms": {
+    "unseen": {
+     "en": "the throw is under the cup; only you saw it",
+     "tr": "atış kabın altında; yalnızca sen gördün"
+    },
+    "seen": {
+     "en": "the children saw the throw too",
+     "tr": "atışı çocuklar da gördü"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "say-true",
+     "en": "Tell them it is not tava",
+     "tr": "Tava gelmediğini söyle"
+    },
+    {
+     "id": "say-tava",
+     "en": "Say it is tava",
+     "tr": "Tava geldi de"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "greeting": {
+   "name": {
+    "en": "Someone coming along, with a greeting for you",
+    "tr": "Yoldan gelip sana selam veren biri"
+   },
+   "arms": {
+    "high": {
+     "en": "the headman",
+     "tr": "muhtar"
+    },
+    "low": {
+     "en": "a water-carrier",
+     "tr": "bir sucu"
+    },
+    "peer": {
+     "en": "a villager",
+     "tr": "köyden biri"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "greet-warm",
+     "en": "Greet them warmly",
+     "tr": "İçtenlikle selam ver"
+    },
+    {
+     "id": "nod",
+     "en": "Nod back",
+     "tr": "Başınla karşılık ver"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "rude-bump": {
+   "name": {
+    "en": "A man with sacks, who knocks into you and swears",
+    "tr": "Sana çarpıp söylenen çuvallı bir adam"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "sorry",
+     "en": "Say sorry anyway",
+     "tr": "Yine de özür dile"
+    },
+    {
+     "id": "back",
+     "en": "Tell him to watch where he is going",
+     "tr": "Önüne bakmasını söyle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "narrow-way": {
+   "name": {
+    "en": "Someone coming the other way on the narrow path",
+    "tr": "Dar yolda karşıdan gelen biri"
+   },
+   "arms": {
+    "elder": {
+     "en": "an elder with a staff",
+     "tr": "bastonlu yaşlı biri"
+    },
+    "porter": {
+     "en": "a girl with two full jugs",
+     "tr": "iki dolu testi taşıyan bir kız"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "aside",
+     "en": "Step aside for her",
+     "tr": "Kenara çekilip yol ver"
+    },
+    {
+     "id": "first",
+     "en": "Keep to your way",
+     "tr": "Yolundan şaşma"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "ask-way": {
+   "name": {
+    "en": "A pedlar who asks you the way to the harbour",
+    "tr": "Sana limanın yolunu soran bir seyyar satıcı"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "walk",
+     "en": "Walk them to the harbour",
+     "tr": "Onu limana kadar götür"
+    },
+    {
+     "id": "point",
+     "en": "Point the way",
+     "tr": "Yolu göster"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "heavy-jugs": {
+   "name": {
+    "en": "An old woman struggling with two heavy jugs",
+    "tr": "İki ağır testiyle zorlanan yaşlı bir kadın"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "carry",
+     "en": "Carry a jug for her",
+     "tr": "Testilerden birini taşı"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "dark-lantern": {
+   "name": {
+    "en": "A woman whose lantern has gone out",
+    "tr": "Feneri sönmüş bir kadın"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "walk",
+     "en": "Walk her to her door",
+     "tr": "Onu kapısına kadar götür"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "lost-purse": {
+   "name": {
+    "en": "A purse lying in the grass",
+    "tr": "Çimenlerin arasında duran bir kese"
+   },
+   "arms": {
+    "few": {
+     "en": "two coins in it",
+     "tr": "içinde iki sikke"
+    },
+    "many": {
+     "en": "nine coins in it",
+     "tr": "içinde dokuz sikke"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "leave",
+     "en": "Set it on the wall for whoever lost it",
+     "tr": "Kaybeden görsün diye taşın üstüne koy"
+    },
+    {
+     "id": "take-one",
+     "en": "Take a coin",
+     "tr": "Bir sikke al"
+    },
+    {
+     "id": "take-all",
+     "en": "Take the coins",
+     "tr": "Sikkeleri al"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "open-gate": {
+   "name": {
+    "en": "A field gate left open",
+    "tr": "Açık bırakılmış bir tarla kapısı"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "shut-gate",
+     "en": "Shut the gate",
+     "tr": "Tarla kapısını kapat"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "litter": {
+   "name": {
+    "en": "Rubbish dropped by the way",
+    "tr": "Yol kenarına atılmış çöp"
+   },
+   "arms": {
+    "clean": {
+     "en": "the place is otherwise clean",
+     "tr": "etraf bunun dışında temiz"
+    },
+    "littered": {
+     "en": "the place is already littered",
+     "tr": "etraf zaten çöp içinde"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "tidy",
+     "en": "Put it in the basket by the wall",
+     "tr": "Duvar dibindeki sepete at"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "caught-lamb": {
+   "name": {
+    "en": "A lamb with its head caught in the fence",
+    "tr": "Başı çite sıkışmış bir kuzu"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "free-lamb",
+     "en": "Free the lamb",
+     "tr": "Kuzuyu kurtar"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "woodpile": {
+   "name": {
+    "en": "A woodpile that has come down",
+    "tr": "Devrilmiş bir odun yığını"
+   },
+   "arms": {},
+   "outcomes": [
+    {
+     "id": "stack",
+     "en": "Stack the logs back neatly",
+     "tr": "Odunları düzgünce yeniden istifle"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  },
+  "honey-stall": {
+   "name": {
+    "en": "A stall of honey, one jar each, nobody minding it",
+    "tr": "Başında kimse olmayan, herkese birer kavanoz bal tezgâhı"
+   },
+   "arms": {
+    "eye": {
+     "en": "a nazar charm hangs over it",
+     "tr": "üstünde bir nazar boncuğu asılı"
+    },
+    "no-eye": {
+     "en": "nothing hangs over it",
+     "tr": "üstünde hiçbir şey asılı değil"
+    }
+   },
+   "outcomes": [
+    {
+     "id": "one-jar",
+     "en": "Take one jar, as the board shows",
+     "tr": "Tahtadaki gibi bir kavanoz al"
+    },
+    {
+     "id": "three-jars",
+     "en": "Take three jars",
+     "tr": "Üç kavanoz al"
+    },
+    {
+     "id": "on",
+     "en": "Walk on",
+     "tr": "Yürüyüp geçmek"
+    }
+   ]
+  }
+ },
+ "strings": {
+  "en": {
+   "guess.title": "What did {name} do?",
+   "guess.someone": "your friend",
+   "guess.lead": "{name} walked through a village where small things happen. Before each one, their echo sealed a guess. Now you guess, and see who knows them better.",
+   "guess.bad": "This link does not open. Ask for a new one.",
+   "guess.begin": "Begin",
+   "guess.of": "{i} of {n}",
+   "guess.q": "What did {name} do?",
+   "guess.result": "You knew {name}: {you} of {n}. Their echo: {echo} of {n}.",
+   "guess.you": "You said",
+   "guess.echo": "Their echo said",
+   "guess.did": "{name}",
+   "guess.won": "You know {name} better than their echo does. For now: it has only just met them.",
+   "guess.lost": "Their echo knows {name} better than you do, after one walk.",
+   "guess.tie": "A tie between you and an echo that has only just met {name}.",
+   "guess.yours": "Let an echo watch you",
+   "guess.yours.lead": "It takes a few minutes, in your browser, with no account.",
+   "guess.send": "Send {name} your score",
+   "guess.sent": "Copied.",
+   "guess.score": "I guessed what you did in the village: {you} of {n}. Your echo got {echo}."
+  },
+  "tr": {
+   "guess.title": "{name} ne yaptı?",
+   "guess.someone": "arkadaşın",
+   "guess.lead": "{name}, küçük şeylerin olduğu bir köyde yürüdü. Her birinden önce yankısı bir tahmin mühürledi. Şimdi sen tahmin et; kim daha iyi tanıyor, görelim.",
+   "guess.bad": "Bu bağlantı açılmıyor. Yenisini iste.",
+   "guess.begin": "Başla",
+   "guess.of": "{n} sorunun {i}.",
+   "guess.q": "{name} ne yaptı?",
+   "guess.result": "{name} hakkında {n} tahminde {you} bildin. Yankısı: {n} tahminde {echo}.",
+   "guess.you": "Sen dedin ki",
+   "guess.echo": "Yankısı dedi ki",
+   "guess.did": "{name}",
+   "guess.won": "{name} hakkında yankısından daha çok şey biliyorsun. Şimdilik: yankı onunla daha yeni tanıştı.",
+   "guess.lost": "Yankısı, tek bir yürüyüşten sonra {name} hakkında senden daha çok şey biliyor.",
+   "guess.tie": "Seninle, {name} ile daha yeni tanışmış bir yankı arasında beraberlik.",
+   "guess.yours": "Bir yankı da seni izlesin",
+   "guess.yours.lead": "Birkaç dakika sürer; tarayıcında, hesap açmadan.",
+   "guess.send": "Skorunu {name} ile paylaş",
+   "guess.sent": "Kopyalandı.",
+   "guess.score": "Köyde ne yaptığını tahmin ettim: {n} soruda {you}. Yankın {echo} bildi."
+  }
+ }
+}

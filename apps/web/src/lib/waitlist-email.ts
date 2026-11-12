@@ -51,7 +51,7 @@ function textBody({ name, seat, hasPortrait }: { name: string; seat: number | nu
       ? `Your character is attached. It was drawn from the photo you sent, in the world's own hand. The photo itself is gone; we kept only the character.`
       : `We could not make your character from your photo this time. Your place is not affected, and you will choose a character when you arrive. Nothing of the photo was kept.`,
     ``,
-    `The island is not open yet. When it is, this address is how we reach you.`,
+    `A first village is already open at echovirtualworld.com. When there is more, this address is how we reach you.`,
     ``,
     `No one knows you there. That is the point.`,
     ``,
@@ -79,7 +79,7 @@ function htmlBody({ name, seat, hasPortrait }: { name: string; seat: number | nu
       ? "Your character is attached. It was drawn from the photo you sent, in the world's own hand. The photo itself is gone; we kept only the character."
       : "We could not make your character from your photo this time. Your place is not affected, and you will choose a character when you arrive. Nothing of the photo was kept.",
   )}
-  ${p("The island is not open yet. When it is, this address is how we reach you.")}
+  ${p("A first village is already open at echovirtualworld.com. When there is more, this address is how we reach you.")}
   ${p('<span style="color:#8b8194;">No one knows you there. That is the point.</span>')}
   <p style="margin:32px 0 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#6b6478;">echovirtualworld.com</p>
 </td></tr></table>

@@ -71,6 +71,7 @@ import PilotOverlay, { type PilotSettings } from "@/components/pilot/PilotOverla
 import EchoAway from "@/components/world/EchoAway";
 import EchoMeeting from "@/components/world/EchoMeeting";
 import EchoPairs from "@/components/world/EchoPairs";
+import { EnvelopeAsides, EnvelopeChip, EnvelopesPanel, LEAVING_AT, useEnvelopes } from "@/components/world/Envelopes";
 import ReportPanel from "@/components/world/ReportPanel";
 import Interact from "@/components/world/Interact";
 import Gatherings from "@/components/world/Gatherings";
@@ -86,6 +87,7 @@ import type { PlayerLayer } from "@/game/world/playerLayer";
 import { carryHandoff } from "@/game/world/crossTo";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { step } from "@/lib/steps";
 import type { SliceLayer } from "@/game/world/sliceLayer";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { WalkLayer } from "@/game/world/walkLayer";
@@ -114,6 +116,9 @@ export interface ParcelCanvasProps {
    */
   pilot?: PilotSettings | null;
 }
+
+/** How long the count's sentence must have been on the consent card for a yes to cover it. */
+const SENTENCE_READ_MS = 2000;
 
 export default function ParcelCanvas({ stations = null, demo = null, pilot = null, ...manifest }: ParcelCanvasProps) {
   // One chain for the life of the page. It arms itself if this browser has already consented.
@@ -215,6 +220,17 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
   const [hereName, setHereName] = useState<string | null>(null);
   const [shore, setShore] = useState(false);
   const adopt = useRef<((next: PlanetWorld) => void) | null>(null);
+
+  // What the echo sealed about the stranger before each moment (C89): never in a pilot visit.
+  const envelopes = useEnvelopes(() => world.current, consent, !pilot, here, !demo);
+  // When the count's sentence came onto the consent card (C91): a yes covers it only if it had been
+  // there long enough to be read. The answer to "is the count on" can land a moment before the click.
+  const sentenceAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (envelopes.count.on && sentenceAt.current === null) sentenceAt.current = performance.now();
+  }, [envelopes.count.on]);
+  const [leaving, setLeaving] = useState(false);
+  const asked = useRef(false);
   useEffect(() => {
     type Job = { cell: string; next: PlanetWorld | null; dropped: boolean };
     let job: Job | null = null;
@@ -346,6 +362,8 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         // The page's own marks go on the page's own world; a crossed-into world brought its own.
         if (first) w?.context().layer<InteractLayer>("interact")?.setMarks(marks.current);
         if (first && w) setHereName(w.region.village?.settlement.name ?? null);
+        // How far people come (C92): the open world, arrived in. A study's visit and a demo's are not counted.
+        if (first && w && !pilot && !demo) step("arrived");
         applyHome(w);
       }}
       className="relative h-full w-full"
@@ -370,6 +388,14 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         inspecting={inspecting}
         onToggleInspector={() => setInspecting((v) => !v)}
         study={!!pilot}
+        under={pilot ? null : <EnvelopeChip env={envelopes} />}
+        onBack={(e) => {
+          // Leaving with envelopes never opened: asked once, and the second press goes.
+          if (pilot || asked.current || envelopes.ready < LEAVING_AT) return;
+          asked.current = true;
+          e.preventDefault();
+          setLeaving(true);
+        }}
         meter={
           // Handed the same chain state the inspector gets, so the glance and the panel cannot
           // disagree; what it may say about it is decided in recognitionReading.ts. None in a pilot visit.
@@ -385,7 +411,21 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         </p>
       ) : null}
 
-      <ConsentCard consent={consent} onAccept={() => chain.accept()} onDecline={() => chain.decline()} />
+      <ConsentCard
+        consent={consent}
+        crowd={envelopes.count.on}
+        onAccept={() => {
+          chain.accept();
+          if (!pilot && !demo) step("watched");
+          // Said yes with the count's sentence on the card (C91): that yes covers it, if the sentence
+          // had stood there two seconds. Otherwise the envelopes' panel asks, in its own words.
+          if (envelopes.count.on && sentenceAt.current !== null && performance.now() - sentenceAt.current >= SENTENCE_READ_MS) void envelopes.setAdding(true);
+        }}
+        onDecline={() => {
+          chain.decline();
+          if (!pilot && !demo) step("declined");
+        }}
+      />
 
       {/* Talking to a villager, where the cell has a village (C42). It reads the villagers layer out of
           the same ref the minimap does, so a parcel with no village simply never shows it. */}
@@ -410,6 +450,9 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
           <EchoPairs consent={consent} />
           {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
           <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
+          {/* What the echo sealed before each moment, opened afterwards (C89): `O`, the envelope, the way out. */}
+          <EnvelopesPanel env={envelopes} consent={consent} />
+          <EnvelopeAsides env={envelopes} coarse={coarse} leaving={leaving} onStay={() => setLeaving(false)} onLeave={() => window.location.assign("/")} />
         </>
       )}
       <ReportPanel cell={here} />
@@ -431,7 +474,9 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
 
       {/* Last, so it paints over the HUD it shares a screen with, and only where there is a thumb to
           use it. The consent card is answered first: see the header. */}
-      {coarse && consent !== "unset" ? (
+      {/* Not while the envelopes are open (C89): the panel fills a phone's screen, and a thumbstick
+          painted over its last lines would take the taps meant for them. */}
+      {coarse && consent !== "unset" && !envelopes.open ? (
         <TouchControls handle={touch} />
       ) : null}
     </WorldCanvas>

@@ -33,7 +33,7 @@ export default function YouDemo({ hostName, ...parcel }: Omit<ParcelCanvasProps,
     setFailed(false);
     try {
       // A fresh person, and their yes to being watched for the visit.
-      for (const k of ["echo.userId", "echo.identityToken"]) localStorage.removeItem(k);
+      for (const k of ["echo.userId", "echo.identityToken", "echo.calls"]) localStorage.removeItem(k);
       localStorage.setItem("echo.consent", JSON.stringify({ telemetry: true }));
       await ensureIdentity();
       const res = await fetch("/api/demo?op=start", { method: "POST", headers: identityHeaders({ "content-type": "application/json" }), body: JSON.stringify({ name: name.trim() || undefined }) });

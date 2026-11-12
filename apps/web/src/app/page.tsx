@@ -3,8 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Lenis from "lenis";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import Splash from "@/components/Splash";
+import { useLang, type Lang } from "@/lib/lang";
+import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 import { coarsePointer } from "@/lib/pointerKind";
+import { step } from "@/lib/steps";
+import HowItGoes from "./_landing/HowItGoes";
 import LegendBook from "./_landing/LegendBook";
 import CharacterSelect from "./_landing/CharacterSelect";
 import DemoEntry from "./_landing/DemoEntry";
@@ -14,6 +19,34 @@ const HeroPlanet = dynamic(() => import("@/components/planet/HeroPlanet"), {
   ssr: false,
   loading: () => <div className="absolute inset-0 bg-ink" />,
 });
+
+/**
+ * The hero's and the nav's words, in both languages (C89). They are here and not in the chrome's table
+ * because they are this page's own, as its sections' words are; the legend, the waitlist and the demo
+ * are still English only (⚑58). A browser set to Turkish reads Turkish (`detectLang`).
+ */
+const COPY: Record<Lang, { eyebrow: string; h1: [string, string]; body: string; small: string; walkIn: string; waitlist: string; scroll: string; nav: { legend: string; waitlist: string; demo: string; evidence: string } }> = {
+  en: {
+    eyebrow: "Who knows you best?",
+    h1: ["A world that", "learns you."],
+    body: "Walk into a village where small things happen. Before each one, your echo seals a guess about what you will do. Then you open them.",
+    small: "A few minutes, in your browser, no account. Or point at the planet and pick a patch of land of your own.",
+    walkIn: "Walk in",
+    waitlist: "Join the waitlist",
+    scroll: "scroll",
+    nav: { legend: "Legend", waitlist: "Waitlist", demo: "Demo", evidence: "Evidence" },
+  },
+  tr: {
+    eyebrow: "Seni en iyi kim tanıyor?",
+    h1: ["Seni öğrenen", "bir dünya."],
+    body: "Küçük şeylerin olduğu bir köye gir. Her birinden önce yankın, ne yapacağına dair bir tahmin mühürler. Sonra sen açarsın.",
+    small: "Birkaç dakika, tarayıcında, hesap açmadan. Ya da gezegene bak ve kendine bir toprak parçası seç.",
+    walkIn: "İçeri gir",
+    waitlist: "Bekleme listesine katıl",
+    scroll: "aşağı",
+    nav: { legend: "Efsane", waitlist: "Bekleme listesi", demo: "Demo", evidence: "Kanıt" },
+  },
+};
 
 /**
  * The landing. Top to bottom:
@@ -28,6 +61,10 @@ const HeroPlanet = dynamic(() => import("@/components/planet/HeroPlanet"), {
  *                   #241d33 to parchment and the nav's over-hero state went with it. The nav is
  *                   still two-state, but both states are now dark; what changed is that the light
  *                   one had nothing left to sit on.
+ *                   Its first button walks into the open village (C89, `lib/openVillage.ts`): the
+ *                   world is open, so the page's main action is to go in, and the waitlist is
+ *                   the second thing it offers, not the first.
+ *   1  HowItGoes    what happens in there, in three steps, and the finding it rests on (C89).
  *   1a LegendBook   the myth, told as a book.
  *   1b CharacterSelect  JOIN WAITLIST. The roster with a hole in it, form at the bottom.
  *   1c DemoEntry    the trailer and a door to the live build. Stays last.
@@ -46,6 +83,10 @@ const HeroPlanet = dynamic(() => import("@/components/planet/HeroPlanet"), {
  */
 export default function Landing() {
   const lenisRef = useRef<Lenis | null>(null);
+  const copy = COPY[useLang()];
+
+  // How far people come (C92): this page was opened.
+  useEffect(() => step("landing"), []);
 
   // This route scrolls; the global stylesheet locks body overflow for the full-screen world/venue
   // routes, so opt back in here and restore on leave.
@@ -101,38 +142,42 @@ export default function Landing() {
             the one thing that must stay clickable turns them back on for itself. */}
         <div className="echo-rise pointer-events-none absolute inset-0 z-10 flex flex-col justify-center px-6 sm:px-12 lg:px-24">
           <div className="max-w-xl">
-            <p className="mb-5 text-[10px] uppercase tracking-[.32em] text-echo-soft">A living world. A place of your own.</p>
+            <p className="mb-5 text-[10px] uppercase tracking-[.32em] text-echo-soft">{copy.eyebrow}</p>
             <h1 className="max-w-xl font-serif text-[clamp(3.6rem,6.6vw,6.8rem)] leading-[.98] tracking-[-.045em] text-parchment">
-              A world that<br /><span className="italic text-echo-soft">learns you.</span>
+              {copy.h1[0]}<br /><span className="italic text-echo-soft">{copy.h1[1]}</span>
             </h1>
-            <p className="mt-7 max-w-sm text-base leading-relaxed text-parchment/75 sm:text-lg">
-              Your first day somewhere new. Find a place on the planet, step into its landscape, and make yourself at home.
+            <p className="mt-7 max-w-md text-base leading-relaxed text-parchment/75 sm:text-lg">
+              {copy.body}
             </p>
             <p className="mt-4 max-w-sm text-xs leading-relaxed text-parchment/45">
-              Choose a patch of land to see it from the ground. Every place you explore is part of this same world.
+              {copy.small}
             </p>
-            <div className="mt-7 flex flex-wrap items-center gap-4">
-              {/* Was "Get Started" into the auth modal. With auth gone the only thing to start is
-                  the waitlist, so it goes there rather than nowhere. */}
-              <a href="#waitlist" className="pointer-events-auto rounded-full bg-parchment px-7 py-3.5 text-sm font-medium text-ink transition-colors hover:bg-white" aria-label="Join the waitlist">
-                Join the waitlist{" "}
+            <div className="mt-7 flex flex-wrap items-center gap-5">
+              {/* The world is open, so the first button goes into it (C89). It was the waitlist, which
+                  asked a stranger to wait for something already here. */}
+              <Link href={OPEN_VILLAGE_PATH} data-walk-in onClick={() => step("walk_in")} className="pointer-events-auto rounded-full bg-parchment px-7 py-3.5 text-sm font-medium text-ink transition-colors hover:bg-white">
+                {copy.walkIn}{" "}
                 <span className="chev" aria-hidden>
                   ›
                 </span>
+              </Link>
+              <a href="#waitlist" className="pointer-events-auto text-sm text-parchment/60 underline decoration-parchment/25 underline-offset-4 transition-colors hover:text-parchment hover:decoration-parchment/60">
+                {copy.waitlist}
               </a>
             </div>
           </div>
         </div>
 
         <a
-          href="#legend"
+          href="#how"
           className="scroll-cue absolute bottom-5 left-1/2 z-10 -translate-x-1/2 font-pixel text-xs text-parchment/55"
           aria-label="Scroll for more"
         >
-          ▾ scroll
+          ▾ {copy.scroll}
         </a>
       </section>
 
+      <HowItGoes />
       <LegendBook />
       <CharacterSelect />
       <DemoEntry />
@@ -150,8 +195,9 @@ export default function Landing() {
 /* ── nav ─────────────────────────────────────────────────────────────────────────────────────── */
 
 /**
- * The navbar. Rebuilt for the page that actually exists now: three places to go, and nothing to log
- * in to (auth is gone — see _landing/README-auth-removal.md).
+ * The navbar. Rebuilt for the page that actually exists now: three places to go on the page, the
+ * evidence, the way in (C89), and nothing to log in to (auth is gone — see
+ * _landing/README-auth-removal.md).
  *
  * Two-state on purpose, because the page is two-toned. Over the hero it is transparent with dark
  * type, since the hero art is bright pixel landscape. Past the hero every section is ink, so it
@@ -163,6 +209,7 @@ export default function Landing() {
  * anchors is furniture, not navigation.
  */
 function Nav() {
+  const copy = COPY[useLang()];
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -200,24 +247,28 @@ function Nav() {
 
         <div className="flex items-center gap-6">
           <a href="#legend" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
-            Legend
+            {copy.nav.legend}
           </a>
           <a href="#waitlist" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
-            Waitlist
+            {copy.nav.waitlist}
           </a>
           <a href="#demo" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
-            Demo
+            {copy.nav.demo}
           </a>
-          <a
-            href="#waitlist"
+          <Link href="/bench" className={`hidden font-pixel text-xs transition-colors sm:block ${link}`}>
+            {copy.nav.evidence}
+          </Link>
+          <Link
+            href={OPEN_VILLAGE_PATH}
+            onClick={() => step("walk_in")}
             className={`rounded border-2 px-3 py-1.5 font-pixel text-xs font-bold transition-colors ${
               scrolled
                 ? "border-parchment/30 text-parchment hover:border-parchment/70"
                 : "border-parchment/25 text-parchment/90 hover:border-parchment/60"
             }`}
           >
-            Join
-          </a>
+            {copy.walkIn}
+          </Link>
         </div>
       </nav>
     </header>

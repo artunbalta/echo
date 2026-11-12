@@ -66,6 +66,10 @@ export interface WorldHudProps {
   consent: ConsentState;
   /** The recognition meter, drawn under the name. */
   meter: ReactNode;
+  /** Under the meter: the envelopes waiting to be opened (C89), or nothing. */
+  under?: ReactNode;
+  /** The way back to the planet was pressed: the page may stop it (C89: envelopes never opened). */
+  onBack?: (e: React.MouseEvent) => void;
   inspecting: boolean;
   onToggleInspector: () => void;
   /**
@@ -75,7 +79,7 @@ export interface WorldHudProps {
   study?: boolean;
 }
 
-export default function WorldHud({ world, name, owned, shore, cell, coarse, consent, meter, inspecting, onToggleInspector, study = false }: WorldHudProps) {
+export default function WorldHud({ world, name, owned, shore, cell, coarse, consent, meter, under = null, onBack, inspecting, onToggleInspector, study = false }: WorldHudProps) {
   const lang = useLang();
   const news = useVillageNews();
   const { muted, toggle: toggleSound } = useSound(world);
@@ -146,6 +150,7 @@ export default function WorldHud({ world, name, owned, shore, cell, coarse, cons
           {title}
         </h1>
         {meter}
+        {under}
         {news.length > 0 ? (
           <ul data-village-news className="mt-1 space-y-1">
             {news.map((n, i) => (
@@ -171,7 +176,7 @@ export default function WorldHud({ world, name, owned, shore, cell, coarse, cons
             <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
           </svg>
         </button>
-        <Link href="/" aria-label={t(lang, "hud.backLong")} onMouseDown={noFocus} className="hud-btn gap-1.5 px-3.5 text-[12px]" style={{ display: "inline-flex" }}>
+        <Link href="/" data-hud-back aria-label={t(lang, "hud.backLong")} onMouseDown={noFocus} onClick={onBack} className="hud-btn gap-1.5 px-3.5 text-[12px]" style={{ display: "inline-flex" }}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M7.5 2.5 4 6l3.5 3.5" />
           </svg>
@@ -189,6 +194,20 @@ export default function WorldHud({ world, name, owned, shore, cell, coarse, cons
             </button>
             {study ? null : (
               <>
+              <button
+                type="button"
+                role="menuitem"
+                data-hud-envelopes
+                onMouseDown={noFocus}
+                onClick={() => {
+                  setMenuOpen(false);
+                  window.dispatchEvent(new Event("echo:envelopes"));
+                }}
+                className={item}
+              >
+                <span>{t(lang, "menu.envelopes")}</span>
+                {coarse ? null : <span className={keycap}>O</span>}
+              </button>
               <button
                 type="button"
                 role="menuitem"
