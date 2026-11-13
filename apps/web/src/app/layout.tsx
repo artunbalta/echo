@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk, Pixelify_Sans } from "next/font/google";
+import { Hanken_Grotesk, Jersey_15, Pixelify_Sans } from "next/font/google";
 import "./globals.css";
 
 // The wordmark's face, and the legend book's. Exposed as --font-pixel, which tailwind.config maps to
@@ -12,7 +12,22 @@ const pixel = Pixelify_Sans({
 });
 
 /**
- * The one face everything else is set in (DECISIONS C97). Until now the site named no face of its
+ * The face a title is written in (DECISIONS C100): the pixel face of the film (`public/film`), where the
+ * owner had already seen and kept it. C97 set every word in one grotesque, titles in its heavier weight,
+ * and the page that made was called flat: "write it in pixels a little more". So there are two voices
+ * and each has one job: this one says what a thing is (a headline, a section's title, a number that is
+ * the point), and the grotesque below is for everything that is read. It has the Turkish letters. The
+ * wordmark keeps its own face, above. Exposed as --font-display; `.font-display` in globals.css.
+ */
+const display = Jersey_15({
+  subsets: ["latin", "latin-ext"],
+  weight: "400",
+  variable: "--font-display",
+  display: "swap",
+});
+
+/**
+ * The one face everything that is READ is set in (DECISIONS C97). Until now the site named no face of its
  * own: "sans" and "serif" were whatever the visitor's machine had, so a title was New York on a Mac,
  * Cambria on Windows and Noto Serif on a phone, and no two people saw the same page. One variable
  * family, served by the build with the page (no request to anyone else), with the Turkish letters
@@ -66,7 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     // `lang` is said again before the page's script runs by a page built in another language
     // (`app/tr/page.tsx`), and by `useLang` after it; React is told not to mind the difference.
-    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${pixel.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${pixel.variable} ${display.variable}`}>
       <body>{children}</body>
     </html>
   );

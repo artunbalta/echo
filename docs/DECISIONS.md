@@ -6794,3 +6794,88 @@ else. `tests/i18n.test.mts`: nothing that decides the language reads the browser
 the pilot's pages, once they are open, will also begin in English for a reader in Turkey; the
 villagers' voice still listens in the browser's language, which is a guess at what is spoken and not
 what is read; `tests/e2e/globePick.spec.ts` stays in quarantine (it reads a card that C96 reworded).
+
+## C100 — shown, not said: the film on the page, how it works by doing it once, the thirteen twins drawn, and titles in the film's pixels
+
+**Date:** 2026-11-13. **Asked for by the owner**, in these words: "Everything is very AI slop. All this
+text, too much text, all of it"; "How it works 1, 2, 3 is a one-prompt job"; under it "13 of 13, I want
+more taste there", "this evidence part is important and we do not press it enough, the research", and
+"there is a silly thing round it, bad as UX and as UI"; and of the words at the head: "keep the unity,
+but not this flat. Write it in pixels a little more, add animation, a character, something. You can
+add the video."
+
+**What was there** (photographed first, a computer and a phone, top to bottom): a headline, a
+paragraph and a form in one grotesque; three numbered paragraphs under "How it works"; "13 of 13" and two
+sentences in a rounded box a shade darker than the page; the roster. Nothing on the page moved but the
+planet, and nothing on it could be done but type an address.
+
+**Decision: the page draws and does what it used to describe, in the film's own hand.**
+
+- **Two voices, one job each** (`app/layout.tsx`, `.font-display` in `globals.css`). What says what a
+  thing IS, a headline, a section's title, the number that is the point, a line spoken in a pixel
+  scene, is the film's pixel face (Jersey 15, served by the build, with the Turkish letters). What is
+  read stays the grotesque. This takes back one line of C97 (titles in the grotesque's heavier weight)
+  and keeps the rest of it: no italics, no spaced label over a title, no hairlines. The wordmark keeps
+  its own face.
+- **The headline is the same sentence**, in that face, with the two things it is about in the echo's
+  colour and the word again behind each, fainter, a step down and to the right (`.echoed`). The
+  paragraph under it is the film's last line: "A small village in your browser. You walk around. It
+  learns you." The hero's words come up one after another as the page opens.
+- **The film is on the page** (`_landing/Film.tsx`, `public/film/echo-calls-it.html`), first under the
+  hero. It is not a video file: the film is drawn live by its own script (56 kB with its sound), so it
+  is sharp at any size, wide on a wide screen and tall on a phone. Its frame is asked for only when it
+  nears the screen; it opens on its own poster and its own Play; its two faces are served from beside
+  it and it asks nobody else for anything; its language is the page's; its last button is the page's
+  waitlist. The cut that is shared as a video is unchanged.
+- **How it works is done once, not listed** (`_landing/TryOne.tsx`). A pouch of gold in the grass and
+  nobody watching: the reader answers. A cloaked figure does what they chose, and its echo, the same
+  figure in the echo's colour, does it a beat after. ECHO has seen them once, writes what they will do
+  next and seals it where the envelope can be seen. A stall of honey with nobody minding it: the reader
+  answers, the envelope opens, and its card says what was written and whether it was so. The three
+  sentences that were three paragraphs are three marks over the scene, lit as they happen.
+  - **What it does not pretend.** The call is made from the one thing it saw: whoever took the gold is
+    called to take three jars, anyone else one. The page says so ("It had seen you once"). It is the
+    finding below in miniature and nothing cleverer.
+  - **Nothing chosen there is kept, sent or counted.** There is no request in the file.
+- **The places are drawn by the film's painter** (`_landing/pixels.ts`, `_landing/PixelScene.tsx`):
+  the sky in ordered dither, the moon, the houses and their windows, the grass that leans, the pouch,
+  the envelope and its seal, moved here from the film so the page and the film are one place; and the
+  stall and the figure, new, in the same hand. A scene is a small canvas enlarged whole by a whole
+  number. It moves only while it is on the screen, at half the screen's rate; someone who asked for
+  less motion gets one still picture with everything at rest where it would have come to.
+- **The finding is a band of the page's own, and the thirteen are drawn** (`_landing/Evidence.tsx`). No
+  box. The number as large as the screen takes, the sentence it is the number of, and beside them one
+  row a published twin: where it scored as released, the line a guess that knows nobody scores, the
+  line of the person asked again, and where the same twin lands after one look at what the person had
+  done. The marks start where the twins were and go to where one look put them, once, when the chart is
+  first seen. Every number is counted from the audit's record, as at `/bench`.
+  - **The chart, by the procedure.** Before and after per item is a dumbbell on one shared axis; two
+    series, so a legend; 10px square marks ringed in the surface, 2px lines of no colour of their own;
+    the two standing lines named where they stand; words in the text's colours. The two hues were run
+    through the validator on the band's surface (#120c19): amber #c9832f and the echo's violet
+    #a06cd5 pass the lightness band, the chroma floor, the colour-blind separation and the contrast.
+    Each row answers a pointer and the keyboard with its numbers; the same numbers are a table for a
+    screen reader and the whole of `/bench`. The axis runs 0.66 to 0.84 and says so: these are places,
+    not bars, and from zero thirteen marks are one smear.
+- **The page ends where the film ends** (`_landing/Closing.tsx`): the village at dusk, its windows
+  coming on one after another when it is first seen, and the list once more.
+- **Order:** the hero, the film, try one, the evidence, the roster, the village.
+
+**Looked at.** The whole page before and after on a computer and a phone; the film played to its end
+in its frame and its last button pressed; try one played through every way (left and one, took and
+one, took and three, looked for the owner and walked past) on a computer, on a phone, and in WebKit as
+an iPhone with and without motion; the page in Turkish.
+
+**Tests.** `tests/landingShown.test.mts` (4): the finding's three counts are computed and no count is typed,
+every twin is on the side of its line the picture puts it on and inside the axis, the two colours are
+the validated pair; trying one talks to nothing and calls by the one rule; the film asks nobody else
+for anything, has its four font files, takes the page's language and ends on the waitlist; the page is
+in two voices, in its order, and still for whoever asked. `tests/e2e/landing.spec.ts` (4): three ways
+through try one with the card each should show and nothing sent, and a row and a table row for every
+twin the headline counts.
+
+**Not decided here, and not done:** the roster section is as it was but for its title's face; the film
+on the page has no captions beyond its own words on the screen (it has no speech); what a visitor
+chooses in try one could be the first thing their echo knows if they then join, and is thrown away;
+`/bench`, `/audit` and `/story` have not been moved to the two voices (only what uses `SectionHead`
+changed with the landing: the story's title).

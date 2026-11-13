@@ -102,7 +102,7 @@ test("the landing's first action is the waitlist, in one face and with no rules 
   // What the page is made of, apart from what its comments say went.
   const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.doesNotMatch(code(landing), /Splash|Lenis|italic|eyebrow/);
-  for (const part of ["app/_landing/Section.tsx", "app/_landing/HowItGoes.tsx", "components/site/SiteFooter.tsx"]) {
+  for (const part of ["app/_landing/Section.tsx", "app/_landing/TryOne.tsx", "app/_landing/Evidence.tsx", "app/_landing/Film.tsx", "app/_landing/Closing.tsx", "components/site/SiteFooter.tsx"]) {
     assert.doesNotMatch(code(read(part)), /border-[tblr]\b|border-y\b|className="eyebrow|italic/, part);
   }
   // The world is the first thing in the hero (C99): the planet's box stands before the words, there is

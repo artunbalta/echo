@@ -258,7 +258,8 @@ html { scroll-behavior: smooth; }
 .hero-planet:has(.hero-card) .hero-hint { visibility: hidden; }
 .hero-hint { margin: 0; padding: 0.25rem 1rem 0; text-align: center; font-size: 0.8125rem; color: rgba(244, 233, 208, 0.55); }
 .hero-words { position: relative; z-index: 10; padding: 1.5rem 0 3.5rem; }
-.hero-title { font-size: clamp(1.8rem, 7.6vw, 2.6rem); }
+/* The headline is in the pixel face (C100), which is narrow: it is set larger than the grotesque was. */
+.hero-title { font-size: clamp(2.5rem, 11vw, 3.75rem); line-height: 0.94; }
 /* A place picked: a sheet at the foot of the screen, where a thumb is; a card in the planet's corner
    where there is room for one. It is over the page's words on a phone, so it is solid: at 95% the
    headline could be read through it. */
@@ -272,10 +273,108 @@ html { scroll-behavior: smooth; }
   .hero-globe > [data-planet] { -webkit-mask-image: none; mask-image: none; }
   .hero-hint { position: absolute; left: 0; right: 0; bottom: 4.5%; padding-top: 0; }
   .hero-words { max-width: min(540px, calc(46vw - 3rem)); padding: calc(60px + 2rem) 0; }
-  .hero-title { font-size: clamp(1.75rem, 3.7vw, 3.6rem); }
+  .hero-title { font-size: clamp(2.4rem, 5vw, 5rem); }
   .hero-card { position: absolute; left: auto; right: 2rem; bottom: 2rem; width: min(540px, calc(100% - 2rem)); max-width: none; margin-inline: 0; max-height: calc(100dvh - 60px - 3rem); }
   .hero-card-view { height: clamp(170px, 30dvh, 300px); }
 }
+
+/* ---- The landing's pixel voice (C100) ----
+   Two voices, one job each. `.font-display` is the film's pixel face and says what a thing IS: a
+   headline, a section's title, the number that is the point, a line spoken inside a pixel scene.
+   Everything that is read stays in the site's grotesque. A pixel face is drawn on a grid, so it is set
+   tight and never bold or slanted. */
+.font-display { font-family: var(--font-display), var(--font-pixel), ui-monospace, monospace; font-weight: 400; font-style: normal; letter-spacing: 0.01em; }
+/* The echo of a word: the word again, twice, fainter, a step down and to the right each time. For the
+   two things the sentence is about and nothing else. */
+.echoed { color: var(--echo-soft, #c9b0ea); text-shadow: 0.055em 0.055em 0 rgba(160, 108, 213, 0.42), 0.11em 0.11em 0 rgba(160, 108, 213, 0.18); }
+
+/* What belongs to a pixel scene has square corners cut a pixel square, as the film's own button has.
+   The page's forms keep their round ones: those are the site's, these are the place's. */
+.px-cut { clip-path: polygon(4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px), 0 4px, 4px 4px); }
+.px-frame { padding: 4px; background: #2b1f3d; clip-path: polygon(4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px), 0 4px, 4px 4px); }
+.px-btn, .px-choice {
+  appearance: none; border: 0; cursor: pointer; text-align: left; text-decoration: none;
+  display: inline-flex; align-items: center; min-height: 48px; padding: 0 20px;
+  font-family: var(--font-display), var(--font-pixel), ui-monospace, monospace; font-size: 1.5rem; line-height: 1;
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px), 0 4px, 4px 4px);
+  transition: background-color 0.12s ease-out, color 0.12s ease-out, transform 0.12s ease-out;
+}
+.px-btn { background: var(--parchment); color: var(--ink); }
+.px-btn:hover { background: #fff8e6; }
+/* A choice: dark, with a rim. The rim is a second ground under an inset one, because a border would be
+   cut off with the corners. */
+.px-choice { background: linear-gradient(#1b1226, #1b1226) padding-box, rgba(244, 233, 208, 0.34); background-clip: padding-box, border-box; border: 2px solid transparent; color: var(--parchment); }
+.px-choice:hover { background: linear-gradient(#2a1d3a, #2a1d3a) padding-box, var(--parchment); background-clip: padding-box, border-box; }
+.px-btn:active, .px-choice:active { transform: translateY(1px); }
+.px-btn:focus-visible, .px-choice:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--echo, #a06cd5); }
+/* The card out of the envelope: paper, with the film's cut corners. */
+.px-card { padding: 22px 24px 24px; background: #fff8e6; max-width: 26rem;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, calc(100% - 6px) 6px, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 6px calc(100% - 6px), 0 calc(100% - 6px), 0 6px, 6px 6px); }
+/* The three things that happen, lit as they do. A square before each: empty, then full. */
+.rail-step { display: inline-flex; align-items: center; gap: 0.5em; color: rgba(244, 233, 208, 0.38); transition: color 0.3s ease; }
+.rail-step::before { content: ""; width: 9px; height: 9px; box-shadow: inset 0 0 0 2px currentColor; transition: background-color 0.3s ease; }
+.rail-step[data-on="true"] { color: var(--parchment); }
+.rail-step[data-on="true"]::before { background: var(--echo, #a06cd5); box-shadow: none; }
+/* On a phone the three would be three lines over the picture: the three squares in a row, and the words of the one that is happening. */
+@media (max-width: 639px) {
+  .rail { column-gap: 10px; }
+  .rail-step:not([aria-current]) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .rail-step:not([aria-current]) { gap: 0; }
+}
+/* The film's frame: wide where the screen is, tall on a phone, where the film is cut for a tall frame. */
+.film-frame { aspect-ratio: 4 / 5; }
+@media (min-width: 640px) { .film-frame { aspect-ratio: 16 / 9; } }
+/* The hero's words come up one after another, once, as the page opens. */
+.hero-words > * { animation: says-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.hero-words > :nth-child(2) { animation-delay: 0.08s; }
+.hero-words > :nth-child(3) { animation-delay: 0.16s; }
+.hero-words > :nth-child(4) { animation-delay: 0.24s; }
+@media (prefers-reduced-motion: reduce) { .hero-words > * { animation: none; } }
+/* What is said next comes up into place; a new place comes out of the dark. */
+.says { animation: says-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.scene-in { animation: scene-in 0.6s ease-out both; }
+@keyframes says-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes scene-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .says, .scene-in { animation: none; } .px-btn, .px-choice, .rail-step, .rail-step::before { transition: none; } }
+
+/* ---- The thirteen twins (`_landing/Evidence.tsx`) ----
+   One row a twin: a name, and a track every row shares, so a place along it is the same number in
+   every row. `--gutter` is where the tracks begin; the lines that stand over all the rows begin there
+   too. Marks are 10px squares ringed in the band's own colour; the lines between are thin and no
+   colour of their own; the two standing lines are a step off the surface and named above the rows, one
+   name over the other so that neither is ever under the other. */
+.twin-plot { position: relative; --name: 14.5rem; --gutter: calc(var(--name) + 14px); padding-top: 3.1rem; }
+@media (min-width: 1280px) { .twin-plot { --name: 18.5rem; } }
+.twin-row, .twin-axis { display: grid; grid-template-columns: var(--name) minmax(0, 1fr); column-gap: 14px; align-items: center; }
+.twin-row { height: 26px; outline: none; }
+.twin-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: rgba(244, 233, 208, 0.58); }
+.twin-row[data-on="true"] .twin-name, .twin-row:focus-visible .twin-name { color: var(--parchment); }
+.twin-track { position: relative; height: 100%; }
+.twin-row .twin-track::before { content: ""; position: absolute; inset: 50% 0 auto; height: 1px; background: rgba(244, 233, 208, 0.06); }
+.twin-row[data-on="true"] .twin-track::before, .twin-row:focus-visible .twin-track::before { inset: 2px 0; height: auto; background: rgba(244, 233, 208, 0.06); }
+.twin-line { position: absolute; top: 50%; height: 2px; margin-top: -1px; background: rgba(244, 233, 208, 0.3); transition: width 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.twin-mark { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; box-shadow: 0 0 0 2px var(--ink-deep); transition: left 0.9s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.twin-body { position: relative; }
+.twin-refs { position: absolute; inset: 0 0 0 var(--gutter); pointer-events: none; }
+.twin-ref { position: absolute; top: -8px; bottom: -8px; width: 1px; background: rgba(244, 233, 208, 0.36); }
+.twin-ref-name { position: absolute; right: -1px; bottom: 100%; padding-bottom: 5px; white-space: nowrap; font-size: 12.5px; font-weight: 500; color: rgba(244, 233, 208, 0.86); }
+.twin-ref-left { bottom: calc(100% + 19px); }
+.twin-axis { height: 0; }
+.twin-axis .twin-track b { position: absolute; top: 10px; transform: translateX(-50%); font-size: 11.5px; font-weight: 400; font-variant-numeric: tabular-nums; color: rgba(244, 233, 208, 0.5); }
+/* What a row says when it is pointed at or reached by the keyboard: the numbers first, then whose they are. */
+.twin-tip { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 5; display: grid; gap: 4px; min-width: 15rem; max-width: min(21rem, 88vw); padding: 10px 12px; background: #231731; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); font-size: 12.5px; line-height: 1.35; color: rgba(244, 233, 208, 0.72); pointer-events: none; }
+.twin-tip > b { font-weight: 500; color: var(--parchment); }
+.twin-tip > span { display: grid; grid-template-columns: 10px auto 1fr; column-gap: 8px; align-items: baseline; }
+.twin-tip > span > i { width: 10px; height: 2px; align-self: center; }
+.twin-tip strong { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--parchment); }
+@media (max-width: 639px) {
+  /* No room for thirteen names beside thirteen tracks: the tracks take the width, and a row says its name when it is touched. */
+  .twin-plot { --gutter: 0px; }
+  .twin-row, .twin-axis { grid-template-columns: minmax(0, 1fr); }
+  .twin-name { display: none; }
+  .twin-row { height: 22px; }
+}
+@media (prefers-reduced-motion: reduce) { .twin-line, .twin-mark { transition: none; } }
 
 /* What arrives after the words (the planet, once it has drawn a frame) comes in, it does not pop. */
 .arrive { opacity: 0; transition: opacity 0.9s ease; }

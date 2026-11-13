@@ -26,7 +26,7 @@ export const SPLIT = "grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,
 export function SectionHead({ title, children, className = "", as: Title = "h2" }: { title: ReactNode; children?: ReactNode; className?: string; as?: "h1" | "h2" }) {
   return (
     <header className={className}>
-      <Title className="text-balance text-[clamp(1.75rem,3vw,2.4rem)] font-semibold leading-[1.1] tracking-[-.025em] text-parchment">{title}</Title>
+      <Title className="font-display text-balance text-[clamp(2.25rem,5.2vw,3.75rem)] leading-[0.95] text-parchment">{title}</Title>
       {children ? <p className="mt-4 max-w-md text-[16.5px] leading-relaxed text-parchment/70">{children}</p> : null}
     </header>
   );

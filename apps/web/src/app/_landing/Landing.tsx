@@ -11,7 +11,10 @@ import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
 import { PREVIEW_SECONDS } from "@/lib/preview";
 import { step } from "@/lib/steps";
 import { WRAP } from "./Section";
-import HowItGoes from "./HowItGoes";
+import Closing from "./Closing";
+import Evidence from "./Evidence";
+import Film from "./Film";
+import TryOne from "./TryOne";
 import CharacterSelect from "./CharacterSelect";
 
 // The planet has to be client only: it opens a WebGL context, which does not exist on a server.
@@ -27,22 +30,42 @@ const HeroPlanet = dynamic(() => import("@/components/planet/HeroPlanet"), { ssr
  * The headline is the one sentence that says what this is, in the owner's words, and it is written in
  * Turkish first: the English is its own sentence and not a translation of it.
  */
-const COPY: Record<Lang, { h1: string; body: string; peek: (seconds: number) => string; character: string; pick: string }> = {
+const COPY: Record<Lang, { h1: string; body: string; peek: (seconds: number) => string; film: string; character: string; pick: string }> = {
   en: {
-    h1: "An agent that learns you from what you do, then acts like you.",
-    body: "ECHO is a small village you walk through in your browser. It watches what you do there, not what you say. For now the village is opening in turns.",
-    peek: (seconds) => `Look around for ${seconds} seconds first`,
+    // *…* is said in the echo's colour, with its echo behind it: the two things the sentence is about.
+    h1: "An agent that *learns you* from what you do, then *acts like you.*",
+    body: "A small village in your browser. You walk around. It learns you.",
+    peek: (seconds) => `Look around for ${seconds} seconds`,
+    film: "Watch the film",
     character: "Choose your character",
     pick: "This is the world. Pick a place on it to look at.",
   },
   tr: {
-    h1: "Yaptıklarından seni öğrenen, sonra senin gibi davranan bir agent.",
-    body: "ECHO, tarayıcında gezdiğin küçük bir köy. Orada ne söylediğine değil, ne yaptığına bakar. Köy şimdilik sırayla açılıyor.",
-    peek: (seconds) => `Önce ${seconds} saniye göz at`,
+    h1: "Yaptıklarından *seni öğrenen,* sonra *senin gibi davranan* bir agent.",
+    body: "Tarayıcında küçük bir köy. Sen gez, o seni öğrensin.",
+    peek: (seconds) => `${seconds} saniye göz at`,
+    film: "Filmi izle",
     character: "Karakterini seç",
     pick: "Dünya bu. Üstünde bir yer seç, oraya bak.",
   },
 };
+
+/** A sentence with its `*marked*` words set apart. */
+function Said({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("*").map((part, i) =>
+        i % 2 ? (
+          <span key={i} className="echoed">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
 
 const SCROLLS = "html, body { height: auto; overflow: visible; }";
 
@@ -59,13 +82,24 @@ const SCROLLS = "html, body { height: auto; overflow: visible; }";
  *                   with the world a scroll away. Before that it filled the hero behind the words.
  *                   Nothing is ever over it or under it, and it comes in when it has drawn (`.arrive`).
  *
- *                   Then what this is in one sentence, and the waitlist: a name, an email, one button.
- *                   The village opens in turns, so the list is the page's main action; the header's
- *                   button for it is on the first screen at every size. Under the form, one quiet
- *                   link to a short look at the village (`lib/preview.ts`), which ends at the same form.
- *   1  HowItGoes    what happens in the village, in three steps, and the finding it rests on.
- *   2  CharacterSelect  a figure to go with the place: the roster with a hole in it. Optional, and it
+ *                   Then what this is in one sentence, in the pixel face, and the waitlist: a name, an
+ *                   email, one button. The village opens in turns, so the list is the page's main
+ *                   action; the header's button for it is on the first screen at every size. Under the
+ *                   form, two quiet links: a short look at the village (`lib/preview.ts`), which ends
+ *                   at the same form, and the film below.
+ *   1  Film         half a minute that says the whole thing, drawn live in its own frame.
+ *   2  TryOne       how it works, by doing it once: two of the village's moments, answered on the page,
+ *                   with ECHO's sealed call opened between them.
+ *   3  Evidence     the finding it rests on: the thirteen twins, each where it scored and where one
+ *                   look put it.
+ *   4  CharacterSelect  a figure to go with the place: the roster with a hole in it. Optional, and it
  *                   knows who has just joined above (`lib/waitlistSeat.ts`).
+ *   5  Closing      the village at dusk with its windows coming on, and the list once more.
+ *
+ * SHOWN, NOT SAID (C100). The owner's words for the page C97 left: "too much text, all of it", and
+ * the three numbered steps "a one-prompt job". So what was three paragraphs is something done in
+ * under a minute, what was a number in a box is thirteen marks either side of a line, and the page
+ * draws its places in the film's own pixels (`pixels.ts`) where it used to describe them.
  *
  * WHAT WENT, and where. The reveal that held the page shut for four seconds (`Splash`) is gone: a
  * visitor sees the page at once. The legend's book is a page of its own, `/story`, with the header's
@@ -73,9 +107,11 @@ const SCROLLS = "html, body { height: auto; overflow: visible; }";
  * and a door to a walk is not what a page whose village opens in turns should end on. The spring laid
  * over the scroll wheel (Lenis) is gone; the page scrolls as the browser scrolls it.
  *
- * ONE FACE, NO RULES. Every word is the site's one family (`app/layout.tsx`), upright, with titles in
- * its heavier weight; the wordmark alone is the pixel face. There is no small spaced label over a
- * title, no second line in italics, and no hairline between sections: space sets them apart.
+ * TWO VOICES, NO RULES. What is read is the site's one grotesque (`app/layout.tsx`, C97). What says
+ * what a thing IS, a headline, a section's title, the number that is the point, is the film's pixel
+ * face (C100, `.font-display`): C97 had set titles in the grotesque too, and the owner asked for the
+ * page to be written "in pixels a little more". There is still no small spaced label over a title, no
+ * italics, and no hairline between sections: space and a change of ground set them apart.
  *
  * THE HEADER AND THE FOOTER are the site's (`components/site`, C96), the same on every page that is
  * a document. The header is clear over the hero (`over`) and solid once the page has scrolled.
@@ -121,8 +157,10 @@ export default function Landing() {
           </div>
           <div className={`${WRAP} hero-row`}>
             <div className="hero-words">
-              <h1 className="hero-title text-balance font-semibold leading-[1.08] tracking-[-.03em] text-parchment">{copy.h1}</h1>
-              <p className="mt-5 max-w-[34rem] text-[17px] leading-relaxed text-parchment/75 sm:text-lg">{copy.body}</p>
+              <h1 className="hero-title font-display text-balance text-parchment">
+                <Said text={copy.h1} />
+              </h1>
+              <p className="mt-6 max-w-[34rem] text-[17px] leading-relaxed text-parchment/75 sm:text-lg">{copy.body}</p>
 
               <div id="waitlist" className="mt-8 scroll-mt-28">
                 <WaitlistForm
@@ -135,17 +173,23 @@ export default function Landing() {
                 />
               </div>
 
-              <p className="mt-7">
+              <p className="mt-7 flex flex-wrap gap-x-6 gap-y-2">
                 <Link href={OPEN_VILLAGE_PATH} data-walk-in onClick={() => step("walk_in")} className="text-link text-[15px]">
                   {copy.peek(PREVIEW_SECONDS)}
                 </Link>
+                <a href="#film" className="text-link text-[15px]">
+                  {copy.film}
+                </a>
               </p>
             </div>
           </div>
         </section>
 
-        <HowItGoes />
+        <Film />
+        <TryOne />
+        <Evidence />
         <CharacterSelect />
+        <Closing />
       </main>
 
       <SiteFooter />

@@ -1,0 +1,876 @@
+<!doctype html>
+<!--
+  ECHO Calls It: the film, as the site shows it (DECISIONS C100). The landing puts this file in a frame
+  (`app/_landing/Film.tsx`) and says which language with ?lang=. It is the film as it was cut, drawn
+  live by its own script at whatever size the frame is, wide or tall, with its own sound. What differs
+  from the cut that is shared as a video: the two faces come from beside this file, its language is
+  the page's, and its last button goes to the waitlist of the page it is in.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>ECHO: a film in half a minute</title>
+<meta name="robots" content="noindex">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* The film's two faces, served from beside it (SIL Open Font License; Jersey 15 by Sarah Cadigan-Fried, Pixelify Sans by Stefie Justprince). */
+@font-face { font-family: "Jersey 15"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/jersey15-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Jersey 15"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/jersey15-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Pixelify Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(fonts/pixelifysans-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Pixelify Sans"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(fonts/pixelifysans-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+</style>
+<style>
+/* Layout: one full-bleed stage. The film is a canvas; the DOM is only the poster before it and the two ways on after it. */
+:root {
+  color-scheme: dark;
+  --void: #07040b;
+  --ink: #1c1326;
+  --parchment: #f4e9d0;
+  --echo: #a06cd5;
+  --echo-soft: #c9b0ea;
+  --ember: #e8c98a;
+  /* one face for every word of the film, one for the mark */
+  --text: "Jersey 15", "Pixelify Sans", ui-monospace, monospace;
+  --mark: "Pixelify Sans", ui-monospace, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--void); color: var(--parchment); font-family: var(--text); overflow: hidden; }
+#stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--void); }
+#film { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ui {
+  position: absolute; inset: 0;
+  padding-block: 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+#poster { display: grid; grid-template-rows: 17% auto; justify-items: center; }
+#poster .col { grid-row: 2; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; min-width: 0; }
+.mark { margin: 0; font: 700 clamp(52px, 12vmin, 104px)/1 var(--mark); letter-spacing: .08em; padding-left: .08em; }
+h1 { margin: 0; font: 400 clamp(24px, 4.6vmin, 36px)/1.15 var(--text); color: var(--echo-soft); text-wrap: balance; }
+.btn {
+  appearance: none; border: 0; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: .55em;
+  min-height: 54px; padding: 0 30px; margin-top: 8px;
+  background: var(--parchment); color: var(--ink);
+  font: 400 27px/1 var(--text);
+  /* the corners are cut a pixel square */
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, calc(100% - 5px) 5px, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 5px calc(100% - 5px), 0 calc(100% - 5px), 0 5px, 5px 5px);
+  transition: transform .12s ease-out, background-color .12s ease-out;
+}
+.btn:hover { background: #fff8e6; }
+.btn:active { transform: translateY(1px) scale(.985); }
+.btn:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--echo); }
+.btn .tri { width: 0; height: 0; border-left: 11px solid var(--ink); border-block: 7px solid transparent; }
+.note { margin: 0; font: 400 17px/1.3 var(--text); letter-spacing: .1em; text-transform: uppercase; color: var(--parchment); opacity: .6; }
+.lang { display: none; }
+.quiet {
+  appearance: none; background: none; border: 0; cursor: pointer;
+  min-height: 40px; padding: 0 12px;
+  font: 400 19px/1 var(--text); letter-spacing: .04em; color: var(--parchment); opacity: .55;
+}
+.quiet:hover { opacity: .9; }
+.quiet[aria-pressed="true"] { opacity: 1; color: var(--ember); }
+.quiet:focus-visible { outline: 2px solid var(--echo); outline-offset: 2px; opacity: 1; }
+#after { pointer-events: none; padding: 0; }
+#after > * { pointer-events: auto; position: absolute; }
+#walk { display: block; }
+#walk:focus-visible { outline: 3px solid var(--echo); outline-offset: 4px; }
+#again { transform: translateX(-50%); white-space: nowrap; text-decoration: underline; text-underline-offset: 4px; opacity: .8; text-shadow: 0 0 8px var(--void); }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+
+<div id="stage">
+  <canvas id="film" role="img" aria-label="ECHO: a film in half a minute."></canvas>
+
+  <div id="poster" class="ui">
+    <div class="col">
+      <p class="mark">ECHO</p>
+      <h1 id="p-title">A film in half a minute.</h1>
+      <button id="play" class="btn" type="button"><span class="tri" aria-hidden="true"></span><span id="p-play">Play</span></button>
+      <p class="note" id="p-hint">Sound on</p>
+      <div class="lang" role="group" aria-label="Language">
+        <button class="quiet" id="lang-en" type="button" aria-pressed="true">English</button>
+        <button class="quiet" id="lang-tr" type="button" aria-pressed="false">Türkçe</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="after" class="ui" hidden>
+    <a id="walk" href="/#waitlist" target="_top" aria-label="Join the waitlist"></a>
+    <button id="again" class="quiet" type="button">Play again</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ───────────────────────────── the words ─────────────────────────────
+// Written in Turkish first; the English is its own sentence, not a translation of it.
+// "/" breaks a line everywhere, "|" only in a tall frame; *word* is said in the echo's colour.
+const COPY = {
+  tr: {
+    dont: 'Noktaya|bakma.', looked: 'Baktın.', everyone: 'Herkes bakar.',
+    pivot: 'Ama sıradakini|herkes aynı yapmaz.',
+    purse1: 'Otların arasında|bir kese altın.', purse2: 'Kimse bakmıyor.', purse3: 'Sen ne yaparsın?',
+    choices: 'Alırım.|Bırakırım.|Sahibini ararım.',
+    looks: 'ECHO söylediğine değil,|yaptığına bakar.',
+    key: 'Yaptıklarından|*seni* *öğrenen,*/sonra *senin* *gibi*|*davranan*|bir agent.',
+    bet: 'ECHO, daha film başlamadan/senin ne yapacağını yazmıştı:', card: 'Bu filmi|sonuna kadar/izleyeceksin.', held: 'Ve izledin.',
+    end: 'Tarayıcında küçük bir köy./Sen gez, o seni öğrensin.', walk: 'Sıraya gir',
+    head: "ECHO'NUN TAHMİNLERİ", r2: 'bakacaksın', r3: 'sonuna kadar izleyeceksin',
+    title: 'Yarım dakikalık bir film.', hint: 'Sesi aç', play: 'Oynat', again: 'Yeniden oynat',
+    aria: 'Sıraya gir',
+  },
+  en: {
+    dont: "Don't look|at the dot.", looked: 'You looked.', everyone: 'Everyone does.',
+    pivot: 'But what comes next|is different for everyone.',
+    purse1: 'A pouch of gold|in the grass.', purse2: 'No one is watching.', purse3: 'What do you do?',
+    choices: 'I take it.|I leave it.|I look for its owner.',
+    looks: 'ECHO watches what you do,|not what you say.',
+    key: 'An agent that|*learns* *you*|from what you do,/then|*acts* *like* *you.*',
+    bet: 'Before this film began,/ECHO wrote down|what you would do:', card: "You'll watch|this film/to the end.", held: 'And you did.',
+    end: 'A small village in your browser./You walk around. It learns you.', walk: 'Join the waitlist',
+    head: "ECHO'S GUESSES", r2: "you'll look", r3: "you'll watch to the end",
+    title: 'A film in half a minute.', hint: 'Sound on', play: 'Play', again: 'Play again',
+    aria: 'Join the waitlist',
+  },
+};
+
+// ───────────────────────────── the clock ─────────────────────────────
+// The picture is a pure function of this time, so the same film can be played live or photographed frame by frame.
+const T = {
+  dont: .7, dot: 1.5, looked: 3.3, everyone: 4.1, pivot: 5.3,
+  purse: 7.1, noone: 9.1, what: 10.7, looks: 13.1,
+  mark: 15.9, bet: 20.7, flap: 22.5, card: 23.0, end: 25.7,
+};
+const PICK = [11.4, 11.8, 12.2];          // the three answers
+const KEY = [16.5, 17.8];                 // the two halves of the sentence the film is for
+const HELD = .9;                          // after the card is read, the word under it
+const DUR = 28.5;
+
+const C = { void: '#07040b', deep: '#120c19', ink: '#1c1326', parch: '#f4e9d0', echo: '#a06cd5', soft: '#c9b0ea', ember: '#e8c98a', danger: '#f0a48a' };
+const TXT = { weight: 400, family: '"Jersey 15", "Pixelify Sans", ui-monospace, monospace' };
+const CAPS = { ...TXT, track: .08 };
+const MARK = { weight: 700, family: '"Pixelify Sans", ui-monospace, monospace', track: .07 };
+
+const $ = id => document.getElementById(id);
+const stage = $('stage'), cv = $('film'), c = cv.getContext('2d');
+const px = document.createElement('canvas'), g = px.getContext('2d'), grain = document.createElement('canvas');
+const Q = new URLSearchParams(location.search);
+const EXPORT = Q.has('export');
+const calm = !EXPORT && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let lang = 'en';
+// English, unless the page this sits in says its reader chose otherwise.
+try { lang = Q.get('lang') || 'en'; } catch (e) {}
+if (!COPY[lang]) lang = 'en';
+let L = COPY[lang];
+
+// ───────────────────────────── small maths ─────────────────────────────
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const sm = (a, b, x) => { x = clamp((x - a) / (b - a)); return x * x * (3 - 2 * x); };
+const outCubic = x => 1 - Math.pow(1 - clamp(x), 3);
+const inOut = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const outBack = x => { x = clamp(x); const k = 1.70158; return 1 + (k + 1) * Math.pow(x - 1, 3) + k * Math.pow(x - 1, 2); };
+const rnd = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+const mulberry = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+// ───────────────────────────── the frame ─────────────────────────────
+let W = 0, H = 0, DPR = 1, U = 1, portrait = false;
+let PS = 4, PW = 0, PH = 0;               // the pixel layer: one of its pixels is PS of the screen's
+let field = null, village = null;         // the two places in the film
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  W = Math.max(240, Math.round(r.width)); H = Math.max(240, Math.round(r.height));
+  DPR = EXPORT ? Number(Q.get('dpr') || 1) : Math.min(2, window.devicePixelRatio || 1);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  portrait = H > W * 1.05; U = Math.min(W, H) / 100;
+  PS = Math.max(3, Math.round(Math.min(W, H) / 150));
+  PW = Math.ceil(W / PS); PH = Math.ceil(H / PS);
+  px.width = PW; px.height = PH;
+  field = portrait ? makePlace(.6, [.87, .5], [[.17, 9]]) : makePlace(.56, [.905, .3], [[.22, 9]]);
+  field.purse = { x: Math.round(PW * .5), y: Math.round(field.HZ + (PH - field.HZ) * .44) };
+  village = portrait ? makePlace(.82, [.82, .665], [[.05, 8], [.23, 10], [.43, 8], [.6, 11], [.8, 9]])
+                     : makePlace(.84, [.9, .56], [[.06, 9], [.19, 8], [.31, 11], [.45, 8], [.58, 10], [.72, 8], [.85, 9]]);
+  buildGrain(); placeAfter();
+}
+const lay = () => (portrait
+  ? { top: .27, picks: [.365, .412, .459], everyone: .59, markY: .2, keyY: .575, betY: .25, envY: .6, end: { mark: .2, line: .345, url: .445, cta: .54 } }
+  : { top: .26, picks: [.39], everyone: .65, markY: .27, keyY: .63, betY: .27, envY: .645, end: { mark: .2, line: .38, url: .5, cta: .6 } });
+
+// ───────────────────────────── type ─────────────────────────────
+function voice(v, size) {
+  c.font = `${v.weight} ${size}px ${v.family}`;
+  if ('letterSpacing' in c) c.letterSpacing = v.track ? `${(size * v.track).toFixed(2)}px` : '0px';
+}
+const trackFix = (v, size) => ('letterSpacing' in c && v.track ? size * v.track / 2 : 0);
+function fit(rows, v, maxW, cap) {
+  const widthAt = size => { voice(v, size); let w = 1; for (const r of rows) w = Math.max(w, c.measureText(r).width); return w; };
+  let s = Math.min(cap, 100 * maxW / widthAt(100));
+  for (let i = 0; i < 2; i++) s = Math.min(cap, s * maxW / widthAt(s));
+  return s;
+}
+
+// The echo arrives first: a soft violet ghost of a line, on the screen before the line is.
+function ghost(rows, v, size, cx, cy, lh, alpha, blur) {
+  if (alpha <= .004) return;
+  const OFF = 3000;
+  c.save(); voice(v, size); c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowColor = rgba(C.echo, Math.min(1, alpha)); c.shadowBlur = blur * DPR; c.shadowOffsetX = OFF * DPR; c.shadowOffsetY = 0;
+  c.fillStyle = '#000';
+  rows.forEach((r, i) => c.fillText(r, cx - OFF + trackFix(v, size), cy + (i - (rows.length - 1) / 2) * lh));
+  c.restore();
+}
+
+// Every line of the film is set by this: one face, upright, in at an even pace and out again.
+// o.big is a line that lands whole (its ghost first); o.at gives each "/" half its own moment.
+function line(str, t0, t1, t, o = {}) {
+  const a = t - t0, pre = o.pre ?? (o.big ? .5 : 0);
+  if (a < -pre || t >= t1) return;
+  const rows = [];
+  str.split('/').forEach((half, hi) => (portrait ? half.split('|') : [half.split('|').join(' ')]).forEach((r, k) => rows.push({
+    words: r.split(' ').map(w => ({ w: w.replace(/\*/g, ''), em: w[0] === '*' })),
+    at: o.at ? o.at[hi] - t0 + k * (o.sub ?? .45) : rows.length * (o.stagger ?? .12),
+  })));
+  const v = o.voice || TXT, plain = rows.map(r => r.words.map(p => p.w).join(' '));
+  const size = fit(plain, v, o.maxW || W * (portrait ? .86 : .76), o.max || (o.big ? (portrait ? H * .13 : H * .2) : (portrait ? H * .062 : H * .088)));
+  const lh = size * (o.lh || 1.04), cx = W * (o.x ?? .5), cy = H * (o.y ?? .5);
+  if (a < 0) { const q = (a + pre) / pre, s = lerp(1.12, 1.02, q); ghost(plain, v, size * s, cx, cy, lh * s, .42 * q * q, lerp(3, 1.2, q) * U); return; }
+  const fade = 1 - sm(t1 - .22, t1, t), settle = o.big && !calm ? 1 + .06 * (1 - outCubic(a / .3)) : 1;
+  c.save(); c.translate(cx, cy); c.scale(settle, settle);
+  voice(v, size); c.textAlign = 'left'; c.textBaseline = 'middle';
+  if (o.shadow) { c.shadowColor = 'rgba(7,4,11,.9)'; c.shadowBlur = U * 1.4 * DPR; }
+  const sp = c.measureText(' ').width;
+  rows.forEach((r, i) => {
+    const q = calm ? (a >= r.at ? 1 : 0) : outCubic((a - r.at) / (o.big ? .14 : .32)); if (q <= 0) return;
+    let x = -c.measureText(plain[i]).width / 2 + trackFix(v, size);
+    const y = (i - (rows.length - 1) / 2) * lh + (o.big ? 0 : (1 - q) * size * .14);
+    c.globalAlpha = q * fade * (o.alpha ?? 1);
+    for (const p of r.words) { c.fillStyle = p.em ? (o.emColor || C.soft) : (o.color || C.parch); c.fillText(p.w, x, y); x += c.measureText(p.w).width + sp; }
+  });
+  c.restore();
+}
+function label(text, x, y, size, color, o = {}) {
+  c.save(); voice(o.voice || TXT, size); c.textAlign = o.align || 'center'; c.textBaseline = 'middle';
+  c.globalAlpha = o.alpha ?? 1; c.fillStyle = color; c.fillText(text, x, y); c.restore();
+}
+function checkMark(x, y, s, color, k) {
+  if (k <= 0) return;
+  c.save(); c.strokeStyle = color; c.lineWidth = Math.max(1.5, s * .34); c.lineCap = 'square'; c.lineJoin = 'miter';
+  c.beginPath(); c.moveTo(x, y); c.lineTo(x + s * .42, y + s * .45);
+  if (k > .4) c.lineTo(x + s * .42 + s * .85 * clamp((k - .4) / .6), y + s * .45 - s * clamp((k - .4) / .6));
+  c.stroke(); c.restore();
+}
+
+// ───────────────────────────── the pixel layer ─────────────────────────────
+function disc(cx, cy, r, col) {
+  g.fillStyle = col;
+  for (let j = -r; j <= r; j++) { const hw = Math.floor(Math.sqrt(r * r - j * j) + .4); g.fillRect(cx - hw, cy + j, hw * 2 + 1, 1); }
+}
+function blit(z = 1, fx = W / 2, fy = H / 2, alpha = 1) {
+  if (alpha <= 0) return;
+  c.save(); c.imageSmoothingEnabled = false; c.globalAlpha = alpha;
+  c.drawImage(px, 0, 0, PW, PH, fx * (1 - z), fy * (1 - z), PW * PS * z, PH * PS * z);
+  c.restore();
+}
+
+// A place at dusk: sky in ordered dither, a moon, two lines of hill, houses on the far one, grass to the bottom edge.
+function makePlace(hz, moon, houses) {
+  const p = { sky: document.createElement('canvas'), HZ: Math.round(PH * hz), blades: [], windows: [], purse: null };
+  p.sky.width = PW; p.sky.height = PH;
+  const s = p.sky.getContext('2d'), im = s.createImageData(PW, PH), d = im.data, HZ = p.HZ;
+  const stops = [[10, 7, 16], [16, 11, 26], [26, 17, 41], [43, 28, 63], [70, 45, 86], [112, 70, 102]];
+  const B = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  const mx = Math.round(PW * moon[0]), my = Math.round(PH * moon[1]), mr = Math.max(4, Math.round(Math.min(PW, PH) * .05));
+  const farY = x => HZ - PH * .05 - Math.sin(x * .043 + 1.2) * PH * .022 - Math.sin(x * .117 + .4) * PH * .008;
+  const nearY = x => HZ - PH * .012 - Math.sin(x * .031 + 4.1) * PH * .016;
+  for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+    const th = (B[y & 3][x & 3] + .5) / 16; let col;
+    if (y < HZ + 3) {
+      const f = Math.pow(clamp(y / HZ), 1.7) * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(f));
+      col = stops[f - i > th ? i + 1 : i];
+      const dm = Math.hypot(x - mx, y - my);
+      if (dm <= mr) col = (x - mx) + (y - my) > mr * .75 ? [205, 193, 176] : [244, 233, 208];
+      else if (dm < mr * 3 && (1 - (dm - mr) / (mr * 2)) * .5 > th) col = [col[0] + 26, col[1] + 20, col[2] + 30];
+      if (y >= farY(x)) col = [27, 19, 41];
+      if (y >= nearY(x)) col = [19, 13, 30];
+    } else col = [15, 12, 24];
+    const o = (y * PW + x) * 4; d[o] = col[0]; d[o + 1] = col[1]; d[o + 2] = col[2]; d[o + 3] = 255;
+  }
+  s.putImageData(im, 0, 0);
+  s.fillStyle = 'rgb(214,202,182)'; s.fillRect(mx - Math.round(mr * .4), my - Math.round(mr * .3), 2, 1); s.fillRect(mx + 1, my + Math.round(mr * .35), 1, 1);
+  for (const [fx, wd] of houses) {
+    const hx = Math.round(PW * fx), hy = Math.round(farY(hx + wd / 2)) + 1;
+    s.fillStyle = 'rgb(13,9,21)'; s.fillRect(hx, hy - 6, wd, 7);
+    for (let j = 0; j < 4; j++) s.fillRect(hx - 1 + j, hy - 7 - j, wd + 2 - 2 * j, 1);
+    s.fillRect(hx + wd - 3, hy - 12, 1, 4);
+    p.windows.push({ x: hx + 2, y: hy - 4 }); if (wd >= 10) p.windows.push({ x: hx + wd - 4, y: hy - 4 });
+  }
+  let y = HZ + 2, i = 0;
+  while (y < PH + 10) {
+    const depth = clamp((y - HZ) / Math.max(1, PH - HZ)), row = { y, depth, list: [] }, hMax = 3 + depth * 9;
+    for (let x = -2; x <= PW + 1; x++) {
+      if (rnd(x * 7.13 + i * 91.7) > .8) continue;
+      row.list.push([x, Math.max(2, Math.round(hMax * (.45 + .55 * rnd(x * 3.7 + i * 13.3)))), rnd(x * 1.9 + i * 5.3) < .3]);
+    }
+    const mix = (a, b) => `rgb(${a.map((v, j) => Math.round(lerp(v, b[j], depth))).join(',')})`;
+    row.col = mix([25, 23, 40], [40, 46, 64]); row.alt = mix([29, 30, 44], [47, 61, 70]); row.tip = mix([46, 45, 66], [86, 98, 114]); row.lit = mix([84, 80, 104], [150, 158, 160]);
+    p.blades.push(row);
+    y += 3 + Math.floor(i * .3); i++;
+  }
+  return p;
+}
+
+const PURSE = [
+  '......oo........',
+  '.....o..o.......',
+  '....kkoookk.....',
+  '...kbbkookbk....',
+  '....kbbbbbk.....',
+  '...kbbBbbbbk....',
+  '..kbbBBbbbbdk...',
+  '.kbbbBbbbbbbdk..',
+  '.kbbbbbbbbbbdk..',
+  '.kbbbbbbbbbddk..',
+  '.kbbbbbbbbbddk..',
+  '..kbbbbbbbddk...',
+  '...kkkkkkkkk....',
+];
+const PURSE_COL = { k: '#0d0914', b: '#7a4a2b', B: '#a9703f', d: '#56321e', o: '#e8c98a' };
+// the gold that slipped out of it: a small heap, so that nobody has to be told what is in the pouch
+const HEAP = [[5, 1], [11, 2], [17, 1], [8, -3], [14, -3], [11, -7], [23, 2]];
+
+function drawPurse(p, st) {
+  const { x, y } = p.purse, k = 2, w = PURSE[0].length * k, h = PURSE.length * k, x0 = x - w / 2, y0 = y - h + 2;
+  g.fillStyle = 'rgba(7,4,11,.55)'; g.fillRect(x0 + 2, y - 1, w + 22, 3);
+  PURSE.forEach((row, j) => { for (let i = 0; i < row.length; i++) { const ch = row[i]; if (ch === '.') continue; g.fillStyle = PURSE_COL[ch]; g.fillRect(x0 + i * k, y0 + j * k, k, k); } });
+  const coins = HEAP.map(([dx, dy]) => [x + w / 2 + dx, y + dy]);
+  g.fillStyle = 'rgba(232,201,138,.1)'; g.fillRect(x + w / 2 + 1, y - 12, 28, 17);
+  coins.forEach(([cx, cy]) => { disc(cx, cy, 3, '#6b4f24'); disc(cx, cy - 1, 2, '#e8c98a'); g.fillStyle = '#b98f47'; g.fillRect(cx - 1, cy, 3, 1); g.fillStyle = '#fff3cf'; g.fillRect(cx - 1, cy - 2, 2, 1); });
+  [[5, .0], [3, .5]].forEach(([ci, off]) => {
+    const gl = (st * .6 + off) % 1; if (gl > .2) return;
+    const [cx, cy] = coins[ci], n = gl < .06 || gl > .14 ? 1 : 3; g.fillStyle = '#fffbea'; g.fillRect(cx - n, cy - 2, n * 2 + 1, 1); g.fillRect(cx, cy - 2 - n, 1, n * 2 + 1);
+  });
+}
+
+function drawPlace(p, st, lit) {
+  g.drawImage(p.sky, 0, 0);
+  for (let i = 0; i < 46; i++) {
+    const x = Math.floor(rnd(i) * PW), y = Math.floor(rnd(i + 50) * p.HZ * .62);
+    const a = .25 + .75 * Math.abs(Math.sin(st * (.5 + rnd(i + 7) * 1.3) + i));
+    g.fillStyle = rgba(C.parch, a * (.35 + .65 * rnd(i + 3))); g.fillRect(x, y, 1, 1);
+  }
+  p.windows.forEach((w, i) => {
+    const on = lit(i, st); if (on <= 0) return;
+    g.fillStyle = rgba(C.ember, .16 * on); g.fillRect(w.x - 2, w.y - 2, 6, 6);
+    g.fillStyle = rgba(C.ember, .3 * on); g.fillRect(w.x - 1, w.y - 1, 4, 4);
+    g.fillStyle = rgba('#f6dc9c', on); g.fillRect(w.x, w.y, 2, 2);
+  });
+  let placed = !p.purse;
+  for (let r = 0; r < p.blades.length; r++) {
+    const row = p.blades[r];
+    if (!placed && row.y > p.purse.y) { drawPurse(p, st); placed = true; }
+    const near = p.purse && Math.abs(row.y - p.purse.y) < 9, front = p.purse && row.y > p.purse.y && row.y < p.purse.y + 7;
+    for (const [x, h0, alt] of row.list) {
+      const h = front && x > p.purse.x + 15 && x < p.purse.x + 44 ? Math.min(h0, 3) : h0;
+      const lean = Math.round(Math.sin(st * 1.5 + x * .16 + r * .9) * (.55 + row.depth * 1.25)), half = Math.ceil(h * .5);
+      g.fillStyle = alt ? row.alt : row.col; g.fillRect(x, row.y - half, 1, half + 1); g.fillRect(x + lean, row.y - h, 1, h - half);
+      g.fillStyle = near && Math.abs(x - p.purse.x - 8) < 34 ? row.lit : row.tip; g.fillRect(x + lean, row.y - h, 1, 1);
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    const x = Math.round(PW * (.1 + .8 * rnd(i + 20)) + Math.sin(st * .45 + i * 2.1) * 7);
+    const y = Math.round(p.HZ + (PH - p.HZ) * (.05 + .55 * rnd(i + 31)) - 5 + Math.cos(st * .6 + i) * 4);
+    const b = Math.max(0, Math.sin(st * 1.6 + i * 1.9));
+    if (b < .05) continue;
+    g.fillStyle = rgba(C.ember, b * .22); g.fillRect(x - 1, y - 1, 3, 3);
+    g.fillStyle = rgba('#fff3cf', b); g.fillRect(x, y, 1, 1);
+  }
+}
+
+function drawSeal(cx, cy, r) {
+  if (r >= 3) disc(cx, cy, r + 1, '#231731');
+  disc(cx, cy, r, '#74489f');
+  if (r >= 2) disc(cx, cy, r - 1, '#a06cd5');
+  if (r >= 5) { g.fillStyle = '#8556b6'; const q = Math.round(r * .45); for (let a = 0; a < 16; a++) g.fillRect(cx + Math.round(Math.cos(a / 16 * TAU) * q), cy + Math.round(Math.sin(a / 16 * TAU) * q), 1, 1); }
+  if (r >= 2) { g.fillStyle = '#c9b0ea'; g.fillRect(cx - Math.round(r * .5), cy - Math.round(r * .55), Math.max(1, Math.round(r * .3)), 1); }
+}
+// An envelope of any size: closed or open, sealed or not, a card part-way out of it.
+function drawEnvelope(cx, cy, w, h, o = {}) {
+  w = Math.max(5, Math.round(w)); h = Math.max(4, Math.round(h));
+  const x = Math.round(cx - w / 2), y = Math.round(cy - h / 2), mid = x + w / 2;
+  const tip = Math.max(2, Math.round(h * .54)), open = o.open || 0;
+  const P = '#f4e9d0', FOLD = '#e0d2b3', LN = '#b3a283', DK = '#231731', IN = '#cdbf9f';
+  g.fillStyle = DK; g.fillRect(x - 1, y - 1, w + 2, h + 2);
+  if (open > 0) {
+    const fh = Math.max(1, Math.round(tip * open));
+    for (let j = 0; j <= fh; j++) { const hw = (w / 2) * (1 - j / (fh + 1)); g.fillStyle = DK; g.fillRect(Math.round(mid - hw) - 1, y - j - 1, Math.round(hw * 2) + 2, 1); }
+    for (let j = 0; j < fh; j++) { const hw = (w / 2) * (1 - j / (fh + 1)); g.fillStyle = IN; g.fillRect(Math.round(mid - hw), y - j - 1, Math.round(hw * 2), 1); }
+  }
+  if (o.card > 0) {
+    const cw = w - Math.max(2, Math.round(w * .12)), ch = Math.round(h * .86), rise = Math.round(o.card * h * .62), cx0 = Math.round(mid - cw / 2);
+    g.fillStyle = DK; g.fillRect(cx0 - 1, y - rise - 1, cw + 2, ch + 2);
+    g.fillStyle = '#fff8e6'; g.fillRect(cx0, y - rise, cw, ch);
+    if (w > 24) { g.fillStyle = '#9a8aa2'; g.fillRect(cx0 + 3, y - rise + 3, Math.round(cw * .5), 1); g.fillRect(cx0 + 3, y - rise + 6, Math.round(cw * .34), 1); }
+    if (o.cardRect) Object.assign(o.cardRect, { x: cx0, y: y - rise, w: cw, h: ch });
+  }
+  g.fillStyle = P; g.fillRect(x, y, w, h);
+  g.fillStyle = FOLD;
+  for (let j = 0; j < h - tip; j++) { const fx = Math.round((w / 2 - 1) * (j / Math.max(1, h - tip))); g.fillRect(x + fx, y + h - 1 - j, 1, 1); g.fillRect(x + w - 1 - fx, y + h - 1 - j, 1, 1); }
+  for (let j = 0; j < tip; j++) {
+    const hw = (w / 2) * (1 - j / tip), a = Math.round(mid - hw), b = Math.round(mid + hw) - 1;
+    if (open <= 0) { g.fillStyle = '#fbf3de'; g.fillRect(a, y + j, b - a + 1, 1); }
+    g.fillStyle = LN; g.fillRect(a, y + j, 1, 1); g.fillRect(b, y + j, 1, 1);
+  }
+  if (open > 0) { g.fillStyle = '#3a2a4a'; g.fillRect(x, y, w, Math.max(1, Math.round(h * .05))); }
+  if (o.seal) drawSeal(Math.round(mid), y + tip, Math.max(1, Math.round(h * .17)));
+}
+function halo(x, y, r, a) {
+  const gr = c.createRadialGradient(x, y, 0, x, y, r);
+  gr.addColorStop(0, rgba(C.echo, a)); gr.addColorStop(.5, rgba(C.echo, a * .3)); gr.addColorStop(1, rgba(C.echo, 0));
+  c.fillStyle = gr; c.fillRect(x - r, y - r, r * 2, r * 2);
+}
+function wax(cx, cy, a, n = 9) {
+  if (a < 0 || a > .6) return;
+  for (let i = 0; i < n; i++) {
+    const ang = rnd(i + 5) * TAU, sp = 16 + rnd(i + 9) * 30, d = sp * a * (1 - a * .6);
+    g.fillStyle = i % 3 ? '#a06cd5' : '#c9b0ea';
+    g.fillRect(Math.round(cx + Math.cos(ang) * d), Math.round(cy + Math.sin(ang) * d * .7 + a * a * 26), 1, 1);
+  }
+}
+
+// ───────────────────────────── scenes ─────────────────────────────
+function ground(t) {
+  const gr = c.createRadialGradient(W / 2, H * .48, 0, W / 2, H * .48, Math.max(W, H) * .78);
+  gr.addColorStop(0, '#21162f'); gr.addColorStop(.55, C.deep); gr.addColorStop(1, '#0a0610');
+  c.fillStyle = gr; c.fillRect(0, 0, W, H);
+}
+// Motes in the dark, on the pixel grid, so a still frame is never quite still.
+function dust(t) {
+  for (let i = 0; i < 38; i++) {
+    const x = (rnd(i + 40) + Math.sin(t * .2 + i) * .012) * W, y = H * (1 - ((rnd(i + 60) + t * (.006 + rnd(i + 70) * .012)) % 1));
+    const tw = .5 + .5 * Math.sin(t * (.7 + rnd(i)) + i * 2.3), s = PS * (rnd(i + 80) < .25 ? 1 : .5);
+    c.fillStyle = rgba(i % 5 ? C.soft : C.ember, .04 + .15 * tw);
+    c.fillRect(Math.round(x / s) * s, Math.round(y / s) * s, s, s);
+  }
+}
+// What is left in the air after something lands: two rings, going out. Never more than that.
+function rings(t) {
+  const d = dotPos(T.looked), l = lay();
+  const R = [[T.looked, d[0], d[1], .6], [T.mark, W / 2, H * l.markY, .7], [T.card, W / 2, H * l.envY, .5]];
+  const far = Math.hypot(W, H) * .6;
+  c.save(); c.lineWidth = Math.max(1, U * .22);
+  for (const [h, x, y, amp] of R) {
+    const a = t - h; if (a <= 0 || a > 2) continue;
+    for (let i = 0; i < 2; i++) {
+      const aa = a - i * .18; if (aa <= 0) continue;
+      c.strokeStyle = rgba(C.echo, Math.pow(1 - aa / 2, 2) * .42 * amp);
+      c.beginPath(); c.arc(x, y, outCubic(aa / 2) * far, 0, TAU); c.stroke();
+    }
+  }
+  c.restore();
+}
+function dotPos(t) {
+  const bx = W * (portrait ? .8 : .86), by = H * (portrait ? .8 : .78), w = U * .7;
+  return [bx + Math.sin(t * 5.1) * w, by + Math.cos(t * 4.3) * w * .7];
+}
+function dot(t) {
+  if (t < T.dot || t > T.looked + .3) return;
+  const a = t - T.dot, [x, y] = dotPos(t);
+  let r = U * 1.2 * outBack(a / .22);
+  c.save();
+  for (const p of [0, .6, 1.2]) {
+    const pa = a - p; if (pa < 0) continue;
+    r *= 1 + .4 * Math.exp(-pa * 9);
+    if (pa < .9) { c.strokeStyle = rgba(C.danger, (1 - pa / .9) * .7); c.lineWidth = Math.max(1, U * .2); c.beginPath(); c.arc(x, y, U * 1.4 + pa * U * 13, 0, TAU); c.stroke(); }
+  }
+  if (t > T.looked) r *= 1 - (t - T.looked) / .3;
+  c.shadowColor = C.danger; c.shadowBlur = U * 3 * DPR; c.fillStyle = t > T.looked ? '#fff3ea' : C.danger;
+  c.beginPath(); c.arc(x, y, Math.max(0, r), 0, TAU); c.fill(); c.restore();
+}
+
+// The field: a pouch of gold, nobody about. Nothing is drawn over it: the frame only comes closer, slowly.
+function fieldScene(t) {
+  const p = field, fx = p.purse.x * PS, fy = (p.purse.y - 8) * PS;
+  g.clearRect(0, 0, PW, PH); drawPlace(p, t, (i, st) => (st < T.noone ? 1 : 0));
+  const z = calm ? 1 : 1 + .12 * sm(T.what, T.looks + 1.2, t);
+  blit(z, fx, fy, sm(T.purse, T.purse + .6, t) * (1 - sm(T.mark - .45, T.mark, t)));
+}
+
+function markScene(t) {
+  const l = lay();
+  line('ECHO', T.mark, T.bet - .05, t, { voice: MARK, big: true, pre: .6, y: l.markY, maxW: W * (portrait ? .5 : .32), max: H * (portrait ? .085 : .19) });
+  line(L.key, T.mark, T.bet - .05, t, { at: KEY, y: l.keyY, max: portrait ? H * .09 : H * .11, maxW: W * (portrait ? .86 : .86), lh: 1.02 });
+}
+
+const cardRect = { x: 0, y: 0, w: 0, h: 0 };
+function betScene(t) {
+  const l = lay(), led = listGeom();
+  const ew = Math.round(Math.min(PW * .5, PH * .4)), eh = Math.round(ew * .64);
+  const k = inOut((t - T.bet) / 1.1), sx = (led.x0 + led.s / 2) / PS, sy0 = (led.y0 + led.lh * ROWS.length) / PS;
+  const cx = Math.round(lerp(sx, PW / 2, k)), cy = Math.round(lerp(sy0, PH * l.envY, k) - Math.sin(k * Math.PI) * PH * .05 + (k >= 1 ? Math.sin(t * 2.2) * .8 : 0));
+  const sc = lerp(.07, 1, Math.pow(k, 1.6)), w = ew * sc, h = eh * sc;
+  const open = clamp((t - T.flap) / .2), card = clamp((t - T.flap - .18) / .26), g0 = T.card - .16;
+  halo(cx * PS, cy * PS, Math.max(U * 5, w * PS * .95), .22 * k);
+  g.clearRect(0, 0, PW, PH);
+  if (t < g0) drawEnvelope(cx, cy, w, h, { seal: t < T.flap, open: Math.ceil(open * 3) / 3, card: Math.ceil(card * 5) / 5, cardRect });
+  else drawEnvelope(cx, cy, w, h, { open: 1 });
+  wax(cx, Math.round(cy - h / 2) + Math.round(h * .54), t - T.flap, 12);
+  blit(1, W / 2, H / 2, 1 - sm(g0, T.card, t));
+  // the card comes out of it and fills the frame: ink on parchment, the one bright thing in the film
+  if (t < g0) return;
+  const q = t < T.card ? outCubic((t - g0) / .16) : 1, a = t - T.card;
+  const CW = portrait ? W * .86 : Math.min(W * .5, H * .95), CH = portrait ? CW * .78 : CW * .5;
+  const tw = lerp(cardRect.w * PS, CW, q), th = lerp(cardRect.h * PS, CH, q);
+  const tx = lerp((cardRect.x + cardRect.w / 2) * PS, W / 2, q), ty = lerp((cardRect.y + cardRect.h / 2) * PS, H * l.envY, q);
+  const n = PS, x = Math.round(tx - tw / 2), y = Math.round(ty - th / 2);
+  const notched = (dx, dy, col, grow = 0) => { c.fillStyle = col; c.fillRect(x + n + dx - grow, y + dy - grow, tw - 2 * n + 2 * grow, th + 2 * grow); c.fillRect(x + dx - grow, y + n + dy - grow, tw + 2 * grow, th - 2 * n + 2 * grow); };
+  const out = 1 - sm(T.end - .3, T.end, t);
+  c.save(); c.globalAlpha = out; notched(n * 2, n * 2, 'rgba(7,4,11,.6)'); notched(0, 0, '#231731', Math.max(2, n * .5)); notched(0, 0, '#fff8e6'); c.restore();
+  if (a < 0) return;
+  line(L.card, T.card, T.end, t, { color: C.ink, y: (H * l.envY - CH * (portrait ? .1 : .09)) / H, maxW: CW * .84, max: CH * (portrait ? .185 : .3), stagger: .16 });
+  const ha = a - HELD, fs = CH * (portrait ? .115 : .13);
+  if (ha > 0) {
+    voice(TXT, fs); const hw = c.measureText(L.held).width, hx = W / 2 - (hw + fs * 1.1) / 2, hy = H * l.envY + CH * (portrait ? .35 : .33);
+    label(L.held, hx, hy, fs, '#74489f', { align: 'left', alpha: clamp(ha / .2) * out });
+    c.save(); c.globalAlpha = out; checkMark(hx + hw + fs * .4, hy - fs * .12, fs * .5, '#74489f', clamp((ha - .1) / .2)); c.restore();
+  }
+}
+
+function ctaRect() {
+  const l = lay(), w = clamp(U * 38, 170, 340), h = clamp(U * 9.5, 48, 72);
+  return { x: W / 2 - w / 2, y: H * l.end.cta - h / 2, w, h };
+}
+// The end: the village itself, at dusk, with its windows lit. This is what "walk in" walks into.
+function endCard(t) {
+  const l = lay().end, a = t - T.end;
+  g.clearRect(0, 0, PW, PH); drawPlace(village, t, (i, st) => .72 + .28 * Math.sin(st * 2.3 + i * 1.7)); blit(1, W / 2, H / 2, sm(0, .7, a));
+  line('ECHO', T.end + .1, 1e9, t, { voice: MARK, big: true, pre: 0, y: l.mark, maxW: W * (portrait ? .62 : .36), max: H * (portrait ? .11 : .19) });
+  // after it, for once, an echo that comes after
+  if (!calm) {
+    const size = fit(['ECHO'], MARK, W * (portrait ? .62 : .36), H * (portrait ? .11 : .19));
+    for (const e of [.7, 1.3, 1.9]) {
+      const ea = a - e; if (ea < 0 || ea > 1.2) continue;
+      const s = size * (1 + ea * .22);
+      c.save(); voice(MARK, s); c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.strokeStyle = rgba(C.echo, .42 * Math.pow(1 - ea / 1.2, 2) * (1 - e * .3)); c.lineWidth = Math.max(1, U * .22);
+      c.strokeText('ECHO', W / 2 + trackFix(MARK, s), H * l.mark); c.restore();
+    }
+  }
+  line(L.end, T.end + .5, 1e9, t, { y: l.line, max: portrait ? H * .046 : H * .07, stagger: .5, shadow: true, lh: 1.12 });
+  const ufs = clamp(U * 4.2, 17, 28);
+  label('echovirtualworld.com', W / 2 + trackFix(CAPS, ufs), H * l.url, ufs, C.ember, { voice: CAPS, alpha: sm(1.5, 1.9, a) });
+  const b = ctaRect(), ba = outCubic((a - 1.7) / .4), n = Math.max(3, Math.round(U * .8));
+  if (ba > 0) {
+    c.save(); c.globalAlpha = ba; c.translate(0, (1 - ba) * U * 1.2);
+    c.fillStyle = 'rgba(7,4,11,.5)'; c.fillRect(b.x + n, b.y + n, b.w, b.h);
+    c.fillStyle = C.parch; c.fillRect(b.x + n, b.y, b.w - 2 * n, b.h); c.fillRect(b.x, b.y + n, b.w, b.h - 2 * n);
+    voice(TXT, b.h * .58); c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = C.ink;
+    c.fillText(L.walk, W / 2, b.y + b.h / 2 + b.h * .02); c.restore();
+  }
+}
+
+// ECHO's guesses: two, on the screen with the first line, each shown when it comes true.
+function listGeom() {
+  const fs = clamp(U * 3.6, 15, 23), m = Math.max(16, U * 4.2);
+  return { fs, lh: fs * 1.42, x0: m, y0: m + fs * .45, s: fs * .46 };
+}
+const ROWS = [
+  { key: 'r2', print: T.dont + .15, open: T.looked + .15 },
+  { key: 'r3', print: T.dont + .25, open: T.card + HELD },
+];
+function guesses(t) {
+  if (t < T.dont + .05 || t >= T.end) return;
+  const { fs, lh, x0, y0, s } = listGeom(), out = 1 - sm(T.end - .3, T.end, t);
+  c.save(); c.globalAlpha = out;
+  label(L.head.slice(0, Math.floor((t - T.dont - .05) * 80)), x0, y0, fs * .86, C.parch, { voice: CAPS, align: 'left', alpha: .55 * out });
+  ROWS.forEach((r, i) => {
+    if (t < r.print) return;
+    const y = y0 + (i + 1) * lh, open = t >= r.open, k = clamp((t - r.open) / .3), tx = x0 + s + fs * .6, text = L[r.key];
+    voice(TXT, fs); const tw = c.measureText(text).width, bw = Math.max(tw, fs * 5);
+    if (open) {
+      checkMark(x0 - s * .1, y - fs * .1, s * 1.05, C.ember, k);
+      c.save(); c.beginPath(); c.rect(tx - 1, y - lh / 2, tw * k + 2, lh); c.clip(); label(text, tx, y, fs, C.parch, { align: 'left', alpha: out }); c.restore();
+      if (k < 1) { c.fillStyle = rgba(C.parch, .22); c.fillRect(tx + bw * k, y - fs * .34, bw * (1 - k), fs * .68); }
+    } else {
+      if (!(r.key === 'r3' && t >= T.bet)) { c.fillStyle = rgba(C.echo, .75 + .25 * Math.sin(t * 2.4 + i)); c.fillRect(x0, y - s / 2, s, s); }
+      c.fillStyle = rgba(C.parch, .2); c.fillRect(tx, y - fs * .34, bw, fs * .68);
+    }
+  });
+  c.restore();
+}
+
+function buildGrain() {
+  grain.width = grain.height = 192;
+  const s = grain.getContext('2d'), im = s.createImageData(192, 192), R = mulberry(11);
+  for (let i = 0; i < im.data.length; i += 4) { const v = R(); im.data[i] = im.data[i + 1] = im.data[i + 2] = v > .5 ? 255 : 0; im.data[i + 3] = Math.pow(R(), 1.6) * 255; }
+  s.putImageData(im, 0, 0);
+}
+function post(t) {
+  const vg = c.createRadialGradient(0, 0, .72, 0, 0, 1.5);
+  vg.addColorStop(0, 'rgba(7,4,11,0)'); vg.addColorStop(1, 'rgba(7,4,11,.6)');
+  c.save(); c.translate(W / 2, H / 2); c.scale(W / 2, H / 2); c.fillStyle = vg; c.fillRect(-1, -1, 2, 2); c.restore();
+  const f = Math.floor(Math.max(0, t) * 24), ox = Math.floor(rnd(f) * 192), oy = Math.floor(rnd(f + 99) * 192);
+  c.save(); c.globalAlpha = .07; c.translate(-ox, -oy); c.fillStyle = c.createPattern(grain, 'repeat'); c.fillRect(ox, oy, W, H); c.restore();
+}
+
+function render(t) {
+  c.setTransform(DPR, 0, 0, DPR, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  if ('letterSpacing' in c) c.letterSpacing = '0px';
+  const l = lay();
+  ground(t);
+  dust(t);
+  if (t >= T.purse && t < T.mark) fieldScene(t);
+  if (t >= T.end) endCard(t);
+  rings(t);
+  // the film opens on its dare
+  line(L.dont, T.dont, T.looked - .05, t, { big: true, pre: .45 });
+  dot(t);
+  line(L.looked, T.looked, T.pivot - .1, t, { big: true, pre: .3, y: .47 });
+  line(L.everyone, T.everyone, T.pivot - .1, t, { y: l.everyone, color: C.soft, max: portrait ? H * .05 : H * .075 });
+  line(L.pivot, T.pivot, T.purse + .1, t, { max: portrait ? H * .07 : H * .1 });
+  line(L.purse1, T.purse + .4, T.noone - .1, t, { y: l.top, shadow: true });
+  line(L.purse2, T.noone, T.what - .1, t, { y: l.top, shadow: true });
+  line(L.purse3, T.what, T.looks - .05, t, { y: l.top, shadow: true, max: portrait ? H * .075 : H * .1 });
+  // the three things a person might say: each its own moment, in the echo's colour
+  L.choices.split('|').forEach((ch, i) => line(ch, PICK[i], T.looks - .05, t, portrait
+    ? { y: l.picks[i], shadow: true, color: C.soft, max: H * .042 }
+    : { y: l.picks[0], x: [.23, .5, .77][i], maxW: W * .27, shadow: true, color: C.soft, max: H * .052 }));
+  line(L.looks, T.looks + .15, T.mark - .25, t, { y: l.top, shadow: true, max: portrait ? H * .066 : H * .092 });
+  if (t >= T.mark - .6 && t < T.bet) markScene(t);
+  if (t >= T.bet && t < T.end) betScene(t);
+  line(L.bet, T.bet + .6, T.end - .1, t, { y: l.betY, max: portrait ? H * .056 : H * .08 });
+  guesses(t);
+  post(t);
+}
+
+// Before the film: the village, and the way in to the film.
+function poster(tp) {
+  c.setTransform(DPR, 0, 0, DPR, 0, 0); c.globalAlpha = 1;
+  if ('letterSpacing' in c) c.letterSpacing = '0px';
+  g.clearRect(0, 0, PW, PH); drawPlace(village, tp, (i, st) => .72 + .28 * Math.sin(st * 2.3 + i * 1.7)); blit(1);
+  post(99 + tp);
+}
+
+// ───────────────────────────── the sound ─────────────────────────────
+// Everything heard is made here. It is a quiet film: three soft knocks from end to end, each softer than the last, and the rest is air, bells and a pad.
+function buildScore(ac, t0) {
+  const R = mulberry(7), sr = ac.sampleRate, at = s => t0 + s;
+  const master = ac.createGain(); master.gain.value = .72;
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -15; comp.knee.value = 10; comp.ratio.value = 6; comp.attack.value = .003; comp.release.value = .2;
+  const outGain = ac.createGain(); outGain.gain.value = .95;
+  // a soft ceiling: the quiet parts come up, and nothing can clip
+  const soft = ac.createWaveShaper(), curve = new Float32Array(2049);
+  for (let i = 0; i < curve.length; i++) { const x = i / 1024 - 1; curve[i] = Math.tanh(1.5 * x) / Math.tanh(1.5); }
+  soft.curve = curve; soft.oversample = '2x';
+  master.connect(comp); comp.connect(outGain); outGain.connect(soft); soft.connect(ac.destination);
+
+  const white = ac.createBuffer(1, sr * 2, sr), brown = ac.createBuffer(1, sr * 2, sr);
+  { const w = white.getChannelData(0), b = brown.getChannelData(0); let last = 0; for (let i = 0; i < w.length; i++) { w[i] = R() * 2 - 1; last = (last + .02 * w[i]) / 1.02; b[i] = last * 3.5; } }
+  const ir = ac.createBuffer(2, Math.floor(sr * 3), sr);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); let y = 0; for (let i = 0; i < d.length; i++) { const x = (R() * 2 - 1) * Math.pow(1 - i / d.length, 2.6); y += .42 * (x - y); d[i] = y; } }
+  const verb = ac.createConvolver(); verb.buffer = ir;
+  const verbOut = ac.createGain(); verbOut.gain.value = .5; verb.connect(verbOut); verbOut.connect(master);
+  const dIn = ac.createGain(), dl = ac.createDelay(1), dr = ac.createDelay(1), f1 = ac.createGain(), f2 = ac.createGain();
+  dl.delayTime.value = .3; dr.delayTime.value = .3; f1.gain.value = .42; f2.gain.value = .42;
+  const pan = v => { if (!ac.createStereoPanner) return ac.createGain(); const p = ac.createStereoPanner(); p.pan.value = v; return p; };
+  const pl = pan(-.7), pr = pan(.7);
+  dIn.connect(dl); dl.connect(pl); pl.connect(master); dl.connect(f1); f1.connect(dr); dr.connect(pr); pr.connect(master); dr.connect(f2); f2.connect(dl);
+
+  const gain = (v = 0) => { const n = ac.createGain(); n.gain.value = v; return n; };
+  const osc = (type, f, s, e) => { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; o.start(at(Math.max(0, s))); o.stop(at(e)); return o; };
+  const noise = (buf, s, e) => { const n = ac.createBufferSource(); n.buffer = buf; n.loop = true; n.start(at(Math.max(0, s)), R() * 1.5); n.stop(at(e)); return n; };
+  const filt = (type, f, q = .7) => { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; };
+  function send(node, o = {}) {
+    let n = node;
+    if (o.pan) { const p = pan(o.pan); n.connect(p); n = p; }
+    if (o.dry !== 0) { const d = gain(o.dry ?? 1); n.connect(d); d.connect(master); }
+    if (o.wet) { const w = gain(o.wet); n.connect(w); w.connect(verb); }
+    if (o.echo) { const e = gain(o.echo); n.connect(e); e.connect(dIn); }
+  }
+  const decay = (g, T0, peak, len, attack = .003) => { g.gain.setValueAtTime(0, at(T0)); g.gain.linearRampToValueAtTime(peak, at(T0 + attack)); g.gain.exponentialRampToValueAtTime(.0008, at(T0 + len)); g.gain.linearRampToValueAtTime(0, at(T0 + len + .02)); };
+
+  // a breath in before something arrives
+  function swell(T0, dur, peak, o = {}) {
+    const s = T0 - dur, rise = g => { g.gain.setValueAtTime(.0002, at(s)); g.gain.exponentialRampToValueAtTime(peak, at(T0)); g.gain.linearRampToValueAtTime(0, at(T0 + .04)); };
+    const n = noise(white, s, T0 + .06), bp = filt('bandpass', o.f0 || 220, .9), g1 = gain();
+    bp.frequency.setValueAtTime(o.f0 || 220, at(s)); bp.frequency.exponentialRampToValueAtTime(o.f1 || 3200, at(T0));
+    rise(g1); n.connect(bp); bp.connect(g1); send(g1, { wet: .2 });
+    for (const f of o.tones || []) {
+      const o1 = osc('sawtooth', f, s, T0 + .06), lp = filt('lowpass', f * 2), g2 = gain(), k = gain(.5);
+      o1.detune.setValueAtTime(-30, at(s)); o1.detune.linearRampToValueAtTime(0, at(T0));
+      lp.frequency.setValueAtTime(f * 1.5, at(s)); lp.frequency.exponentialRampToValueAtTime(f * 7, at(T0));
+      rise(g2); o1.connect(lp); lp.connect(g2); g2.connect(k); send(k, { wet: .15 });
+    }
+  }
+  // a knock on wood, felt more than heard: no click, no crash
+  function knock(T0, lvl) {
+    const o1 = osc('sine', 110, T0, T0 + 1.2), g1 = gain(); o1.frequency.setValueAtTime(118, at(T0)); o1.frequency.exponentialRampToValueAtTime(46, at(T0 + .16)); decay(g1, T0, lvl, .8, .006); o1.connect(g1); send(g1, { wet: .12 });
+    const o2 = osc('triangle', 190, T0, T0 + .25), g2 = gain(); o2.frequency.setValueAtTime(190, at(T0)); o2.frequency.exponentialRampToValueAtTime(74, at(T0 + .08)); decay(g2, T0, lvl * .45, .16, .004); o2.connect(g2); send(g2, { wet: .2 });
+    const n = noise(white, T0, T0 + .3), lp = filt('lowpass', 380), g3 = gain(); decay(g3, T0, lvl * .3, .2, .005); n.connect(lp); lp.connect(g3); send(g3, { wet: .3 });
+  }
+  function ping(T0, f, lvl, p = 0, len = .8, o = {}) {
+    const o1 = osc('sine', f, T0, T0 + len + .1), g1 = gain(); decay(g1, T0, lvl, len); o1.connect(g1);
+    const o2 = osc('sine', f * (o.part || 2.01), T0, T0 + .4), g2 = gain(); decay(g2, T0, lvl * .28, .22); o2.connect(g2);
+    const m = gain(1); g1.connect(m); g2.connect(m); send(m, { pan: p, wet: o.wet ?? .5, echo: o.echo ?? .5 });
+  }
+  const bell = (T0, f, lvl, p = 0) => ping(T0, f, lvl, p, 1.7, { part: 2.76, wet: .7, echo: .22 });
+  function tick(T0, lvl = .1, p = 0) {
+    const n = noise(white, T0, T0 + .05), bp = filt('bandpass', 3100, 2.2), g1 = gain(); decay(g1, T0, lvl, .022, .001); n.connect(bp); bp.connect(g1); send(g1, { pan: p, wet: .12 });
+    const o1 = osc('sine', 1850, T0, T0 + .03), g2 = gain(); decay(g2, T0, lvl * .5, .014, .001); o1.connect(g2); send(g2, { pan: p });
+  }
+  function check(T0, lvl = .08, p = 0) { ping(T0, 1318.5, lvl, p, .16, { wet: .3, echo: .12 }); ping(T0 + .075, 1975.5, lvl, p, .22, { wet: .3, echo: .12 }); }
+  function pop(T0, lvl, p = 0) { const o1 = osc('sine', 880, T0, T0 + .2), g1 = gain(); o1.frequency.setValueAtTime(880, at(T0)); o1.frequency.exponentialRampToValueAtTime(330, at(T0 + .07)); decay(g1, T0, lvl, .12, .002); o1.connect(g1); send(g1, { pan: p, wet: .35, echo: .2 }); }
+  function thump(T0, lvl) {
+    const o1 = osc('sine', 78, T0, T0 + .4), g1 = gain(); o1.frequency.setValueAtTime(82, at(T0)); o1.frequency.exponentialRampToValueAtTime(44, at(T0 + .11)); decay(g1, T0, lvl, .26, .008); o1.connect(g1); send(g1, { wet: .08 });
+    const o2 = osc('triangle', 150, T0, T0 + .2), g2 = gain(); o2.frequency.setValueAtTime(160, at(T0)); o2.frequency.exponentialRampToValueAtTime(70, at(T0 + .07)); decay(g2, T0, lvl * .32, .12, .006); o2.connect(g2); send(g2, {});
+  }
+  function pad(s, e, freqs, lvl, o = {}) {
+    const a = o.attack ?? 1.2, r = o.release ?? 1, lp = filt('lowpass', o.c0 || 500, .6), g1 = gain();
+    lp.frequency.setValueAtTime(o.c0 || 500, at(s)); lp.frequency.linearRampToValueAtTime(o.c1 || 1400, at(e));
+    g1.gain.setValueAtTime(0, at(s)); g1.gain.linearRampToValueAtTime(lvl, at(s + a)); g1.gain.setValueAtTime(lvl, at(Math.max(s + a, e))); g1.gain.linearRampToValueAtTime(0, at(Math.max(s + a, e) + r));
+    freqs.forEach(f => { for (const d of [-7, 6]) { const o1 = osc('sawtooth', f, s, Math.max(s + a, e) + r + .1), k = gain(.7 / freqs.length); o1.detune.setValueAtTime(d, at(s)); o1.connect(k); k.connect(lp); } });
+    lp.connect(g1); send(g1, { wet: o.wet ?? .6 });
+  }
+  function cricket(s, e, lvl, p, f, period) {
+    const o1 = osc('sine', f, s, e), o2 = osc('sine', f * 1.043, s, e), g1 = gain();
+    for (let tt = s + R() * .3; tt < e - .15; tt += period * (.9 + R() * .2)) for (let k = 0; k < 4; k++) { const a = tt + k * .036; g1.gain.setTargetAtTime(lvl, at(a), .003); g1.gain.setTargetAtTime(0, at(a + .017), .004); }
+    g1.gain.setTargetAtTime(0, at(e - .05), .005);
+    o1.connect(g1); o2.connect(g1); send(g1, { pan: p, wet: .25 });
+  }
+
+  // the dare: a breath in, the first knock, and the two guesses printed in the corner
+  swell(T.dont, .45, .05, { f0: 300, f1: 1600 });
+  knock(T.dont, .42);
+  [.15, .25].forEach(d => tick(T.dont + d, .05, -.5));
+  pad(T.dont, T.pivot, [73.42, 110, 146.83], .085, { attack: .6, release: 1, c0: 300, c1: 600, wet: .3 });
+
+  // the dot: a sonar, three times, from where it is; then it bursts
+  [0, .6, 1.2].forEach((d, i) => ping(T.dot + d, 1760, .12 + .02 * i, .6));
+  pop(T.looked, .2, .5); check(T.looked + .2, .05, -.5);
+
+  // the room changes; then a field at dusk
+  pad(T.pivot, T.mark - .5, [73.42, 110, 174.61, 261.63, 329.63], .11, { attack: 1.6, release: .8, c0: 380, c1: 1150, wet: .7 });
+  { const n = noise(brown, T.purse, T.mark + .1), lp = filt('lowpass', 560), g1 = gain();
+    g1.gain.setValueAtTime(0, at(T.purse)); g1.gain.linearRampToValueAtTime(.13, at(T.purse + 1.2)); g1.gain.setValueAtTime(.13, at(T.looks)); g1.gain.linearRampToValueAtTime(.06, at(T.looks + .8)); g1.gain.linearRampToValueAtTime(0, at(T.mark));
+    n.connect(lp); lp.connect(g1); send(g1, { wet: .2 }); }
+  cricket(T.purse + .2, T.looks + .4, .016, .65, 4350, .56);
+  cricket(T.purse + .6, T.looks + .2, .011, -.7, 3900, .74);
+  bell(T.purse + .4, 440, .09, -.2); bell(T.noone, 349.23, .09, .2); bell(T.what, 329.63, .09);
+  tick(T.noone + .02, .08, -.6);                                              // the window goes dark
+  thump(T.what + .05, .2); thump(T.what + .29, .12);                          // one heartbeat, and only one, far off
+  PICK.forEach((p, i) => ping(p, [587.33, 659.25, 783.99][i], .06, [-.4, 0, .4][i], .45, { wet: .5, echo: .2 }));
+  bell(T.looks + .15, 293.66, .1); bell(T.looks + .15, 440, .05, .3);
+
+  // the name: the one moment in the film that is allowed to arrive
+  swell(T.mark, .9, .15, { tones: [116.54, 174.61, 233.08] });
+  knock(T.mark, .4);
+  pad(T.mark, T.mark + 2.2, [58.27, 116.54, 174.61, 220, 293.66], .15, { attack: .06, release: .7, c0: 2200, c1: 800, wet: .6 });
+  pad(T.mark + 2.2, T.bet, [65.41, 130.81, 196, 261.63, 329.63], .13, { attack: .5, release: .6, c0: 800, c1: 1400, wet: .6 });
+  bell(KEY[0], 587.33, .1, -.3); bell(KEY[1], 698.46, .1, .3);
+
+  // the guess it wrote down before any of this
+  pad(T.bet, T.card - .1, [55, 110, 164.81, 220, 293.66], .11, { attack: .5, release: .12, c0: 500, c1: 1700, wet: .7 });
+  { const n = noise(white, T.bet, T.bet + 1.3), bp = filt('bandpass', 300, 1.3), g1 = gain();
+    bp.frequency.setValueAtTime(300, at(T.bet)); bp.frequency.exponentialRampToValueAtTime(1900, at(T.bet + .7)); bp.frequency.exponentialRampToValueAtTime(500, at(T.bet + 1.2));
+    g1.gain.setValueAtTime(0, at(T.bet)); g1.gain.linearRampToValueAtTime(.07, at(T.bet + .65)); g1.gain.linearRampToValueAtTime(0, at(T.bet + 1.2));
+    n.connect(bp); bp.connect(g1); send(g1, { wet: .3 }); }
+  tick(T.flap, .09);
+  [[.02, .1, .06], [.1, .07, .09]].forEach(([d, lvl, len]) => { const n = noise(white, T.flap + d, T.flap + d + len + .05), hp = filt('highpass', 1700), g1 = gain(); decay(g1, T.flap + d, lvl, len, .004); n.connect(hp); hp.connect(g1); send(g1, { wet: .25 }); });   // paper
+  [587.33, 739.99, 880].forEach((f, i) => ping(T.flap + .12 + i * .12, f, .055, i % 2 ? .4 : -.4, .5, { wet: .6, echo: .3 }));
+  knock(T.card, .32);
+  pad(T.card, T.end, [73.42, 110, 185, 220, 293.66, 329.63], .15, { attack: .04, release: .6, c0: 2200, c1: 900, wet: .6 });
+  check(T.card + HELD + .1, .06);
+
+  // the village, and the only echoes in the film that come after
+  pad(T.end, T.end + 2.2, [73.42, 110, 185, 220, 293.66, 369.99], .14, { attack: .6, release: 2.4, c0: 1300, c1: 700, wet: .8 });
+  cricket(T.end + .3, T.end + 4.2, .008, .6, 4350, .6);
+  bell(T.end + .1, 587.33, .16); bell(T.end + .1, 880, .09);
+  [.7, 1.3, 1.9].forEach((d, i) => { const k = Math.pow(.5, i + 1), p = i % 2 ? -.65 : .65; bell(T.end + d, 587.33, .18 * k, p); bell(T.end + d, 880, .1 * k, p); });
+}
+
+async function renderWav() {
+  const sr = 44100, oc = new OfflineAudioContext(2, Math.ceil((DUR + 2.4) * sr), sr);
+  buildScore(oc, 0);
+  const buf = await oc.startRendering(), n = buf.length, a = buf.getChannelData(0), b = buf.getChannelData(1);
+  const out = new DataView(new ArrayBuffer(44 + n * 4)), w = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); out.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 2, true);
+  out.setUint32(24, sr, true); out.setUint32(28, sr * 4, true); out.setUint16(32, 4, true); out.setUint16(34, 16, true); w(36, 'data'); out.setUint32(40, n * 4, true);
+  let peak = 0;
+  for (let i = 0; i < n; i++) { peak = Math.max(peak, Math.abs(a[i]), Math.abs(b[i])); out.setInt16(44 + i * 4, clamp(a[i], -1, 1) * 32767, true); out.setInt16(46 + i * 4, clamp(b[i], -1, 1) * 32767, true); }
+  const u8 = new Uint8Array(out.buffer); let s = '';
+  for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+  return { peak, b64: btoa(s) };
+}
+
+// ───────────────────────────── running it ─────────────────────────────
+let AC = null, mode = 'poster', perf0 = 0;
+const posterEl = $('poster'), afterEl = $('after');
+
+function words() {
+  L = COPY[lang]; document.documentElement.lang = lang;
+  $('p-title').textContent = L.title; $('p-play').textContent = L.play; $('p-hint').textContent = L.hint; $('again').textContent = L.again;
+  $('walk').setAttribute('aria-label', L.aria);
+  $('lang-en').setAttribute('aria-pressed', String(lang === 'en')); $('lang-tr').setAttribute('aria-pressed', String(lang === 'tr'));
+  const all = Object.values(L).join(' ') + ' ECHO echovirtualworld.com';
+  if (document.fonts && document.fonts.load) for (const f of ['400 40px "Jersey 15"', '700 40px "Pixelify Sans"']) document.fonts.load(f, all).catch(() => {});
+}
+function placeAfter() {
+  const b = ctaRect(), walk = $('walk'), again = $('again');
+  Object.assign(walk.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' });
+  Object.assign(again.style, { left: '50%', top: (b.y + b.h + Math.max(8, U * 1.2)) + 'px' });
+}
+
+let seen = true;
+if (window.IntersectionObserver) new IntersectionObserver(es => { seen = es[es.length - 1].isIntersecting; }).observe(stage);
+function loop() {
+  requestAnimationFrame(loop);
+  if (mode === 'poster') { if (seen) poster(performance.now() / 1000); return; }
+  const t = (performance.now() - perf0) / 1000;
+  if (!seen && t > DUR) return;
+  render(Math.max(0, t));
+  if (afterEl.hidden && t >= T.end + 2.1) { afterEl.hidden = false; $('again').style.visibility = 'hidden'; }
+  if (t >= DUR && $('again').style.visibility === 'hidden') $('again').style.visibility = 'visible';
+}
+
+async function play() {
+  const lead = .1; let late = 0;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    await AC.resume();
+    late = (AC.outputLatency || 0) + (AC.baseLatency || 0);
+    buildScore(AC, AC.currentTime + lead);
+  } catch (e) { /* no sound is still a film */ }
+  perf0 = performance.now() + (lead + Math.min(late, .3)) * 1000;
+  posterEl.hidden = true; afterEl.hidden = true; mode = 'film';
+}
+
+$('play').addEventListener('click', play);
+$('again').addEventListener('click', play);
+for (const k of ['en', 'tr']) $('lang-' + k).addEventListener('click', () => { lang = k; try { localStorage.setItem('echo.film.lang', k); } catch (e) {} words(); });
+addEventListener('resize', resize);
+if (window.ResizeObserver) new ResizeObserver(resize).observe(stage);
+
+words(); resize();
+if (EXPORT) {
+  posterEl.hidden = true; mode = 'export';
+  window.__film = { duration: DUR, seek: t => render(t), poster: t => poster(t), wav: renderWav, ready: () => (document.fonts ? document.fonts.ready.then(() => true) : Promise.resolve(true)) };
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => render(Number(Q.get('t') || 0)));
+} else {
+  loop();
+}
+})();
+</script>
+
+</body>
+</html>
