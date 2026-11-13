@@ -107,6 +107,13 @@ export interface PlanetGlobeOptions {
    */
   offsetX?: number;
   /**
+   * The globe's diameter as a fraction of its box's HEIGHT while it is just turning (`IDLE_FILL` when
+   * not given). A box made for the planet alone, as the landing's is, wants it nearly full; a planet
+   * behind a page's words wanted room round it. A function is asked again at every resize: the
+   * landing's box changes shape with the screen, and how full it should be changes with it.
+   */
+  fill?: number | (() => number);
+  /**
    * Turn on pointing at the planet.
    *
    * Picking is arithmetic, as section 6.1 says: intersect the ray with the surface the globe
@@ -739,7 +746,8 @@ export class PlanetGlobe {
     const radius = 1 + DEFAULT_GLOBE_OPTIONS.reliefScale;
     // Far enough that the globe is IDLE_FILL of the height, and far enough again that it is never
     // more than MAX_WIDTH_FILL of the width. The wider of the two constraints wins.
-    const byHeight = radius / (IDLE_FILL * halfFov);
+    const asked = typeof this.options.fill === "function" ? this.options.fill() : this.options.fill;
+    const byHeight = radius / ((asked && asked > 0 ? asked : IDLE_FILL) * halfFov);
     const byWidth = radius / (MAX_WIDTH_FILL * halfFov * this.camera.aspect);
     this.idleDistance = Math.max(byHeight, byWidth);
 

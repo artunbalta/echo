@@ -6736,3 +6736,61 @@ their tops); the trades' things appear the first time their owner is seen at wor
 moment's own people at a task (the wall, the cart) have the moment's props and no tools of their own;
 the stranger's hand holds one thing at a time; on a phone the same rules hold by reading (no key repeats
 there), and were not filmed.
+
+## C99 — the world first: the planet at the head of the landing on every screen, pressed with a thumb too, and English as the site's language
+
+**Date:** 2026-11-13. **Asked for by the owner**, in these words: "when the phone opens it the world is
+not seen. There is only text, and that looks very AI slop"; "on a computer the world stays below"; "I
+want to see the world and it must be clickable"; and "the main language must be English".
+
+**What was there** (the live page photographed first, at seven sizes):
+
+- **Below 1024px the planet was under the words.** On a phone the first screen was a headline, a
+  paragraph, two fields and a button; the planet began 700px down. A tablet upright, a computer's window
+  at half a screen, and a laptop zoomed in to 150% (960px of width, 520 of height) were all the same
+  page: the form, then a scroll, then the world.
+- **It answered only a wide screen with a mouse.** Everywhere else it was a picture: C97 had said a
+  canvas that answers a thumb takes the thumb meant for the page.
+- **A browser set to Turkish was handed the Turkish page** (C97), whoever was reading and whatever they
+  wanted. The owner's phone is set to Turkish.
+
+**Decision.**
+
+- **The planet's box is the first thing in the hero, and there is one of it**
+  (`app/_landing/Landing.tsx`, `.hero-planet` in `globals.css`): over the words on an upright screen,
+  the right half of one wider than it is tall. The stylesheet moves it with one query, by shape as well
+  as width (`min-width: 1024px`, or 640px and at least five wide to four tall), because a short wide
+  window has room for a planet beside its words and none over them. Two boxes with one hidden, and the
+  script that mounted the planet in whichever showed, are gone.
+- **On a phone the first screen is the world, a line under it, and the headline.** The form follows;
+  the header's "Join the waitlist" is on that screen as on every other.
+- **A place can be picked on every screen** (`components/planet/HeroPlanet.tsx`). A tap picks as a click
+  does. The planet takes no drag, so a thumb that starts on it still scrolls the page (measured: 221px
+  of scroll from a drag begun on the planet, and no card opened). What a pick opens is the same card: in
+  the planet's corner where there is room, a sheet at the foot of the screen where there is not
+  (`.hero-card`). The close look that follows a pointer is for a pointer; a finger does not get it.
+- **One line says what it is and that it can be pressed**: "This is the world. Pick a place on it to
+  look at." It goes while a place is picked.
+- **How full of its box the planet is, is the stylesheet's to say** (`--globe-fill`, read at every
+  resize; `PlanetGlobe` `fill`): nearly full over the words, less beside them where the box is the
+  height of the screen.
+- **English is the site's language, and Turkish is a choice** (`lib/lang.ts`, `lib/langOf.ts`,
+  `middleware.ts`): the header's switch, kept in the browser and in a cookie. The middleware hands `/`
+  in Turkish only to a reader who chose Turkish here; nothing reads what the browser is set to. With
+  no choice made a page is read in the language it was built in, so `/tr` is still an address for a
+  link meant to be read in Turkish. A choice made before today is kept.
+
+**Looked at.** Seven sizes, before and after, in a browser set to Turkish: a phone as Safari shows it
+(390 by 664), a small phone, a phone on its side, a tablet upright, a narrow laptop, a laptop, a desk.
+A place picked with a thumb on the phone and with a mouse at 1440 and at 960 by 520; the card whole on
+each. The page in English with nothing chosen, in Turkish with Turkish chosen, and `/tr` in Turkish.
+
+**Tests.** `tests/preview.test.mts`: the planet's box stands before the headline and there is one
+planet; the query that moves it; picking left out on no screen, and no hover card for a finger; a page
+served in English, and in Turkish only to a cookie that says so, with the middleware reading nothing
+else. `tests/i18n.test.mts`: nothing that decides the language reads the browser's.
+
+**Not decided here, and not done:** the form is not on a phone's first screen (the header's button is);
+the pilot's pages, once they are open, will also begin in English for a reader in Turkey; the
+villagers' voice still listens in the browser's language, which is a guess at what is spoken and not
+what is read; `tests/e2e/globePick.spec.ts` stays in quarantine (it reads a card that C96 reworded).

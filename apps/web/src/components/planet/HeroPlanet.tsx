@@ -13,6 +13,13 @@
  * hexagon appears under your pointer instead of being drawn everywhere at once. On a fresh planet
  * that means terrain and twelve gold marks, and it fills in as people arrive, which is the story
  * the registry is telling anyway.
+ *
+ * A PLACE CAN BE PICKED ON EVERY SCREEN (C99). It used to answer only a wide screen with a mouse: on
+ * a phone, and in any window under 1024px, it was a picture under the form, and the owner's words for
+ * the page that left were "only text". A tap picks as a click does; nothing here takes a drag, so a
+ * thumb that starts on the planet still scrolls the page. What a pick opens is a card in the planet's
+ * corner where there is room and a sheet at the foot of the screen where there is not (`.hero-card`).
+ * The close look that follows a pointer needs a pointer, so a finger does not get it.
  */
 
 import dynamic from "next/dynamic";
@@ -119,30 +126,31 @@ export default function HeroPlanet() {
 
     void import("@/game/planet/PlanetGlobe").then(({ PlanetGlobe }) => {
       if (!live || !host.current) return;
-      // The planet has a box of its own now (C97, `app/page.tsx`): beside the words on a wide screen,
-      // under them on a narrow one. So it sits in the middle of what it is given and is never slid
-      // under the headline, which is where a phone had it.
+      // The planet has a box of its own (C97, C99; `.hero-planet`): over the words on an upright
+      // screen, beside them on a wide one. It sits in the middle of what it is given, nearly filling
+      // it, and nothing is ever over it.
       //
-      // Pointing at it is for a wide screen and a pointer. Under the words on a phone it is a picture:
-      // the card a pick opens is taller than the planet's box there, and a canvas that answers a
-      // thumb is a canvas that takes the thumb meant for the page.
-      const pointable = window.matchMedia("(min-width: 1024px) and (pointer: fine)").matches;
+      // The close look that follows the pointer is for something that hovers. A finger has no hover:
+      // it would open under the thumb on the way to a scroll and be left standing there.
+      const hovers = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
       instance = new PlanetGlobe(host.current, {
         seed: world.seed,
         seaLevel: world.seaLevel,
         peakElevation: world.peakElevation,
         reducedMotion,
-        picking: pointable
-          ? {
-              parcelResolution: pickResolution,
-              commonsResolution: world.commonsResolution,
-              minLandFraction: world.minLandFraction,
-              commons: world.commons,
-              onHover: setHover,
-              onSelect: select,
-            }
-          : undefined,
+        // How full of its box: the stylesheet's to say, with the layout it goes with (`.hero-globe`).
+        fill: () => Number(getComputedStyle(host.current ?? document.body).getPropertyValue("--globe-fill")),
+        picking: {
+          parcelResolution: pickResolution,
+          commonsResolution: world.commonsResolution,
+          minLandFraction: world.minLandFraction,
+          commons: world.commons,
+          onHover: hovers ? setHover : undefined,
+          onSelect: select,
+        },
       });
+      // A hand over what can be pressed, as on every other thing on the page that can be.
+      host.current.style.cursor = "pointer";
       instance.setClaimed(Object.keys(world.commons), 1400);
       globe.current = instance;
       // Two frames on, it has drawn itself.
@@ -314,9 +322,9 @@ function DemoPrompt({ parcel, world, onDismiss }: {
   const canEnter = parcel.assignable || !!parcel.commonsName;
   const village = useVillage(parcel.cell);
   return (
-    <section aria-label={copy.label} className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-parchment/15 bg-ink/95 text-parchment shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(540px,calc(100%-2rem))]">
+    <section aria-label={copy.label} data-picked={parcel.cell} className="hero-card rounded-2xl border border-parchment/15 bg-ink text-parchment shadow-2xl">
       {canEnter ? (
-        <div className="relative h-[230px] sm:h-[300px]" data-preview-cell={parcel.cell}>
+        <div className="hero-card-view overflow-hidden rounded-t-2xl bg-ink-deep" data-preview-cell={parcel.cell}>
           <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} commons={Object.keys(world.commons)} />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent" />
           <span className="absolute left-5 top-4 rounded-full bg-ink/70 px-3 py-1 text-[12px] text-parchment/85">{copy.live}</span>
@@ -340,7 +348,7 @@ function DemoPrompt({ parcel, world, onDismiss }: {
             ? copy.village
             : canEnter ? copy.land : copy.sea}
         </p>
-        <div className="mt-5 flex items-center gap-4">
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
           {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="btn btn-primary">{copy.go}</a> : null}
           <button type="button" onClick={onDismiss} className="btn btn-ghost">{copy.stay}</button>
         </div>

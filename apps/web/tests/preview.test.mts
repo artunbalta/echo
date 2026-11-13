@@ -65,17 +65,17 @@ test("a turn is a code on the list: its cookie holds a digest, and taking the co
   assert.equal(isPreview(undefined, { NODE_ENV: "production", ECHO_OPEN: "1" }), false);
 });
 
-test("a page is served in the language its reader chose, and failing that the first one their browser asks for that we have", () => {
-  assert.equal(langOf(undefined, "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"), "tr");
-  assert.equal(langOf(undefined, "en-GB,en;q=0.9,tr;q=0.8"), "en");
-  assert.equal(langOf(undefined, "de-DE,de;q=0.9,tr;q=0.5,en;q=0.4"), "tr");
-  assert.equal(langOf(undefined, "de-DE,fr;q=0.9"), "en");
-  assert.equal(langOf(undefined, null), "en");
-  assert.equal(langOf(undefined, ""), "en");
-  // Their own choice here wins over the browser's; anything else in the cookie is not a choice.
-  assert.equal(langOf("en", "tr-TR,tr;q=0.9"), "en");
-  assert.equal(langOf("tr", "en-GB,en;q=0.9"), "tr");
-  assert.equal(langOf("xx", "tr"), "tr");
+test("a page is served in English, and in Turkish only to a reader who chose Turkish here", () => {
+  assert.equal(langOf(undefined), "en");
+  assert.equal(langOf(""), "en");
+  assert.equal(langOf("en"), "en");
+  assert.equal(langOf("tr"), "tr");
+  // Anything else in the cookie is not a choice.
+  assert.equal(langOf("xx"), "en");
+  // And the middleware asks the cookie alone: what a browser is set to is not what its reader asked for.
+  const middleware = read("middleware.ts").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(middleware, /langOf\(req\.cookies\.get\(LANG_COOKIE\)\?\.value\) !== "tr"/);
+  assert.doesNotMatch(middleware, /accept-language/i);
 });
 
 test("the route asks once and hands it down; a look is never asked the question, and ends with the village gone", () => {
@@ -105,6 +105,18 @@ test("the landing's first action is the waitlist, in one face and with no rules 
   for (const part of ["app/_landing/Section.tsx", "app/_landing/HowItGoes.tsx", "components/site/SiteFooter.tsx"]) {
     assert.doesNotMatch(code(read(part)), /border-[tblr]\b|border-y\b|className="eyebrow|italic/, part);
   }
+  // The world is the first thing in the hero (C99): the planet's box stands before the words, there is
+  // one of it (not one box for a wide screen and another for a narrow one), and the stylesheet puts it
+  // over the words or beside them.
+  assert.ok(landing.indexOf('className="hero-planet"') > 0 && landing.indexOf('className="hero-planet"') < landing.indexOf("<h1"), "the planet stands before the headline");
+  assert.equal(code(landing).match(/<HeroPlanet\b/g)?.length, 1);
+  const css = read("app/globals.css");
+  assert.match(css, /@media \(min-width: 1024px\), \(min-width: 640px\) and \(min-aspect-ratio: 5\/4\) \{[\s\S]*?\.hero-planet \{ position: absolute;/);
+  // And a place on it can be picked on every screen: no screen is left out, and a finger gets no hover card.
+  const planet = code(read("components/planet/HeroPlanet.tsx"));
+  assert.doesNotMatch(planet, /picking: \w+\s*\?/);
+  assert.match(planet, /onHover: hovers \? setHover : undefined/);
+  assert.match(planet, /className="hero-card /);
   // Both builds of the landing are the same page; the Turkish one says which language it was built in.
   assert.match(read("app/page.tsx"), /<Landing \/>/);
   assert.match(read("app/tr/page.tsx"), /<ServedLang lang="tr">[\s\S]*<Landing \/>/);

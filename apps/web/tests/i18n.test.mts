@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { RECIPES, STAGES, allThingKinds, verbsOf } from "@echo/planet";
 
-import { VERBS_TR_FOR_TEST, detectLang, t, verbLabel } from "../src/lib/i18n";
+import { VERBS_TR_FOR_TEST, t, verbLabel } from "../src/lib/i18n";
 
 test("every verb the world can offer, and every thing a stranger can make or build, has a Turkish label", () => {
   const labels = new Set<string>();
@@ -23,12 +23,15 @@ test("every verb the world can offer, and every thing a stranger can make or bui
   assert.equal(verbLabel("tr", "Knock"), "Kapıyı çal");
 });
 
-test("the browser's first language decides, Turkish only when it is Turkish", () => {
-  assert.equal(detectLang(["tr-TR", "en-US"]), "tr");
-  assert.equal(detectLang(["en-GB", "tr"]), "en");
-  assert.equal(detectLang(["de-DE", "tr-TR"]), "tr");
-  assert.equal(detectLang(["de-DE"]), "en");
-  assert.equal(detectLang([]), "en");
+test("the site is English, and Turkish only for whoever chose it: the browser's language decides nothing", async () => {
+  const fs = await import("node:fs");
+  const src = (path: string) => fs.readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  // Nothing that decides the language reads what the browser is set to.
+  for (const file of ["lib/lang.ts", "lib/langOf.ts", "middleware.ts", "app/layout.tsx"]) assert.doesNotMatch(src(file), /navigator\.language|accept-language/i, file);
+  // With no choice made, the page is read in the language it was built in: English, but for the page built in Turkish.
+  assert.match(src("lib/lang.ts"), /\(\) => choice\(\) \?\? served/);
+  assert.match(src("lib/servedLang.tsx"), /createContext<Lang>\("en"\)/);
+  assert.match(src("app/layout.tsx"), /<html lang="en"/);
 });
 
 test("a string is filled from its values, in either language", () => {

@@ -15,7 +15,7 @@ import type { Lang } from "./lang";
 
 // Which language, and the hook that says so, live in `lib/lang.ts` (so that a page with its own words
 // does not carry this table); they are still found here by everything that always found them here.
-export { LANG_NAME, LANGS, detectLang, setLang, useLang, type Lang } from "./lang";
+export { LANG_NAME, LANGS, setLang, useLang, type Lang } from "./lang";
 
 const EN = {
   "hud.back": "Exit",

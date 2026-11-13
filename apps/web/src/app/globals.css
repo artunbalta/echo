@@ -233,6 +233,50 @@ img.pixel {
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
+/* The landing's first screen (C99). The planet is the first thing on it at every size: OVER the words
+   on an upright screen, BESIDE them on one wider than it is tall. It was under the words below 1024px,
+   so a phone opened on a headline and a form with the world a scroll away, and so did a computer whose
+   window was narrow or zoomed in. One box, moved by this one query; the globe frames itself to
+   whatever it is given (`PlanetGlobe.resize`). The query is by shape as well as width: a window
+   960px wide and 520px tall (a laptop zoomed in) has no room for a planet over its words and plenty
+   beside them. */
+.hero { position: relative; overflow: hidden; background: var(--ink); }
+/* No z-index on the planet's box: it would make the box a layer of its own, and the sheet a pick opens
+   (fixed, below) would be drawn under the headline. */
+.hero-planet { position: relative; margin-top: 56px; }
+/* `--globe-fill` is how much of this box's height the planet takes while it turns (`HeroPlanet` reads
+   it at every resize). */
+.hero-globe { position: relative; height: clamp(250px, 48vh, 560px); height: clamp(250px, 48svh, 560px); --globe-fill: 0.84; }
+/* The drawing's own head and foot fade out, so a planet that has leant in to a picked place goes under
+   the header and not up to a straight edge. On the drawing and not on its box: a mask on the box
+   would cut the sheet below to the box's shape, fixed or not. */
+.hero-globe > [data-planet] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+}
+/* The line under the planet says a place can be picked; with one picked it has been said. */
+.hero-planet:has(.hero-card) .hero-hint { visibility: hidden; }
+.hero-hint { margin: 0; padding: 0.25rem 1rem 0; text-align: center; font-size: 0.8125rem; color: rgba(244, 233, 208, 0.55); }
+.hero-words { position: relative; z-index: 10; padding: 1.5rem 0 3.5rem; }
+.hero-title { font-size: clamp(1.8rem, 7.6vw, 2.6rem); }
+/* A place picked: a sheet at the foot of the screen, where a thumb is; a card in the planet's corner
+   where there is room for one. It is over the page's words on a phone, so it is solid: at 95% the
+   headline could be read through it. */
+.hero-card { position: fixed; left: 0.75rem; right: 0.75rem; bottom: 0.75rem; z-index: 60; max-width: 540px; margin-inline: auto; max-height: calc(100dvh - 1.5rem); overflow-y: auto; }
+.hero-card-view { position: relative; height: 190px; }
+@media (min-width: 1024px), (min-width: 640px) and (min-aspect-ratio: 5/4) {
+  .hero-row { display: flex; min-height: 100dvh; flex-direction: column; justify-content: center; }
+  .hero-planet { position: absolute; top: 0; right: 0; margin-top: 0; width: 50vw; height: 100dvh; max-height: 100%; }
+  /* The whole of its half, top to bottom: leant in, the planet is cut by the screen and by nothing else. */
+  .hero-globe { position: absolute; inset: 0; height: auto; --globe-fill: 0.72; }
+  .hero-globe > [data-planet] { -webkit-mask-image: none; mask-image: none; }
+  .hero-hint { position: absolute; left: 0; right: 0; bottom: 4.5%; padding-top: 0; }
+  .hero-words { max-width: min(540px, calc(46vw - 3rem)); padding: calc(60px + 2rem) 0; }
+  .hero-title { font-size: clamp(1.75rem, 3.7vw, 3.6rem); }
+  .hero-card { position: absolute; left: auto; right: 2rem; bottom: 2rem; width: min(540px, calc(100% - 2rem)); max-width: none; margin-inline: 0; max-height: calc(100dvh - 60px - 3rem); }
+  .hero-card-view { height: clamp(170px, 30dvh, 300px); }
+}
+
 /* What arrives after the words (the planet, once it has drawn a frame) comes in, it does not pop. */
 .arrive { opacity: 0; transition: opacity 0.9s ease; }
 .arrive[data-here="true"] { opacity: 1; }

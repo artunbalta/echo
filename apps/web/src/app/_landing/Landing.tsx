@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import SiteFooter from "@/components/site/SiteFooter";
@@ -20,45 +20,49 @@ const HeroPlanet = dynamic(() => import("@/components/planet/HeroPlanet"), { ssr
 
 /**
  * The hero's words, in both languages. They are here and not in the chrome's table because they are
- * this page's own, as its sections' words are (each section keeps its own, the same way). A browser
- * set to Turkish reads Turkish (`detectLang`). The header's and the footer's words are
- * `components/site`'s.
+ * this page's own, as its sections' words are (each section keeps its own, the same way). The page is
+ * English, and Turkish for whoever chose it with the header's switch (`lib/lang.ts`, C99). The
+ * header's and the footer's words are `components/site`'s.
  *
  * The headline is the one sentence that says what this is, in the owner's words, and it is written in
  * Turkish first: the English is its own sentence and not a translation of it.
  */
-const COPY: Record<Lang, { h1: string; body: string; peek: (seconds: number) => string; character: string }> = {
+const COPY: Record<Lang, { h1: string; body: string; peek: (seconds: number) => string; character: string; pick: string }> = {
   en: {
     h1: "An agent that learns you from what you do, then acts like you.",
     body: "ECHO is a small village you walk through in your browser. It watches what you do there, not what you say. For now the village is opening in turns.",
     peek: (seconds) => `Look around for ${seconds} seconds first`,
     character: "Choose your character",
+    pick: "This is the world. Pick a place on it to look at.",
   },
   tr: {
     h1: "Yaptıklarından seni öğrenen, sonra senin gibi davranan bir agent.",
     body: "ECHO, tarayıcında gezdiğin küçük bir köy. Orada ne söylediğine değil, ne yaptığına bakar. Köy şimdilik sırayla açılıyor.",
     peek: (seconds) => `Önce ${seconds} saniye göz at`,
     character: "Karakterini seç",
+    pick: "Dünya bu. Üstünde bir yer seç, oraya bak.",
   },
 };
 
 const SCROLLS = "html, body { height: auto; overflow: visible; }";
 
 /**
- * The landing (DECISIONS C97). It is served by two pages, one in each language (`app/page.tsx`,
- * `app/tr/page.tsx`), so its first paint is in its reader's language. Top to bottom:
+ * The landing (DECISIONS C97, C99). It is served by two pages, one in each language (`app/page.tsx`,
+ * `app/tr/page.tsx`): English, and Turkish for a reader who chose it. Top to bottom:
  *
- *   hero            what this is in one sentence, and the waitlist: a name, an email, one button. The
- *                   village opens in turns now, so the list is the page's main action and it is the
- *                   first thing on it. Under the form, one quiet link to a short look at the
- *                   village (`lib/preview.ts`), which ends at the same form.
+ *   hero            THE PLANET, first (C99): the world itself, turning, and a place on it can be
+ *                   picked with a mouse or a thumb (`components/planet/HeroPlanet.tsx`). It has a box
+ *                   of its own: over the words on an upright screen, beside them on a wide one
+ *                   (`.hero-planet`, globals.css). For a week (C97) it was UNDER the words below
+ *                   1024px and answered no thumb, so a phone, and a computer whose window was narrow
+ *                   or zoomed in, opened on a headline and a form: "only text", in the owner's words,
+ *                   with the world a scroll away. Before that it filled the hero behind the words.
+ *                   Nothing is ever over it or under it, and it comes in when it has drawn (`.arrive`).
  *
- *                   THE PLANET has a box of its own: beside the words on a wide screen, under them on
- *                   a narrow one. It used to fill the hero behind the words, so on a phone the
- *                   headline was set over a turning sphere, and everywhere it appeared all at once a
- *                   second or two after the page. Now nothing is ever over it or under it, and it
- *                   comes in when it has drawn (`.arrive`). On a wide screen it can still be pointed
- *                   at and a parcel picked (`components/planet/HeroPlanet.tsx`).
+ *                   Then what this is in one sentence, and the waitlist: a name, an email, one button.
+ *                   The village opens in turns, so the list is the page's main action; the header's
+ *                   button for it is on the first screen at every size. Under the form, one quiet
+ *                   link to a short look at the village (`lib/preview.ts`), which ends at the same form.
  *   1  HowItGoes    what happens in the village, in three steps, and the finding it rests on.
  *   2  CharacterSelect  a figure to go with the place: the roster with a hole in it. Optional, and it
  *                   knows who has just joined above (`lib/waitlistSeat.ts`).
@@ -103,16 +107,24 @@ export default function Landing() {
 
       <main>
         {/* ───────────────────────── HERO ───────────────────────── */}
-        <section id="top" className="relative overflow-hidden bg-ink">
-          {/* The planet's box. From `lg` it is the right of the hero, edge to edge and top to bottom,
-              and the words keep to the left of where it starts; under `lg` it is a square under the
-              words. The words never share ground with it. */}
-          <div className={`${WRAP} relative flex flex-col lg:min-h-[100dvh] lg:justify-center`}>
-            <div className="relative z-10 pb-4 pt-[calc(60px+2.75rem)] sm:pt-[calc(60px+4rem)] lg:max-w-[min(540px,calc(46vw-3rem))] lg:py-[calc(60px+2rem)]">
-              <h1 className="text-balance text-[clamp(2rem,8.4vw,2.75rem)] font-semibold leading-[1.08] tracking-[-.03em] text-parchment lg:text-[clamp(2.5rem,3.7vw,3.6rem)]">{copy.h1}</h1>
-              <p className="mt-6 max-w-[34rem] text-[17px] leading-relaxed text-parchment/75 sm:text-lg">{copy.body}</p>
+        <section id="top" className="hero">
+          {/* The planet's box, and it is the first thing in the hero (C99): over the words on an upright
+              screen, the right half of a wide one, edge to edge and top to bottom, with the words kept
+              to the left of where it starts. One box, placed by the stylesheet (`.hero-planet`,
+              globals.css); the words never share ground with it. Under it, one line saying what it
+              is and that it can be pressed. */}
+          <div className="hero-planet">
+            <div className="hero-globe">
+              <HeroPlanet />
+            </div>
+            <p className="hero-hint">{copy.pick}</p>
+          </div>
+          <div className={`${WRAP} hero-row`}>
+            <div className="hero-words">
+              <h1 className="hero-title text-balance font-semibold leading-[1.08] tracking-[-.03em] text-parchment">{copy.h1}</h1>
+              <p className="mt-5 max-w-[34rem] text-[17px] leading-relaxed text-parchment/75 sm:text-lg">{copy.body}</p>
 
-              <div id="waitlist" className="mt-9 scroll-mt-28">
+              <div id="waitlist" className="mt-8 scroll-mt-28">
                 <WaitlistForm
                   where="landing"
                   after={
@@ -129,13 +141,6 @@ export default function Landing() {
                 </Link>
               </p>
             </div>
-
-            <div className="relative mx-auto mt-6 aspect-square w-full max-w-[420px] lg:hidden">
-              <HeroPlanetWhen wide={false} />
-            </div>
-          </div>
-          <div className="absolute inset-y-0 right-0 hidden w-[50vw] lg:block">
-            <HeroPlanetWhen wide />
           </div>
         </section>
 
@@ -146,26 +151,4 @@ export default function Landing() {
       <SiteFooter />
     </div>
   );
-}
-
-/**
- * The planet, mounted in the one of its two boxes this screen shows. Both boxes are in the page (one
- * is hidden by the stylesheet), and a planet in each would be two WebGL contexts for one picture.
- */
-function HeroPlanetWhen({ wide }: { wide: boolean }) {
-  const isWide = useWide();
-  return isWide === wide ? <HeroPlanet /> : null;
-}
-
-/** Whether the screen is `lg` or wider; null until the page is in a browser. */
-function useWide(): boolean | null {
-  const [wide, setWide] = useState<boolean | null>(null);
-  useEffect(() => {
-    const query = window.matchMedia("(min-width: 1024px)");
-    setWide(query.matches);
-    const listener = (event: MediaQueryListEvent) => setWide(event.matches);
-    query.addEventListener("change", listener);
-    return () => query.removeEventListener("change", listener);
-  }, []);
-  return wide;
 }

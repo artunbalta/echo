@@ -7,13 +7,16 @@
  * the whole table in the landing's first load. So the choice lives here, the table imports it, and
  * every existing import from `lib/i18n` still finds it there.
  *
- * WHICH LANGUAGE. The person's own choice, kept in this browser; before they have made one, the
- * browser's first language if it is Turkish, and English otherwise.
+ * WHICH LANGUAGE. English (C99): it is the site's language. Turkish is the person's own choice, made
+ * with the switch and kept in this browser. Before they have made one, a page is read in the language
+ * it was built in, which is English everywhere but at `/tr`, the address for a link meant to be read
+ * in Turkish. The browser's own language decides nothing: it used to (C69, C97), and a phone set to
+ * Turkish opened a Turkish site nobody had asked for.
  *
  * WHAT THE SERVER RENDERS. English, unless the page was built in another language and says so with
- * `ServedLang` (C97): the landing is built in both, and a Turkish reader is handed the Turkish one
- * (`middleware.ts`, `lib/langOf.ts`), so its words do not all change a moment after they appear. A
- * page with no `ServedLang` renders English on the server and switches on the client, as before.
+ * `ServedLang` (C97): the landing is built in both, and a reader who chose Turkish is handed the
+ * Turkish one (`middleware.ts`, `lib/langOf.ts`), so its words do not all change a moment after they
+ * appear. A page with no `ServedLang` renders English on the server and switches on the client.
  */
 import { useEffect, useSyncExternalStore } from "react";
 
@@ -26,33 +29,25 @@ export const LANG_NAME: Record<Lang, string> = { en: "English", tr: "Türkçe" }
 
 const KEY = "echo.lang";
 
-/** The browser's first choice, read as a language we have. */
-export function detectLang(languages: readonly string[]): Lang {
-  for (const l of languages) {
-    const base = l.toLowerCase().split("-")[0];
-    if (base === "tr") return "tr";
-    if (base === "en") return "en";
-  }
-  return "en";
-}
-
-let current: Lang | null = null;
+/** The person's choice, once it has been read or made; `undefined` until this browser has been asked. */
+let chosen: Lang | null | undefined;
 const listeners = new Set<() => void>();
 
-function read(): Lang {
-  if (current) return current;
+/** What the person chose here, or null if they have chosen nothing. */
+function choice(): Lang | null {
+  if (chosen !== undefined) return chosen;
   let kept: string | null = null;
   try {
     kept = localStorage.getItem(KEY);
   } catch {
     // nothing kept
   }
-  current = kept === "tr" || kept === "en" ? kept : detectLang(typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
-  return current;
+  chosen = kept === "tr" || kept === "en" ? kept : null;
+  return chosen;
 }
 
 export function setLang(lang: Lang): void {
-  current = lang;
+  chosen = lang;
   try {
     localStorage.setItem(KEY, lang);
   } catch {
@@ -62,13 +57,16 @@ export function setLang(lang: Lang): void {
   try {
     document.cookie = `${LANG_COOKIE}=${lang}; path=/; max-age=31536000; samesite=lax`;
   } catch {
-    // no cookies: the browser's own language decides, as on a first visit
+    // no cookies: the next page is built in English, and turns on arriving
   }
   if (typeof document !== "undefined") document.documentElement.lang = lang;
   for (const l of listeners) l();
 }
 
-/** The language, for a component. On the server and during hydration, the one the page was built in (English unless it says). */
+/**
+ * The language, for a component: the person's choice, and the one the page was built in where they
+ * have made none (English unless the page says). On the server and during hydration, the page's.
+ */
 export function useLang(): Lang {
   const served = useServedLang();
   const lang = useSyncExternalStore<Lang>(
@@ -76,7 +74,7 @@ export function useLang(): Lang {
       listeners.add(on);
       return () => listeners.delete(on);
     },
-    read,
+    () => choice() ?? served,
     () => served,
   );
   // The page says which language it is in, for a screen reader's voice and the browser's hyphenation.
