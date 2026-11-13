@@ -35,7 +35,7 @@ import { weatherOn } from "./weather.js";
 import { friendCircles } from "./social.js";
 import { gatheringsOn, type Gathering } from "./events.js";
 import { present, temperaments } from "./life.js";
-import { gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
+import { BENCH, benchSeat, gravesOn, householdOn, residentsOn, type Plot, type Point, type VillagePlan } from "./village.js";
 import { isMarketDay, isTravelDay, stallOf } from "./markets.js";
 
 // ── the dials ───────────────────────────────────────────────────────────────────
@@ -144,14 +144,19 @@ export function doorOf(plot: Plot): Point {
   return along({ x: plot.x, y: plot.y }, plot.facing, plot.depthM / 2 + 1.1);
 }
 
-/** A seat on one of the green's benches: two to a bench, a metre apart, facing the well. */
-function benchSeat(plan: VillagePlan, person: string): { at: Point; heading: number } {
-  const seats = plan.benches.length * 2;
-  if (seats === 0) return { at: greenSpot(plan, person, 0.8), heading: 0 };
-  const k = Math.floor(hash01(`${person}/bench`) * seats);
-  const b = plan.benches[Math.floor(k / 2)];
-  const side = k % 2 === 0 ? -0.5 : 0.5;
-  return { at: along(b, b.heading, side), heading: toward(b, plan.centre) };
+/**
+ * A seat on one of the green's benches: two to a bench, a metre apart, facing the well. `taken` is
+ * the seats the old already given one today hold: the one a person's hash picks, or the next free
+ * after it, so no two are ever drawn in the same place. Past the last seat, a spot on the green.
+ */
+function elderSeat(plan: VillagePlan, person: string, taken: Set<number>): { at: Point; heading: number } {
+  const seats = plan.benches.length * BENCH.seats.length;
+  if (seats === 0 || taken.size >= seats) return { at: greenSpot(plan, person, 0.8), heading: 0 };
+  let k = Math.floor(hash01(`${person}/bench`) * seats);
+  while (taken.has(k)) k = (k + 1) % seats;
+  taken.add(k);
+  const seat = benchSeat(plan, plan.benches[Math.floor(k / BENCH.seats.length)], BENCH.seats[k % BENCH.seats.length]);
+  return { at: { x: seat.x, y: seat.y }, heading: seat.heading };
 }
 
 /** A seat on the green, somewhere round the well, the same one every evening. */
@@ -405,6 +410,8 @@ export function dayPlans(
     const r = 0.7 + 0.11 * group.length;
     return onGreen({ x: centre.x + Math.cos(a) * r, y: centre.y + Math.sin(a) * r }, id);
   };
+  /** Bench seats given out today, so two of the old are never on one (see `elderSeat`). */
+  const seatsTaken = new Set<number>();
   for (const { person: p, plot } of residents) {
     const age = ageYears(p, day);
     // Infants are carried, and the ill keep to their beds (C66): neither has a day out of doors.
@@ -544,7 +551,7 @@ export function dayPlans(
       stay(SCHEDULE.childBed + j("play") - 0.08 * wet, 0, "play", plan.greenRadiusM * 0.45);
       bed();
     } else if (age >= SCHEDULE.elderYears) {
-      const seat = benchSeat(plan, p.id);
+      const seat = elderSeat(plan, p.id, seatsTaken);
       go(seat.at);
       if (gathering) {
         stay(gathering.g.t0, seat.heading, "sit");

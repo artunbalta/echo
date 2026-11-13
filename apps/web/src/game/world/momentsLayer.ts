@@ -30,9 +30,11 @@
  */
 import * as THREE from "three";
 import {
+  BENCH,
   MOMENT,
   MOMENTS,
   armOf,
+  benchPlace,
   benchSpot,
   doorSpot,
   eggLine,
@@ -60,12 +62,15 @@ import {
   type WorldClock,
 } from "@echo/planet";
 
-import { Crowd, hashUnit, lookFor, type Look } from "./crowd";
+import { Crowd, hashUnit, lookFor, type Look, type Task } from "./crowd";
 import { momentProps, type MomentProps } from "./momentProps";
 import type { DirectorLayer } from "./directorLayer";
 import type { InteriorLayer } from "./interiorLayer";
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
+import type { ActNow, PlayerLayer } from "./playerLayer";
+import { benchSeatAt, takenOn, type SeatAt } from "./seats";
 import type { SkyLayer } from "./skyLayer";
+import type { VillagersLayer } from "./villagersLayer";
 
 type P = { x: number; y: number };
 
@@ -75,6 +80,19 @@ export interface MomentsLayer extends WorldLayer {
   things(mx: number, my: number): Thing[];
   /** An act on one of them was finished: the moment plays out, a hidden thing is found. A line to say, or null. */
   acted(ref: string, verbId: string): string | null;
+  /**
+   * Where a thing let go in an act on one of them should be sent (C98): the child a ball is thrown to,
+   * the basket litter goes into. Local metres, and how high it arrives. Null leaves it to the body.
+   */
+  aimFor(ref: string, verbId: string): { x: number; y: number; upM: number } | null;
+  /**
+   * Where sitting down at one of them puts the stranger: beside the one on the bench or at its far
+   * end, in the gap by the fire, across her table. Null where there is no place of its own (they sit
+   * where they stand).
+   */
+  seatFor(ref: string, verbId: string): SeatAt | null;
+  /** Where its people were drawn sitting last frame, local metres: a seat with someone on it is taken. */
+  seated(): { x: number; y: number }[];
   /** Called once when the stranger has walked past a moment whose passing is data. */
   onPassed(fn: ((kind: MomentKind, ref: string, distM: number, arm: MomentArm | null) => void) | null): void;
   /** Called once when a promise made here came to nothing: the loaf never brought (C87). */
@@ -137,6 +155,8 @@ interface Live {
   looks: Look[];
   /** For the ball games: the throw that went to the stranger, and when it landed. */
   longAt: number | null;
+  /** When what the stranger let go (the ball thrown back) came down, seconds into the moment (C98). */
+  landedAt: number | null;
   /** C87. A passer's way, where they are now, and their meeting with the stranger. */
   path: { from: P; to: P; meet: P } | null;
   at: P;
@@ -159,6 +179,9 @@ interface Live {
   seenAt: number | null;
   nearest: number;
   reported: boolean;
+  /** A bench moment: which bench, and where along it the one sitting there sits (`BENCH`). */
+  bench: number | null;
+  seatAlong: number;
 }
 
 interface Errand {
@@ -195,6 +218,10 @@ interface Figure {
   wave?: number;
   lookUp?: number;
   lantern?: boolean;
+  /** What they are working at, while they work (C98, `crowd.ts`). */
+  task?: Task;
+  /** Sitting on something: its top, metres above the ground (`Pose.seatM`). */
+  seatM?: number;
 }
 
 const WALK_MPS = 1.4;
@@ -358,8 +385,19 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
   let beganFn: ((m: { ref: string; kind: MomentKind; lane: MomentLane; arm: string | null }) => void) | null = null;
   let overFn: ((row: SeenMoment) => void) | null = null;
   let me: P = { x: 0, y: 0 };
+  /** Where this layer's people were drawn sitting last frame. */
+  const sat: P[] = [];
   let nowS = 0;
   let dark = false;
+  /**
+   * The act the stranger's body is in the middle of, and how many things it let go are in the air
+   * (C98, `playerLayer.act`). A moment whose thing is in the stranger's hand does not draw it: the
+   * hand does. One whose thing answers the body (a gate walked shut, logs stacked) moves it as far as
+   * the body has got, where it used to wait for the act to be over and then play it by itself.
+   */
+  let doing: ActNow | null = null;
+  let inAir = 0;
+  const mine = (l: Live): ActNow | null => (doing && doing.arrived && doing.ref === `moment:${l.id}` ? doing : null);
 
   const ground = (): MomentGround => ({
     height: (x, y) => {
@@ -524,9 +562,12 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         return Array.from({ length: l.arm?.id === "crew" ? 3 : 1 }, (_, i) => ({ at: along(at(Math.PI, 0.8 + i * 1.1), side, 0.35 * (i % 2 ? 1 : -1)), age: 30 + hashUnit(`${l.id}|age|${i}`) * 35, sex: "m" as const, trade: "fisher" }));
       case "tangled-net":
         return [{ at: at(Math.PI / 2, 1.2), age: 40 + hashUnit(`${l.id}|age`) * 25, sex: "m", trade: "fisher" }];
-      case "bench-sit":
-        // At one end of the bench, sitting the way the bench faces.
-        return [{ at: along(l.spot, f + Math.PI / 2, 0.62), age: l.arm?.id === "elder" ? 72 : 28, sex: hashUnit(`${l.id}|s`) < 0.5 ? "f" : "m", trade: l.arm?.id === "elder" ? "weaver" : "farmer" }];
+      case "bench-sit": {
+        // ON the bench, toward one end of it. `f` is the way a sitter faces, so the plank runs across it.
+        const b = l.bench === null ? null : ctxRef?.region.village?.plan.benches[l.bench];
+        const at = b ? along(b, b.heading, l.seatAlong) : l.spot;
+        return [{ at, age: l.arm?.id === "elder" ? 72 : 28, sex: hashUnit(`${l.id}|s`) < 0.5 ? "f" : "m", trade: l.arm?.id === "elder" ? "weaver" : "farmer" }];
+      }
       case "unfinished-tale":
         // The old man, and two children sitting in front of him.
         return [{ at: l.spot, age: 78, sex: "m", trade: "weaver" }, { at: at(0.5, 1.3), age: 8, sex: "m", trade: "farmer" }, { at: at(-0.5, 1.3), age: 9, sex: "f", trade: "farmer" }];
@@ -616,6 +657,8 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
     const avoid: P[] = [...waysides.map((w) => w.spot), ...(lanes.people.live ? [lanes.people.live.spot] : []), ...(staged ? [{ x: staged.x, y: staged.y }] : [])];
     let spot: P | null = null;
     let facing = 0;
+    let bench: number | null = null;
+    let seatAlong = 0;
     let path: Live["path"] = null;
     if (lane === "passer") {
       path = passerPath(me, heading, id, g, PASS[next.kind]?.sideM ?? MOMENT.passer.sideM);
@@ -653,10 +696,17 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         facing = s.facing;
       }
     } else if (def.where === "bench" && plan) {
-      const s = benchSpot(me, heading, plan);
+      // A bench none of the village's own keeps a seat on today, if one is near; else any with room on it.
+      const villagers = ctx.layer<VillagersLayer>("villagers");
+      const keptBy = villagers?.benchesKept() ?? new Set<number>();
+      const end = (hashUnit(`${id}|end`) < 0.5 ? -1 : 1) * BENCH.endM;
+      const roomOn = (i: number) => benchPlace(takenOn(plan.benches[i]!, villagers?.seated() ?? []), end);
+      const s = benchSpot(me, heading, plan, (i) => !keptBy.has(i) && roomOn(i) !== null) ?? benchSpot(me, heading, plan, (i) => roomOn(i) !== null);
       if (s) {
-        spot = s;
+        spot = { x: s.x, y: s.y };
         facing = s.facing;
+        bench = s.bench;
+        seatAlong = roomOn(s.bench) ?? end;
       }
     } else if (def.where === "field" && plan) {
       const s = fieldSpot(me, heading, plan, g);
@@ -683,6 +733,8 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       }
     }
     if (!spot) {
+      // No bench with room on it: the rotation moves on, it does not wait for one.
+      if (def.where === "bench" && lane !== "wayside") lanes[lane].count = next.n;
       later(lane === "wayside" ? 4 : 6);
       return;
     }
@@ -714,10 +766,10 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
     const entry = path ? path.from : doorway ?? entryPoint(spot, me, id, g);
     const exit = path ? path.to : doorway ?? along(spot, toward(entry, spot), MOMENT.entryM);
     const l: Live = {
-      id, kind: next.kind, lane, arm, spot, facing, entry, exit, t0: now, arrive: 0, near: false, outcome: null, aim: null, looks: [], longAt: null,
+      id, kind: next.kind, lane, arm, spot, facing, entry, exit, t0: now, arrive: 0, near: false, outcome: null, aim: null, looks: [], longAt: null, landedAt: null,
       path, at: path ? path.from : spot, stoppedAt: null, goOnAt: null, met: false,
       pressure: errand && !errand.done && errand.kind === "carry" ? (errand.arm?.context?.time_pressure ?? 0) : 0,
-      spoke: false, spokeAt: 0, step: 0, variant, errandTo, seenS: 0, seenAt: null, nearest: Infinity, reported: false,
+      spoke: false, spokeAt: 0, step: 0, variant, errandTo, seenS: 0, seenAt: null, nearest: Infinity, reported: false, bench, seatAlong,
     };
     const c86People = l.kind === "village-dance" ? 6 : l.kind === "ball-game" || l.kind === "well-queue" ? 3 : l.kind === "well-custom" ? 2 : 1;
     const c87 = def.paradigm !== "C86";
@@ -738,8 +790,14 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       const far = Math.max(0, ...spots(l).map((s) => dist(entry, s)));
       l.arrive = far / (def.children ? RUN_MPS : WALK_MPS);
     } else l.arrive = lane === "people" ? 0.5 : 0;
-    if (lane === "wayside") waysides.push(l);
-    else lanes[lane].live = l;
+    if (lane === "wayside") {
+      waysides.push(l);
+      // The stream's gap runs from a beginning too (C98). Without it the clock stayed where the first one
+      // left it, in the past, and nothing but the two conditions in `update` stood between one thing and
+      // the next: two began a fifth of a second apart.
+      const [g0, g1] = MOMENT.lanes.wayside.gapS;
+      waysideNextAt = now + g0 + hashUnit(`${seed}|gap|wayside|${waysideCount}`) * (g1 - g0);
+    } else lanes[lane].live = l;
     beganFn?.({ ref: `moment:${l.id}`, kind: l.kind, lane, arm: l.arm?.id ?? null });
   };
 
@@ -838,7 +896,9 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
           const a = (hashUnit(`${l.id}|apple|${i}`) * 2 - 1) * Math.PI;
           const r = 0.6 + hashUnit(`${l.id}|appler|${i}`) * 1.6;
           const rest = along(l.spot, l.facing + a, r);
-          const gone = i / APPLES < gathered || (done && sinceDone > 0.4 + i * 0.08);
+          // Each one the stranger picks up is gone from the ground as it is picked (C98), the nearest first.
+          const helping = mine(l);
+          const gone = i / APPLES < gathered || (helping ? APPLES - 1 - i < helping.released + (helping.grip ? 1 : 0) : false) || (done && sinceDone > 0.4 + i * 0.08);
           if (t < spill || gone) continue;
           const k = Math.min(1, (t - spill) / 0.5);
           place(apples[i]!, { x: lerp(l.spot.x, rest.x, k), y: lerp(l.spot.y, rest.y, k) }, 0.08 + Math.sin(Math.PI * k) * 0.35);
@@ -856,21 +916,23 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       }
       case "stuck-cart": {
         const f = arriveOrLeave(0, along(l.spot, l.facing + Math.PI, 1.1));
-        const rolled = done ? Math.min(1, sinceDone / 2) : 0;
+        // It gives a little with every heave while the stranger is at it (C98), and comes free at the end.
+        const heaving = mine(l);
+        const rolled = done ? 0.12 + 0.88 * Math.min(1, sinceDone / 2) : heaving ? 0.12 * heaving.progress : 0;
         const cartAt = along(l.spot, l.facing + Math.PI / 2, rolled * 3);
         const stuck = t >= l.arrive && !done;
         if (cart) {
           const behind = f && t < l.arrive ? along({ x: f.x, y: f.y }, f.heading + Math.PI, 1.5) : f && leaving ? along({ x: f.x, y: f.y }, f.heading + Math.PI, 1.5) : cartAt;
           const yaw = f && (t < l.arrive || leaving) ? yawOf(f.heading) : yawOf(l.facing + Math.PI / 2);
           place(cart, behind, stuck ? -0.12 : 0, yaw);
-          cart.rotation.z = stuck ? 0.22 + Math.sin(t * 6) * 0.03 : 0;
+          cart.rotation.z = stuck ? 0.22 * (1 - 0.5 * (heaving?.progress ?? 0)) + Math.sin(t * (heaving ? 11 : 6)) * (heaving ? 0.05 : 0.03) : 0;
         }
         if (f) out.push(f);
         else if (done && sinceDone < 3.5) out.push({ x: cartAt.x - Math.cos(l.facing) * 1.1, y: cartAt.y - Math.sin(l.facing) * 1.1, heading: toward(l.spot, me), activity: "stand", speed: 0, wave: sinceDone > 2 ? Math.sin((Math.PI * (sinceDone - 2)) / 1.5) : 0 });
         else {
           const at = along(l.spot, l.facing + Math.PI, 1.1);
           // Straining at it, and, left to it too long, sitting down on the shaft.
-          out.push({ x: at.x, y: at.y, heading: l.facing, activity: t - l.arrive > 30 ? "sit" : "work", speed: 0 });
+          out.push({ x: at.x, y: at.y, heading: l.facing, activity: t - l.arrive > 30 && !heaving ? "sit" : "work", task: "push", speed: 0 });
         }
         break;
       }
@@ -895,6 +957,8 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
           let b: P;
           let k: number;
           let peak = 1.4;
+          // In the stranger's hand, or in the air from it (C98): the hand's to draw, not this layer's.
+          let theirs = false;
           if (l.longAt === null) {
             const n = Math.floor((t - l.arrive) / throwEvery);
             a = where[n % 2]!;
@@ -905,24 +969,23 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
             b = l.aim!;
             k = (t - (l.longAt - 1.1)) / 1.1;
             peak = 2.6;
+            const act = mine(l);
+            theirs = !!act && (act.grip || act.released > 0);
           } else {
-            // Thrown back by the stranger: to the one on their own, or to the others; then the game goes on.
+            // Thrown back by the stranger: to the one on their own, or to the others. It is the stranger's
+            // throw until it comes down; then the game goes on from whoever it went to.
             const included = done.verb === "to-alone";
-            const s = t - (done.at - l.t0);
             const players = included ? [where[2]!, where[0]!, where[1]!] : [where[0]!, where[1]!];
-            if (s < 1) {
-              a = l.aim!;
-              b = players[0]!;
-              k = s;
-            } else {
-              const n = Math.floor((s - 1) / throwEvery);
-              a = players[n % players.length]!;
-              b = players[(n + 1) % players.length]!;
-              k = ((s - 1) % throwEvery) / throwEvery;
-            }
+            if (l.landedAt === null && inAir === 0) l.landedAt = t;
+            theirs = l.landedAt === null;
+            const s = t - (l.landedAt ?? t);
+            const n = Math.floor(s / throwEvery);
+            a = players[n % players.length]!;
+            b = players[(n + 1) % players.length]!;
+            k = (s % throwEvery) / throwEvery;
           }
           const f = arc(a, b, k, peak);
-          if (ball) place(ball, f.p, Math.max(0.12, f.h));
+          if (ball && !theirs) place(ball, f.p, Math.max(0.12, f.h));
         }
         break;
       }
@@ -941,13 +1004,17 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
               l.aim = along(me, toward(l.spot, me), 1.1);
               l.longAt = t + 0.9;
             }
+            const act = mine(l);
             if (t < l.longAt) {
               const k = (t - (l.longAt - 0.9)) / 0.9;
               const p = arc(l.spot, me, k, 0.6);
               place(ball, p.p, 0.6 + p.h);
+            } else if (act && (act.grip || act.released > 0)) {
+              // Picked up to be rolled back (C98): in the stranger's hand, then along the ground from it.
             } else if (done?.verb === "laugh") {
-              const k = Math.min(1, (t - (done.at - l.t0)) / 1.2);
-              place(ball, { x: lerp(l.aim!.x, l.spot.x, k), y: lerp(l.aim!.y, l.spot.y, k) }, 0.12);
+              // Rolled back by the stranger: theirs until it stops at the child's feet.
+              if (l.landedAt === null && inAir === 0) l.landedAt = t;
+              if (l.landedAt !== null) place(ball, along(l.spot, toward(l.spot, l.aim!), 0.35), 0.12);
             } else place(ball, l.aim!, 0.12);
           }
         }
@@ -992,7 +1059,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
           }
           const place_ = i - turnsGone;
           const at = along(c, l.facing, 1.7 + 1.25 * place_);
-          out.push({ x: at.x, y: at.y, heading: toward(at, c), activity: place_ === 0 ? "work" : "stand", speed: 0, talk: done?.verb === "cut" && i === 2 && sinceDone < 3 ? 0.9 : 0 });
+          out.push({ x: at.x, y: at.y, heading: toward(at, c), activity: place_ === 0 ? "work" : "stand", task: "draw", speed: 0, talk: done?.verb === "cut" && i === 2 && sinceDone < 3 ? 0.9 : 0 });
           if (buckets[i]) place(buckets[i]!, along(at, toward(at, c) + 0.9, 0.35), 0.5);
         }
         if (t > l.arrive + 3 * step + 6) close("people", l.t0 + t, l);
@@ -1001,11 +1068,17 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       case "loose-hen": {
         const f = arriveOrLeave(0, l.spot);
         // The hen runs rings round the spot until it is caught; she goes after it, bent double.
-        const caught = done && done.verb !== "passed" && done.verb !== "expired" && done.verb !== "left";
+        // Caught the moment the stranger's hands close on it (C98), not when the bar has filled.
+        const caught = (done && done.verb !== "passed" && done.verb !== "expired" && done.verb !== "left") || !!mine(l)?.grip;
         const a = (t - l.arrive) * 2.1 + Math.sin(t * 3.3) * 0.6;
         const henAt = caught ? along(l.spot, l.facing, 0.5) : along(l.spot, a, 1.4 + Math.sin(t * 1.7) * 0.3);
         if (hen && t >= l.arrive && !(caught && sinceDone > 1.2) && !leaving) {
-          place(hen, henAt, Math.abs(Math.sin(t * 9)) * (caught ? 0 : 0.08), yawOf(a + Math.PI / 2));
+          const held = mine(l);
+          if (held?.grip) {
+            hen.position.copy(held.hand);
+            hen.position.y -= 0.12 * S();
+            hen.visible = true;
+          } else place(hen, henAt, Math.abs(Math.sin(t * 9)) * (caught ? 0 : 0.08), yawOf(a + Math.PI / 2));
         }
         if (f) out.push({ ...f, lantern: dark });
         else if (caught && sinceDone < 3.5) out.push({ x: l.spot.x, y: l.spot.y, heading: toward(l.spot, me), activity: "stand", speed: 0, wave: sinceDone > 1.2 ? 0.7 : 0, talk: 0.5, lantern: dark });
@@ -1046,8 +1119,10 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         if (door) {
           const shut = done && done.verb === "shut";
           const gust = Math.max(0, Math.sin(t * 1.9) * Math.sin(t * 0.7 + 1)) * 0.9 + 0.15;
+          // Pulled to by the stranger's hand as far as the hand has pulled it (C98).
+          const pulling = mine(l);
           place(door, l.spot, 0, yawOf(l.facing));
-          (door.children[0] as THREE.Object3D).rotation.y = shut ? 0 : -gust;
+          (door.children[0] as THREE.Object3D).rotation.y = shut ? 0 : pulling?.grip || (pulling && pulling.progress > 0) ? -0.5 * (1 - pulling.progress) : -gust;
         }
         break;
       }
@@ -1194,28 +1269,32 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
           }
         }
         const pass = (t * 0.7) % 1;
-        for (let i = 0; i < cast.length; i++) react(i, { heading: cast.length > 1 ? l.facing + Math.PI / 2 + (pass > 0.5 ? 0.6 : -0.6) : l.facing, activity: "work", talk: cast.length > 1 && i === 0 ? 0.4 : 0 });
+        for (let i = 0; i < cast.length; i++) react(i, { heading: cast.length > 1 ? l.facing + Math.PI / 2 + (pass > 0.5 ? 0.6 : -0.6) : l.facing, activity: "work", task: "lay", talk: cast.length > 1 && i === 0 ? 0.4 : 0 });
         break;
       }
       case "net-haul": {
         // At the water's edge, leaning back on the rope; hauled in, the net and its catch come up the sand.
+        // It comes up the sand as the stranger hauls (C98), and the rest of the way when it is done.
         const hauled = acted && answered("haul");
-        const up = hauled ? Math.min(1, sinceDone / 1.5) : 0;
+        const hauling = mine(l);
+        const up = hauled ? 0.7 + 0.3 * Math.min(1, sinceDone / 1.5) : hauling ? 0.7 * hauling.progress : 0;
         const netAt = at(0, lerp(2.2 - Math.sin(t * 1.3) * 0.12, 0.4, up));
         if (!leaving) place(P.net, netAt, 0.02, yawOf(l.facing));
         if (hauled && !leaving) for (let i = 0; i < P.fish.length; i++) place(P.fish[i]!, along(netAt, l.facing + Math.PI / 2, (i - 3.5) * 0.18), 0.06 * s, yawOf(l.facing + hashUnit(`${l.id}|f|${i}`)));
-        for (let i = 0; i < cast.length; i++) react(i, { heading: l.facing, activity: "work", talk: i === 0 ? 0.3 : 0.05 });
+        for (let i = 0; i < cast.length; i++) react(i, { heading: l.facing, activity: "work", task: "haul", talk: i === 0 ? 0.3 : 0.05 });
         break;
       }
       case "bench-sit":
-        // Sitting at one end, looking out the way the bench looks.
-        there(0, { heading: l.facing, activity: "sit", talk: done && acted && sinceDone < 3 ? 0.4 : 0 });
+        // Sitting toward one end, looking out the way the bench looks, hips on the plank.
+        there(0, { heading: l.facing, activity: "sit", seatM: BENCH.seatTopM, talk: done && acted && sinceDone < 3 ? 0.4 : 0 });
         break;
       case "unfinished-tale": {
         // He tells it with his hands; at the pause he fills his pipe; the children hang on the end.
         const pausing = l.step === 1;
         const ended = l.step >= 2 || (acted && answered("ask-end"));
-        there(0, { heading: toward(cast[0]!.at, l.spot) + Math.PI, activity: "sit", talk: pausing ? 0.05 : ended ? 0.5 : 0.85, wave: !pausing && !ended && Math.sin(t * 1.1) > 0.5 ? 0.4 : 0 });
+        // Facing the children (they sit in front of him, either side of `facing`). It was `toward(his own
+        // place, the spot) + π`, which is the same point twice: due west, whichever way they sat.
+        there(0, { heading: l.facing, activity: "sit", talk: pausing ? 0.05 : ended ? 0.5 : 0.85, wave: !pausing && !ended && Math.sin(t * 1.1) > 0.5 ? 0.4 : 0 });
         if (pausing && !leaving) place(P.kaval, along(cast[0]!.at, l.facing, 0.22), 0.95 * s, yawOf(l.facing));
         for (let i = 1; i < cast.length; i++) there(i, { heading: toward(cast[i]!.at, cast[0]!.at), activity: "sit", talk: ended ? 0.9 : 0, wave: ended && i === 1 ? 0.5 : 0 });
         break;
@@ -1266,7 +1345,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         const r = cast[0]!;
         if (!leaving) place(P.net, at(0, 0.4), 0.05, yawOf(l.facing + 0.5));
         if (!leaving) P.net.scale.set(0.7, 3, 0.7);
-        react(0, { heading: toward(r.at, at(0, 0.4)), activity: "stoop", talk: 0.3 });
+        react(0, { heading: toward(r.at, at(0, 0.4)), activity: "stoop", task: "mend", talk: 0.3 });
         break;
       }
       case "bread-errand": {
@@ -1371,26 +1450,33 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       // ── things by the way: nobody about ──
       case "lost-purse": {
         const coins = Number(l.arm?.raw?.coins ?? 2);
-        const left = answered("leave");
-        const taken = answered("take-all") ? coins : answered("take-one") ? 1 : 0;
+        // What the stranger's hand has closed on is in the hand (C98): the coins, or the purse on its way to the wall.
+        const hand = mine(l);
+        const lifting = hand?.verb === "leave";
+        const left = answered("leave") || (lifting && hand.released > 0);
+        const taken = answered("take-all") || (hand?.verb === "take-all" && hand.grip) ? coins : answered("take-one") || (hand?.verb === "take-one" && hand.grip) ? 1 : 0;
         const purseAt = left ? at(0.6, 1.1) : l.spot;
-        if (left) place(P.ledge, at(0.6, 1.1), 0, yawOf(l.facing));
-        place(P.purse, purseAt, left ? 0.62 * s : 0.05 * s, yawOf(l.facing));
+        if (left || lifting) place(P.ledge, at(0.6, 1.1), 0, yawOf(l.facing));
+        if (!(lifting && hand.grip)) place(P.purse, purseAt, left ? 0.62 * s : 0.05 * s, yawOf(l.facing));
         if (!left) for (let i = 0; i < coins - taken; i++) place(P.coins[i]!, along(l.spot, l.facing + 0.7 + i * 0.5, 0.16 + (i % 3) * 0.05), 0.01 * s, yawOf(i));
         break;
       }
       case "open-gate": {
         place(P.gate, l.spot, 0, yawOf(l.facing + Math.PI / 2));
+        // Walked shut by the stranger: it swings as far as they have walked it (C98).
         const shut = answered("shut-gate");
-        const swing = shut ? Math.max(0, 1.2 * (1 - Math.min(1, sinceDone / 1.2))) : 1.2;
+        const walking_ = mine(l);
+        const swing = shut ? 0 : walking_ ? 1.2 * (1 - walking_.progress) : 1.2;
         (P.gate.children[2] as THREE.Object3D).rotation.y = -swing;
         break;
       }
       case "litter": {
         const n = Number(l.arm?.raw?.litter ?? 1);
-        const tidied = answered("tidy");
+        // The piece the stranger picks up is in their hand, then in the air to the basket (C98).
+        const tidying = mine(l);
+        const tidied = answered("tidy") || (!!tidying && (tidying.grip || tidying.released > 0));
         for (let i = 0; i < n; i++) {
-          if (tidied && i === 0 && sinceDone > 0.5) continue;
+          if (tidied && i === 0) continue;
           const a = i === 0 ? 0 : hashUnit(`${l.id}|lt|${i}`) * Math.PI * 2;
           const r = i === 0 ? 0 : 0.7 + hashUnit(`${l.id}|lr|${i}`) * 2.4;
           place(P.litter[i]!, along(l.spot, a, r), 0.02 * s, yawOf(a * 3));
@@ -1408,8 +1494,13 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         break;
       }
       case "woodpile": {
-        const neat = answered("stack") ? Math.min(1, sinceDone / 1.2) : 0;
+        // One log at a time, as the stranger sets each on the pile (C98); the last of them when it is done.
+        const stacking = mine(l);
+        const set = answered("stack") ? P.logs.length : stacking ? Math.min(P.logs.length - 1, stacking.released + Math.floor(stacking.progress * (P.logs.length - 4))) : 0;
         for (let i = 0; i < P.logs.length; i++) {
+          const neat = i < set ? 1 : 0;
+          // The one in the stranger's hands is in their hands.
+          if (stacking?.grip && i === set) continue;
           const fallen = { p: along(l.spot, hashUnit(`${l.id}|wa|${i}`) * Math.PI * 2, 0.3 + hashUnit(`${l.id}|wr|${i}`) * 1.3), lift: 0.08 * s, yaw: hashUnit(`${l.id}|wy|${i}`) * Math.PI * 2 };
           const row = Math.floor(i / 3);
           const stacked = { p: along(l.spot, l.facing + Math.PI / 2, ((i % 3) - 1 + (row % 2) * 0.5) * 0.18), lift: (0.08 + row * 0.15) * s, yaw: yawOf(l.facing) };
@@ -1421,7 +1512,9 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       }
       case "honey-stall": {
         place(P.stall, l.spot, 0, yawOf(l.facing));
-        const gone = answered("three-jars") ? 3 : answered("one-jar") ? 1 : 0;
+        // A jar is off the stall when the stranger's hand closes on it (C98): one reach, one jar.
+        const taking = mine(l);
+        const gone = answered("three-jars") ? 3 : answered("one-jar") ? 1 : taking && (taking.verb === "three-jars" || taking.verb === "one-jar") ? Math.round(taking.progress * (taking.verb === "three-jars" ? 3 : 1)) : 0;
         for (let i = gone; i < P.jars.length; i++) place(P.jars[i]!, along(l.spot, l.facing + Math.PI / 2, (i - 2) * 0.2), 0.88 * s, 0);
         if (l.arm?.id === "eye") place(P.nazar, along(l.spot, l.facing + Math.PI, 0.22), 1.42 * s, yawOf(l.facing));
         break;
@@ -1661,6 +1754,9 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       const at = player.position();
       const [mx, my] = frame.toLocalM(at.x, at.y);
       me = { x: mx, y: my };
+      const body = ctx.layer<WorldLayer & Partial<Pick<PlayerLayer, "act" | "inFlight">>>("player");
+      doing = body?.act?.() ?? null;
+      inAir = body?.inFlight?.() ?? 0;
       const hour = ctx.layer<SkyLayer>("sky")?.timeOfDay() ?? 0.5;
       dark = hour > 0.8 || hour < 0.24;
       const indoors = ctx.layer<InteriorLayer>("interior")?.inside() ?? null;
@@ -1681,7 +1777,9 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         const t = now - w.t0;
         if (dist(me, w.spot) > MOMENT.wayside.goneM || t > MOMENTS[w.kind].lifeS || (w.outcome && now - w.outcome.at > 4)) close("wayside", now, w);
       }
-      if (now >= waysideNextAt && waysides.length < MOMENT.wayside.max && !waysides.some((w) => !w.outcome && dist(w.spot, me) < MOMENT.wayside.wantM)) {
+      // One just answered still stands for four seconds, and the gap follows its going (C98): the next
+      // used to begin on the frame of the answer, ahead of the stranger, while the jar was still in the air.
+      if (now >= waysideNextAt && waysides.length < MOMENT.wayside.max && !waysides.some((w) => w.outcome || dist(w.spot, me) < MOMENT.wayside.wantM)) {
         if (quiet) waysideNextAt = now + 5;
         else begin("wayside", ctx, now, hour);
       }
@@ -1689,6 +1787,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       for (const o of props.all) o.visible = false;
       if (lamp2) lamp2.visible = false;
       props.fireLight.intensity = 0;
+      sat.length = 0;
       crowd.begin();
       let lamps = 0;
       // The way the view looks, on the ground (C87: what is in front of it is what the stranger sees).
@@ -1783,9 +1882,12 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
               wave: f.wave,
               lantern,
               lookUp: f.lookUp,
+              task: f.task,
+              seatM: f.seatM,
             },
             l.looks[i] ?? l.looks[0]!,
           );
+          if (f.activity === "sit") sat.push({ x: f.x, y: f.y });
           const flame = lamps === 0 ? lamp : lamps === 1 ? lamp2 : null;
           if (lantern && flame && crowd.lanternAt(handAt)) {
             flame.position.copy(handAt);
@@ -1803,7 +1905,7 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         const f = stepErrand(errand, dt, now);
         if (f) {
           const [tx, ty] = frame.fromLocalM(f.x, f.y);
-          crowd.pose({ x: tx * frame.tileM, y: Math.max(0, frame.heightAtTile(tx, ty)), z: ty * frame.tileM, yaw: f.heading + Math.PI / 2, activity: f.activity, speed: f.speed, time: now, phase0: 1.3, talk: f.talk, wave: f.wave, lantern: !!f.lantern }, errand.look);
+          crowd.pose({ x: tx * frame.tileM, y: Math.max(0, frame.heightAtTile(tx, ty)), z: ty * frame.tileM, yaw: f.heading + Math.PI / 2, activity: f.activity, speed: f.speed, time: now, phase0: 1.3, talk: f.talk, wave: f.wave, lantern: !!f.lantern, task: f.task }, errand.look);
           if (errand.kind === "escort" && errand.from === "heavy-jugs" && props) place(props.jugs[1]!, along(errand.at, errand.heading - Math.PI / 2, 0.42), 0.25 * S(), yawOf(errand.heading));
           const flame = lamps === 0 ? lamp : lamps === 1 ? lamp2 : null;
           if (f.lantern && flame && crowd.lanternAt(handAt)) {
@@ -1832,6 +1934,22 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
         out.push({ ref: `egg:${e.id}`, kind: e.kind, x: e.x, y: e.y, sizeM: e.kind === "lookout-rock" ? 1.6 : e.kind === "still-pool" ? 1.1 : 0.5, owners: [], name: EGG_NAMES[e.kind] });
       }
       return out;
+    },
+
+    aimFor(ref, verbId) {
+      const l = lives().find((x) => ref === `moment:${x.id}`);
+      if (!l) return null;
+      const where = spots(l);
+      // A ball thrown back goes to a child's hands: the one left out, or one of the two who were playing.
+      if (l.kind === "ball-game") {
+        const to = verbId === "to-alone" ? where[2] : where[0];
+        return to ? { ...to, upM: 0.8 * S() } : null;
+      }
+      // Rolled back, it stops at the feet of the child who threw it.
+      if (l.kind === "stray-ball") return l.aim ? { ...along(l.spot, toward(l.spot, l.aim), 0.35), upM: 0.12 * S() } : null;
+      // Litter goes into the basket by the wall.
+      if (l.kind === "litter") return { ...along(l.spot, l.facing + Math.PI / 2, 2.2), upM: 0.4 * S() };
+      return null;
     },
 
     acted(ref, verbId) {
@@ -1873,6 +1991,38 @@ export function momentsLayer(options: { clock: WorldClock }): MomentsLayer {
       }
       return null;
     },
+
+    seatFor(ref, verbId) {
+      const l = lives().find((x) => ref === `moment:${x.id}`);
+      const plan = ctxRef?.region.village?.plan;
+      if (!l || l.outcome || !frame) return null;
+      if (l.kind === "bench-sit" && plan && l.bench !== null) {
+        // Beside them is one body's width from them, toward the bench's middle; the far end is the other
+        // end. Either way a place nobody is on: `benchPlace` moves it clear of whoever else sits there.
+        const toMiddle = l.seatAlong > 0 ? -1 : 1;
+        const want = verbId === "sit-far" ? toMiddle * BENCH.endM : l.seatAlong + toMiddle * BENCH.apartM;
+        const taken = [l.seatAlong, ...takenOn(plan.benches[l.bench]!, ctxRef?.layer<VillagersLayer>("villagers")?.seated() ?? [])];
+        const room = benchPlace(taken, want);
+        return room === null ? null : benchSeatAt(frame, plan, l.bench, room);
+      }
+      if (l.kind === "campfire" && verbId === "sit-fire") {
+        // The gap in the ring nearest where the stranger stands, as far from the fire as everyone in it.
+        const n = castOf(l).length;
+        const step = (Math.PI * 2) / n;
+        const first = l.facing + 0.4 + step / 2;
+        const at = along(l.spot, first + Math.round((toward(l.spot, me) - first) / step) * step, 1.3);
+        return { x: at.x, y: at.y, heading: toward(at, l.spot), topM: null };
+      }
+      if (l.kind === "tea-invite" && verbId === "sit-tea") {
+        // Across her low table from her.
+        const her = castOf(l)[0]!.at;
+        const at = along(along(her, l.facing + 0.9, 0.8), l.facing + 0.9, 0.7);
+        return { x: at.x, y: at.y, heading: toward(at, her), topM: null };
+      }
+      return null;
+    },
+
+    seated: () => sat.map((p) => ({ ...p })),
 
     onPassed(fn) {
       passedFn = fn;

@@ -5,6 +5,9 @@ import * as THREE from "three";
 import { PALETTE, hashStr } from "./palette";
 export const UNITS_PER_TILE = 1;
 export const BODY_H = 1.05;
+/** How far the hips drop to sit, and the top of the seat that puts under the thighs: rig units above the root. */
+export const SIT_DROP = .16;
+export const SIT_SEAT = .455 - SIT_DROP - .072;
 const mat = (color: number) => new THREE.MeshLambertMaterial({ color });
 const shape = (w: number, h: number, d: number) => {
   const g = new THREE.SphereGeometry(0.5, 24, 16);
@@ -146,7 +149,7 @@ export function poseCharacter(p: CharacterParts, s: PoseInput) {
   // return early, so whatever is carried is shown first.
   p.carry.visible = s.carrying;
   if (s.activity === 'sit' || s.activity === 'row') {
-    p.body.position.y -= .16;
+    p.body.position.y -= SIT_DROP;
     p.legL.rotation.x = p.legR.rotation.x = -1.45;
     p.kneeL.rotation.x = p.kneeR.rotation.x = 1.5;
     p.footL.rotation.x = p.footR.rotation.x = -.05;
@@ -210,10 +213,23 @@ const elbowPoint = new THREE.Vector3(), lowerDirection = new THREE.Vector3();
 const shoulderRotation = new THREE.Quaternion(), elbowRotation = new THREE.Quaternion();
 /** Reach a world-space contact with a connected two-bone arm. Returns false outside arm's reach. */
 export function reachCharacter(p: CharacterParts, side: -1 | 1, worldTarget: THREE.Vector3, weight = 1): boolean {
+  return solveArm(p, side, worldTarget, weight, false);
+}
+/**
+ * Put a hand at a world-space point, or as near it as the arm goes (C98): what an act's hand does.
+ * Where `reachCharacter` declines a point out of reach (a wall is braced against or it is not), this
+ * stretches toward it, because a hand going out to a jar goes out all the way.
+ */
+export function stretchCharacter(p: CharacterParts, side: -1 | 1, worldTarget: THREE.Vector3, weight = 1): boolean {
+  return solveArm(p, side, worldTarget, weight, true);
+}
+function solveArm(p: CharacterParts, side: -1 | 1, worldTarget: THREE.Vector3, weight: number, stretch: boolean): boolean {
   p.root.updateMatrixWorld(true);
   const shoulder = side < 0 ? p.armL : p.armR, elbow = side < 0 ? p.elbowL : p.elbowR;
   reachTarget.copy(worldTarget); p.torso.worldToLocal(reachTarget); reachTarget.sub(shoulder.position);
-  const distance=reachTarget.length(), upper=.17, lower=.15;
+  const upper=.17, lower=.15;
+  if (stretch) reachTarget.clampLength(.05, (upper+lower)*.985);
+  const distance=reachTarget.length();
   if (distance > upper+lower || distance < .025) return false;
   reachDirection.copy(reachTarget).normalize();
   reachPole.set(side*.75,-.5,-.2).addScaledVector(reachDirection,-reachPole.dot(reachDirection)).normalize();

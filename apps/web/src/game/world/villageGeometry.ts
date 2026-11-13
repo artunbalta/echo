@@ -24,7 +24,7 @@
  */
 
 import * as THREE from "three";
-import { DYES, HOME, PLACEABLE, gravesOn, plotState, type Home, type Plot, type PlotState, type SettledParcel, type VillageStyle } from "@echo/planet";
+import { BENCH, DYES, HOME, PLACEABLE, gravesOn, plotState, type Home, type Plot, type PlotState, type SettledParcel, type VillageStyle } from "@echo/planet";
 
 import { PALETTE } from "../three/palette";
 import type { WorldFrame } from "./PlanetWorld";
@@ -560,12 +560,12 @@ export function buildVillage(frame: WorldFrame, v: SettledParcel, day: number): 
   well(built, sw);
   footprints.push({ x: plan.centre.x, y: plan.centre.y, heading: 0, halfAlong: 1.1, halfAcross: 1.1 });
 
-  // The benches round the green, where the old sit. A plank on two trestles, the seat at the
-  // height the crowd's sitting pose puts a pair of hips.
+  // The benches round the green, where the old sit. A plank on two trestles, built from `BENCH`:
+  // whoever sits on one is put on that top (`Pose.seatM`, `Seat.topM`), so the two cannot drift.
   for (const b of plan.benches) {
     built.setTransform(placement(frame, b.x, b.y, b.heading, Math.max(0, groundAt(frame, b.x, b.y))));
-    built.box(0, 0.4, 0, 2.3, 0.1, 0.42, rgb(PALETTE.woodLight));
-    for (const x of [-0.9, 0.9]) built.box(x, 0.18, 0, 0.14, 0.36, 0.38, rgb(PALETTE.wood));
+    built.box(0, BENCH.seatTopM - 0.05, 0, BENCH.lengthM, 0.1, BENCH.depthM, rgb(PALETTE.woodLight));
+    for (const x of [-0.9, 0.9]) built.box(x, (BENCH.seatTopM - 0.09) / 2, 0, 0.14, BENCH.seatTopM - 0.09, BENCH.depthM - 0.04, rgb(PALETTE.wood));
   }
 
   // Fields, draped on the ground in furrow stripes along their length.

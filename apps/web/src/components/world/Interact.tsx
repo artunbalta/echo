@@ -36,8 +36,10 @@ import type { LayerContext } from "@/game/world/PlanetWorld";
 import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
+import { seatOf } from "@/game/world/seats";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
+import { actFor } from "@/lib/actSites";
 import { beatText, nameText, t, useLang, verbLabel } from "@/lib/i18n";
 import { closePanel, usePanel } from "@/lib/panels";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
@@ -126,14 +128,19 @@ export default function Interact({
   consent,
   chain,
   coarse,
+  look = false,
 }: {
   world: () => PlanetWorld | null;
   cell: string;
   consent: ConsentState;
   chain: MeasureChain;
   coarse: boolean;
+  /** A look (C97): the card is never shown, so an act is done without it and nothing of it is kept. */
+  look?: boolean;
 }) {
   const lang = useLang();
+  /** The consent card is standing at the foot of the screen: unanswered, and not a look (which never shows it). */
+  const carded = consent === "unset" && !look;
   const [near, setNear] = useState<NearThing | null>(null);
   const [talkable, setTalkable] = useState<NearVillager | null>(null);
   const [acting, setActing] = useState<Acting | null>(null);
@@ -176,6 +183,14 @@ export default function Interact({
   actingRef.current = acting;
   const carryingRef = useRef<string | null>(null);
   carryingRef.current = carrying;
+  /** Moments answered on this page (one answer each, `momentsLayer.acted`): never offered or begun again. */
+  const answered = useRef(new Set<string>());
+  /**
+   * Not yet seen standing still since the act was begun. Walking that was already under way is not a wish
+   * to stop it (let go, then asked again, is), and whether it was under way is not asked of the body at
+   * the press: its answer is a frame old, and W and E pressed together were read as E, then a walk.
+   */
+  const walkedIn = useRef(false);
 
   /** Make something (C47): the pack is checked and changed by the server. */
   const makeIt = useCallback(async (recipe: Recipe) => {
@@ -513,6 +528,12 @@ export default function Interact({
       }
       // A moment plays out, and a hidden thing says what was found (C86).
       const told = done && (a.thing.ref.startsWith("moment:") || a.thing.ref.startsWith("egg:")) ? (layers().moments?.acted(a.thing.ref, a.verb.id) ?? null) : null;
+      // What is near was last read before the act began (the clock below does not look while one is under
+      // way), and the layer reads it again only every 0.15 s: until then both still name this moment.
+      if (done && a.thing.ref.startsWith("moment:")) {
+        answered.current.add(a.thing.ref);
+        setNear(null);
+      }
       if (done && told) say(beatText(lang, told), 6500);
       else if (done && a.verb.beat) say(MOMENTARY.has(a.thing.kind) ? beatText(lang, a.verb.beat) : a.verb.beat);
       // Something done for a villager changes the terms: asking them again is not pressing (C58).
@@ -559,24 +580,32 @@ export default function Interact({
 
   const begin = useCallback(
     (verb: Verb, thing: NearThing) => {
-      if (actingRef.current) return;
+      if (actingRef.current || answered.current.has(thing.ref)) return;
       if (verb.id === "talk") {
         window.dispatchEvent(new CustomEvent("echo:talk"));
         return;
       }
-      if (touchesTheWorld(verb) && consent === "unset") {
+      // On a look (C97) there is no card to answer: the act is done, and nothing of it is kept (`finish`
+      // records only with an answer). It used to be refused there with "Answer the card first", for good.
+      if (touchesTheWorld(verb) && carded) {
         say("Answer the card first: what you do here is remembered, and that needs the answer, either way.");
         return;
       }
-      const { player, ctx } = layers();
+      const { player, ctx, moments } = layers();
       if (!player || !ctx) return;
       const [tx, ty] = ctx.frame.fromLocalM(thing.x, thing.y);
-      player.perform(verb.pose, { x: tx, y: ty });
+      // The act itself (C98): the body steps up to the thing and does the verb's own gesture, with the
+      // thing in its hand where there is one; where a thing let go is sent is the thing's layer's to say.
+      // Sitting down at something that has a place to sit is sitting ON it (`seatOf`), not where one stood.
+      const to = moments?.aimFor(thing.ref, verb.id) ?? null;
+      const aim = to ? { x: ctx.frame.fromLocalM(to.x, to.y)[0], y: ctx.frame.fromLocalM(to.x, to.y)[1], upM: to.upM } : null;
+      player.perform(verb.pose, { x: tx, y: ty }, { ...actFor(verb, thing, carryingRef.current, aim), seat: verb.gesture === "sit" ? seatOf(ctx, thing, verb.id) : null });
+      walkedIn.current = true;
       const decisionMs = seenSince.current?.ref === thing.ref ? performance.now() - seenSince.current.at : 0;
       setActing({ verb, thing, startedAt: performance.now(), decisionMs });
       say(null);
     },
-    [consent, layers, say],
+    [carded, layers, say],
   );
 
   /** Put what is in the hand back in the pack. */
@@ -589,8 +618,10 @@ export default function Interact({
       }
       const { player } = layers();
       if (!player) return;
-      player.perform("build", null);
-      setActing({ verb: recipeVerb(r), thing: SELF, startedAt: performance.now(), decisionMs: 0, recipe: r });
+      const making = recipeVerb(r);
+      player.perform("build", { x: player.position().x, y: player.position().y }, actFor(making, SELF, null));
+      walkedIn.current = true;
+      setActing({ verb: making, thing: SELF, startedAt: performance.now(), decisionMs: 0, recipe: r });
       say(null);
     },
     [consent, layers, say],
@@ -688,13 +719,19 @@ export default function Interact({
       const { interact, villagers, player } = layers();
       const a = actingRef.current;
       if (a) {
-        const held = (performance.now() - a.startedAt) / 1000;
+        // The act's clock is the body's (C98): it starts when the feet have reached the thing.
+        const held = player?.actSeconds() ?? (performance.now() - a.startedAt) / 1000;
         if (a.verb.holdS > 0) {
           setProgress(Math.min(1, held / a.verb.holdS));
           if (held >= a.verb.holdS) return finish(false);
         }
         // Walking is how a person stops. An act with no length (sitting) is FINISHED by getting up.
-        if (player?.wantsToMove()) finish(a.verb.holdS > 0);
+        // And only a wish to walk made AFTER the act began (C98): E pressed without letting go of W was
+        // abandoned inside this clock's first tick, with no line and nothing done, and sent to the echo
+        // as a refusal.
+        const wants = player?.wantsToMove() ?? false;
+        if (!wants) walkedIn.current = false;
+        else if (!walkedIn.current) finish(a.verb.holdS > 0);
         return;
       }
       if (aboardRef.current) {
@@ -725,7 +762,8 @@ export default function Interact({
         h.told = true;
         void chain.emitAction("ignores_pet", { cue: "D11" as never, channel: "D" as never, polarity: "refuse", raw: { amount: 0, dwell_ms: Math.round(performance.now() - Math.max(h.since, h.lastKind)) }, target: { id: `animal:${dog}`, kind: "pet" }, contextOverride: { stakes: "low", public_or_private: "private", counterpart_status: "none" } });
       }
-      const n = interact?.nearest() ?? null;
+      const read = interact?.nearest() ?? null;
+      const n = read && answered.current.has(read.ref) ? null : read;
       if (n && seenSince.current?.ref !== n.ref) seenSince.current = { ref: n.ref, at: performance.now() };
       setNear(n);
       // Out of your own house after arranging it (C59): the room, read once, as the echo hears it.
@@ -813,7 +851,9 @@ export default function Interact({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (typing() || talking) return;
+      // A key held down repeats some thirty times a second, and each repeat was read as a new press (C98):
+      // E held began the same act again the instant it was done, on a thing no longer there.
+      if (typing() || talking || e.repeat) return;
       if (e.code === "KeyT" && talkable && !actingRef.current) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("echo:talk"));
@@ -862,7 +902,9 @@ export default function Interact({
   return (
     <>
       {acting ? (
-        <div data-acting={acting.verb.id} className="pointer-events-none absolute bottom-32 left-1/2 z-30 w-56 -translate-x-1/2 text-center">
+        // Above the consent card while it stands, where the prompt it replaces was (C94): at the foot of
+        // the screen the bar was drawn across the card's second paragraph.
+        <div data-acting={acting.verb.id} className={`pointer-events-none absolute left-1/2 z-30 w-56 -translate-x-1/2 text-center ${carded ? "bottom-64" : "bottom-32"}`}>
           <p className="hud-shadow text-xs text-parchment/85">
             {verbLabel(lang, acting.verb.label)}
             {acting.verb.holdS === 0 ? ` · ${t(lang, "prompt.moveToGetUp")}` : ""}
@@ -904,7 +946,7 @@ export default function Interact({
       ) : near || talkHint ? (
         // Above the consent card while it stands (C94): on arrival the nearest tuft of grass put its
         // prompt across the card's first line.
-        <div data-interact-prompt={near?.ref ?? ""} className={`absolute left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${consent === "unset" ? "bottom-64" : "bottom-28"} ${coarse ? "" : "pointer-events-none"}`}>
+        <div data-interact-prompt={near?.ref ?? ""} className={`absolute left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 ${carded ? "bottom-64" : "bottom-28"} ${coarse ? "" : "pointer-events-none"}`}>
           {near ? (
             <span className="rounded-full bg-ink-deep/80 px-3 py-1 text-xs text-parchment backdrop-blur-md">{nameText(lang, title(near))}</span>
           ) : null}
@@ -1028,7 +1070,8 @@ export default function Interact({
         </section>
       ) : null}
       {line ? (
-        <p data-act-line className="hud-shadow hud-in pointer-events-none absolute bottom-44 left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-parchment">
+        // And the line clear of the card too, over the prompt: it was drawn across the card's title.
+        <p data-act-line className={`hud-shadow hud-in pointer-events-none absolute left-1/2 z-30 w-[min(520px,90vw)] -translate-x-1/2 text-center font-serif text-[15px] text-parchment ${carded ? "bottom-[21rem]" : "bottom-44"}`}>
           {line}
         </p>
       ) : null}

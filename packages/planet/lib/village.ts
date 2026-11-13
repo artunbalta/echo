@@ -148,7 +148,8 @@ export interface VillagePlan {
   graveyard: Graveyard | null;
   /**
    * Benches round the green, facing the well, where the old sit through the day. Two seats each, a
-   * metre apart along the bench. Static: the place has them whoever sits on them.
+   * metre apart along the bench. Static: the place has them whoever sits on them. `heading` is the
+   * way the PLANK runs (along the green's edge), not the way a sitter faces: that is {@link benchOut}.
    */
   benches: { x: number; y: number; heading: number }[];
   /**
@@ -166,6 +167,65 @@ export interface VillagePlan {
    * `villageAt`, which has the planet to find the neighbours with; absent on a plan made without it.
    */
   market?: Market | null;
+}
+
+// ── a bench, as something sat on ────────────────────────────────────────────────
+
+/**
+ * The one description of a bench as a seat. The mesh is built from it, the schedule seats the old by
+ * it, a moment seats its people by it and the stranger is sat down by it, so nobody is beside a bench
+ * that somebody else is on. Metres; `seatTopM` is above the ground at the bench's middle.
+ */
+export const BENCH = {
+  lengthM: 2.3,
+  depthM: 0.42,
+  /** The top of the plank. Low, because these bodies are: a seated adult's feet reach the ground from it. */
+  seatTopM: 0.3,
+  /** The two seats the village's own keep, along the plank from its middle. */
+  seats: [-0.5, 0.5] as const,
+  /** An end of the bench, for whoever wants its length between them and someone on it. */
+  endM: 0.8,
+  /** Two bodies side by side: never nearer than this, hips to hips (a body is 0.71 across the arms). */
+  apartM: 0.72,
+} as const;
+
+type Bench = VillagePlan["benches"][number];
+
+/** The way someone on a bench faces: out from it, toward the well. The plank has no back to tell by. */
+export function benchOut(plan: Pick<VillagePlan, "centre">, b: Bench): number {
+  return Math.atan2(plan.centre.y - b.y, plan.centre.x - b.x);
+}
+
+/** A place on a bench, `along` metres from its middle: where the hips are, and the way the body faces. */
+export function benchSeat(plan: Pick<VillagePlan, "centre">, b: Bench, along: number): { x: number; y: number; heading: number } {
+  return { x: b.x + Math.cos(b.heading) * along, y: b.y + Math.sin(b.heading) * along, heading: benchOut(plan, b) };
+}
+
+/** A point in a bench's own frame: metres along the plank from its middle, and metres off its line. */
+export function alongBench(b: Bench, p: Point): { along: number; off: number } {
+  const dx = p.x - b.x;
+  const dy = p.y - b.y;
+  return { along: dx * Math.cos(b.heading) + dy * Math.sin(b.heading), off: Math.abs(-dx * Math.sin(b.heading) + dy * Math.cos(b.heading)) };
+}
+
+/**
+ * The free place on a bench nearest `want` (metres along it), given where people already sit on it:
+ * on the plank, and at least `apartM` from every one of them. Null when the bench is full.
+ */
+export function benchPlace(taken: readonly number[], want: number, apartM: number = BENCH.apartM): number | null {
+  const half = BENCH.lengthM / 2 - 0.3;
+  const free = (a: number) => Math.abs(a) <= half + 1e-9 && taken.every((t) => Math.abs(t - a) >= apartM - 1e-9);
+  const w = Math.max(-half, Math.min(half, want));
+  if (free(w)) return w;
+  // Otherwise the nearest place that is just clear of someone, on either side of them.
+  let best: number | null = null;
+  for (const t of taken) {
+    for (const side of [-1, 1]) {
+      const a = t + side * apartM;
+      if (free(a) && (best === null || Math.abs(a - w) < Math.abs(best - w))) best = a;
+    }
+  }
+  return best;
 }
 
 // ── the dials ───────────────────────────────────────────────────────────────────

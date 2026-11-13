@@ -6634,3 +6634,105 @@ is a link the owner hands out); whether a look should end sooner for someone who
 `/bench` and `/audit` keep their own rules inside tables and are still English; a friend's page still ends
 on "Let an echo watch you", which for a friend without a turn is now a look; the ad film's end card still
 says "Walk in".
+
+## C98 — acts that are really done: every act its own motion, the thing in the hand, a seat sat on
+
+**Date:** 2026-11-13. **Asked for by the owner**, in these words: the stall with the jars near the way in
+"does not work, then all at once it is spammed"; every job is the same back and forth ("you are told to
+draw water with someone, it does its back and forth; you are to take the jars, it does its back and
+forth"); "they must all be different, really the job's own"; people sitting beside you still do not sit
+in the right place; and "if it says throw the ball back, it really throws the ball again. It does not
+show it as if it were done. It really does it."
+
+**What was there.**
+
+- **One motion for everything.** The rig had nine poses and one "work" pump for five of them; 144 verbs
+  shared them. The thing acted on did nothing until the bar was full, and then changed all at once: the
+  jars went, the ball was somewhere else.
+- **Nothing was ever in a hand.** A jar taken, a ball thrown, a bucket drawn: none of them was drawn.
+- **The body did the act from where it stood**, up to three metres off, facing the thing.
+- **Sitting was a chair's pose wherever one stood.** On a bench the stranger sat in the air in front of
+  it, facing it; a moment's sitter was set in front of the plank and turned along it; the old on their
+  seats were pushed off them by the stranger coming near; two elders could be given one seat; and by a
+  fire or on the sand everyone sat on a chair nobody could see.
+- **The villagers at work all did one thing** with their arms, whatever their trade.
+- **The stall** (measured in a browser on a copy of the code as it stood, four ways of arriving):
+  - E pressed without letting go of W was abandoned within a tenth of a second, with no line and no jar,
+    and sent to the echo as a refusal: "it does not work".
+  - E held down began the act again the instant it ended, as often as the key repeated: seven acts in
+    ten seconds, the last three on sand where the stall had been, each sent to the echo: "spammed".
+  - On a look (C97) anything that touches somebody was refused with "Answer the card first", and no
+    card is ever shown there.
+  - With the card up, the bar and the line were drawn across the card's text.
+  - The next thing by the way began on the frame the last was answered, and two could begin a fifth of
+    a second apart: the stream's gap ran only from an ending.
+
+**Decision: the registry says what the body does, the rig does it, and the thing moves as far as the
+hand has got.**
+
+- **Every verb names its gesture** (`packages/planet/lib/affordances.ts`, `Verb.gesture`, 82 of them in
+  `GESTURES`), and what the gesture does with the hand (`GESTURE_HANDS`: takes, leaves, flies). A test
+  holds that no gesture carries more than a tenth of the timed verbs.
+- **The rig moves each one its own way** (`apps/web/src/game/three/gestures.ts`): a pure function of
+  the seconds into the act, with the hands taken to where the thing is by the arm's own two bones
+  (`character.ts` `stretchCharacter`), and a report of when the hand closes, when it lets go, and how far
+  the act has got. Taking three jars is three reaches; drawing water is hand over hand on a rope;
+  throwing winds up and lets go.
+- **The body steps up to the thing first** (`game/world/playerLayer.ts`, `lib/actSites.ts`): the act's
+  clock, and its bar, start when the feet are there. A body that cannot get there in a second and a half
+  does it from where it stands.
+- **What is taken is in the hand, and what is thrown crosses the air**
+  (`game/world/handThings.ts`): a jar, a coin, a loaf, a log, a ball; an arc, a roll, a skip over water,
+  a fall, a spray of grain; a bucket on its rope down the well; rings where a pebble went in.
+- **The thing's own layer moves it as far as the body has got** (`momentsLayer.ts`, `mine(l)`): jars
+  leave the stall one at a time as the hand closes on them; the children's ball is the stranger's while
+  it is in their hand and in the air, lands where it was thrown, and the game goes on from whoever
+  caught it; the cart moves with the shoulder; the gate swings with the arm; the logs go onto the pile
+  one by one.
+- **A seat is sat on** (`packages/planet/lib/village.ts` `BENCH`, `benchSeat`, `benchPlace`;
+  `game/world/seats.ts`). A bench is described once and the mesh, the villagers, the moments and the
+  stranger all read it. The stranger walks to the seat and is put on the plank, facing out, at the
+  plank's height; whoever is on it keeps their place or moves along, and is not pushed off; no two
+  elders share a seat. **With nothing to sit on, a body sits on the ground**, knees up, arms round them
+  (the stranger and the crowd both). At a tree, a rock or a log one sits with the back to it.
+- **Each trade has its own task** (`game/world/crowd.ts` `taskPose`, `TASK_OF_TRADE`, 16 of them),
+  **and the thing it is done to** (`game/world/workThings.ts`): the potter's wheel with the pot turning
+  between the palms, the loom, the anvil and the hammer that comes down on it, the log and the saw in
+  it, the rock and the pick, the net on its rack, the load on its rope, the broom, the mortar and its
+  pestle, the table. Where each stands is measured from where that task's hands are. What someone works
+  at stays where they left it while they are away.
+- **One press is one act** (`components/world/Interact.tsx`): a repeating key is not a press; a moment
+  answered is not offered or begun again; walking that was under way when the act began is not a wish
+  to stop it (let go and asked again, it is); on a look nothing waits for a card; the bar and the line
+  stand clear of the card while it is up.
+- **Things by the way come one at a time** (`momentsLayer.ts`): the stream's gap runs from a beginning
+  as well as an ending, and nothing begins while one just answered still stands.
+
+**What this changes in what is measured.** An act begun while walking used to be sent as a refusal after
+a tenth of a second; it is now the act. A held key used to send the same answer several times; it sends
+one. Nothing else about a measurement moved: the verbs, their cues and their lengths are as they were,
+and an act's length is still its `holdS`, counted from when the feet arrive.
+
+**Looked at, not only read.** `/dev/gestures` draws any gesture at six moments, `/dev/work` every trade
+at its task with its things (dev only, linked from nowhere). In the village itself, filmed in a
+browser: three jars taken from the stall one by one; the ball picked up and thrown to the children, and
+the game going on; water drawn at the well; sitting down on a bench beside an old man already on it,
+who keeps his place, the two a metre apart and facing out; sitting by a rock and under a palm; a held
+key and a key pressed while walking each giving one act, and a held key inside a look; a potter, a
+weaver and a farmer at their work.
+
+**Tests.** `packages/planet/tests/affordances.test.ts` (every verb has a known gesture; what gives
+takes, what throws flies), `packages/planet/tests/bench.test.ts` (3: seats on the plank, facing out,
+never shared). `apps/web/tests/gestures.test.mts` (8): the rig moves every gesture the registry names;
+no two gestures are one motion; the hand does what the registry says, one reach a jar; a hand that takes
+goes to where the thing is; every trade has a task and no two tasks are one motion; the pot is between
+the potter's palms, a tool is in the hand all through its stroke, the hammer meets the anvil, the saw is
+in the log, and what is left standing has no tool in the air; the press, the repeat, the walk and the
+card, as the code has them. `apps/web/tests/moments.test.mts` (+1): things by the way never begin
+together, and none begins while one just answered still stands (it fails on the pacing as it was).
+
+**Not decided here, and not done:** a fallen log or a rock is leant on, not sat on (nobody has measured
+their tops); the trades' things appear the first time their owner is seen at work, not before; a
+moment's own people at a task (the wall, the cart) have the moment's props and no tools of their own;
+the stranger's hand holds one thing at a time; on a phone the same rules hold by reading (no key repeats
+there), and were not filmed.

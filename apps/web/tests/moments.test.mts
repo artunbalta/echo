@@ -514,3 +514,47 @@ test("C87: a moment the stranger never saw is not reported", async () => {
     w.restore();
   }
 });
+
+test("C98: things by the way come one at a time: never two begun together, and none while one just answered still stands", async () => {
+  const probe = village();
+  const start = startOf(probe.plan);
+  const w = world(start);
+  w.me.heading = start.heading;
+  const layer = momentsLayer({ clock: worldClock(WORLD_EPOCH) });
+  try {
+    await layer.build(w.ctx as never, new AbortController().signal);
+    const begun: { ref: string; kind: MomentKind; t: number }[] = [];
+    // The layer's own clock (the world above stands in for it), so that a beginning and an answer are a tenth apart at most.
+    const clock = () => performance.now() / 1000;
+    layer.onBegan((m) => {
+      if (m.lane === "wayside") begun.push({ ref: m.ref, kind: m.kind, t: clock() });
+    });
+    // Walk on, and answer whatever is by the way the second it is seen standing there.
+    const answeredAt = new Map<string, number>();
+    stroll(w, layer, 240, () => {
+      const t = clock();
+      for (const thing of layer.things(w.me.x, w.me.y)) {
+        const b = begun.find((x) => x.ref === thing.ref);
+        if (!b || answeredAt.has(b.ref)) continue;
+        const verb = verbsOf(thing.kind)[0];
+        if (!verb) continue;
+        layer.acted(thing.ref, verb.id);
+        answeredAt.set(b.ref, t);
+      }
+    });
+    assert.ok(begun.length >= 4, `only ${begun.length} things by the way in four minutes`);
+    assert.ok(answeredAt.size >= 2, `only ${answeredAt.size} of them could be answered`);
+    for (let i = 1; i < begun.length; i++) {
+      const gap = begun[i]!.t - begun[i - 1]!.t;
+      assert.ok(gap >= MOMENT.lanes.wayside.gapS[0], `${begun[i - 1]!.kind} and ${begun[i]!.kind} began ${gap.toFixed(1)} s apart`);
+    }
+    // The one answered stands four seconds more, and the stream's gap follows its going.
+    for (const [ref, at] of answeredAt) {
+      const next = begun.find((x) => x.t > at);
+      if (next) assert.ok(next.t - at >= 4 + MOMENT.lanes.wayside.gapS[0], `${next.kind} began ${(next.t - at).toFixed(1)} s after ${ref} was answered`);
+    }
+  } finally {
+    layer.dispose?.();
+    w.restore();
+  }
+});

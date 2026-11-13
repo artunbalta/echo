@@ -47,7 +47,7 @@ import { blocked, navGraph } from "./nav.js";
 import { doorOf } from "./schedule.js";
 import { inVillage } from "./director.js";
 import type { ArmContext } from "./things.js";
-import type { VillagePlan } from "./village.js";
+import { benchOut, type VillagePlan } from "./village.js";
 
 /**
  * Which stream a moment comes in (C87). Three run at once, so that something is always near:
@@ -623,18 +623,21 @@ export function fieldSpot(at: { x: number; y: number }, heading: number, plan: V
 }
 
 /**
- * One of the green's benches near the stranger (C87): the nearest, preferring one ahead; facing the way
- * the bench faces, its seats along either side of it.
+ * One of the green's benches near the stranger (C87): the nearest, preferring one ahead, that nobody
+ * is on (`free`; a bench the old are sitting on is theirs). Its middle, facing the way a SITTER on it
+ * faces (out, toward the well: `benchOut`, not `heading`, which is the way the plank runs), and
+ * which bench it is, so its people can be seated by `benchSeat`.
  */
-export function benchSpot(at: { x: number; y: number }, heading: number, plan: VillagePlan): Spot | null {
-  let best: (Spot & { score: number }) | null = null;
-  for (const b of plan.benches) {
+export function benchSpot(at: { x: number; y: number }, heading: number, plan: VillagePlan, free: (bench: number) => boolean = () => true): (Spot & { bench: number }) | null {
+  let best: (Spot & { bench: number; score: number }) | null = null;
+  for (let i = 0; i < plan.benches.length; i++) {
+    const b = plan.benches[i]!;
     const r = Math.hypot(b.x - at.x, b.y - at.y);
-    if (r < MOMENT.benchM[0] || r > MOMENT.benchM[1]) continue;
+    if (r < MOMENT.benchM[0] || r > MOMENT.benchM[1] || !free(i)) continue;
     const score = r + (angleOff(at, b, heading) > Math.PI * 0.45 ? 30 : 0);
-    if (!best || score < best.score) best = { x: b.x, y: b.y, facing: b.heading, score };
+    if (!best || score < best.score) best = { x: b.x, y: b.y, facing: benchOut(plan, b), bench: i, score };
   }
-  return best && { x: best.x, y: best.y, facing: best.facing };
+  return best && { x: best.x, y: best.y, facing: best.facing, bench: best.bench };
 }
 
 /**

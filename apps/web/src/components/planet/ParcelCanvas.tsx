@@ -509,7 +509,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
 
       {/* Everything within reach, and the act (C45): one prompt, the registry's verbs, the echo and
           the village told. It opens the conversation above with `T`. */}
-      <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} />
+      <Interact world={() => world.current} cell={here} consent={consent} chain={chain} coarse={coarse} look={!!preview} />
       <Gatherings world={() => world.current} cell={here} consent={consent} chain={chain} />
       {/* Now and then, the one encounter that would teach the echo most (C63), only with consent. */}
       <Director world={() => world.current} cell={here} consent={consent} chain={chain} pace={pilot ? "pilot" : demo ? "demo" : "world"} />

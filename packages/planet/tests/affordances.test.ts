@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { ASSET_CLASSES } from "../lib/assets.js";
-import { OTHER_THINGS, VILLAGE_THINGS, allThingKinds, thingName, verbsOf } from "../lib/affordances.js";
+import { GESTURES, GESTURE_HANDS, OTHER_THINGS, VILLAGE_THINGS, allThingKinds, thingName, verbsOf } from "../lib/affordances.js";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const catalog = readFileSync(`${root}docs/world-design/cue-catalog.md`, "utf8");
@@ -96,3 +96,30 @@ test("C59: nothing the ground offers — a scatter class, the water — is a dee
   // witnesses to compute. A deed on a scatter verb would need both: give it one, and that path too.
   for (const k of [...ASSET_CLASSES.map((c) => c.id), "water" as const]) for (const verb of verbsOf(k)) assert.equal(verb.deed, null, `${k}/${verb.id} is a deed`);
 });
+
+test("C98: every act is its own motion — a verb says what the body does, and the stance alone is nobody's act", () => {
+  const known = new Set<string>(GESTURES);
+  assert.equal(known.size, GESTURES.length, "a gesture is listed twice");
+  const used = new Set<string>();
+  for (const k of allThingKinds()) {
+    for (const verb of verbsOf(k)) {
+      assert.ok(known.has(verb.gesture), `${k}/${verb.id}: "${verb.gesture}" is not a gesture the rig has (lib/affordances.ts GESTURES)`);
+      used.add(verb.gesture);
+      // What the body does agrees with how it stands: nobody sits to throw, and nobody stands to sit.
+      if (verb.gesture === "sit" || verb.gesture === "lie") assert.equal(verb.pose, "sit", `${k}/${verb.id}`);
+      if (verb.pose === "sit") assert.ok(["sit", "lie", "haul"].includes(verb.gesture), `${k}/${verb.id} sits and does "${verb.gesture}"`);
+      // A verb that puts something in the hand takes it; one that says it throws lets it fly.
+      if (verb.gives) assert.equal(GESTURE_HANDS[verb.gesture], "takes", `${k}/${verb.id} gives "${verb.gives}" with a gesture that takes nothing`);
+      if (/^(Throw|Skip|Drop|Scatter)\b/.test(verb.label)) assert.equal(GESTURE_HANDS[verb.gesture], "flies", `${k}/${verb.id} ("${verb.label}") lets nothing go`);
+    }
+  }
+  // A gesture nothing uses is a motion nobody will ever see: take it out of the list or give it a verb.
+  for (const g of GESTURES) assert.ok(used.has(g), `no verb uses the gesture "${g}"`);
+  // The complaint this answers: one motion for every job. No single gesture carries more than a tenth of the verbs
+  // that have a length, apart from sitting, which is one act in many places.
+  const timed = allThingKinds().flatMap((k) => verbsOf(k)).filter((v) => v.holdS > 0);
+  const counts = new Map<string, Set<string>>();
+  for (const v of timed) counts.set(v.gesture, (counts.get(v.gesture) ?? new Set()).add(v.label));
+  for (const [g, labels] of counts) assert.ok(labels.size <= Math.ceil(new Set(timed.map((v) => v.label)).size / 10), `"${g}" is the motion of ${labels.size} different acts`);
+});
+

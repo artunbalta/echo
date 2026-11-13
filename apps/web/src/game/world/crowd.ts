@@ -135,6 +135,125 @@ export interface Look {
   skirt: boolean;
 }
 
+/**
+ * What someone at work is working AT (DECISIONS C98). "Work" was one motion for the whole village: both
+ * arms going back and forth in front of the body, whether the body was a smith's, a weaver's or a man
+ * hauling a net. Each is its own now: a rope comes in hand over hand, a hammer rises and falls beside a
+ * hand that holds the piece, a pick goes up over the shoulder and down, a stone is stooped for, lifted
+ * and set. A body with no task keeps the old motion, so nothing is undrawn.
+ */
+export type Task = "haul" | "hammer" | "saw" | "pick" | "hoe" | "weed" | "knead" | "weave" | "mend" | "lay" | "draw" | "push" | "sweep" | "turn" | "grind" | "serve";
+
+/** One arm at a moment of a task: the shoulder forward (negative is up and out in front), the elbow, and how far it is held out from the side. */
+type ArmPose = [arm: number, elbow: number, spread: number];
+interface TaskPose {
+  torso: number;
+  head: number;
+  twist: number;
+  knee: number;
+  L: ArmPose;
+  R: ArmPose;
+}
+
+const smooth = (x: number) => {
+  const c = Math.min(1, Math.max(0, x));
+  return c * c * (3 - 2 * c);
+};
+
+/** The body at a task, `t` seconds in. Pure, so two people at one task differ only by where in it they are. */
+export function taskPose(task: Task, t: number): TaskPose {
+  const both = (arm: number, elbow: number, spread = 0.07): { L: ArmPose; R: ArmPose } => ({ L: [arm, elbow, spread], R: [arm, elbow, spread] });
+  switch (task) {
+    case "haul": {
+      // Weight back, and the rope comes in a hand at a time.
+      const s = Math.sin(t * 4.4);
+      return { torso: -0.2 - 0.1 * Math.max(0, s), head: 0.1, twist: 0, knee: 0.25, R: [-1.0 - 0.4 * s, -0.55 + 0.45 * s, 0.05], L: [-1.0 + 0.4 * s, -0.55 - 0.45 * s, 0.05] };
+    }
+    case "hammer": {
+      // One hand keeps the piece where it is; the other rises and comes down on it.
+      const b = Math.max(0, Math.sin(t * 5.5)) ** 2;
+      return { torso: 0.14, head: 0.22, twist: 0, knee: 0.05, R: [-1.0 - 0.9 * b, -1.0 + 0.3 * b, 0.05], L: [-0.95, -0.55, 0.1] };
+    }
+    case "saw": {
+      const s = Math.sin(t * 6);
+      return { torso: 0.3, head: 0.25, twist: 0.1, knee: 0.1, R: [-0.7 + 0.35 * s, -1.1 - 0.5 * s, 0.05], L: [-1.0, -0.4, 0.12] };
+    }
+    case "pick": {
+      // Up over the shoulder slowly, and down fast.
+      const u = (t * 0.75) % 1;
+      const a = u < 0.5 ? smooth(u / 0.5) : 1 - smooth((u - 0.5) / 0.18);
+      return { torso: 0.5 - 0.62 * a, head: 0.1, twist: 0, knee: 0.15 * (1 - a), ...both(-0.6 - 2.0 * a, -0.5 - 0.3 * a, 0.05) };
+    }
+    case "hoe": {
+      const s = Math.sin(t * 3.4);
+      return { torso: 0.38 + 0.1 * s, head: 0.2, twist: 0, knee: 0.12, ...both(-0.85 + 0.3 * s, -0.55 - 0.2 * s, 0.08) };
+    }
+    case "weed": {
+      // Bent to the row: one hand takes a weed and throws it aside, the other on the knee.
+      const s = Math.max(0, Math.sin(t * 4));
+      return { torso: 0.1, head: 0.25, twist: 0.25 * s, knee: 0.1, R: [-1.0 + 0.5 * s, -0.3 - 0.9 * s, 0.05 + 0.5 * s], L: [-0.6, -0.9, 0.1] };
+    }
+    case "knead": {
+      const s = Math.sin(t * 5);
+      return { torso: 0.22 + 0.05 * Math.abs(s), head: 0.25, twist: 0, knee: 0.05, R: [-0.75 + 0.18 * s, -0.95 - 0.25 * s, 0.08], L: [-0.75 - 0.18 * s, -0.95 + 0.25 * s, 0.08] };
+    }
+    case "weave": {
+      // The shuttle from one hand to the other, across.
+      const s = Math.sin(t * 3.2);
+      return { torso: 0.15, head: 0.25, twist: 0, knee: 0, R: [-1.05, -1.1, 0.06 + 0.4 * Math.max(0, s)], L: [-1.05, -1.1, 0.06 + 0.4 * Math.max(0, -s)] };
+    }
+    case "mend": {
+      // The net across the knees: the close, small work of a needle.
+      const s = Math.sin(t * 7);
+      const c = Math.cos(t * 7);
+      return { torso: 0.3, head: 0.35, twist: 0, knee: 0.1, R: [-0.7 + 0.05 * s, -1.35 + 0.1 * c, 0.1], L: [-0.7 - 0.05 * s, -1.35 - 0.1 * c, 0.1] };
+    }
+    case "lay": {
+      // Down for a stone, up with it, onto the course, and bedded with the palms.
+      const u = (t * 0.4) % 1;
+      const down = smooth(u / 0.12) * (1 - smooth((u - 0.2) / 0.12));
+      const set = smooth((u - 0.45) / 0.12);
+      const pat = u > 0.72 ? Math.max(0, Math.sin((u - 0.72) * 60)) * 0.12 : 0;
+      const arm = -1.0 + 0.5 * down - 0.35 * set + pat;
+      const elbow = -1.1 + 0.95 * down + 0.75 * set;
+      return { torso: 0.15 + 0.65 * down + 0.1 * set, head: 0.2, twist: 0.3 * down, knee: 0.5 * down, ...both(arm, elbow, 0.1) };
+    }
+    case "draw": {
+      // At the well: the rope down through the hands, one over the other.
+      const s = Math.sin(t * 5);
+      return { torso: 0.15 - 0.06 * Math.max(0, s), head: 0.25, twist: 0, knee: 0.08, R: [-1.55 + 0.4 * s, -0.8 - 0.4 * s, 0.04], L: [-1.55 - 0.4 * s, -0.8 + 0.4 * s, 0.04] };
+    }
+    case "push": {
+      const h = Math.max(0, Math.sin(t * 5.5));
+      return { torso: 0.45 + 0.06 * h, head: 0.05, twist: 0, knee: 0.3 + 0.08 * h, ...both(-1.35, -0.25, 0.08) };
+    }
+    case "sweep": {
+      const s = Math.sin(t * 3);
+      return { torso: 0.2, head: 0.25, twist: 0.45 * s, knee: 0.05, R: [-0.8 + 0.25 * s, -0.6, 0.1], L: [-1.0 + 0.25 * s, -0.9, -0.05] };
+    }
+    case "turn": {
+      // Hands round the clay as it turns.
+      const s = Math.sin(t * 2.5);
+      return { torso: 0.32, head: 0.3, twist: 0, knee: 0.05, ...both(-0.8, -1.0 + 0.05 * s, 0.12 - 0.05 * s) };
+    }
+    case "grind": {
+      const a = t * 6;
+      return { torso: 0.28, head: 0.3, twist: 0, knee: 0.05, R: [-0.8 + 0.08 * Math.sin(a), -1.05 + 0.08 * Math.cos(a), 0.05], L: [-0.75, -0.9, 0.1] };
+    }
+    case "serve": {
+      // Behind the stall: setting things straight, to one side and the other.
+      const s = Math.sin(t * 1.6);
+      return { torso: 0.1, head: 0.15, twist: 0.3 * s, knee: 0, R: [-0.9, -0.7, 0.1 + 0.35 * Math.max(0, s)], L: [-0.9, -0.7, 0.1 + 0.35 * Math.max(0, -s)] };
+    }
+  }
+}
+
+/** What each trade is doing when the schedule says it is at work (`@echo/planet` `schedule.ts`). */
+export const TASK_OF_TRADE: Readonly<Record<string, Task>> = {
+  fisher: "mend", labourer: "haul", farmer: "weed", herder: "sweep", forester: "saw", miner: "pick", stonecutter: "pick", smith: "hammer", potter: "turn",
+  weaver: "weave", carpenter: "saw", healer: "grind", teacher: "serve", trader: "serve", carter: "haul", innkeeper: "serve",
+};
+
 /** The pose a body is in. Everything here is the crowd's own short list, never the player's input. */
 export interface Pose {
   /** three's world position of the feet. */
@@ -161,7 +280,22 @@ export interface Pose {
   lantern?: boolean;
   /** The head tipped back to look up, radians (C87: people stopped in the way, looking up at a roof). */
   lookUp?: number;
+  /** What they are working at, while `activity` is "work" or "stoop" (C98). */
+  task?: Task;
+  /**
+   * Sitting ON something: the top of it, metres above `y`. The hips are put on it whatever the body's
+   * size (a child's feet hang). Unset, a sitter drops by {@link SIT_DROP}, as on nothing in particular.
+   */
+  seatM?: number;
 }
+
+/** How far the hips drop on a boat's thwart, and with no seat at all (down to the ground); the hip joint's height and half a thigh. Rig units. */
+const SIT_DROP = 0.2;
+const FLOOR_DROP = 0.37;
+/** From the elbow down the forearm to the middle of the hand, rig units. */
+export const HAND = 0.17;
+const HIP = 0.455;
+const THIGH = 0.072;
 
 // ── the crowd ───────────────────────────────────────────────────────────────────
 
@@ -196,6 +330,10 @@ export class Crowd {
   /** Where the last body placed holds its lantern, in the scene, or null if it carries none (C84). */
   private readonly handAt = new THREE.Vector3();
   private holding = false;
+  /** The last body placed: its right forearm's frame, and where its two hands are, in the scene (C98). */
+  private readonly gripM = new THREE.Matrix4();
+  private readonly palmR = new THREE.Vector3();
+  private readonly palmL = new THREE.Vector3();
   /** Lying on the back: the body's up turned to the way it faces, its face turned up (C54). */
   private static readonly LYING = new THREE.Quaternion()
     .setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)
@@ -254,6 +392,11 @@ export class Crowd {
     const phase = p.time * 9 + p.phase0;
     const work = Math.sin(p.time * Math.PI * 2 * 1.3 + p.phase0);
     const sitting = p.activity === "sit" || p.activity === "row";
+    // Sitting with no seat named is sitting on the ground (C98): by a fire, on a step, on the sand.
+    // It was a chair's pose either way, so those people sat on a chair nobody could see.
+    const floor = p.activity === "sit" && p.seatM === undefined;
+    // The task in hand (C98), for a body at work: its own motion in place of the one every worker shared.
+    const job = (p.activity === "work" || p.activity === "stoop") && p.task ? taskPose(p.task, p.time + p.phase0) : null;
 
     // Root: feet on the ground, facing `yaw`, at the body's own scale. Asleep (C54), the feet are at
     // the foot of the bed and the body lies the way it faces, head toward the bed's head, face up.
@@ -270,7 +413,7 @@ export class Crowd {
     const wave = Math.min(1, Math.max(0, p.wave ?? 0));
     const bobY = sleeping
       ? Math.sin(p.time * 0.9 + p.phase0) * 0.004 // breathing
-      : (speed > 0 ? Math.cos(phase * 2) * 0.009 * amount : Math.sin(p.time * 1.7 + p.phase0) * 0.002) - 0.035 * amount - 0.055 * run - (sitting ? 0.2 : 0);
+      : (speed > 0 ? Math.cos(phase * 2) * 0.009 * amount : Math.sin(p.time * 1.7 + p.phase0) * 0.002) - 0.035 * amount - 0.055 * run - (sitting ? (p.seatM !== undefined ? HIP - THIGH - p.seatM / s : floor ? FLOOR_DROP : SIT_DROP) : 0);
     const sway = p.activity === "stand" ? idle * Math.sin(p.time * 0.55 + p.phase0) * 0.028 : 0;
     this.at(this.root, 0, bobY, 0, 0, 0, Math.sin(phase) * 0.022 * amount + sway, this.body);
     this.at(this.body, 0, 0.455, 0, 0, Math.sin(phase) * 0.055 * amount, 0, this.hips);
@@ -279,10 +422,10 @@ export class Crowd {
 
     let torsoX = run * 0.12 + look.stoop;
     let headX = -run * 0.06;
-    if (p.activity === "work") torsoX += 0.08;
-    if (p.activity === "stoop") torsoX += 0.5 + work * 0.06;
+    if (p.activity === "work") torsoX += job ? job.torso : 0.08;
+    if (p.activity === "stoop") torsoX += 0.5 + (job ? job.torso : work * 0.06);
     if (p.activity === "row") torsoX += 0.25 + Math.sin(p.time * 3) * 0.25;
-    if (p.activity === "stoop" || p.activity === "work") headX = 0.2;
+    if (p.activity === "stoop" || p.activity === "work") headX = job ? job.head : 0.2;
     if (p.activity === "mourn") {
       headX = 0.42;
       torsoX += 0.05;
@@ -291,7 +434,7 @@ export class Crowd {
       headX -= p.lookUp;
       torsoX -= p.lookUp * 0.15;
     }
-    this.at(this.body, 0, 0.43, 0, torsoX, -Math.sin(phase) * 0.065 * amount, 0, this.spine);
+    this.at(this.body, 0, 0.43, 0, torsoX, -Math.sin(phase) * 0.065 * amount + (job ? job.twist : 0), 0, this.spine);
     this.put("torso", this.spine, look.cloth);
     headX += talk * Math.sin(p.time * 5.2 + p.phase0) * 0.07;
     const wander = p.lookYaw === undefined ? idle * Math.sin(p.time * 0.33 + p.phase0 * 1.7) * 0.32 : 0;
@@ -310,6 +453,11 @@ export class Crowd {
         hip = 0;
         knee = 0.05;
         ankle = 0.3;
+      } else if (floor) {
+        // On the ground: knees up in front, the soles flat.
+        hip = -1.95;
+        knee = 2.25;
+        ankle = -0.3;
       } else if (sitting) {
         hip = -1.45;
         knee = 1.5;
@@ -325,6 +473,12 @@ export class Crowd {
           knee += 0.45;
           ankle -= 0.1;
         }
+        // A task that bends the knees: hauling, pushing, down for a stone.
+        if (job) {
+          hip -= job.knee * 0.8;
+          knee += job.knee * 1.2;
+          ankle -= job.knee * 0.3;
+        }
       }
       this.at(this.hips, side * 0.087, 0, 0, hip, 0, 0, this.j1);
       this.put("thigh", this.j1, look.skirt ? look.cloth : look.trousers);
@@ -338,7 +492,10 @@ export class Crowd {
     for (const side of [-1, 1]) {
       let arm = (side < 0 ? 1 : -1) * Math.sin(phase) * 0.4 * amount;
       let elbow = -0.18 - run * 0.8 - Math.max(0, side < 0 ? Math.cos(phase) : -Math.cos(phase)) * 0.2 * amount;
-      if (p.activity === "work") {
+      let spread = 0.065;
+      if (job) {
+        [arm, elbow, spread] = side < 0 ? job.L : job.R;
+      } else if (p.activity === "work") {
         arm = -0.55 + work * 0.35 * side;
         elbow = -0.7 - work * 0.3;
       } else if (p.activity === "stoop") {
@@ -350,6 +507,10 @@ export class Crowd {
       } else if (p.activity === "fish") {
         arm = -0.9;
         elbow = -0.6;
+      } else if (floor) {
+        // Arms round the knees.
+        arm = -0.95;
+        elbow = -0.45;
       } else if (p.activity === "sit") {
         arm = -0.35;
         elbow = -0.9;
@@ -378,10 +539,12 @@ export class Crowd {
         arm = arm * 0.35 - 0.15;
         elbow = -0.3;
       }
-      this.at(this.spine, side * 0.15, 0.275, 0, arm, 0, side * (lantern ? 0.2 : 0.065), this.j1);
+      this.at(this.spine, side * 0.15, 0.275, 0, arm, 0, side * (lantern ? 0.2 : spread), this.j1);
       this.put("upperArm", this.j1, look.cloth);
       this.at(this.j1, 0, -0.17, 0, elbow, 0, 0, this.j2);
       this.put("forearm", this.j2, look.skin);
+      (side > 0 ? this.palmR : this.palmL).set(0, -HAND, 0).applyMatrix4(this.j2);
+      if (side > 0) this.gripM.copy(this.j2);
       if (lantern) {
         // It hangs from the hand by its handle.
         this.handAt.set(0, -0.3, 0.02).applyMatrix4(this.j2);
@@ -407,6 +570,16 @@ export class Crowd {
   lanternAt(out: THREE.Vector3): boolean {
     if (this.holding) out.copy(this.handAt);
     return this.holding;
+  }
+
+  /**
+   * The hands of the body just placed (C98), for whatever it works with: the right forearm's frame (the
+   * hand is `HAND` down it, a tool lies in that frame), and both hands in the scene.
+   */
+  hands(grip: THREE.Matrix4, right: THREE.Vector3, left: THREE.Vector3): void {
+    grip.copy(this.gripM);
+    right.copy(this.palmR);
+    left.copy(this.palmL);
   }
 
   /** How many bodies the last frame placed. */

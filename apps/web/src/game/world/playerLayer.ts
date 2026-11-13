@@ -23,7 +23,9 @@ import * as THREE from "three";
 import type { ColliderIndex } from "@echo/planet";
 import { cylinderBoomLimit } from "./cameraObstacles";
 
-import { buildCharacter, gaitFootTarget, poseCharacter, reachCharacter, type CharacterParts } from "../three/character";
+import { buildCharacter, gaitFootTarget, poseCharacter, reachCharacter, SIT_SEAT, type CharacterParts } from "../three/character";
+import { gestureCharacter, handAim, handPoint, type GestureState } from "../three/gestures";
+import { handThings, type Flight, type HandItem, type HandThings } from "./handThings";
 import type { ActivityKind } from "../WorldCore";
 import { raftSpeed } from "../../lib/raft";
 import { boatForm, raftForm, sailForm } from "./villageGeometry";
@@ -40,7 +42,7 @@ import type { TouchControlHandle } from "./touchInput";
 import { SPAWN_HORIZON_MARGIN_DEG, spawnView, yawBehindHeading } from "./spawnView";
 import type { LayerContext, WorldLayer } from "./PlanetWorld";
 import type { WeatherLayer } from "./weatherLayer";
-import { DYES, type Look } from "@echo/planet";
+import { DYES, type Gesture, type Look } from "@echo/planet";
 
 export interface PlayerLayerOptions {
   /** Seeds the body's look, so it is the same person every visit. */
@@ -87,9 +89,21 @@ export interface PlayerLayer extends WorldLayer {
    * walking until `release`. Walking is how a person stops doing something, so the input is still
    * read: `wantsToMove` says when they have asked to go, and the act ends there.
    */
-  perform(pose: ActivityKind, face: { x: number; y: number } | null): void;
+  perform(pose: ActivityKind, face: { x: number; y: number } | null, act?: Act): void;
   release(): void;
+  /** The seat the body is on, or null: whoever sits beside it keeps clear of it. */
+  seat(): Seat | null;
   wantsToMove(): boolean;
+  /**
+   * The act the body is in the middle of (C98), for whoever owns the thing it is done to: how far in
+   * it is, whether the thing is in the hand, where the hand is, and how far a thing that answers the
+   * body has come. Null when nothing is being done.
+   */
+  act(): ActNow | null;
+  /** Seconds the body has been AT the act: 0 while it is still stepping up to the thing. Null when not acting. */
+  actSeconds(): number | null;
+  /** How many things the body let go are still in the air (a ball thrown back, a stone skipping). */
+  inFlight(): number;
   /** Show something carried in the hands (C45). */
   setCarrying(on: boolean): void;
   /** Whether something is in the hands: what you hold decides what you are reaching for (C59). */
@@ -118,6 +132,69 @@ export interface PlayerLayer extends WorldLayer {
    * cycle, and the two feet are half a cycle apart). The ears hear a step on each (C56).
    */
   footfalls(): number;
+}
+
+/**
+ * An act, as the body is asked to do it (C98): the registry's gesture, and what the body needs to know
+ * of the thing to do it for real.
+ */
+export interface Act {
+  gesture: Gesture;
+  /** The act's length in seconds; 0 lasts until the person gets up. */
+  holdS: number;
+  /** The thing's ref and the verb's id, for the thing's own layer to recognise the act as its own. */
+  ref: string;
+  verb: string;
+  /** What is seen in the hand while it is held, and what flies when it is let go; null for bare hands. */
+  item: HandItem | null;
+  /**
+   * How near the thing the body stands to do it, metres: it steps up to there before it begins, and
+   * the act's clock starts when it has. Null does it from where the body is.
+   */
+  standM: number | null;
+  /** How high off the ground the thing is where a hand meets it, metres. 0 leaves it to the gesture. */
+  upM: number;
+  /** Where a thing let go is sent, tiles, when that is not the thing itself; `upM` is how high it arrives. */
+  aim?: { x: number; y: number; upM?: number } | null;
+  /** A thing its own layer draws again once it has landed (a moment's ball): nothing is left lying here. */
+  owned?: boolean;
+  /** Sitting down ON something: the place. The body walks up to it and is then on it, facing the way it faces. */
+  seat?: Seat | null;
+}
+
+/** An act in the middle of being done. */
+export interface ActNow {
+  ref: string;
+  verb: string;
+  gesture: Gesture;
+  /** Seconds at it, and 0 to 1 through it (0 for an act with no length). */
+  t: number;
+  k: number;
+  /** False while the body is still stepping up to the thing. */
+  arrived: boolean;
+  grip: boolean;
+  released: number;
+  progress: number;
+  /** Where the hand (or the middle of both) is, in the scene. Read it at once: it is the layer's own vector. */
+  hand: THREE.Vector3;
+}
+
+/** How each gesture that lets a thing go sends it. */
+const FLIGHT: Partial<Record<Gesture, Flight>> = { throw: "arc", snowball: "arc", tidy: "arc", roll: "roll", skip: "skip", drop: "fall", scatter: "spray", dig: "arc", weed: "arc", bail: "spray" };
+
+/**
+ * A place to sit that is a place (a bench's seat, a gap in the ring round a fire): the body is put ON
+ * it, facing the way a sitter there faces, and stood up in front of it when it gets up. Tiles, and
+ * this layer's heading (atan2 of the south step against the east step), as `perform`'s `face` is.
+ */
+export interface Seat {
+  x: number;
+  y: number;
+  heading: number;
+  /** The top of what is sat on, metres above the sea, or null for the ground (the pose's own drop). */
+  topM: number | null;
+  /** Where the body stands when it gets up: in front of the seat, on ground it can walk on. */
+  up: { x: number; y: number };
 }
 
 /** One body passed from one parcel's world to the next (C57). */
@@ -169,7 +246,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
   let contactSide: -1 | 1 = 1;
   const tmp = new THREE.Vector3();
   const look = new THREE.Vector3();
-  let acting: { pose: ActivityKind; heading: number | null } | null = null;
+  let acting: { pose: ActivityKind; heading: number | null; act: Act | null; target: { x: number; y: number } | null; seat: Seat | null; arrived: boolean; waited: number; t: number; released: number } | null = null;
+  /** The gesture just let go of, eased out over a fifth of a second so the body does not snap upright. */
+  let easing: { act: Act; t: number; ahead: number; weight: number } | null = null;
+  let now: GestureState | null = null;
+  let things: HandThings | null = null;
+  const hand = new THREE.Vector3();
+  const sendTo = new THREE.Vector3();
+  let advance = 0;
   let wants = false;
   let carrying = false;
   let boating = false;
@@ -289,6 +373,9 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       raft.add(sail);
       ctx.scene.add(raft);
       boatMovement = { ...parcelMovement(ctx.frame.tileM), walk: ROW_MPS / ctx.frame.tileM, run: ROW_MPS / ctx.frame.tileM };
+      // What is in the hand and what leaves it (C98).
+      things = handThings(ctx.frame.tileM / 1.6);
+      ctx.scene.add(things.group);
       input = createInput(ctx.renderer.domElement, { touch: options.touch });
       input.setEnabled(inputEnabled);
     },
@@ -301,7 +388,33 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       // While acting the body holds its pose and the mover is told so; the ask is kept for wantsToMove.
       // In a boat the ground is the water: anything deep enough, inside the region, and no jumping.
       // A village boat is rowed and never runs; the raft is paddled, and Shift puts up its sail (C57).
-      const move = acting ? { ...NEUTRAL, activity: acting.pose } : boating ? { ...asked, jump: false, run: rafting && asked.run } : asked;
+      let move = acting ? { ...NEUTRAL, activity: acting.pose } : boating ? { ...asked, jump: false, run: rafting && asked.run } : asked;
+      // An act begins by stepping up to the thing (C98): a hand that takes a jar has to be where the
+      // jar is. The act's clock waits for the feet. A body that cannot get there (something in the
+      // way, or a second and a half gone) does it from where it stands.
+      if (acting?.act && acting.target && !acting.arrived) {
+        const dx = acting.target.x - state.x;
+        const dy = acting.target.y - state.y;
+        const d = Math.hypot(dx, dy);
+        // To a seat: up to it, and the last half step is sitting down on it.
+        const want = acting.seat ? 0.45 / ctx.frame.tileM : acting.act.standM === null ? Infinity : acting.act.standM / ctx.frame.tileM;
+        acting.waited += dt;
+        const stuck = acting.waited > 0.35 && Math.hypot(state.vx, state.vy) < 0.05;
+        if (d > want + 0.05 && acting.waited < 1.5 && !stuck && !boating) move = { dx: dx / d, dy: dy / d, run: false, jump: false, activity: null };
+        else {
+          acting.arrived = true;
+          acting.t = 0;
+          if (acting.seat) {
+            // On it, facing the way a sitter there faces.
+            state = { ...state, x: acting.seat.x, y: acting.seat.y, vx: 0, vy: 0, heading: acting.seat.heading };
+            acting.heading = acting.seat.heading;
+          } else if (d > 1e-4) acting.heading = Math.atan2(dy, dx);
+        }
+      } else if (acting?.act && acting.arrived) {
+        acting.t += dt;
+        // A gesture that goes somewhere (walking on, wading in) takes the body with it.
+        if (advance > 0 && !boating) move = { dx: Math.cos(state.heading) * (advance / movement.walk), dy: Math.sin(state.heading) * (advance / movement.walk), run: false, jump: false, activity: null };
+      }
       if (boating && rafting) {
         const wind = ctx.layer<WeatherLayer>("weather")?.weather()?.wind ?? 0.3;
         boatMovement = { ...boatMovement, walk: raftSpeed(wind, false) / ctx.frame.tileM, run: raftSpeed(wind, true) / ctx.frame.tileM };
@@ -324,6 +437,9 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       // Cadence and stride are paired: the stance foot retreats at the body's forward speed.
       if (moving) animTime += dt * (1 + runBlend * .7);
       ctx.frame.toScene(state.x, state.y, jumpHeightM(state), tmp);
+      // On a seat the hips are on ITS top, wherever the ground under it is: the root is set so that
+      // the seat the pose sits on (`SIT_SEAT`) is the seat that is there.
+      if (acting?.seat && acting.arrived && acting.seat.topM !== null) tmp.y = acting.seat.topM - SIT_SEAT * ctx.frame.tileM;
       parts.root.position.copy(tmp);
       const hull = rafting ? raft : boat;
       if (boating && hull) {
@@ -341,15 +457,75 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         const y = state.y - Math.sin(yaw) * side * .087 + Math.cos(yaw) * foot.forward;
         return (ctx.frame.heightAtTile(x, y) - ctx.frame.heightAtTile(state.x, state.y)) / ctx.frame.tileM;
       };
-      poseCharacter(parts, { facing: state.facing, moving: moving && !boating, animTime, bob: 0, lean: 0, carrying,
-        activity: boating && !acting ? (moving && !underSail ? "row" : "sit") : state.activity, speed: boating ? 0 : speed, runBlend,
+      // An act with a gesture is moved by the gesture, over the standing body; the old stances are for an
+      // act that has none (the boat's own rowing and sitting).
+      const gestured = !!acting?.act;
+      poseCharacter(parts, { facing: state.facing, moving: moving && !boating, animTime, bob: 0, lean: 0, carrying: carrying && !gestured,
+        activity: boating && !acting ? (moving && !underSail ? "row" : "sit") : gestured ? null : state.activity, speed: boating ? 0 : speed, runBlend,
         airborne: state.jumpT >= 0, groundL: footGround(-1), groundR: footGround(1) });
       parts.root.rotation.y = yawFromHeading(state.heading);
+      parts.body.position.x = 0;
+      parts.body.position.z = 0;
+
+      // ── the act itself (C98) ──
+      now = null;
+      advance = 0;
+      if (acting?.act && acting.arrived && acting.target) {
+        const a = acting.act;
+        const ahead = Math.hypot(acting.target.x - state.x, acting.target.y - state.y);
+        now = gestureCharacter(parts, a.gesture, { t: acting.t, holdS: a.holdS, ahead, side: 0, up: a.upM / ctx.frame.tileM, variant: a.verb, weight: Math.min(1, acting.t / 0.16), seated: acting.seat?.topM != null });
+        advance = now.advance;
+        handPoint(parts, now.twoHanded, hand);
+        if (things) {
+          if (now.grip && a.item) things.hold(a.item, hand, parts.root.rotation.y, handAim(parts, sendTo));
+          // A rope from the hands to what is hauled; at the well, to the bucket coming up.
+          if (a.gesture === "haul") things.rope(hand, ctx.frame.toScene(acting.target.x, acting.target.y, 0.35 * (ctx.frame.tileM / 1.6), sendTo));
+          if (a.gesture === "draw-water") {
+            const rim = Math.max(0.5, a.upM);
+            const lift = rim - 1.4 * (1 - now.progress) + 0.14;
+            ctx.frame.toScene(acting.target.x, acting.target.y, lift, sendTo);
+            if (acting.t < a.holdS * 0.76) {
+              things.hold("bucket", sendTo, 0);
+              things.rope(hand, sendTo);
+            }
+          }
+          // Each thing let go since the last frame goes where it was sent.
+          const how = FLIGHT[a.gesture];
+          while (acting.released < now.released) {
+            acting.released++;
+            if (!how) continue;
+            const item: HandItem | null = a.gesture === "dig" ? "earth" : a.gesture === "weed" ? "weed" : a.gesture === "bail" ? "grain" : a.item;
+            if (!item) continue;
+            const reach = ctx.frame.tileM;
+            // Where it goes: where the act says; failing that the thing itself, or for what is flung aside, aside.
+            let tx = a.aim?.x ?? acting.target.x;
+            let ty = a.aim?.y ?? acting.target.y;
+            if (how === "skip") {
+              tx = state.x + Math.cos(state.heading) * (7 / reach);
+              ty = state.y + Math.sin(state.heading) * (7 / reach);
+            } else if (a.gesture === "dig" || a.gesture === "weed" || a.gesture === "bail") {
+              tx = state.x + Math.cos(state.heading - 1.9) * (0.9 / reach);
+              ty = state.y + Math.sin(state.heading - 1.9) * (0.9 / reach);
+            } else if (how === "spray" && !a.aim) {
+              tx = state.x + Math.cos(state.heading) * (1.5 / reach);
+              ty = state.y + Math.sin(state.heading) * (1.5 / reach);
+            }
+            const water = ctx.frame.heightAtTile(tx, ty) < -0.02;
+            ctx.frame.toScene(tx, ty, a.aim?.upM ?? (how === "roll" ? 0.12 * (reach / 1.6) : 0.03), sendTo);
+            things.fly(item, hand, sendTo, how, water, a.owned ? 0 : 0.7);
+          }
+        }
+      } else if (easing) {
+        easing.weight -= dt / 0.2;
+        if (easing.weight <= 0) easing = null;
+        else gestureCharacter(parts, easing.act.gesture, { t: easing.t, holdS: easing.act.holdS, ahead: easing.ahead, side: 0, up: easing.act.upM / ctx.frame.tileM, variant: easing.act.verb, weight: easing.weight, seated: easing.act.seat?.topM != null });
+      }
+      things?.update(dt);
 
       // A hand braces against a reachable solid when movement meets it. The target is on the
       // collider surface; the arm solver preserves both segment lengths through the contact.
       let contact = false;
-      if (colliders && blocked && state.jumpT < 0 && Math.hypot(move.dx, move.dy) > 0 &&
+      if (colliders && blocked && !gestured && !easing && state.jumpT < 0 && Math.hypot(move.dx, move.dy) > 0 &&
           blocked(state.x + move.dx * .25, state.y + move.dy * .25)) {
         const [xm, ym] = ctx.frame.toLocalM(state.x, state.y);
         let best = Infinity;
@@ -367,7 +543,7 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
         }
       }
       contactWeight += ((contact ? 1 : 0)-contactWeight)*(1-Math.exp(-12*dt));
-      if (contactWeight > .01) reachCharacter(parts,contactSide,contactTarget,contactWeight);
+      if (contactWeight > .01 && !gestured && !easing) reachCharacter(parts,contactSide,contactTarget,contactWeight);
 
       // The camera. The ground it must stay above is the ground the feet stand on: the sea sheet
       // counts, exactly as toScene clamps the feet to it.
@@ -387,13 +563,29 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       ctx.camera.lookAt(look.set(result.lookAt[0], result.lookAt[1], result.lookAt[2]));
     },
 
-    perform(pose, face) {
-      acting = { pose, heading: face ? Math.atan2(face.y - state.y, face.x - state.x) : null };
+    perform(pose, face, act) {
+      easing = null;
+      // Sitting down on something is going to it: the body walks to the seat, and is then on it.
+      const seat = act?.seat ?? null;
+      const target = seat ? { x: seat.x, y: seat.y } : face;
+      acting = { pose, heading: target ? Math.atan2(target.y - state.y, target.x - state.x) : null, act: act ?? null, target, seat, arrived: !act || !target || (!seat && act.standM === null), waited: 0, t: 0, released: 0 };
     },
     release() {
+      if (acting?.act && acting.arrived && acting.target) easing = { act: acting.act, t: acting.t, ahead: Math.hypot(acting.target.x - state.x, acting.target.y - state.y), weight: 1 };
+      // Up off a seat is onto your feet in front of it, not inside the plank.
+      if (acting?.seat && acting.arrived) state = { ...state, x: acting.seat.up.x, y: acting.seat.up.y, vx: 0, vy: 0 };
       acting = null;
+      now = null;
     },
+    seat: () => (acting?.arrived ? acting.seat : null),
     wantsToMove: () => wants,
+    act() {
+      const a = acting?.act;
+      if (!acting || !a) return null;
+      return { ref: a.ref, verb: a.verb, gesture: a.gesture, t: acting.t, k: a.holdS > 0 ? Math.min(1, acting.t / a.holdS) : 0, arrived: acting.arrived, grip: now?.grip ?? false, released: now?.released ?? 0, progress: now?.progress ?? 0, hand };
+    },
+    actSeconds: () => (acting ? (acting.act ? (acting.arrived ? acting.t : 0) : null) : null),
+    inFlight: () => things?.flying() ?? 0,
     setCarrying(on) {
       carrying = on;
     },
@@ -447,6 +639,8 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       }
       raft = null;
       sail = null;
+      things?.dispose();
+      things = null;
       input?.dispose();
       input = null;
       blocked = null;

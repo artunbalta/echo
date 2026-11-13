@@ -24,6 +24,10 @@
 
 import * as THREE from "three";
 import {
+  BENCH,
+  alongBench,
+  benchPlace,
+  benchSeat,
   ageYears,
   boatAt,
   chatter,
@@ -62,7 +66,8 @@ import {
 
 import { earshotOf } from "@/lib/soundscape";
 
-import { Crowd, hashUnit, lookFor, type Look } from "./crowd";
+import { Crowd, TASK_OF_TRADE, hashUnit, lookFor, type Look, type Task } from "./crowd";
+import { workThings, type WorkThings } from "./workThings";
 import type { InteractLayer } from "./interactLayer";
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { SkyLayer } from "./skyLayer";
@@ -76,6 +81,13 @@ const SPEAKING_M = 7;
 const STEP_ASIDE_M = 0.8;
 /** A villager's half-width, for the player's gate. */
 const BODY_M = 0.3;
+/**
+ * Someone on a bench and a stranger STANDING on top of them (a body cannot walk that near: the gate
+ * is 0.35 + BODY_M, so this is someone come to their seat while the stranger stood on it): nearer than
+ * the first, they move along the plank until they are the second away, which is outside the gate.
+ */
+const SEAT_INSIDE_M = 0.6;
+const SEAT_CLEAR_M = 0.7;
 /** Within this many metres, someone with a need asks the stranger for it (C50), once. */
 const ASK_M = 5;
 /** How long a villager's own line to the stranger stays over them, seconds. */
@@ -83,6 +95,8 @@ const SAY_S = 7;
 /** Lanterns drawn at once after dark (C84), and the warm light's strength, candela. */
 const LANTERNS = 32;
 const LAMP_CD = 5;
+/** How near the stranger someone at work is given what they work at and with, metres (C98). */
+const WORK_SEEN_M = 70;
 
 /** A lantern's glow (C84): a bright core and a soft halo, computed once, pixel by pixel (no canvas, so it builds anywhere). */
 function lanternGlow(): THREE.Texture {
@@ -124,6 +138,10 @@ export interface VillagersLayer extends WorldLayer {
   drawn(): number;
   /** The plans in force, for tests. */
   plans(): readonly DayPlan[];
+  /** Where people were drawn sitting out of doors last frame, local metres: a seat with someone on it is taken. */
+  seated(): { x: number; y: number }[];
+  /** The benches one of the village's own has a seat on today: theirs, whether or not they are on it now. */
+  benchesKept(): ReadonlySet<number>;
   /** Whoever is within speaking distance of the player, nearest first; the held one while talking. */
   nearest(): NearVillager | null;
   /** Metres from the player to a villager drawn last frame, or null if they are not out. */
@@ -182,6 +200,7 @@ export interface VillagersLayer extends WorldLayer {
 
 interface PlayerLike {
   position(): { x: number; y: number };
+  seat?(): unknown;
 }
 
 /** One line of a life, for the nameplate: the most telling thing that has happened to them. */
@@ -231,6 +250,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   let names = new Map<string, string>();
   let life = new Map<string, LifeEvent[]>();
   const looks = new Map<string, Look>();
+  /** What each person is working at when they are at work (C98): their trade's own task. */
+  const tasks = new Map<string, Task | undefined>();
   let state: { day: number; plans: DayPlan[]; boats: (BoatDay | null)[]; moorings: Mooring[] } = { day: -1, plans: [], boats: [], moorings: [] };
   let label: HTMLDivElement | null = null;
   let labelled: { id: string; x: number; y: number; z: number } | null = null;
@@ -256,7 +277,10 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   /** A villager's own line to the stranger, held over them for a few seconds. */
   let spoken: { id: string; text: string; until: number } | null = null;
   let near: NearVillager | null = null;
-  let held: { id: string; x: number; y: number; activity: string } | null = null;
+  let held: { id: string; x: number; y: number; activity: string; heading: number } | null = null;
+  /** Who has a seat on which bench today (the schedule's own seats, read back off the plans). */
+  const benchOf = new Map<string, number>();
+  const kept = new Set<number>();
   let indoors: { plot: Plot; room: Room; floor: number; forced: boolean } | null = null;
   let hosting: { id: string; plot: number } | null = null;
   /** Who sleeps in the house the stranger is in, today. */
@@ -286,6 +310,13 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
   let lamp: THREE.PointLight | null = null;
   let watch = new Set<string>();
   const lanternAt = new THREE.Vector3();
+  /** What people at work are working at (C98), and the hands of whoever was drawn last. */
+  let work: WorkThings | null = null;
+  const gripM = new THREE.Matrix4();
+  const palmR = new THREE.Vector3();
+  const palmL = new THREE.Vector3();
+  /** Where each person was last seen at work, and at what: their things are left standing there. */
+  const workAt = new Map<string, { task: Task; x: number; y: number; z: number; yaw: number; scale: number; lx: number; ly: number; seen: number }>();
   let lastHour = 0.5;
   let lent: number | null = null;
   const zero = new THREE.Vector3(0, 0, 0);
@@ -298,11 +329,28 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
     const next = dayPlans(v.settlement, v.plan, day, v.changes);
     state = { day, ...next };
     watch = new Set([...watchOn(v.settlement, v.plan, day), ...watchOn(v.settlement, v.plan, day - 1)]);
+    benchOf.clear();
+    kept.clear();
+    for (const d of next.plans) {
+      for (const s of d.stays) {
+        if (s.activity !== "sit") continue;
+        const i = v.plan.benches.findIndex((b) => {
+          const a = alongBench(b, s.at);
+          return a.off < 0.05 && Math.abs(a.along) <= BENCH.lengthM / 2;
+        });
+        if (i >= 0) {
+          benchOf.set(d.person, i);
+          kept.add(i);
+        }
+      }
+    }
     for (const d of next.plans) {
       if (!looks.has(d.person)) {
         const p = people.get(d.person)!;
         looks.set(d.person, lookFor(p.id, occupationOn(p, day), ageYears(p, day), p.sex));
       }
+      const who = people.get(d.person);
+      if (who) tasks.set(d.person, TASK_OF_TRADE[occupationOn(who, day)]);
     }
   };
   const adopt = (v: SettledParcel) => {
@@ -346,6 +394,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         glowGeometry,
         new THREE.PointsMaterial({ map: lanternGlow(), color: 0xffc27a, size: 0.95 * ctx.frame.tileM / 1.6, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
       );
+      work = workThings(ctx.scene);
       glow.name = "villagers:lanterns";
       glow.frustumCulled = false;
       ctx.scene.add(glow);
@@ -404,6 +453,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       let nearest: { id: string; d: number; x: number; y: number; z: number } | null = null;
 
       crowd.begin();
+      work?.begin();
       const dark = sky ? sky.state().sun.y < 0.05 : hour > 0.78 || hour < 0.22;
       const late = hour > SCHEDULE.gatherEnd || hour < SCHEDULE.wake;
       let lanterns = 0;
@@ -431,7 +481,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           w.x = held.x;
           w.y = held.y;
           w.visible = true;
-          w.heading = Math.atan2(my - held.y, mx - held.x);
+          // Someone sitting stays the way their seat faces, and turns their head (`lookYaw`, below).
+          w.heading = held.activity === "sit" ? held.heading : Math.atan2(my - held.y, mx - held.x);
           w.activity = held.activity === "sit" ? "sit" : "stand";
           w.speed = 0;
         } else if (released && released.id === d.person) {
@@ -454,9 +505,28 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         }
         // Nobody walks through the stranger (C46): a villager whose way crosses where you stand steps
         // round you. Presentation only, and only here; the schedule everyone else sees is untouched.
+        // Someone ON A BENCH is not stepped aside off it (they were: sat in the air behind the plank). They
+        // keep their seat unless the stranger is sat down beside them nearer than two bodies sit, or is stood
+        // where they sit; then they move ALONG the plank to the nearest room, and only with none left get up.
+        const bench = w.activity === "sit" ? benchOf.get(d.person) : undefined;
         if (!(held && held.id === d.person) && w.boat === null) {
           const gap = Math.hypot(w.x - mx, w.y - my);
-          if (gap < STEP_ASIDE_M && gap > 1e-6) {
+          const beside = !!player?.seat?.();
+          const clear = bench === undefined ? STEP_ASIDE_M : beside ? BENCH.apartM : SEAT_CLEAR_M;
+          const b = bench === undefined ? null : village.plan.benches[bench];
+          let moved = false;
+          if (b && gap < (beside ? BENCH.apartM : SEAT_INSIDE_M)) {
+            const others: number[] = [alongBench(b, { x: mx, y: my }).along];
+            for (const [id, at] of lastAt) if (id !== d.person && at.activity === "sit" && benchOf.get(id) === bench) others.push(alongBench(b, at).along);
+            const to = benchPlace(others, alongBench(b, w).along, clear);
+            if (to !== null) {
+              const s = benchSeat(village.plan, b, to);
+              w.x = s.x;
+              w.y = s.y;
+              moved = true;
+            } else w.activity = "stand";
+          }
+          if (!moved && gap < STEP_ASIDE_M && gap > 1e-6 && (!b || w.activity === "stand")) {
             w.x = mx + ((w.x - mx) / gap) * STEP_ASIDE_M;
             w.y = my + ((w.y - my) / gap) * STEP_ASIDE_M;
           }
@@ -520,9 +590,20 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
             lookYaw,
             wave,
             lantern,
+            task: tasks.get(d.person),
+            // On a bench, the hips are on the plank whatever the body's size.
+            seatM: bench !== undefined && w.activity === "sit" ? BENCH.seatTopM : undefined,
           },
           look,
         );
+        // At work, the thing worked on and the tool (C98), for whoever is near enough to be seen at it.
+        const task = tasks.get(d.person);
+        if (task && work && w.boat === null && (w.activity === "work" || w.activity === "stoop") && dp < WORK_SEEN_M) {
+          crowd.hands(gripM, palmR, palmL);
+          const at = { task, x: tx * frame.tileM, y, z: ty * frame.tileM, yaw: w.heading + Math.PI / 2, scale: (look.scale * frame.tileM) / 1.6, lx: w.x, ly: w.y, seen: seconds };
+          work.put(task, at, at.yaw, at.scale, seconds + hashUnit(d.person) * Math.PI * 2, gripM, palmR, palmL);
+          workAt.set(d.person, at);
+        }
         if (lantern && crowd.lanternAt(lanternAt)) putLantern(lanternAt.x, lanternAt.y, lanternAt.z);
         else if (dark && late && grown && w.activity === "sit" && w.boat === null) {
           const side = w.heading + Math.PI / 2;
@@ -572,7 +653,11 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
           }
         }
       }
+      // What someone works at stays where they left it, for as long as this page has seen them at it:
+      // a weed basket goes with the weeder, a loom does not go to dinner with its weaver.
+      if (work) for (const at of workAt.values()) if (at.seen !== seconds && at.task !== "weed" && Math.hypot(at.lx - mx, at.ly - my) < WORK_SEEN_M) work.rest(at.task, at, at.yaw, at.scale);
       crowd.end();
+      work?.end();
       drawn = crowd.placed();
       if (glow) {
         glow.geometry.setDrawRange(0, lanterns);
@@ -742,6 +827,8 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
 
     drawn: () => drawn,
     plans: () => state.plans,
+    seated: () => [...lastAt.values()].filter((at) => at.activity === "sit").map((at) => ({ x: at.x, y: at.y })),
+    benchesKept: () => kept,
     nearest: () => near,
     playerPosition: () => (Number.isFinite(playerAt.x) ? { x: playerAt.x, y: playerAt.y } : null),
     lend(household) {
@@ -822,7 +909,7 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
         if (!at || !d) return;
         // The sky's hour, as everywhere in this layer: never the clock's (see the header).
         const w = whereabouts(d, lastHour, state.boats, state.moorings);
-        held = { id, x: at.x, y: at.y, activity: w.activity };
+        held = { id, x: at.x, y: at.y, activity: w.activity, heading: at.heading ?? w.heading };
         if (released?.id === id) released = null;
       }
     },
@@ -831,6 +918,9 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       for (const b of bubbles) b.el.remove();
       bubbles.length = 0;
       crowd?.dispose();
+      work?.dispose();
+      work = null;
+      workAt.clear();
       boatMesh?.geometry.dispose();
       boatMaterial?.dispose();
       if (glow) {

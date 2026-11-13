@@ -127,5 +127,6 @@ export function verbsInHand(verbs: readonly Verb[], held: string | null, aboard 
 
 /** A recipe as a verb, so making something is an act like any other: a pose, a length, a measurement. */
 export function recipeVerb(r: { id: string; label: string; holdS: number; measure: Verb["measure"]; beat: string }): Verb {
-  return { id: `make:${r.id}`, label: r.label, holdS: r.holdS, pose: "build", reachM: 0, stakes: "low", measure: r.measure, effect: null, deed: null, owner: "none", beat: r.beat };
+  // Making is the close work of two hands at one thing (C98): the registry's "untie".
+  return { id: `make:${r.id}`, label: r.label, holdS: r.holdS, pose: "build", gesture: "untie", reachM: 0, stakes: "low", measure: r.measure, effect: null, deed: null, owner: "none", beat: r.beat };
 }
