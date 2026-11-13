@@ -58,6 +58,10 @@ export default function HeroPlanet() {
   const [selected, setSelected] = useState<PickedParcel | null>(null);
   const inset = useRef<HTMLDivElement>(null);
   const [arrow, setArrow] = useState<{ fromX: number; fromY: number; toX: number; toY: number } | null>(null);
+  // The planet has drawn a frame (C97). Until then its box is empty and clear; then it comes in over
+  // most of a second (`.arrive`). It used to appear all at once, a second or two after the words, on
+  // top of them on a phone.
+  const [here, setHere] = useState(false);
 
   // Two fetches, deliberately. The planet needs terrain, a sea level and the twelve commons, which
   // is two hundred milliseconds, and it draws as soon as it has them. The counts and the parcels
@@ -66,6 +70,9 @@ export default function HeroPlanet() {
   // hero was an empty rectangle in production.
   useEffect(() => {
     let cancelled = false;
+    // The planet's own code is asked for now, beside its numbers, not after them: it is the larger of
+    // the two, and one waiting for the other was a second of an empty hero.
+    void import("@/game/planet/PlanetGlobe");
     fetch("/api/planet/world")
       .then((r) => r.json())
       .then((data) => {
@@ -112,25 +119,34 @@ export default function HeroPlanet() {
 
     void import("@/game/planet/PlanetGlobe").then(({ PlanetGlobe }) => {
       if (!live || !host.current) return;
+      // The planet has a box of its own now (C97, `app/page.tsx`): beside the words on a wide screen,
+      // under them on a narrow one. So it sits in the middle of what it is given and is never slid
+      // under the headline, which is where a phone had it.
+      //
+      // Pointing at it is for a wide screen and a pointer. Under the words on a phone it is a picture:
+      // the card a pick opens is taller than the planet's box there, and a canvas that answers a
+      // thumb is a canvas that takes the thumb meant for the page.
+      const pointable = window.matchMedia("(min-width: 1024px) and (pointer: fine)").matches;
       instance = new PlanetGlobe(host.current, {
         seed: world.seed,
         seaLevel: world.seaLevel,
         peakElevation: world.peakElevation,
         reducedMotion,
-        // Right of centre on a wide screen, so the headline has ground of its own. On a narrow one
-        // the copy stacks over the planet anyway and an offset would only push it off the edge.
-        offsetX: window.innerWidth >= 1024 ? 0.78 : 0,
-        picking: {
-          parcelResolution: pickResolution,
-          commonsResolution: world.commonsResolution,
-          minLandFraction: world.minLandFraction,
-          commons: world.commons,
-          onHover: setHover,
-          onSelect: select,
-        },
+        picking: pointable
+          ? {
+              parcelResolution: pickResolution,
+              commonsResolution: world.commonsResolution,
+              minLandFraction: world.minLandFraction,
+              commons: world.commons,
+              onHover: setHover,
+              onSelect: select,
+            }
+          : undefined,
       });
       instance.setClaimed(Object.keys(world.commons), 1400);
       globe.current = instance;
+      // Two frames on, it has drawn itself.
+      requestAnimationFrame(() => requestAnimationFrame(() => live && setHere(true)));
       // The planet's villages as lights (DECISIONS C41). A static index derived from the seed, so a
       // seed with no index simply has no lights; it is never a reason for the planet not to draw.
       fetch(`/planet/villages-${world.seed}.json`)
@@ -189,7 +205,7 @@ export default function HeroPlanet() {
 
   return (
     <>
-      <div ref={host} className="absolute inset-0 h-full w-full" aria-hidden />
+      <div ref={host} data-planet data-here={here} className="arrive absolute inset-0 h-full w-full" aria-hidden />
 
       {/* What the pointer is over, drawn close up, with a line back to where it is. A parcel is
           three percent of the frame at hero distance, so naming it is not enough: the eye needs
@@ -215,7 +231,7 @@ export default function HeroPlanet() {
             ) : null}
           </svg>
 
-          <div ref={inset} className="pointer-events-none absolute right-6 top-24 z-30 sm:right-10">
+          <div ref={inset} className="pointer-events-none absolute right-4 top-24 z-30 sm:right-8">
             <ParcelInset
               cell={hover.cell}
               seed={world.seed}
@@ -272,8 +288,8 @@ const PICK: Record<Lang, { label: string; live: string; close: string; place: st
     village: "You arrive at the edge of the village. Everyone in it has lived a life here, and the houses, the boats and the graves are theirs.",
     land: "Step into this landscape. The ground, vegetation and arrival point you see here are the place you will explore.",
     sea: "Choose a patch of land to begin exploring.",
-    go: "Explore this place",
-    stay: "Keep exploring",
+    go: "Look around here",
+    stay: "Keep looking",
   },
   tr: {
     label: "Seçilen toprak",
@@ -286,7 +302,7 @@ const PICK: Record<Lang, { label: string; live: string; close: string; place: st
     village: "Köyün kıyısına varırsın. İçindeki herkes burada bir ömür yaşadı; evler, kayıklar ve mezarlar onların.",
     land: "Bu manzaranın içine gir. Burada gördüğün zemin, bitkiler ve varış noktası, gezeceğin yerin kendisi.",
     sea: "Gezmeye başlamak için bir toprak parçası seç.",
-    go: "Burayı gez",
+    go: "Buraya göz at",
     stay: "Bakmaya devam et",
   },
 };
@@ -298,12 +314,12 @@ function DemoPrompt({ parcel, world, onDismiss }: {
   const canEnter = parcel.assignable || !!parcel.commonsName;
   const village = useVillage(parcel.cell);
   return (
-    <section aria-label={copy.label} className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-parchment/15 bg-ink/95 text-parchment shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(580px,48vw)]">
+    <section aria-label={copy.label} className="absolute inset-x-4 bottom-5 z-30 overflow-hidden rounded-2xl border border-parchment/15 bg-ink/95 text-parchment shadow-2xl backdrop-blur-xl sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[min(540px,calc(100%-2rem))]">
       {canEnter ? (
         <div className="relative h-[230px] sm:h-[300px]" data-preview-cell={parcel.cell}>
           <ParcelPreview key={parcel.cell} cell={parcel.cell} seed={world.seed} seaLevel={world.seaLevel} peakElevation={world.peakElevation} radiusKm={world.radiusKm} commons={Object.keys(world.commons)} />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink via-transparent to-transparent" />
-          <span className="absolute left-5 top-4 rounded-full bg-ink/70 px-3 py-1 text-[10px] uppercase tracking-[.2em]">{copy.live}</span>
+          <span className="absolute left-5 top-4 rounded-full bg-ink/70 px-3 py-1 text-[12px] text-parchment/85">{copy.live}</span>
         </div>
       ) : null}
       <button type="button" aria-label={copy.close} title={copy.close} onClick={onDismiss} className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full border border-parchment/15 bg-ink/80 text-parchment/80 transition-colors hover:bg-ink-deep hover:text-parchment">
@@ -312,8 +328,8 @@ function DemoPrompt({ parcel, world, onDismiss }: {
         </svg>
       </button>
       <div className="relative px-6 pb-6 pt-4">
-        <p className="text-[10px] uppercase tracking-[.24em] text-echo-soft">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
-        <h2 className="mt-2 font-serif text-3xl">{parcel.commonsName ?? village?.name ?? (canEnter ? copy.place : copy.ocean)}</h2>
+        <p className="text-[12px] tabular-nums text-parchment/50">{parcel.lat.toFixed(3)}° · {parcel.lng.toFixed(3)}°</p>
+        <h2 className="mt-1.5 font-serif text-[1.7rem] leading-tight">{parcel.commonsName ?? village?.name ?? (canEnter ? copy.place : copy.ocean)}</h2>
         {village ? (
           <p data-village={village.name} className="mt-1 text-sm text-ember">
             {village.kind === 'abandoned village' ? copy.abandoned(village.graves) : copy.lives(village.kind, village.population, village.households)}
@@ -325,7 +341,7 @@ function DemoPrompt({ parcel, world, onDismiss }: {
             : canEnter ? copy.land : copy.sea}
         </p>
         <div className="mt-5 flex items-center gap-4">
-          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="btn btn-primary">{copy.go} <span aria-hidden>›</span></a> : null}
+          {canEnter ? <a data-parcel-entry={parcel.cell} href={`/parcel/${parcel.cell}`} className="btn btn-primary">{copy.go}</a> : null}
           <button type="button" onClick={onDismiss} className="btn btn-ghost">{copy.stay}</button>
         </div>
       </div>

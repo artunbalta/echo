@@ -6,8 +6,12 @@ import { BEATS, COVER, LEGEND_INTRO } from "./legend";
 import { SECTION, SectionHead, SPLIT, WRAP } from "./Section";
 
 /**
- * The legend book (landing §1a). A bespoke pixel-art book: cover, then seven spreads, each one
- * mythic line and one illustration.
+ * The legend book. A bespoke pixel-art book: cover, then seven spreads, each one mythic line and one
+ * illustration.
+ *
+ * IT IS A PAGE OF ITS OWN NOW, `/story` (C97). It stood in the middle of the landing, between how the
+ * place works and the waitlist, a screen tall; the landing is the pitch and the list, and the story is
+ * for whoever asks for it, from the header and the footer of every page.
  *
  * Around it (C96): a title and one sentence saying it is a story with pages, two buttons with words
  * on them, a count, and a dot a page from `sm` up. The pixel face is kept for what is INSIDE the
@@ -60,9 +64,8 @@ const PAGES = BEATS.length + 1;
  * the section has a title and one sentence, the two ways to turn are buttons with words on them,
  * and the count says how far along you are.
  */
-const COPY: Record<Lang, { eyebrow: string; title: string; lead: (pages: number) => string; book: string; back: string; next: string; open: string; prev: string; nextPage: string; page: (i: number, n: number) => string; cover: string }> = {
+const COPY: Record<Lang, { title: string; lead: (pages: number) => string; book: string; back: string; next: string; open: string; prev: string; nextPage: string; page: (i: number, n: number) => string; cover: string }> = {
   en: {
-    eyebrow: "The story",
     title: `${LEGEND_INTRO}.`,
     lead: (pages) => `A short legend the villagers tell, ${pages} pages long. Turn them with the buttons, the arrow keys, or a swipe.`,
     book: "The legend of echo",
@@ -75,7 +78,6 @@ const COPY: Record<Lang, { eyebrow: string; title: string; lead: (pages: number)
     cover: "the cover",
   },
   tr: {
-    eyebrow: "Hikâye",
     title: "Şöyle anlatırlar.",
     lead: (pages) => `Köylülerin anlattığı ${pages} sayfalık kısa bir efsane. Düğmelerle, ok tuşlarıyla ya da kaydırarak çevir.`,
     book: "Echo efsanesi",
@@ -171,7 +173,7 @@ export default function LegendBook() {
   return (
     <section id="legend" className={SECTION}>
       <div className={`${WRAP} ${SPLIT}`}>
-        <SectionHead eyebrow={copy.eyebrow} title={copy.title}>
+        <SectionHead as="h1" title={copy.title}>
           {copy.lead(PAGES)}
         </SectionHead>
 

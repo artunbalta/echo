@@ -81,9 +81,14 @@ img.pixel {
 /* ---- One set of controls for every page (C96) ----
    The site had grown five kinds of button and three kinds of small label, one per page. These are the
    only ones now: a pill that is the main thing to do, a pill that is the other thing, a small label,
-   a field, a text link. Sans for everything that is read or pressed; serif for titles; the pixel face
-   for the wordmark alone. In `components`, so a utility on the element still wins. */
+   a field, a text link. One family for everything (C97, `app/layout.tsx`): what is read or pressed in
+   its regular weight, titles in a heavier one; the pixel face for the wordmark alone. In `components`,
+   so a utility on the element still wins. */
 @layer components {
+  /* A title. `font-serif` used to ask the visitor's machine for a second family; it is the same family
+     now, and this is what still sets a title apart: its weight, and a little less air between letters.
+     A weight set on the element itself (`font-medium`, `font-semibold`) still wins. */
+  .font-serif { font-weight: 560; letter-spacing: -0.012em; }
   .btn {
     display: inline-flex;
     align-items: center;
@@ -108,7 +113,9 @@ img.pixel {
   .btn-danger:hover { border-color: rgba(240, 164, 138, 0.8); }
   .btn:disabled, .btn[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; }
   .btn:focus-visible, .field:focus-visible, .text-link:focus-visible { outline: 2px solid rgba(201, 176, 234, 0.8); outline-offset: 2px; }
-  .eyebrow { font-size: 0.6875rem; letter-spacing: 0.2em; text-transform: uppercase; color: #c9b0ea; }
+  /* A small label over a title, on the pages that still have one (the evidence, your data). In the
+     site's face as it is written, where it was small spaced capitals (C97). */
+  .eyebrow { font-size: 0.8125rem; font-weight: 500; color: #c9b0ea; }
   .field {
     display: block;
     width: 100%;
@@ -218,93 +225,18 @@ img.pixel {
   }
 }
 
-/* ---- Splash / first-load reveal ---- */
-
-/* Full-screen atmospheric cover that plays before the landing hero is ready.
-   Dark ink ground + echo-glow wordmark — the signature ECHO look. */
-.splash {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.6rem;
-  background: radial-gradient(120% 100% at 50% 40%, #241733 0%, var(--ink) 46%, var(--ink-deep) 100%);
-  transition: opacity 0.65s ease, visibility 0.65s ease;
-}
-.splash::after {
-  /* Faint vignette so the edges fall into the dark, matching the world. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 42%, transparent 55%, rgba(18, 12, 25, 0.55) 100%);
-}
-.splash--exit {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.splash-mark {
-  display: flex;
-  font-family: var(--font-pixel), ui-monospace, monospace;
-  font-weight: 700;
-  font-size: clamp(3.5rem, 14vw, 8rem);
-  letter-spacing: 0.04em;
-  line-height: 1;
-  color: var(--parchment);
-}
-.splash-letter {
-  display: inline-block;
-  opacity: 0;
-  animation: splash-letter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes splash-letter {
-  from { opacity: 0; transform: translateY(0.28em) scale(0.92); filter: blur(8px); }
-  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-}
-
-.splash-tagline {
-  /* Sans, like every other small label: the pixel face is the wordmark's alone (C96). */
-  margin: 0;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-  font-size: clamp(0.6875rem, 2.2vw, 0.8125rem);
-  color: rgba(244, 233, 208, 0.6);
-  opacity: 0;
-  animation: splash-tagline 0.6s ease both;
-}
-@keyframes splash-tagline {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .splash-letter,
-  .splash-tagline {
-    animation: none !important;
-    opacity: 1;
-    filter: none;
-    transform: none;
-  }
-}
-
 /* ---- The landing ---- */
 
-/* Smooth in-page anchor scrolling for the site header's links. */
+/* Smooth in-page anchor scrolling for the site header's links, for whoever has not asked for less
+   motion. The page scrolls as the browser scrolls it: the spring that was laid over the wheel is gone
+   (C97), because a page that moves differently from every other page is a thing to get used to. */
 html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 
-/* Lenis smooth/spring scroll (landing only; classes added at runtime). */
-html.lenis,
-html.lenis body { height: auto; }
-.lenis.lenis-smooth { scroll-behavior: auto !important; }
-.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
-.lenis.lenis-stopped { overflow: hidden; }
-.lenis.lenis-smooth iframe { pointer-events: none; }
+/* What arrives after the words (the planet, once it has drawn a frame) comes in, it does not pop. */
+.arrive { opacity: 0; transition: opacity 0.9s ease; }
+.arrive[data-here="true"] { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .arrive { transition: none; } }
 
 /* ---- The sign-in modal (components/AuthModal.tsx) ----
    Nothing mounts it since sign-in was removed from the landing. Its few rules are kept, scoped to the

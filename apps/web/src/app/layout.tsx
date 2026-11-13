@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Pixelify_Sans } from "next/font/google";
+import { Hanken_Grotesk, Pixelify_Sans } from "next/font/google";
 import "./globals.css";
 
-// Pixel display face used by the landing hero (matches the chunky pixel-art aesthetic).
-// Exposed as --font-pixel, which tailwind.config maps to the `font-pixel` utility.
+// The wordmark's face, and the legend book's. Exposed as --font-pixel, which tailwind.config maps to
+// the `font-pixel` utility.
 const pixel = Pixelify_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -11,14 +11,27 @@ const pixel = Pixelify_Sans({
   display: "swap",
 });
 
+/**
+ * The one face everything else is set in (DECISIONS C97). Until now the site named no face of its
+ * own: "sans" and "serif" were whatever the visitor's machine had, so a title was New York on a Mac,
+ * Cambria on Windows and Noto Serif on a phone, and no two people saw the same page. One variable
+ * family, served by the build with the page (no request to anyone else), with the Turkish letters
+ * (`latin-ext`); titles are its heavier weights, not a second family.
+ */
+const sans = Hanken_Grotesk({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   // Absolute base so the file-based icon/opengraph-image URLs resolve correctly in prod.
   metadataBase: new URL("https://echovirtualworld.com"),
-  title: "echo. A world that learns you.",
-  description: "Walk into a village where small things happen. Before each one, your echo seals a guess about what you will do. Then you open them, and see who knows you best.",
+  title: "ECHO. An agent that learns you from what you do.",
+  description: "ECHO is a small village you walk through in your browser. It watches what you do there, not what you say, and builds an agent that acts like you. The village is opening in turns: join the waitlist.",
   openGraph: {
-    title: "echo. A world that learns you.",
-    description: "A country that does not exist. Your echo seals a guess before each thing you do there. Then you open them.",
+    title: "ECHO. An agent that learns you from what you do, then acts like you.",
+    description: "A small village in your browser. It watches what you do, not what you say. Opening in turns: join the waitlist.",
     type: "website",
   },
   twitter: { card: "summary_large_image" },
@@ -51,7 +64,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={pixel.variable}>
+    // `lang` is said again before the page's script runs by a page built in another language
+    // (`app/tr/page.tsx`), and by `useLang` after it; React is told not to mind the difference.
+    <html lang="en" suppressHydrationWarning className={`${sans.variable} ${pixel.variable}`}>
       <body>{children}</body>
     </html>
   );

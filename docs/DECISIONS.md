@@ -6518,3 +6518,99 @@ reads "4 to open". In a browser, the mirror's erasure tests go by the Privacy ta
 **Not decided here:** the reading's own words in Turkish (⚑58); the villager conversation, the demo's and
 the pilot's overlays were looked at and left as they are; `/bench` and `/audit` stay English.
 
+
+## C97 — the village opens in turns: the waitlist first, a ten-second look, and a landing in one face
+
+**Date:** 2026-11-13. **Asked for by the owner**, in these words: the site should lead a visitor onto the
+waitlist, easily; a visitor may walk the village for ten seconds at most and is then sent to the
+waitlist, and the landing sends them there too; and the landing "is still AI slop": the typefaces are not
+consistent, there are straight lines between everything, and the planet loads late and sits on the text.
+
+**What was there** (photographed first, desktop and phone, before anything was changed):
+
+- **The page's main action walked into the village.** "Walk in" was the one filled button, in the hero,
+  in the header and again under the three steps; the waitlist was the fifth link of the header and a
+  section four screens down, where a figure had to be picked before two fields appeared.
+- **A reveal held the page shut for four seconds** (`Splash`): the wordmark letter by letter, a tagline, a
+  second's dwell, a fade.
+- **No typeface was the site's.** "Sans" and "serif" were whatever the visitor's machine had (New York
+  and San Francisco on a Mac, Cambria and Segoe on Windows, Noto and Roboto on a phone), so no two people
+  saw the same page; the headline's second line was italic and violet; every title had a small spaced
+  label in capitals over it; the hover card on the planet was in the pixel face, in English only.
+- **A hairline over every section**, under the header, over the footer, down the side of the finding and
+  between the lines of the phone's menu.
+- **The planet filled the hero behind the words.** On a phone the headline was set over a turning sphere.
+  Everywhere it appeared all at once, a second or two after the page, because its code was only asked for
+  once its numbers had arrived.
+- **A Turkish reader was served the English page**, and every word changed when the script arrived.
+
+**Decision: the list is the first thing on the page, the village is a look, and the page is one face.**
+
+- **The waitlist is a name, an email and a button, at the head of the landing**
+  (`components/site/WaitlistForm.tsx`). It posts what the roster's form posts, without a figure. Its
+  checks are the route's own, made first in the reader's language. The header's filled button is "Join
+  the waitlist" on every page. The roster is the optional second step, "Who will you be in the village?"
+  (`_landing/CharacterSelect.tsx`): it knows who has just joined above (`lib/waitlistSeat.ts`, kept for
+  the page only), does not ask twice, and saves the figure to the place they have. The count of places
+  ("1,074,936 of 1,074,942 left") is no longer drawn: true, and of no use to someone deciding.
+- **A visitor without a turn is given a ten-second look** (`lib/preview.ts`, `lib/previewPass.ts`). The
+  parcel route asks the server once and hands down one prop (`components/planet/ParcelVisit.tsx`). On a
+  look the question about being watched is never asked, so someone who has never said yes is not
+  measured and nothing is made or kept; a count runs from the moment the world is on the screen; at its
+  end the village is unmounted and the waitlist stands where it was, over the look's last frame
+  (`components/world/PreviewGate.tsx`). It is a door for a visitor, not a lock.
+  - **Where.** In turns wherever the site is built for visitors (a production build); open as before on a
+    development server, where the tests and the day's work are. `ECHO_OPEN=1` opens a production build
+    to everyone (the day the turns end; a browser test that plays a production build right through).
+    `ECHO_GATE=1`, or `?look=1` on one address, gives a development server a visitor's look.
+  - **A turn is a link**, `/in/<code>`, for a code on the deployment's `ECHO_PASS` list (commas between,
+    eight characters or more). It leaves a cookie holding a digest of the code and walks into the open
+    village. Taking the code off the list ends the turn of everyone who came by it. Until `ECHO_PASS` is
+    set there are no turns to give.
+  - **Not a look:** the pilot's visit and the five-minute demo (`/pilot`, `/you`) mount the world
+    themselves and are as they were.
+- **One family** (`app/layout.tsx`): Hanken Grotesk, served by the build with the page, with the Turkish
+  letters. `font-serif`, which marks a title in some thirty files, now names the same family at a heavier
+  weight (`tailwind.config.ts`, `globals.css`), so the world's chrome and the evidence changed with the
+  landing and nothing had to be touched one file at a time. The pixel face is the wordmark's, and the
+  legend book's own. No italics, no label in spaced capitals (`.eyebrow` is a small label in the site's
+  face on the two pages that still have one).
+- **No rules.** Sections are set apart by space (`_landing/Section.tsx`); the finding stands on a surface
+  a shade under the page's; the footer is that shade; the header has no line under it, and is opaque
+  with a phone's sheet open.
+- **The planet has a box of its own**: beside the words from `lg`, under them on a narrow screen. Nothing
+  is over it or under it. Its code is asked for beside its numbers, and it comes in over most of a second
+  once it has drawn (`.arrive`). It can be pointed at only with a wide screen and a pointer; under the
+  words on a phone it is a picture and takes no thumb. Its hover card is in the site's face and both
+  languages.
+- **The landing is built in both languages and served in the reader's** (`middleware.ts`,
+  `lib/langOf.ts`, `app/tr/page.tsx`, `lib/servedLang.tsx`): their own choice (now also kept in a cookie),
+  failing that the first language their browser asks for that we have. Both builds are static; `/tr` is
+  also an address of its own, with its own title, description and share picture, for a link meant to be
+  read in Turkish.
+- **In plain words.** The headline is the owner's sentence: "Yaptıklarından seni öğrenen, sonra senin
+  gibi davranan bir agent." The three steps say what happens (you walk; it watches what you do; it acts
+  like you when you are away) and no longer speak of sealing and envelopes.
+
+**What went, and where.** `Splash` and the spring over the scroll wheel (Lenis): gone. The legend's book:
+a page of its own, `/story`, in the header and the footer. The trailer and "Walk the demo"
+(`_landing/DemoEntry.tsx`): off the landing and out of the tree; the film is of an older world, and its
+files are still in `public/`. `/demo` still redirects to the demo parcel, which is a look like any other.
+The header's row is three places (how it works, the evidence, the story); the twin audit and your data
+are in the footer and in a phone's sheet.
+
+**Counted** (`lib/steps.ts`): `joined`, a place taken, and `gated`, a look that reached its end. `walk_in`
+is now the press that begins a look.
+
+**Tests.** `tests/preview.test.mts` (6): where the village is in turns and the two settings that move it;
+a turn's cookie being a digest, and a code off the list ending it; the language a page is served in; the
+route asking once, a look never being asked the question and ending with the village gone, the pilot and
+the demo passing no look; the landing's first action being the form, with no rule, italic or spaced label
+in its code. In a browser, on a production build: a look on a desktop and on a phone to its gate, the
+form's refusals in Turkish, `/in/<code>` right and wrong, a forged cookie.
+
+**Not decided here:** who is given a turn and when (there is no invitation sent by the list yet; a turn
+is a link the owner hands out); whether a look should end sooner for someone who has already joined;
+`/bench` and `/audit` keep their own rules inside tables and are still English; a friend's page still ends
+on "Let an echo watch you", which for a friend without a turn is now a look; the ad film's end card still
+says "Walk in".

@@ -8,11 +8,17 @@ import { useLang, type Lang } from "@/lib/lang";
 import { EMPTY_INDEX, EMPTY_SLOT, GRID, GRID_COLS, type RosterEntry } from "./roster";
 import { SECTION, SectionHead, WRAP } from "./Section";
 import { VACANCY } from "./vacancy";
-import { OPEN_VILLAGE_PATH } from "@/lib/openVillage";
+import { setSeat, useSeat } from "@/lib/waitlistSeat";
 
 /**
- * The waitlist — the character select (§1b). A roster with a hole in the middle: the empty centre
- * slot is you.
+ * A character to go with a place on the waitlist (§1b). A roster with a hole in the middle: the empty
+ * centre slot is you.
+ *
+ * IT IS THE SECOND STEP NOW, AND AN OPTIONAL ONE (C97). Joining is a name and an email at the head of
+ * the page (`components/site/WaitlistForm.tsx`); this is for whoever also wants a figure. Someone who
+ * joined above is known here (`lib/waitlistSeat.ts`): the two fields are not shown again, and the one
+ * button saves the figure to the place they already have (the list updates a person in place). Someone
+ * who came straight here can still do both at once, as before.
  *
  * LAID OUT AS A FORM WITH A ROSTER BESIDE IT (C96). It was a spaced pixel title, nine large portraits
  * and then, a screen and a half down, the form they were for. Now the title, the one sentence and
@@ -39,18 +45,18 @@ type Fill = "photo" | "premade" | null;
  * shown as they come. The English of every check is word for word what it was.
  */
 interface Copy {
-  eyebrow: string;
   title: string;
   lead: string;
-  left: (remaining: string, cap: string) => string;
-  taken: (cap: string) => string;
+  known: (name: string) => string;
+  save: string;
+  saving: string;
   group: string;
   emptySlot: string;
   you: string;
   chosen: string;
   pickHint: string;
   fill: { title: string; photo: string; photoOn: string; photoOff: string; premade: string; premadeHint: string; choose: string; change: string; alt: string; consent: string; note: string };
-  err: { type: string; size: string; read: string; small: string; large: string; notImage: string; pick: string; fill: string; photo: string; consent: string; save: string; reach: string };
+  err: { type: string; size: string; read: string; small: string; large: string; notImage: string; pick: string; fill: string; photo: string; consent: string; name: string; email: string; many: string; save: string; reach: string };
   name: string;
   namePh: string;
   email: string;
@@ -59,16 +65,16 @@ interface Copy {
   joining: string;
   full: string;
   note: string;
-  joined: { kept: string; yours: string; arrival: (seat: number) => string; pending: string; already: string; fresh: string; open: string; walkIn: string };
+  joined: { kept: string; yours: string; arrival: (seat: number) => string; pending: string; already: string; fresh: string };
 }
 
 const COPY: Record<Lang, Copy> = {
   en: {
-    eyebrow: "Waitlist",
-    title: "Join the waitlist",
-    lead: "Every figure here is someone who already arrived. The space in the middle is yours. Pick one, or take the empty place, and leave your name.",
-    left: (remaining, cap) => `${remaining} of ${cap} places left`,
-    taken: (cap) => `All ${cap} places taken`,
+    title: "Who will you be in the village?",
+    lead: "You can choose a character to go with your place on the list. Every figure here is someone who already arrived; the space in the middle is yours. Pick one, or take the empty place.",
+    known: (name) => `You are on the list, ${name}. Pick a figure and it is saved to your place.`,
+    save: "Save my character",
+    saving: "Saving…",
     group: "Choose your character",
     emptySlot: "The empty slot: this one is you",
     you: "You",
@@ -98,6 +104,9 @@ const COPY: Record<Lang, Copy> = {
       fill: "Choose how to fill your slot.",
       photo: "Choose a photo first.",
       consent: "We need your say-so before sending your photo.",
+      name: "Tell us what to call you.",
+      email: "That email address does not look right.",
+      many: "Too many signups from here. Try again a little later.",
       save: "Could not save that. Please try again.",
       reach: "Could not reach the waitlist. Check your connection and try again.",
     },
@@ -105,27 +114,25 @@ const COPY: Record<Lang, Copy> = {
     namePh: "What should people call you?",
     email: "Your email",
     emailPh: "Where do we find you?",
-    join: "Join",
+    join: "Join the waitlist",
     joining: "Joining…",
     full: "Full",
-    note: "Name and email only. We write to you when there is something to see.",
+    note: "Name and email only. We write to you when it is your turn.",
     joined: {
       kept: "Kept your place",
       yours: "The slot is yours",
       arrival: (seat) => `Arrival ${seat}`,
       pending: "Your character is being drawn from your photo. It will reach you by email shortly. Your place is already kept, whatever the drawing does.",
       already: "We already had you. Your character is updated, and your place is unchanged.",
-      fresh: "No one knows you here yet. That is the point. We will write when there is more to see.",
-      open: "A village is already open.",
-      walkIn: "Walk in",
+      fresh: "No one knows you here yet. That is the point. We will write to you when it is your turn.",
     },
   },
   tr: {
-    eyebrow: "Bekleme listesi",
-    title: "Bekleme listesine katıl",
-    lead: "Buradaki her figür çoktan gelmiş biri. Ortadaki boşluk senin. Birini seç ya da boş yeri al, sonra adını bırak.",
-    left: (remaining, cap) => `${cap} yerden ${remaining} tanesi boş`,
-    taken: (cap) => `${cap} yerin hepsi doldu`,
+    title: "Köyde kim olacaksın?",
+    lead: "Sıradaki yerinin yanına bir karakter de seçebilirsin. Buradaki her figür çoktan gelmiş biri; ortadaki boşluk senin. Birini seç ya da boş yeri al.",
+    known: (name) => `Sıradasın, ${name}. Bir figür seç, yerine kaydedelim.`,
+    save: "Karakterimi kaydet",
+    saving: "Kaydediliyor…",
     group: "Karakterini seç",
     emptySlot: "Boş yer: bu sensin",
     you: "Sen",
@@ -155,6 +162,9 @@ const COPY: Record<Lang, Copy> = {
       fill: "Yerini nasıl dolduracağını seç.",
       photo: "Önce bir fotoğraf seç.",
       consent: "Fotoğrafını göndermeden önce onayın gerekiyor.",
+      name: "Sana ne diyeceğimizi yaz.",
+      email: "E-posta adresi doğru görünmüyor.",
+      many: "Buradan çok fazla kayıt geldi. Biraz sonra yeniden dene.",
       save: "Kaydedilemedi. Lütfen yeniden dene.",
       reach: "Bekleme listesine ulaşılamadı. Bağlantını kontrol edip yeniden dene.",
     },
@@ -162,19 +172,17 @@ const COPY: Record<Lang, Copy> = {
     namePh: "Sana ne diyelim?",
     email: "E-postan",
     emailPh: "Seni nereden bulalım?",
-    join: "Katıl",
-    joining: "Katılıyorsun…",
+    join: "Sıraya gir",
+    joining: "Kaydediliyor…",
     full: "Dolu",
-    note: "Yalnızca ad ve e-posta. Görülecek bir şey olduğunda sana yazarız.",
+    note: "Yalnızca ad ve e-posta. Sıran geldiğinde sana yazarız.",
     joined: {
       kept: "Yerin duruyor",
       yours: "Yer senin",
       arrival: (seat) => `Geliş sırası: ${seat}`,
       pending: "Karakterin fotoğrafından çiziliyor. Kısa süre içinde e-postayla ulaşacak. Çizime ne olursa olsun yerin ayrıldı.",
       already: "Seni zaten tanıyorduk. Karakterin güncellendi, yerin değişmedi.",
-      fresh: "Burada seni henüz kimse tanımıyor. Mesele de bu. Görülecek yeni bir şey olduğunda yazarız.",
-      open: "Bir köy şimdiden açık.",
-      walkIn: "İçeri gir",
+      fresh: "Burada seni henüz kimse tanımıyor. Mesele de bu. Sıran geldiğinde sana yazarız.",
     },
   },
 };
@@ -207,8 +215,7 @@ type Seats = {
 const TILE_SIZE = "box-content w-[72px] lg:w-[144px]";
 
 export default function CharacterSelect() {
-  const lang = useLang();
-  const copy = COPY[lang];
+  const copy = COPY[useLang()];
   const [selected, setSelected] = useState<Selection>(null);
   const [fill, setFill] = useState<Fill>(null);
   const [focusIndex, setFocusIndex] = useState(EMPTY_INDEX);
@@ -225,6 +232,8 @@ export default function CharacterSelect() {
   const [seats, setSeats] = useState<Seats | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
+  // Who joined at the head of the page, if anyone did: their name and email are not asked for twice.
+  const seat = useSeat();
 
   // The result of createFromPremade — held so a failed submit never loses the chosen character (§1b).
   const characterRef = useRef<CharacterResult | null>(null);
@@ -256,8 +265,9 @@ export default function CharacterSelect() {
     };
   }, [entry]);
 
-  // The real remaining count. Fetched, never assumed: if it cannot be read the line simply does not
-  // render (see Scarcity), because a made-up number is the exact growth-hack pattern we refuse.
+  // The list as it stands: whether it is full, and whether the photo path can deliver. The count of
+  // places itself is no longer drawn (C97): "1,074,936 of 1,074,942 places left" is true, and tells
+  // someone deciding whether to join nothing.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/waitlist")
@@ -322,6 +332,19 @@ export default function CharacterSelect() {
       }
     }
 
+    // The two checks the route makes first, made here in the reader's language (the route's own
+    // refusals are English). Not made for someone already on the list: theirs passed once.
+    if (!seat) {
+      if (!name.trim()) {
+        setError(copy.err.name);
+        return;
+      }
+      if (!/^[^@\s]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(email.trim())) {
+        setError(copy.err.email);
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       const character = characterRef.current;
@@ -329,8 +352,8 @@ export default function CharacterSelect() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          name,
-          email,
+          name: seat?.name ?? name,
+          email: seat?.email ?? email,
           website, // honeypot — server answers 200 and discards if this is non-empty
           characterSource: isEmpty && fill === "photo" ? "selfie" : "premade",
           selfie: isEmpty && fill === "photo" ? selfie : undefined,
@@ -352,7 +375,9 @@ export default function CharacterSelect() {
       };
       if (!res.ok) {
         // Keep name, email AND the chosen character — never lose the selection on a failed submit.
-        setError(data.error ?? copy.err.save);
+        // A photo's refusal is the route's own sentence (it names what is wrong with the file); the
+        // two a person can meet without a photo are said in their language.
+        setError(res.status === 429 ? copy.err.many : res.status === 500 ? copy.err.save : (data.error ?? copy.err.save));
         // A 409 means the last seat went while this form was open. Reflect the truth immediately
         // rather than leaving a stale "N left" on screen above a form that can no longer succeed.
         if (data.full) setSeats({ cap: data.cap ?? 0, taken: data.taken ?? 0, remaining: 0, available: true });
@@ -366,6 +391,8 @@ export default function CharacterSelect() {
         seat: data.seat ?? null,
         portraitPending: Boolean(data.portraitPending),
       });
+      // Joined here and not above: the head of the page now knows too.
+      if (!seat) setSeat({ name: name.trim(), email: email.trim().toLowerCase(), seat: data.seat ?? null });
     } catch {
       setError(copy.err.reach);
     } finally {
@@ -387,16 +414,13 @@ export default function CharacterSelect() {
   const full = seats?.available === true && seats.remaining === 0;
 
   return (
-    <section id="waitlist" className={SECTION}>
+    <section id="character" className={SECTION}>
       {/* Three blocks in reading order: the words, the roster, the form. Stacked on a phone; from
           `sm` the roster takes the right column for the height of the other two, small until `lg`
           and at twice the size from there. */}
       <div className={`${WRAP} grid items-start gap-x-10 gap-y-10 sm:grid-cols-[minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1fr)_640px] lg:gap-x-12 xl:grid-cols-[minmax(0,1fr)_720px] xl:gap-x-16`}>
         <div className="sm:col-start-1 sm:row-start-1">
-          <SectionHead eyebrow={copy.eyebrow} title={copy.title}>
-            {copy.lead}
-          </SectionHead>
-          <Scarcity seats={seats} copy={copy} lang={lang} />
+          <SectionHead title={copy.title}>{copy.lead}</SectionHead>
         </div>
 
         <div className="sm:col-start-2 sm:row-span-2 sm:row-start-1">
@@ -433,6 +457,7 @@ export default function CharacterSelect() {
         </div>
 
         <div ref={formRef} className="w-full max-w-md sm:col-start-1 sm:row-start-2">
+          {seat ? <p data-character-known className="mb-5 text-[15px] leading-relaxed text-parchment/75">{copy.known(seat.name)}</p> : null}
           <Chosen selected={selected} entry={entry} copy={copy} />
 
           {isEmpty && (
@@ -454,6 +479,7 @@ export default function CharacterSelect() {
 
           <Form
             copy={copy}
+            known={seat !== null}
             name={name}
             email={email}
             website={website}
@@ -474,27 +500,6 @@ export default function CharacterSelect() {
       </div>
     </section>
   );
-}
-
-/* ── real scarcity ───────────────────────────────────────────────────────────────────────────── */
-
-/**
- * The true remaining count, straight from the row count (§8). Everything here is load-bearing:
- *
- *  - The number is REAL. It is `cap - count(confirmed rows)`, read from GET /api/waitlist, and the
- *    server refuses signups past the cap with a 409 rather than quietly hiding the form. If it says
- *    limited, it is limited.
- *  - If the count cannot be read, this renders NOTHING. No placeholder, no cap-only teaser, no
- *    "almost gone". An invented number is precisely the pattern the brief forbids, and a fake
- *    scarcity line is worse than no scarcity line.
- *  - No countdown, no decay, no "1,247 people joined", no urgency verbs. The line states a fact in
- *    the world's register and stops. The pull is that the place is small, not that a clock is running.
- */
-function Scarcity({ seats, copy, lang }: { seats: Seats | null; copy: Copy; lang: Lang }) {
-  if (!seats?.available || seats.remaining === null || seats.taken === null) return null;
-  // The same two numbers, written the way the reader's language writes a large one.
-  const n = (x: number) => x.toLocaleString(lang === "tr" ? "tr-TR" : "en-US");
-  return <p className="mt-4 text-[13px] tabular-nums text-parchment/55">{seats.remaining === 0 ? copy.taken(n(seats.cap)) : copy.left(n(seats.remaining), n(seats.cap))}</p>;
 }
 
 /* ── what is picked ──────────────────────────────────────────────────────────────────────────── */
@@ -518,7 +523,7 @@ function Chosen({ selected, entry, copy }: { selected: Selection; entry: RosterE
         <div className="mx-auto w-[72px] -translate-x-2">{entry ? <Portrait entry={entry} fallbackScale={2} /> : <Silhouette breathing={false} />}</div>
       </div>
       <div>
-        <p className="eyebrow">{copy.chosen}</p>
+        <p className="text-[13px] text-parchment/55">{copy.chosen}</p>
         <p className="mt-0.5 font-serif text-2xl leading-tight text-parchment">{entry ? entry.name : copy.you}</p>
       </div>
     </div>
@@ -778,7 +783,7 @@ function FillChoice({
 
   return (
     <div className="mb-6">
-      <p className="eyebrow mb-3">{copy.fill.title}</p>
+      <p className="mb-3 text-[13px] text-parchment/65">{copy.fill.title}</p>
       <div className="flex flex-col gap-2">
         {/* Not offered when it cannot deliver. A disabled button that says why beats a live one that
             takes a photo, takes a seat, and returns nothing. */}
@@ -845,6 +850,7 @@ function FillChoice({
 
 function Form({
   copy,
+  known,
   name,
   email,
   website,
@@ -858,6 +864,8 @@ function Form({
   onSubmit,
 }: {
   copy: Copy;
+  /** Joined at the head of the page already: the two fields are not asked for again. */
+  known: boolean;
   name: string;
   email: string;
   website: string;
@@ -876,14 +884,18 @@ function Form({
   return (
     <form onSubmit={onSubmit} noValidate>
       <div className="flex flex-col gap-3">
-        <label className="block">
-          <span className="sr-only">{copy.name}</span>
-          <input value={name} onChange={(e) => onName(e.target.value)} placeholder={copy.namePh} autoComplete="name" maxLength={80} className="field" />
-        </label>
-        <label className="block">
-          <span className="sr-only">{copy.email}</span>
-          <input value={email} onChange={(e) => onEmail(e.target.value)} placeholder={copy.emailPh} type="email" autoComplete="email" maxLength={254} className="field" />
-        </label>
+        {known ? null : (
+          <>
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] text-parchment/65">{copy.name}</span>
+              <input value={name} onChange={(e) => onName(e.target.value)} placeholder={copy.namePh} autoComplete="name" maxLength={80} className="field h-12" />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] text-parchment/65">{copy.email}</span>
+              <input value={email} onChange={(e) => onEmail(e.target.value)} placeholder={copy.emailPh} type="email" inputMode="email" autoComplete="email" maxLength={254} className="field h-12" />
+            </label>
+          </>
+        )}
 
         {/* Honeypot. Hidden from people and from assistive tech; only a bot fills it in. Not
             display:none — some bots skip those. Off-screen + aria-hidden + tabIndex -1. */}
@@ -901,7 +913,7 @@ function Form({
         </div>
 
         {error && (
-          <p role="alert" data-waitlist-error className="rounded-xl border border-danger/40 px-4 py-2.5 text-[13px] leading-snug text-danger">
+          <p role="alert" data-waitlist-error className="text-[13.5px] leading-snug text-danger">
             {error}
           </p>
         )}
@@ -909,10 +921,10 @@ function Form({
         {/* When the list is full the button says so and stops. The form is not hidden and the
             endpoint still refuses with a 409 — hiding it would leave the cap unenforced and make
             the scarcity a UI trick rather than a fact (§8). */}
-        <button type="submit" disabled={busy || disabled || full} className="btn btn-primary mt-1 w-full">
-          {full ? copy.full : busy ? copy.joining : copy.join}
+        <button type="submit" disabled={busy || disabled || full} className="btn btn-primary mt-1 h-12 w-full text-[15px]">
+          {full ? copy.full : known ? (busy ? copy.saving : copy.save) : busy ? copy.joining : copy.join}
         </button>
-        <p className="text-[12.5px] leading-relaxed text-parchment/45">{copy.note}</p>
+        {known ? null : <p className="text-[13px] leading-relaxed text-parchment/50">{copy.note}</p>}
       </div>
     </form>
   );
@@ -934,7 +946,7 @@ function Joined({
   portraitPending: boolean;
 }) {
   return (
-    <section id="waitlist" className={SECTION}>
+    <section id="character" className={SECTION}>
       <div className={`${WRAP} flex flex-col gap-8 sm:flex-row sm:items-center sm:gap-12`}>
         <div className="box-content w-[144px] shrink-0 overflow-hidden rounded-xl border border-parchment/15 bg-ink-deep">
           {entry ? <Portrait entry={entry} fallbackScale={4} /> : <Silhouette breathing={false} />}
@@ -942,9 +954,9 @@ function Joined({
         <div className="max-w-md">
           {/* A real seat number, assigned by the database, not a flourish. It is the one number here
               that means something, so it is the one number shown. No confetti. */}
-          {seat !== null && <p className="eyebrow mb-4">{copy.joined.arrival(seat)}</p>}
-          <h2 data-waitlist-joined className="font-serif text-[clamp(1.85rem,3.2vw,2.6rem)] leading-[1.08] tracking-[-.02em] text-parchment">{already ? copy.joined.kept : copy.joined.yours}</h2>
-          <p className="mt-4 text-[16px] leading-relaxed text-parchment/65">
+          {seat !== null && <p className="mb-3 text-[14px] tabular-nums text-parchment/60">{copy.joined.arrival(seat)}</p>}
+          <h2 data-waitlist-joined className="text-[clamp(1.75rem,3vw,2.4rem)] font-semibold leading-[1.1] tracking-[-.025em] text-parchment">{already ? copy.joined.kept : copy.joined.yours}</h2>
+          <p className="mt-4 text-[16.5px] leading-relaxed text-parchment/70">
             {portraitPending
               ? // Honest about the wait AND about the seat: the place is already theirs, the drawing
                 // is the only thing outstanding. No progress bar, because we cannot honestly promise
@@ -954,11 +966,6 @@ function Joined({
                 ? copy.joined.already
                 : copy.joined.fresh}
           </p>
-          {/* The world is open (C89): a place kept is no reason to wait outside it. */}
-          <p className="mt-6 text-[14px] text-parchment/55">{copy.joined.open}</p>
-          <a href={OPEN_VILLAGE_PATH} className="btn btn-primary mt-3">
-            {copy.joined.walkIn} <span aria-hidden>›</span>
-          </a>
         </div>
       </div>
     </section>

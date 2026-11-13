@@ -20,6 +20,10 @@ const config: Config = {
         danger: "#f0a48a",
       },
       fontFamily: {
+        // One family (C97, `app/layout.tsx`). `font-serif` is still what a title is marked with, in
+        // some thirty files; it now names the same family, and `globals.css` gives it its weight.
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        serif: ["var(--font-sans)", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
         pixel: ["var(--font-pixel)", "ui-monospace", "monospace"],
       },
       keyframes: {

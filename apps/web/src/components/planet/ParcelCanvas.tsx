@@ -87,6 +87,8 @@ import type { PlayerLayer } from "@/game/world/playerLayer";
 import { carryHandoff } from "@/game/world/crossTo";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { useLang, type Lang } from "@/lib/lang";
+import { PREVIEW_MS } from "@/lib/preview";
 import { step } from "@/lib/steps";
 import { closePanel, usePanel } from "@/lib/panels";
 import type { SliceLayer } from "@/game/world/sliceLayer";
@@ -116,12 +118,25 @@ export interface ParcelCanvasProps {
    * echo reads you while you play (no meter, no mirror, no inspector, no meetings).
    */
   pilot?: PilotSettings | null;
+  /**
+   * A ten-second look (C97, `lib/preview.ts`): the village for a visitor whose turn has not come.
+   * The question about being watched is never asked, so someone who has never said yes to it is not
+   * measured and nothing is made or kept for them; a count runs from the moment the world is shown,
+   * and at its end `onEnd` is handed the last frame.
+   */
+  preview?: { onEnd: (still: string | null) => void } | null;
 }
+
+/** The look's two lines, in both languages: how long is left, and how to move. */
+const LOOK: Record<Lang, { left: (s: number) => string; keys: string; thumb: string }> = {
+  en: { left: (s) => `Preview · ${s} s`, keys: "W A S D to walk, drag to look", thumb: "Drag the stick to walk" },
+  tr: { left: (s) => `Önizleme · ${s} sn`, keys: "Yürümek için W A S D, bakmak için sürükle", thumb: "Yürümek için kolu sürükle" },
+};
 
 /** How long the count's sentence must have been on the consent card for a yes to cover it. */
 const SENTENCE_READ_MS = 2000;
 
-export default function ParcelCanvas({ stations = null, demo = null, pilot = null, ...manifest }: ParcelCanvasProps) {
+export default function ParcelCanvas({ stations = null, demo = null, pilot = null, preview = null, ...manifest }: ParcelCanvasProps) {
   // One chain for the life of the page. It arms itself if this browser has already consented.
   //
   // It is deliberately never disposed. Disposal is the right thing on a real unmount, and it is
@@ -364,6 +379,37 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
     };
   }, [here, consent, applyHome]);
 
+  // ── a ten-second look (C97) ───────────────────────────────────────────────────────
+  // The count starts when the world is on the screen, not when the page was asked for: the seconds a
+  // slow machine spends building the ground are not seconds of looking.
+  const [shownAt, setShownAt] = useState<number | null>(null);
+  const [left, setLeft] = useState(PREVIEW_MS);
+  const onEnd = preview?.onEnd;
+  useEffect(() => {
+    if (!onEnd || shownAt === null) return;
+    const tick = setInterval(() => {
+      const rest = PREVIEW_MS - (performance.now() - shownAt);
+      setLeft(Math.max(0, rest));
+      if (rest > 0) return;
+      clearInterval(tick);
+      // The last frame, to stand still behind the waitlist. Drawn and read in one task, because a
+      // WebGL canvas keeps its picture only until the browser has shown it.
+      let still: string | null = null;
+      try {
+        const w = world.current;
+        if (w) {
+          w.handle.renderer.render(w.scene, w.camera);
+          still = w.handle.canvas.toDataURL("image/jpeg", 0.7);
+        }
+      } catch {
+        // No picture; the waitlist stands on the page's own colour.
+      }
+      onEnd(still);
+    }, 200);
+    return () => clearInterval(tick);
+  }, [onEnd, shownAt]);
+  const look = LOOK[useLang()];
+
   if (changes === null) return <div className="relative h-full w-full" data-phase="changes" />;
 
   return (
@@ -371,6 +417,9 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
       {...manifest}
       changes={changes}
       layers={layers}
+      onPhase={(phase) => {
+        if (phase === "ready") setShownAt((at) => at ?? performance.now());
+      }}
       onWorld={(w, adoptNext) => {
         const first = world.current === null;
         world.current = w;
@@ -427,8 +476,19 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         </p>
       ) : null}
 
+      {/* A look: how long is left, and the one thing needed to use it. In the place the how-to card
+          takes on a visit, which a look never shows (it follows the consent question). */}
+      {preview && shownAt !== null ? (
+        <div data-preview-left={Math.ceil(left / 1000)} className="pointer-events-none absolute left-1/2 top-16 z-20 flex -translate-x-1/2 flex-col items-center gap-2 max-sm:top-[5.5rem]">
+          <p className="hud-pop px-4 py-1.5 text-[13px] tabular-nums text-parchment">{look.left(Math.ceil(left / 1000))}</p>
+          <p className="hud-shadow text-center text-[13px] text-parchment/85">{coarse ? look.thumb : look.keys}</p>
+        </div>
+      ) : null}
+
+      {/* Never asked on a look: unanswered is off (see the header), so a look by someone who has never
+          said yes measures nothing. A browser that said yes on an earlier visit is still watched. */}
       <ConsentCard
-        consent={consent}
+        consent={preview ? "declined" : consent}
         crowd={envelopes.count.on}
         onAccept={() => {
           chain.accept();
@@ -492,7 +552,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
           use it. The consent card is answered first: see the header. */}
       {/* Not while the envelopes are open (C89): the panel fills a phone's screen, and a thumbstick
           painted over its last lines would take the taps meant for them. */}
-      {coarse && consent !== "unset" && !envelopes.open ? (
+      {coarse && (consent !== "unset" || preview) && !envelopes.open ? (
         <TouchControls handle={touch} />
       ) : null}
     </WorldCanvas>

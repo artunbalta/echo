@@ -26,6 +26,8 @@ import {
 } from "@echo/planet";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useLang, type Lang } from "@/lib/lang";
+
 export interface ParcelInsetProps {
   cell: string;
   seed: string;
@@ -50,6 +52,7 @@ export default function ParcelInset({
   resolution = 192,
 }: ParcelInsetProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const words = WORDS[useLang()];
   const [summary, setSummary] = useState<{ widthM: number; areaKm2: number; biome: string } | null>(null);
 
   const field = useMemo(() => createTerrain(seed), [seed]);
@@ -171,42 +174,42 @@ export default function ParcelInset({
         height={resolution}
         className="block h-[204px] w-[204px] rounded [image-rendering:pixelated]"
       />
-      <p className="mt-2 font-pixel text-xs text-parchment">
-        {commonsName ?? (summary ? LABEL[summary.biome] ?? summary.biome : "Reading the ground")}
+      <p className="mt-2.5 text-[13.5px] font-medium text-parchment">
+        {commonsName ?? (summary ? words.biome[summary.biome] ?? summary.biome : words.reading)}
       </p>
       {summary ? (
-        <p className="mt-0.5 font-pixel text-[10px] leading-relaxed text-parchment/50">
-          {summary.areaKm2.toFixed(2)} km², about {Math.round(summary.widthM)} m across
+        <p className="mt-0.5 text-[12px] leading-relaxed tabular-nums text-parchment/55">
+          {words.size(summary.areaKm2.toFixed(2), Math.round(summary.widthM))}
         </p>
       ) : null}
       {/* Said before the click, not after it. The whole complaint was not knowing what you were
           pointing at, and "you cannot have this one" is the most useful thing to know early. */}
       {!assignable && !commonsName ? (
-        <p className="mt-1 font-pixel text-[10px] leading-relaxed text-echo-soft">
-          Never assigned. Too little land.
-        </p>
+        <p className="mt-1 text-[12px] leading-relaxed text-echo-soft">{words.never}</p>
       ) : null}
       {commonsName ? (
-        <p className="mt-1 font-pixel text-[10px] leading-relaxed text-[#e2c67a]">
-          Public commons. Nobody owns it.
-        </p>
+        <p className="mt-1 text-[12px] leading-relaxed text-ember">{words.commons}</p>
       ) : null}
     </div>
   );
 }
 
-const LABEL: Record<string, string> = {
-  ocean: "Open water",
-  beach: "Shoreline",
-  grassland: "Grassland",
-  forest: "Forest",
-  rainforest: "Rainforest",
-  savanna: "Savanna",
-  desert: "Desert",
-  tundra: "Tundra",
-  taiga: "Taiga",
-  "bare-rock": "Bare rock",
-  snow: "Snow",
+/** The card's few words, in both languages (C97): it was the one thing over the planet still in English. */
+const WORDS: Record<Lang, { reading: string; size: (km2: string, m: number) => string; never: string; commons: string; biome: Record<string, string> }> = {
+  en: {
+    reading: "Reading the ground",
+    size: (km2, m) => `${km2} km², about ${m} m across`,
+    never: "Never assigned. Too little land.",
+    commons: "Public commons. Nobody owns it.",
+    biome: { ocean: "Open water", beach: "Shoreline", grassland: "Grassland", forest: "Forest", rainforest: "Rainforest", savanna: "Savanna", desert: "Desert", tundra: "Tundra", taiga: "Taiga", "bare-rock": "Bare rock", snow: "Snow" },
+  },
+  tr: {
+    reading: "Zemin okunuyor",
+    size: (km2, m) => `${km2} km², bir ucundan öbürüne yaklaşık ${m} m`,
+    never: "Kimseye verilmez. Karası çok az.",
+    commons: "Ortak alan. Kimsenin değil.",
+    biome: { ocean: "Açık deniz", beach: "Kıyı", grassland: "Çayır", forest: "Orman", rainforest: "Yağmur ormanı", savanna: "Savan", desert: "Çöl", tundra: "Tundra", taiga: "Tayga", "bare-rock": "Çıplak kaya", snow: "Kar" },
+  },
 };
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);

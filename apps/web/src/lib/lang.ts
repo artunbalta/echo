@@ -8,10 +8,17 @@
  * every existing import from `lib/i18n` still finds it there.
  *
  * WHICH LANGUAGE. The person's own choice, kept in this browser; before they have made one, the
- * browser's first language if it is Turkish, and English otherwise. The server always renders English
- * and the page switches on the client, so the first paint is never a guess the server made.
+ * browser's first language if it is Turkish, and English otherwise.
+ *
+ * WHAT THE SERVER RENDERS. English, unless the page was built in another language and says so with
+ * `ServedLang` (C97): the landing is built in both, and a Turkish reader is handed the Turkish one
+ * (`middleware.ts`, `lib/langOf.ts`), so its words do not all change a moment after they appear. A
+ * page with no `ServedLang` renders English on the server and switches on the client, as before.
  */
 import { useEffect, useSyncExternalStore } from "react";
+
+import { LANG_COOKIE } from "./langOf";
+import { useServedLang } from "./servedLang";
 
 export type Lang = "en" | "tr";
 export const LANGS: readonly Lang[] = ["en", "tr"];
@@ -51,19 +58,26 @@ export function setLang(lang: Lang): void {
   } catch {
     // kept for this page only
   }
+  // And where the server can see it, so the next page it builds for this reader is in this language.
+  try {
+    document.cookie = `${LANG_COOKIE}=${lang}; path=/; max-age=31536000; samesite=lax`;
+  } catch {
+    // no cookies: the browser's own language decides, as on a first visit
+  }
   if (typeof document !== "undefined") document.documentElement.lang = lang;
   for (const l of listeners) l();
 }
 
-/** The language, for a component. English on the server and during hydration. */
+/** The language, for a component. On the server and during hydration, the one the page was built in (English unless it says). */
 export function useLang(): Lang {
+  const served = useServedLang();
   const lang = useSyncExternalStore<Lang>(
     (on) => {
       listeners.add(on);
       return () => listeners.delete(on);
     },
     read,
-    () => "en",
+    () => served,
   );
   // The page says which language it is in, for a screen reader's voice and the browser's hyphenation.
   useEffect(() => {

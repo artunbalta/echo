@@ -31,11 +31,19 @@
  * default is already 1, and that is the reason to name it: a route that leans on a host default
  * for the size of the world it builds is a route that silently builds a different world the day
  * the default moves, and the demo would have kept its ring while this parcel lost six neighbours.
+ *
+ * A VISITOR WITHOUT A TURN IS GIVEN A LOOK (DECISIONS C97). The village opens in turns, so this route
+ * asks the one place that knows (`lib/previewPass.ts`) whether this arrival walks the village or looks
+ * at it for ten seconds and is then shown the waitlist. It is decided here, on the server, from the
+ * deployment's settings and the arrival's cookie, and handed down as one prop. A development server
+ * can be asked for a look with `?look=1`, which is how a browser test sees one.
  */
 import { PARCEL_REGION_K } from "@echo/planet";
+import { cookies } from "next/headers";
 
-import ParcelCanvas from "@/components/planet/ParcelCanvas";
+import ParcelVisit from "@/components/planet/ParcelVisit";
 import { planet } from "@/lib/planet";
+import { PASS_COOKIE, isPreview } from "@/lib/previewPass";
 import { STATIONS_PARAM, stationSetFor } from "@/lib/stationSet";
 
 export const dynamic = "force-dynamic";
@@ -50,8 +58,11 @@ export default async function ParcelPage({
   const { cell } = await params;
   const { world, calibration, commons } = planet();
 
-  const { set, refused } = stationSetFor(cell, (await searchParams)[STATIONS_PARAM]);
+  const query = await searchParams;
+  const { set, refused } = stationSetFor(cell, query[STATIONS_PARAM]);
   if (refused) console.warn(`[parcel] ${refused}`);
+
+  const look = isPreview((await cookies()).get(PASS_COOKIE)?.value) || (process.env.NODE_ENV !== "production" && query.look === "1");
 
   return (
     // Not a dead colour, which is why it changed rather than went. The GL canvas is opaque and
@@ -59,7 +70,8 @@ export default async function ParcelPage({
     // before the renderer exists, and, for a cell with no dry ground to spawn on, permanently
     // behind the failure message. The blue that was here said noon under a sky that opens at dusk.
     <main className="relative h-[100dvh] w-screen overflow-hidden bg-ink">
-      <ParcelCanvas
+      <ParcelVisit
+        look={look}
         cell={cell}
         k={PARCEL_REGION_K}
         stations={set}
