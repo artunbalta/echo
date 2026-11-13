@@ -11,8 +11,9 @@
  * (`app/_landing/CharacterSelect.tsx`), and reads who joined from `lib/waitlistSeat.ts`.
  *
  * It posts what the roster's form posts, without a figure: the route takes that as a place with no
- * character yet. Its checks are the route's own, made here first so a person reads them in their own
- * language; the route makes them again, because anyone can post to it.
+ * character yet, and for someone already on the list leaves the character they have (`keepCharacter`).
+ * Its checks are the route's own, made here first so a person reads them in their own language; the
+ * route makes them again, because anyone can post to it.
  */
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -122,7 +123,8 @@ export default function WaitlistForm({ where, after = null, className = "" }: { 
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: who, email: mail, website, characterSource: "premade", characterRef: null }),
+        // `keepCharacter`: this form says nothing about a figure, so someone already on the list keeps theirs.
+        body: JSON.stringify({ name: who, email: mail, website, characterSource: "premade", characterRef: null, keepCharacter: true }),
       });
       const data = (await res.json().catch(() => ({}))) as { already?: boolean; seat?: number | null };
       if (!res.ok) {

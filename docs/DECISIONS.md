@@ -6553,6 +6553,10 @@ consistent, there are straight lines between everything, and the planet loads la
   (`_landing/CharacterSelect.tsx`): it knows who has just joined above (`lib/waitlistSeat.ts`, kept for
   the page only), does not ask twice, and saves the figure to the place they have. The count of places
   ("1,074,936 of 1,074,942 left") is no longer drawn: true, and of no use to someone deciding.
+  - **Someone already on the list keeps their character.** `waitlist_join` writes the source and the
+    figure it is handed, so a second signup through a form that says nothing of a figure would have
+    cleared the one they chose. The short form sends `keepCharacter`, and the route hands the function
+    what the row already holds (`api/waitlist/route.ts`, step 3b). No migration.
 - **A visitor without a turn is given a ten-second look** (`lib/preview.ts`, `lib/previewPass.ts`). The
   parcel route asks the server once and hands down one prop (`components/planet/ParcelVisit.tsx`). On a
   look the question about being watched is never asked, so someone who has never said yes is not
@@ -6606,7 +6610,9 @@ is now the press that begins a look.
 a turn's cookie being a digest, and a code off the list ending it; the language a page is served in; the
 route asking once, a look never being asked the question and ending with the village gone, the pilot and
 the demo passing no look; the landing's first action being the form, with no rule, italic or spaced label
-in its code. In a browser, on a production build: a look on a desktop and on a phone to its gate, the
+in its code. `tests/waitlistShort.test.mts` (4), the route as the real handler: a place with no figure; a
+figure and a photo kept on a second signup; the roster still changing the figure; the route's own checks.
+In a browser, on a production build: a look on a desktop and on a phone to its gate, the
 form's refusals in Turkish, `/in/<code>` right and wrong, a forged cookie.
 
 **Not decided here:** who is given a turn and when (there is no invitation sent by the list yet; a turn

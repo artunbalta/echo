@@ -223,6 +223,21 @@ export async function POST(req: Request) {
     );
   }
 
+  // 3b. A place taken with no character said (C97). The short form at the head of the landing asks for
+  //     a name and an email and sends `keepCharacter`. For someone already on the list that must not
+  //     undo the figure they chose, or the photo they sent: waitlist_join() writes the source and the
+  //     figure it is handed, whatever the row held. So it is handed what the row holds. If the row
+  //     cannot be read, the person is new as far as this request can tell, and joins with none.
+  let joinSource: "selfie" | "premade" = source;
+  let joinRef = characterRef;
+  if (body.keepCharacter === true && source === "premade" && characterRef === null) {
+    const had = await admin.from("waitlist").select("character_source, character_ref").eq("email", email).maybeSingle();
+    if (had.data) {
+      joinSource = had.data.character_source === "selfie" ? "selfie" : "premade";
+      joinRef = typeof had.data.character_ref === "string" ? had.data.character_ref : null;
+    }
+  }
+
   // 4. The write. One RPC, not an upsert: waitlist_join() takes the advisory lock, counts confirmed
   //    seats, refuses past the cap and assigns the seat number in a single atomic transaction. A
   //    repeat signup updates in place and keeps its original seat (§3), consuming no second seat.
@@ -230,8 +245,8 @@ export async function POST(req: Request) {
     p_email: email,
     p_name: name,
     p_cap: CAP,
-    p_source: source,
-    p_ref: characterRef,
+    p_source: joinSource,
+    p_ref: joinRef,
     p_sprite_url: spriteUrl,
     p_attributes: attributes,
     p_ip_hash: hashIp(clientIp(req)),
