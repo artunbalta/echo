@@ -6,7 +6,7 @@
  * WHY IT EXISTS. Joining meant scrolling four screens to a roster, picking a figure, and only then
  * finding two fields; the page's first button walked into the village instead. The village now opens
  * in turns, so the list is the page's main action and has to be the first thing a hand can reach. This
- * is that: it stands at the head of the landing and at the end of a ten-second look at the village
+ * is that: it stands at the head of the landing and at the end of a short look at the village
  * (`components/world/PreviewGate.tsx`). The roster is still there for whoever wants a figure
  * (`app/_landing/CharacterSelect.tsx`), and reads who joined from `lib/waitlistSeat.ts`.
  *
@@ -30,7 +30,7 @@ interface Copy {
   joining: string;
   note: string;
   err: { name: string; email: string; many: string; full: string; closed: string; save: string; reach: string };
-  done: { title: (name: string) => string; seat: (seat: number) => string; fresh: (email: string) => string; already: string };
+  done: { title: (name: string) => string; seat: (seat: number) => string; fresh: (email: string) => string; emailed: (email: string) => string; already: string };
 }
 
 const COPY: Record<Lang, Copy> = {
@@ -55,6 +55,7 @@ const COPY: Record<Lang, Copy> = {
       title: (name) => `You are on the list, ${name}.`,
       seat: (seat) => `Your place in the line: ${seat}.`,
       fresh: (email) => `When it is your turn we will write to ${email}.`,
+      emailed: (email) => `We sent a confirmation to ${email}, and will write there again when it is your turn. If it is not in your inbox, look in spam.`,
       already: "You were already on the list. Your place has not changed.",
     },
   },
@@ -79,6 +80,7 @@ const COPY: Record<Lang, Copy> = {
       title: (name) => `Sıradasın, ${name}.`,
       seat: (seat) => `Sıra numaran: ${seat}.`,
       fresh: (email) => `Sıran geldiğinde ${email} adresine yazacağız.`,
+      emailed: (email) => `${email} adresine bir onay e-postası gönderdik; sıran geldiğinde de oraya yazacağız. Gelen kutunda yoksa spam klasörüne bak.`,
       already: "Zaten sıradaydın. Yerin değişmedi.",
     },
   },
@@ -98,7 +100,7 @@ export default function WaitlistForm({ where, after = null, className = "" }: { 
   const [website, setWebsite] = useState(""); // honeypot; a human never sees or fills this
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ already: boolean; seat: number | null; name: string; email: string } | null>(null);
+  const [done, setDone] = useState<{ already: boolean; emailed: boolean; seat: number | null; name: string; email: string } | null>(null);
 
   // "Join the waitlist" in the header leads here (`/#waitlist`) and says so (`echo:join`). The page
   // scrolls to the form; this puts the caret in its first field, so the button is followed by typing
@@ -124,16 +126,16 @@ export default function WaitlistForm({ where, after = null, className = "" }: { 
         method: "POST",
         headers: { "content-type": "application/json" },
         // `keepCharacter`: this form says nothing about a figure, so someone already on the list keeps theirs.
-        body: JSON.stringify({ name: who, email: mail, website, characterSource: "premade", characterRef: null, keepCharacter: true }),
+        body: JSON.stringify({ name: who, email: mail, website, lang, characterSource: "premade", characterRef: null, keepCharacter: true }),
       });
-      const data = (await res.json().catch(() => ({}))) as { already?: boolean; seat?: number | null };
+      const data = (await res.json().catch(() => ({}))) as { already?: boolean; emailed?: boolean; seat?: number | null };
       if (!res.ok) {
         setError(res.status === 429 ? copy.err.many : res.status === 409 ? copy.err.full : res.status === 503 ? copy.err.closed : res.status === 400 ? copy.err.email : copy.err.save);
         return;
       }
       const seat = typeof data.seat === "number" ? data.seat : null;
       setSeat({ name: who, email: mail, seat });
-      setDone({ already: Boolean(data.already), seat, name: who, email: mail });
+      setDone({ already: Boolean(data.already), emailed: Boolean(data.emailed), seat, name: who, email: mail });
       // How far people come (C92): a place taken. A second press by the same person is the same place.
       if (!data.already) step("joined");
     } catch {
@@ -148,7 +150,8 @@ export default function WaitlistForm({ where, after = null, className = "" }: { 
       <div data-waitlist-done={where} role="status" className={className}>
         <p className="text-[1.25rem] font-semibold leading-snug tracking-[-.01em] text-parchment">{copy.done.title(done.name)}</p>
         <p className="mt-2 text-[15px] leading-relaxed text-parchment/70">
-          {done.already ? copy.done.already : `${done.seat !== null ? `${copy.done.seat(done.seat)} ` : ""}${copy.done.fresh(done.email)}`}
+          {/* A message is promised only when the route says one went (`emailed`). */}
+          {`${done.already ? `${copy.done.already} ` : done.seat !== null ? `${copy.done.seat(done.seat)} ` : ""}${done.emailed ? copy.done.emailed(done.email) : done.already ? "" : copy.done.fresh(done.email)}`.trim()}
         </p>
         {after}
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * A parcel as a visitor meets it (DECISIONS C97): the village, or a ten-second look at it and then
+ * A parcel as a visitor meets it (DECISIONS C97): the village, or a short look at it and then
  * the waitlist.
  *
  * The server says which (`lib/previewPass.ts`); this holds the one piece of state that follows from

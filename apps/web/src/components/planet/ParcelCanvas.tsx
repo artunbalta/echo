@@ -119,7 +119,7 @@ export interface ParcelCanvasProps {
    */
   pilot?: PilotSettings | null;
   /**
-   * A ten-second look (C97, `lib/preview.ts`): the village for a visitor whose turn has not come.
+   * A short look (C97, `lib/preview.ts`): the village for a visitor whose turn has not come.
    * The question about being watched is never asked, so someone who has never said yes to it is not
    * measured and nothing is made or kept for them; a count runs from the moment the world is shown,
    * and at its end `onEnd` is handed the last frame.
@@ -379,7 +379,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
     };
   }, [here, consent, applyHome]);
 
-  // ── a ten-second look (C97) ───────────────────────────────────────────────────────
+  // ── a short look (C97) ───────────────────────────────────────────────────────
   // The count starts when the world is on the screen, not when the page was asked for: the seconds a
   // slow machine spends building the ground are not seconds of looking.
   const [shownAt, setShownAt] = useState<number | null>(null);

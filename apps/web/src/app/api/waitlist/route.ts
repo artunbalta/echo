@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { adminClient } from "@/lib/supabaseAdmin";
 import { hasFal, submitPortrait } from "@/lib/fal-portrait";
 import { photoPathReady } from "@/lib/photo-path-ready";
+import { sendJoinedEmail } from "@/lib/waitlist-email";
 import { PUBLISHED_CAPACITY } from "@echo/planet";
 
 export const runtime = "nodejs";
@@ -33,6 +34,13 @@ export const maxDuration = 60;
 // is an acceptable price for a landing page. Tighten to a sliding window only if that shows up.
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const MAX_PER_WINDOW = 5;
+
+/**
+ * How long after someone's last signup a repeat is answered with the confirmation again (C97). A first
+ * signup always is. A repeat is how a person who saw no message asks for it once more, and it is also
+ * how a stranger could have one sent to an address over and over: so, once more, and not within this.
+ */
+const RECONFIRM_AFTER_MS = 10 * 60 * 1000;
 
 const MAX_NAME = 80;
 const MAX_EMAIL = 254; // RFC 5321 maximum length of a forward-path
@@ -140,6 +148,8 @@ export async function POST(req: Request) {
   if (!validEmail(email))
     return NextResponse.json({ error: "That email address does not look right." }, { status: 400 });
 
+  // The language the form was read in, for the confirmation's words.
+  const lang = body.lang === "tr" ? "tr" : "en";
   const source = body.characterSource === "selfie" ? "selfie" : "premade";
   const characterRef = typeof body.characterRef === "string" ? body.characterRef.slice(0, 64) : null;
   // Never persist a data URL: uploadSheet() returns one inline when Storage is unconfigured, and a
@@ -223,19 +233,22 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3b. A place taken with no character said (C97). The short form at the head of the landing asks for
-  //     a name and an email and sends `keepCharacter`. For someone already on the list that must not
+  // 3b. What the list already holds for this address, read once before the write (C97). Two things
+  //     turn on it, and if it cannot be read the person is new as far as this request can tell.
+  //
+  //     A place taken with no character said. The short form at the head of the landing asks for a
+  //     name and an email and sends `keepCharacter`. For someone already on the list that must not
   //     undo the figure they chose, or the photo they sent: waitlist_join() writes the source and the
-  //     figure it is handed, whatever the row held. So it is handed what the row holds. If the row
-  //     cannot be read, the person is new as far as this request can tell, and joins with none.
+  //     figure it is handed, whatever the row held. So it is handed what the row holds.
+  //
+  //     And when they last signed up, for whether a repeat is answered with the confirmation again.
+  const had = await admin.from("waitlist").select("character_source, character_ref, updated_at").eq("email", email).maybeSingle();
+  const row = (had.data ?? null) as { character_source?: string; character_ref?: string | null; updated_at?: string | null } | null;
   let joinSource: "selfie" | "premade" = source;
   let joinRef = characterRef;
-  if (body.keepCharacter === true && source === "premade" && characterRef === null) {
-    const had = await admin.from("waitlist").select("character_source, character_ref").eq("email", email).maybeSingle();
-    if (had.data) {
-      joinSource = had.data.character_source === "selfie" ? "selfie" : "premade";
-      joinRef = typeof had.data.character_ref === "string" ? had.data.character_ref : null;
-    }
+  if (row && body.keepCharacter === true && source === "premade" && characterRef === null) {
+    joinSource = row.character_source === "selfie" ? "selfie" : "premade";
+    joinRef = typeof row.character_ref === "string" ? row.character_ref : null;
   }
 
   // 4. The write. One RPC, not an upsert: waitlist_join() takes the advisory lock, counts confirmed
@@ -333,9 +346,18 @@ export async function POST(req: Request) {
     selfie = null;
   }
 
+  // 6. The confirmation (C97). THE PLACE IS ALREADY TAKEN and nothing here can lose it: a message
+  //    that does not go is said so in the answer (`emailed: false`), and the page then promises none.
+  //    A first signup is always answered; a repeat only if the last one was a while ago (see
+  //    RECONFIRM_AFTER_MS), which is how someone who saw no message asks for it again.
+  const last = row?.updated_at ? Date.parse(row.updated_at) : NaN;
+  const confirm = !r.already || (Number.isFinite(last) && Date.now() - last > RECONFIRM_AFTER_MS);
+  const emailed = confirm ? await sendJoinedEmail({ to: email, name, seat: r.seat ?? null, lang, portraitPending: source === "selfie" }) : false;
+
   return NextResponse.json({
     ok: true,
     already: Boolean(r.already),
+    emailed,
     portraitPending: source === "selfie",
     seat: r.seat ?? null,
     taken: r.taken ?? 0,

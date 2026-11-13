@@ -50,7 +50,7 @@ const SCROLLS = "html, body { height: auto; overflow: visible; }";
  *
  *   hero            what this is in one sentence, and the waitlist: a name, an email, one button. The
  *                   village opens in turns now, so the list is the page's main action and it is the
- *                   first thing on it. Under the form, one quiet link to a ten-second look at the
+ *                   first thing on it. Under the form, one quiet link to a short look at the
  *                   village (`lib/preview.ts`), which ends at the same form.
  *
  *                   THE PLANET has a box of its own: beside the words on a wide screen, under them on

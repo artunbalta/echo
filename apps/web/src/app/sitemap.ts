@@ -1,4 +1,4 @@
-/** The pages worth finding (C89, C90, C97): the landing in each language, the story, the evidence, the audit. The village is a ten-second look now, which is not a page to be found by. */
+/** The pages worth finding (C89, C90, C97): the landing in each language, the story, the evidence, the audit. The village is a short look now, which is not a page to be found by. */
 import type { MetadataRoute } from "next";
 
 const SITE = "https://echovirtualworld.com";

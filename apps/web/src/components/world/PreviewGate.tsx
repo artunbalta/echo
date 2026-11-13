@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Where a ten-second look ends (DECISIONS C97, `lib/preview.ts`): the waitlist, standing where the
+ * Where a short look ends (DECISIONS C97, `lib/preview.ts`): the waitlist, standing where the
  * village was.
  *
  * The village is gone from the page by the time this is drawn (`components/planet/ParcelVisit.tsx`

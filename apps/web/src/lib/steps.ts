@@ -18,8 +18,8 @@
 export const STEPS = [
   "landing", // the landing was opened
   "joined", // a place on the waitlist was taken (C97)
-  "walk_in", // the way into the village was pressed: since C97, a ten-second look
-  "gated", // a look reached its ten seconds and was shown the waitlist (C97)
+  "walk_in", // the way into the village was pressed: since C97, a short look
+  "gated", // a look reached its end and was shown the waitlist (C97)
   "arrived", // the open world was built and shown
   "watched", // said yes to the echo watching
   "declined", // said no

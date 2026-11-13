@@ -34,7 +34,7 @@
  *
  * A VISITOR WITHOUT A TURN IS GIVEN A LOOK (DECISIONS C97). The village opens in turns, so this route
  * asks the one place that knows (`lib/previewPass.ts`) whether this arrival walks the village or looks
- * at it for ten seconds and is then shown the waitlist. It is decided here, on the server, from the
+ * at it for a short while (`lib/preview.ts`) and is then shown the waitlist. It is decided here, on the server, from the
  * deployment's settings and the arrival's cookie, and handed down as one prop. A development server
  * can be asked for a look with `?look=1`, which is how a browser test sees one.
  */

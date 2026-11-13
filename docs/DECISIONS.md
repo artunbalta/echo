@@ -6519,7 +6519,7 @@ reads "4 to open". In a browser, the mirror's erasure tests go by the Privacy ta
 the pilot's overlays were looked at and left as they are; `/bench` and `/audit` stay English.
 
 
-## C97 — the village opens in turns: the waitlist first, a ten-second look, and a landing in one face
+## C97 — the village opens in turns: the waitlist first, a short look, and a landing in one face
 
 **Date:** 2026-11-13. **Asked for by the owner**, in these words: the site should lead a visitor onto the
 waitlist, easily; a visitor may walk the village for ten seconds at most and is then sent to the
@@ -6595,6 +6595,20 @@ consistent, there are straight lines between everything, and the planet loads la
 - **In plain words.** The headline is the owner's sentence: "Yaptıklarından seni öğrenen, sonra senin
   gibi davranan bir agent." The three steps say what happens (you walk; it watches what you do; it acts
   like you when you are away) and no longer speak of sealing and envelopes.
+
+**The same night, from the owner trying it.**
+
+- **A place taken is answered with a message.** He joined, and waited for an email that no code sent: one
+  went out only once a portrait had been drawn from a photo. Now a first signup is confirmed at once
+  (`lib/waitlist-email.ts` `sendJoinedEmail`, `api/waitlist/route.ts` step 6), in the language the form
+  was read in, with a text part, nothing remote in it, and one sentence for whoever did not sign up. The
+  route waits for the provider's answer (six seconds at most) and says it (`emailed`); the page speaks of
+  a message only when one went. A repeat is answered again only if the last signup was more than ten
+  minutes ago: that is how someone who saw nothing asks once more, and why a stranger cannot have it sent
+  to an address over and over. A provider that refuses costs nobody their place. The portrait's email no
+  longer says a village is open.
+- **A look is thirty seconds**, not ten (`lib/preview.ts`): ten was too short to see anything in. The
+  landing and the footer say the number from the constant.
 
 **What went, and where.** `Splash` and the spring over the scroll wheel (Lenis): gone. The legend's book:
 a page of its own, `/story`, in the header and the footer. The trailer and "Walk the demo"

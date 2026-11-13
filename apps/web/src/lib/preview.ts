@@ -1,6 +1,7 @@
 /**
- * The ten-second look (DECISIONS C97): how long a visitor without a turn may walk the village before
- * the waitlist is put in front of them.
+ * The look (DECISIONS C97): how long a visitor without a turn may walk the village before the
+ * waitlist is put in front of them. Thirty seconds; it was ten for its first hour, and the owner
+ * found that too short to see anything in.
  *
  * WHY THERE IS ONE. The village opens in turns now, and the page that says so asks for a name and an
  * email. A stranger asked to wait for a thing they have not seen has no reason to. So anyone may walk
@@ -13,5 +14,5 @@
  * Who is given a look and who the whole village is the server's to say, once, in `lib/previewPass.ts`.
  * This file is the number alone, so the landing can say it without carrying the server's half.
  */
-export const PREVIEW_SECONDS = 10;
+export const PREVIEW_SECONDS = 30;
 export const PREVIEW_MS = PREVIEW_SECONDS * 1000;

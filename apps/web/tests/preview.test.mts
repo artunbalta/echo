@@ -1,5 +1,5 @@
 /**
- * The village opens in turns (DECISIONS C97): who is given a ten-second look and who the village, the
+ * The village opens in turns (DECISIONS C97): who is given a short look and who the village, the
  * link that is a turn, and the language a page is served in.
  *
  * Run:  node --import tsx --test apps/web/tests/preview.test.mts
@@ -33,9 +33,12 @@ test("the village opens in turns where it is built for visitors, and is open whe
   assert.equal(inTurns({ NODE_ENV: "production", ECHO_OPEN: "true" }), true);
 });
 
-test("a look is ten seconds", () => {
-  assert.equal(PREVIEW_SECONDS, 10);
-  assert.equal(PREVIEW_MS, 10_000);
+test("a look is thirty seconds, and the page says the number it is", () => {
+  assert.equal(PREVIEW_SECONDS, 30);
+  assert.equal(PREVIEW_MS, 30_000);
+  // Said from the one number, never typed: the landing's link and the footer's.
+  assert.match(read("app/_landing/Landing.tsx"), /copy\.peek\(PREVIEW_SECONDS\)/);
+  assert.match(read("components/site/SiteFooter.tsx"), /copy\.peek\(PREVIEW_SECONDS\)/);
 });
 
 test("a turn is a code on the list: its cookie holds a digest, and taking the code off the list ends it", () => {

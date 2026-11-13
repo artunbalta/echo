@@ -65,7 +65,7 @@ interface Copy {
   joining: string;
   full: string;
   note: string;
-  joined: { kept: string; yours: string; arrival: (seat: number) => string; pending: string; already: string; fresh: string };
+  joined: { kept: string; yours: string; arrival: (seat: number) => string; pending: string; already: string; fresh: string; emailed: string };
 }
 
 const COPY: Record<Lang, Copy> = {
@@ -125,6 +125,7 @@ const COPY: Record<Lang, Copy> = {
       pending: "Your character is being drawn from your photo. It will reach you by email shortly. Your place is already kept, whatever the drawing does.",
       already: "We already had you. Your character is updated, and your place is unchanged.",
       fresh: "No one knows you here yet. That is the point. We will write to you when it is your turn.",
+      emailed: "We sent you a confirmation by email. If it is not in your inbox, look in spam.",
     },
   },
   tr: {
@@ -183,6 +184,7 @@ const COPY: Record<Lang, Copy> = {
       pending: "Karakterin fotoğrafından çiziliyor. Kısa süre içinde e-postayla ulaşacak. Çizime ne olursa olsun yerin ayrıldı.",
       already: "Seni zaten tanıyorduk. Karakterin güncellendi, yerin değişmedi.",
       fresh: "Burada seni henüz kimse tanımıyor. Mesele de bu. Sıran geldiğinde sana yazarız.",
+      emailed: "Sana bir onay e-postası gönderdik. Gelen kutunda yoksa spam klasörüne bak.",
     },
   },
 };
@@ -215,7 +217,8 @@ type Seats = {
 const TILE_SIZE = "box-content w-[72px] lg:w-[144px]";
 
 export default function CharacterSelect() {
-  const copy = COPY[useLang()];
+  const lang = useLang();
+  const copy = COPY[lang];
   const [selected, setSelected] = useState<Selection>(null);
   const [fill, setFill] = useState<Fill>(null);
   const [focusIndex, setFocusIndex] = useState(EMPTY_INDEX);
@@ -228,6 +231,7 @@ export default function CharacterSelect() {
     already: boolean;
     seat: number | null;
     portraitPending: boolean;
+    emailed: boolean;
   } | null>(null);
   const [seats, setSeats] = useState<Seats | null>(null);
   const [selfie, setSelfie] = useState<string | null>(null);
@@ -355,6 +359,7 @@ export default function CharacterSelect() {
           name: seat?.name ?? name,
           email: seat?.email ?? email,
           website, // honeypot — server answers 200 and discards if this is non-empty
+          lang, // the language the confirmation is written in
           characterSource: isEmpty && fill === "photo" ? "selfie" : "premade",
           selfie: isEmpty && fill === "photo" ? selfie : undefined,
           selfieConsent: isEmpty && fill === "photo" ? consent : undefined,
@@ -368,6 +373,7 @@ export default function CharacterSelect() {
         already?: boolean;
         full?: boolean;
         portraitPending?: boolean;
+        emailed?: boolean;
         seat?: number | null;
         taken?: number;
         cap?: number;
@@ -390,6 +396,7 @@ export default function CharacterSelect() {
         already: Boolean(data.already),
         seat: data.seat ?? null,
         portraitPending: Boolean(data.portraitPending),
+        emailed: Boolean(data.emailed),
       });
       // Joined here and not above: the head of the page now knows too.
       if (!seat) setSeat({ name: name.trim(), email: email.trim().toLowerCase(), seat: data.seat ?? null });
@@ -408,6 +415,7 @@ export default function CharacterSelect() {
         seat={done.seat}
         entry={entry}
         portraitPending={done.portraitPending}
+        emailed={done.emailed}
       />
     );
 
@@ -938,12 +946,15 @@ function Joined({
   seat,
   entry,
   portraitPending,
+  emailed,
 }: {
   copy: Copy;
   already: boolean;
   seat: number | null;
   entry: RosterEntry | null;
   portraitPending: boolean;
+  /** The route says a confirmation went: only then is one spoken of. */
+  emailed: boolean;
 }) {
   return (
     <section id="character" className={SECTION}>
@@ -966,6 +977,7 @@ function Joined({
                 ? copy.joined.already
                 : copy.joined.fresh}
           </p>
+          {emailed ? <p className="mt-3 text-[15px] leading-relaxed text-parchment/60">{copy.joined.emailed}</p> : null}
         </div>
       </div>
     </section>
