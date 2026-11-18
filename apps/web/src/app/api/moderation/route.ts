@@ -14,6 +14,7 @@
  */
 import { NextResponse } from "next/server";
 import { worldClock, worldDayIndex, WORLD_EPOCH, type Occupation } from "@echo/planet";
+import { worldOf } from "@echo/shared";
 
 import { MODERATION, applyUndo, forgetBars, isModerator, occupationOf, undoPlan } from "@/lib/moderation";
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
@@ -48,7 +49,9 @@ async function moderator(req: Request): Promise<{ who: string; store: VillageSto
 async function before(): Promise<(cell: string, person: string, day: number) => Promise<Occupation | null>> {
   const villages = new Map<string, Awaited<ReturnType<typeof loadVillage>>>();
   return async (cell, person, day) => {
-    if (!villages.has(cell)) villages.set(cell, await loadVillage(cell));
+    // A trace from a village room's copy (C102) is filed under `cell~CODE`: that copy's village, read through its own store.
+    const w = worldOf(cell);
+    if (!villages.has(cell)) villages.set(cell, await loadVillage(w.cell, undefined, villageStore(w.room)));
     const v = villages.get(cell);
     return v ? occupationOf(v.village.settlement.people, person, day) : null;
   };

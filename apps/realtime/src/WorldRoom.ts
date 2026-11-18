@@ -8,7 +8,7 @@
  * client-side between state snapshots.
  */
 import { Room, type Client } from "@colyseus/core";
-import { identitySecretsFor, subjectFor } from "@echo/shared/identity";
+import { authSubject } from "./auth.js";
 import {
   WORLD,
   TICK_MS,
@@ -141,23 +141,7 @@ export class WorldRoom extends Room<WorldState> {
    * and, worse, would let a refused join keep writing.
    */
   onAuth(_client: Client, options: JoinOptions, context?: { token?: string }) {
-    const verdict = subjectFor(
-      {
-        trustClientId: process.env.ECHO_TRUST_CLIENT_ID,
-        vercelEnv: process.env.VERCEL_ENV,
-        nodeEnv: process.env.NODE_ENV,
-        secrets: identitySecretsFor({
-          secret: process.env.ECHO_IDENTITY_SECRET,
-          previous: process.env.ECHO_IDENTITY_SECRET_OLD,
-          vercelEnv: process.env.VERCEL_ENV,
-          nodeEnv: process.env.NODE_ENV,
-        }),
-      },
-      context?.token || options.token || "",
-      options.userId ?? null,
-    );
-    if (!verdict.ok) throw new Error(`identity_${verdict.reason}`);
-    return { uid: verdict.subject };
+    return authSubject(context?.token || options.token, options.userId);
   }
 
   onJoin(client: Client, options: JoinOptions, auth?: { uid: string }) {

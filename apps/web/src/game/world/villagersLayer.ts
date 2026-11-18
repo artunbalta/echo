@@ -46,6 +46,7 @@ import {
   roomToLocal,
   occupationOn,
   timeOfDay,
+  visitorName,
   whereabouts,
   worldDayIndex,
   SCHEDULE,
@@ -74,9 +75,9 @@ import type { SkyLayer } from "./skyLayer";
 import { BOAT_PAINT, boatForm } from "./villageGeometry";
 
 /** The player's walking speed, metres per second: the gait's `speed = 1`. */
-const PLAYER_WALK_MPS = 1.65;
+export const PLAYER_WALK_MPS = 1.65;
 /** Close enough to speak: the nameplate shows inside this many metres. */
-const SPEAKING_M = 7;
+export const SPEAKING_M = 7;
 /** How far a villager keeps from the stranger's middle when their way crosses (C46). */
 const STEP_ASIDE_M = 0.8;
 /** A villager's half-width, for the player's gate. */
@@ -131,6 +132,11 @@ export interface NearVillager {
   occupation: string;
   age: number;
   distanceM: number;
+  /**
+   * Someone who came into a village room (C107), told as a villager is so that one panel talks to both:
+   * their room handle is `id`. Read only to know where a line goes; nothing shown ever depends on it.
+   */
+  room?: true;
 }
 
 export interface VillagersLayer extends WorldLayer {
@@ -146,6 +152,12 @@ export interface VillagersLayer extends WorldLayer {
   nearest(): NearVillager | null;
   /** Metres from the player to a villager drawn last frame, or null if they are not out. */
   distanceTo(id: string): number | null;
+  /**
+   * Who someone who came into a village room is here (C107), from their look's seed: a name in this
+   * village's own tongue and a visitor's line, a guest of one of its people today, as anyone visiting from
+   * another village is. The same on every page that draws them. Null before the village is built.
+   */
+  visitor(seed: string): { name: string; line: string } | null;
   /** The stranger's own deeds here (C49): what the villagers may be saying about them, once word has spread. */
   setDeeds(deeds: readonly Deed[]): void;
   /** What each villager would ask for this week (C50), as this page has the village: for tests and the HUD. */
@@ -196,11 +208,51 @@ export interface VillagersLayer extends WorldLayer {
    * unchanged, which is why this can exist without a server (C27, L2).
    */
   hold(id: string | null): void;
+  /** A villager is being talked to (`hold`): their plate stays. */
+  holding(): boolean;
 }
 
 interface PlayerLike {
   position(): { x: number; y: number };
   seat?(): unknown;
+}
+
+/** The nameplate over whoever is nearest (C42). One plate, whoever it is over: someone who came into a village room wears it too (C107). */
+export const PLATE_CSS =
+  "position:absolute;left:0;top:0;pointer-events:none;z-index:15;display:none;transform:translate(-50%,-100%);" +
+  "max-width:260px;padding:6px 10px;border-radius:10px;background:rgba(18,12,25,.86);color:#f4e9d0;" +
+  "font:12px/1.35 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35)";
+
+/** A line said, in a bubble over whoever said it (C49): a villager's, and a line said in a village room (C101). */
+export const BUBBLE_CSS =
+  "position:absolute;left:0;top:0;pointer-events:none;z-index:14;display:none;transform:translate(-50%,-100%);" +
+  "max-width:220px;padding:4px 9px;border-radius:12px;background:rgba(244,233,208,.9);color:#1c1326;" +
+  "font:11px/1.3 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)";
+
+/** Write a plate: the name, "age · trade", and the line of a life under them. */
+export function fillPlate(el: HTMLElement, name: string, sub: string, line: string): void {
+  el.innerHTML = "";
+  const title = document.createElement("div");
+  title.style.cssText = "font-weight:600;font-size:13px";
+  title.textContent = name;
+  const under = document.createElement("div");
+  under.style.cssText = "opacity:.75";
+  under.textContent = sub;
+  const story = document.createElement("div");
+  story.style.cssText = "margin-top:3px;color:#e8c98a";
+  story.textContent = line;
+  el.append(title, under, story);
+}
+
+/** What a visitor's plate says (C53): here for the day, and whose guest. */
+export const visitorLine = (host: string): string => `Here for the day from another village, visiting ${host}.`;
+
+/** The one other layer whose plate this one gives way to (C107): the people who came into a village room. */
+interface PlateRival {
+  /** Metres to the nearest of them within speaking distance last frame, or null. */
+  nearestM(): number | null;
+  /** One of them is being talked to: their plate stays. */
+  holding(): boolean;
 }
 
 /** One line of a life, for the nameplate: the most telling thing that has happened to them. */
@@ -406,18 +458,12 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       if (host) {
         label = document.createElement("div");
         label.dataset.villagerLabel = "";
-        label.style.cssText =
-          "position:absolute;left:0;top:0;pointer-events:none;z-index:15;display:none;transform:translate(-50%,-100%);" +
-          "max-width:260px;padding:6px 10px;border-radius:10px;background:rgba(18,12,25,.86);color:#f4e9d0;" +
-          "font:12px/1.35 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35)";
+        label.style.cssText = PLATE_CSS;
         host.appendChild(label);
         for (let k = 0; k < 3; k++) {
           const el = document.createElement("div");
           el.dataset.villagerChatter = "";
-          el.style.cssText =
-            "position:absolute;left:0;top:0;pointer-events:none;z-index:14;display:none;transform:translate(-50%,-100%);" +
-            "max-width:220px;padding:4px 9px;border-radius:12px;background:rgba(244,233,208,.9);color:#1c1326;" +
-            "font:11px/1.3 ui-sans-serif,system-ui,sans-serif;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)";
+          el.style.cssText = BUBBLE_CSS;
           host.appendChild(el);
           bubbles.push({ el, at: null, key: "" });
         }
@@ -671,29 +717,28 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       } else near = null;
 
       if (label) {
-        if (nearest && nearest.id !== labelled?.id) {
-          const p = people.get(nearest.id)!;
+        // Someone who came into a village room stands nearer, or is being talked to (C107): the plate is
+        // theirs, drawn by their layer, and this one stands down. Never while a villager is held.
+        const rival = held ? null : ctx.layer<WorldLayer & PlateRival>("others");
+        const plated = rival && (rival.holding() || (rival.nearestM() ?? Infinity) < (nearest?.d ?? Infinity)) ? null : nearest;
+        if (plated && plated.id !== labelled?.id) {
+          const p = people.get(plated.id)!;
           const age = Math.floor(ageYears(p, day));
-          label.innerHTML = "";
-          const title = document.createElement("div");
-          title.style.cssText = "font-weight:600;font-size:13px";
-          title.textContent = `${p.given} ${p.family}`;
-          const sub = document.createElement("div");
-          sub.style.cssText = "opacity:.75";
           // A child has a trade drawn for later, not one they work at: the panel says "a child", and so does this.
-          sub.textContent = `${age} · ${age >= 13 ? occupationOn(p, day) : "a child"}`;
-          const line = document.createElement("div");
-          line.style.cssText = "margin-top:3px;color:#e8c98a";
           // A decision to go is the most telling thing about anyone, and everyone can see it (C44).
           // A visitor's leaving is going home after the day (C53), not leaving for good.
-          line.textContent = p.visiting
-            ? `Here for the day from another village, visiting ${names.get(p.visiting) ?? "someone"}.`
-            : p.leftDay !== Infinity && p.leftDay > day
-              ? `Leaving ${village!.settlement.name} in ${p.leftDay - day} day${p.leftDay - day === 1 ? "" : "s"}.`
-              : lifeLine(life.get(p.id) ?? [], day, names);
-          label.append(title, sub, line);
+          fillPlate(
+            label,
+            `${p.given} ${p.family}`,
+            `${age} · ${age >= 13 ? occupationOn(p, day) : "a child"}`,
+            p.visiting
+              ? visitorLine(names.get(p.visiting) ?? "someone")
+              : p.leftDay !== Infinity && p.leftDay > day
+                ? `Leaving ${village!.settlement.name} in ${p.leftDay - day} day${p.leftDay - day === 1 ? "" : "s"}.`
+                : lifeLine(life.get(p.id) ?? [], day, names),
+          );
         }
-        labelled = nearest ? { id: nearest.id, x: nearest.x, y: nearest.y, z: nearest.z } : null;
+        labelled = plated ? { id: plated.id, x: plated.x, y: plated.y, z: plated.z } : null;
         if (!labelled) label.style.display = "none";
       }
 
@@ -895,6 +940,18 @@ export function villagersLayer(options: { clock: WorldClock }): VillagersLayer {
       const at = lastAt.get(id);
       return at ? Math.hypot(at.x - playerAt.x, at.y - playerAt.y) : null;
     },
+
+    visitor(seed) {
+      if (!village) return null;
+      const n = visitorName(village.settlement.culture, seed);
+      const day = worldDayIndex(options.clock, Date.now());
+      // A guest of one of the village's grown people who live here and are here today, the same one all day.
+      const hosts = [...people.values()].filter((p) => !p.visiting && p.birthDay <= day && p.deathDay > day && p.arrivedDay <= day && (p.leftDay > day || p.backDay <= day) && ageYears(p, day) >= 20);
+      const host = hosts.length ? hosts[Math.floor(hashUnit(`${seed}/host/${day}`) * hosts.length) % hosts.length]! : null;
+      return { name: `${n.given} ${n.family}`, line: visitorLine(host ? `${host.given} ${host.family}` : "someone") };
+    },
+
+    holding: () => held !== null,
 
     hold(id) {
       if (id === (held?.id ?? null)) return;

@@ -15,7 +15,8 @@ import { useSyncExternalStore } from "react";
 
 /** The echo's four, in the order their tabs stand, and the report, which is not about the echo. */
 export const ECHO_TABS = ["guesses", "portrait", "friends", "privacy"] as const;
-export type PanelName = (typeof ECHO_TABS)[number] | "report";
+/** `room`: the door of a village room (C101), not about the echo either. */
+export type PanelName = (typeof ECHO_TABS)[number] | "report" | "room";
 
 let current: PanelName | null = null;
 let waiting = 0;

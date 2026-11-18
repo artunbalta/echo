@@ -6,6 +6,7 @@
  * yours, so nobody hears gossip about a stranger they are not.
  */
 import { NextResponse } from "next/server";
+import { roomOfRequest } from "@echo/shared";
 
 import { subjectOf, subjectRejection } from "@/lib/subject";
 import { villageStore } from "@/lib/villageStore";
@@ -21,9 +22,13 @@ export async function GET(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
-  const cell = new URL(req.url).searchParams.get("cell") ?? "";
+  const query = new URL(req.url).searchParams;
+  const cell = query.get("cell") ?? "";
   if (!CELL.test(cell)) return NextResponse.json({ error: "bad_cell" }, { status: 400 });
-  const store = villageStore();
+  // In a village room's copy (C102), only what you did in that copy.
+  const room = roomOfRequest(cell, query.get("room") ?? undefined);
+  if (!room.ok) return NextResponse.json({ error: "bad_room" }, { status: 400 });
+  const store = villageStore(room.room);
   const deeds = store ? await store.deedsFor(caller.subject, cell) : [];
   return NextResponse.json({ deeds: deeds ?? [] }, { headers: { "cache-control": "no-store" } });
 }

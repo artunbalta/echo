@@ -522,6 +522,18 @@ function familyName(r: () => number, c: Culture): string {
   return capitalise(stem + tail);
 }
 
+/**
+ * A name for somebody from outside who has come to a settlement (DECISIONS C107): someone who came into a
+ * village room through its door is named as one of the land's own people is, in the settlement's culture
+ * (`culture` is the settlement's own `culture` field), from `key` and nothing else. Every page that draws
+ * the same body draws the same name, and no name says where it came from.
+ */
+export function visitorName(culture: string, key: string): { given: string; family: string } {
+  const c = CULTURES.find((x) => x.name === culture) ?? CULTURES[0];
+  const r = stream(`${key}/visitor-name`);
+  return { given: givenName(r, c), family: familyName(r, c) };
+}
+
 /** The settlement's own name, in its own culture. */
 function placeName(r: () => number, c: Culture): string {
   const stem = syllable(r, c) + (r() < 0.4 ? syllable(r, c) : "");

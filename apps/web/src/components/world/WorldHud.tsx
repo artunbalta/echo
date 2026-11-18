@@ -85,9 +85,11 @@ export interface WorldHudProps {
    * inspector), and no meetings. What you see of yourself afterwards cannot shape what you did before.
    */
   study?: boolean;
+  /** The village can be entered as a room with friends (C101): the menu offers the door. */
+  rooms?: boolean;
 }
 
-export default function WorldHud({ world, name, owned, shore, cell, coarse, consent, meter, under = null, onBack, inspecting, onToggleInspector, study = false }: WorldHudProps) {
+export default function WorldHud({ world, name, owned, shore, cell, coarse, consent, meter, under = null, onBack, inspecting, onToggleInspector, study = false, rooms = false }: WorldHudProps) {
   const lang = useLang();
   const waiting = useWaiting();
   const panelOpen = usePanel() !== null;
@@ -241,6 +243,22 @@ export default function WorldHud({ world, name, owned, shore, cell, coarse, cons
               </>
             )}
             <p className={group}>{t(lang, "menu.group.place")}</p>
+            {rooms ? (
+              <button
+                type="button"
+                role="menuitem"
+                data-hud-room
+                onMouseDown={noFocus}
+                onClick={() => {
+                  setMenuOpen(false);
+                  openPanel("room");
+                }}
+                className={item}
+              >
+                <Glyph d="M5 7.200a2.200 2.200 0 1 0 0-4.400 2.200 2.200 0 0 0 0 4.400zM11 7.200a2.200 2.200 0 1 0 0-4.400 2.200 2.200 0 0 0 0 4.400zM1.200 13.500c.4-2.200 1.800-3.500 3.800-3.500s3.400 1.300 3.800 3.500M7.200 13.500c.4-2.200 1.800-3.500 3.800-3.500s3.400 1.300 3.800 3.500" />
+                <span className="flex-1">{t(lang, "menu.room")}</span>
+              </button>
+            ) : null}
             <button type="button" role="menuitem" data-hud-pack onMouseDown={noFocus} onClick={ask("echo:pack")} className={item}>
               <Glyph d="M4.500 5.500V4a3.500 3.500 0 0 1 7 0v1.500M2.500 5.500h11l-.8 8.500H3.300z" />
               <span className="flex-1">{t(lang, "pack.title")}</span>

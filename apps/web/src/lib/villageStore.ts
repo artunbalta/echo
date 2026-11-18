@@ -14,6 +14,7 @@
 import "server-only";
 
 import { WRONGS, type Deed, type Home, type Landing, type LifeChange, type Look, type Pack, type Staging, type WorldEffect } from "@echo/planet";
+import { worldKey, worldOf, type AwayEntry } from "@echo/shared";
 
 import { adminClient } from "@/lib/supabaseAdmin";
 import type { DemoVisit, EchoInvite, EchoMeeting, EchoPair, Outing } from "@/lib/echoTypes";
@@ -28,6 +29,73 @@ export interface VillagerMemory {
   meetings: number;
   firstDay: number;
   lastDay: number;
+}
+
+/**
+ * One settled call, as it is kept for an echo that stands in for its person (C103): the moment, the call
+ * sealed before it and how sure, and what the person did. Nothing else of the envelope is kept.
+ */
+export interface KeptLook {
+  /** The envelope's hash in the browser's chain (`seal.ts`). */
+  seal: string;
+  cell: string;
+  kind: string;
+  arm: string | null;
+  call: string;
+  p: number;
+  did: string;
+  sealedAt: string;
+}
+
+/** What an echo did while it kept its person's body in a room (C105), as the room reported it. */
+export interface AwayRecord {
+  cell: string;
+  room: string;
+  /** ms */
+  since: number;
+  until: number;
+  log: AwayEntry[];
+}
+
+/** "That was not me" (C105): one moment the echo met, and the call it made there. */
+export interface Veto {
+  /** The moment's time as the room logged it, ms. */
+  at: number;
+  kind: string;
+  call: string;
+}
+
+/** One line a person typed while they let their words be kept (C108). */
+export interface KeptLine {
+  /** ISO time it was said. */
+  at: string;
+  cell: string;
+  /** The village room's code, or null for the open world. */
+  room: string | null;
+  /** To a villager, to someone in a room, or aloud in one. */
+  to: "villager" | "person" | "aloud";
+  /** What a villager had just said to them; never another person's words. */
+  heard: string | null;
+  said: string;
+}
+
+/** One guess an echo sealed before its person answered a villager, settled (C108). */
+export interface TalkLook {
+  /** The hash of what was sealed. */
+  seal: string;
+  cell: string;
+  /** What the villager said. */
+  heard: string;
+  guess: string;
+  /** How sure the echo said it was. */
+  p: number;
+  /** What the person answered. */
+  said: string;
+  /** Whether a model found the two meant the same and sounded the same. */
+  hit: boolean;
+  /** The model's few words on why. */
+  why: string | null;
+  sealedAt: string;
 }
 
 export interface VillageStore {
@@ -149,6 +217,34 @@ export interface VillageStore {
   savePilotMoments(rows: PilotMoment[]): Promise<boolean>;
   /** One person's moments, in the order they were met. Null: unreadable (0039 not applied, say). */
   pilotMomentsOf(subject: string): Promise<PilotMoment[] | null>;
+  /** Whether this person lets their echo keep their body in a village room when they leave it (C103). Null: unreadable. */
+  standInOf(subject: string): Promise<boolean | null>;
+  /** Yes keeps their settled calls from now on; no deletes the yes and every call kept (0042). */
+  setStandIn(subject: string, on: boolean): Promise<boolean>;
+  /** Keep settled calls; a seal already kept is not kept again. The seals now kept, or null: nothing was kept. */
+  keepLooks(subject: string, rows: readonly KeptLook[]): Promise<string[] | null>;
+  /** Every settled call kept for this person, oldest first. Null: unreadable. */
+  looksOf(subject: string): Promise<KeptLook[] | null>;
+  /** Keep what their echo did while it kept their body (C105); one per keeping. False: not kept. */
+  keepAway(subject: string, record: AwayRecord): Promise<boolean>;
+  /** The last `limit` keepings, newest first. Null: unreadable. */
+  awayOf(subject: string, limit?: number): Promise<AwayRecord[] | null>;
+  /** "That was not me" of one moment; once per moment. False: not kept. */
+  keepVeto(subject: string, veto: Veto): Promise<boolean>;
+  /** Every veto of theirs. Null: unreadable. */
+  vetoesOf(subject: string): Promise<Veto[] | null>;
+  /** Whether this person lets what they say be kept, for their echo to learn to talk from (C108). Null: unreadable. */
+  wordsOf(subject: string): Promise<boolean | null>;
+  /** Yes keeps their lines and their echo's guesses from now on; no deletes the yes and all of them (0043). */
+  setWords(subject: string, on: boolean): Promise<boolean>;
+  /** Keep one line. False: not kept. */
+  keepLine(subject: string, line: KeptLine): Promise<boolean>;
+  /** Their last `limit` lines, newest first. Null: unreadable. */
+  linesOf(subject: string, limit: number): Promise<KeptLine[] | null>;
+  /** Keep one settled guess; a seal already kept is not kept again. False: not kept. */
+  keepTalkLook(subject: string, look: TalkLook): Promise<boolean>;
+  /** Every settled guess of theirs, oldest first. Null: unreadable. */
+  talkLooksOf(subject: string): Promise<TalkLook[] | null>;
   /**
    * Everything of one person this store holds, gone (§13): in the in-process store, every map, with the
    * world's history kept and made nameless (C44, C45). Against Supabase it does nothing, because
@@ -1029,6 +1125,142 @@ function supabaseStore(): VillageStore | null {
         outcome: r.outcome,
       }));
     },
+    async standInOf(subject) {
+      const { data, error } = await admin.from("echo_stand_in").select("subject").eq("subject", subject).maybeSingle();
+      if (error) return warn("standInOf", error.message), null;
+      return data !== null;
+    },
+    async setStandIn(subject, on) {
+      if (on) {
+        const { error } = await admin.from("echo_stand_in").upsert({ subject }, { onConflict: "subject", ignoreDuplicates: true });
+        if (error) return warn("setStandIn", error.message), false;
+        return true;
+      }
+      // No: the record goes first, so a failure leaves the yes standing and visible rather than a record nobody owns up to.
+      for (const table of ["echo_vetoes", "echo_away", "echo_looks"]) {
+        const gone = await admin.from(table).delete().eq("subject", subject);
+        if (gone.error) return warn(`setStandIn (${table})`, gone.error.message), false;
+      }
+      const yes = await admin.from("echo_stand_in").delete().eq("subject", subject);
+      if (yes.error) return warn("setStandIn", yes.error.message), false;
+      return true;
+    },
+    async keepLooks(subject, rows) {
+      if (rows.length === 0) return [];
+      const { error } = await admin.from("echo_looks").upsert(
+        rows.map((r) => ({ subject, seal: r.seal, cell: r.cell, kind: r.kind, arm: r.arm, call: r.call, p: r.p, did: r.did, sealed_at: r.sealedAt })),
+        { onConflict: "subject,seal", ignoreDuplicates: true },
+      );
+      if (error) return warn("keepLooks", error.message), null;
+      return rows.map((r) => r.seal);
+    },
+    async keepAway(subject, r) {
+      const { error } = await admin.from("echo_away").upsert(
+        { subject, cell: r.cell, room: r.room, since: new Date(r.since).toISOString(), until: new Date(r.until).toISOString(), log: r.log },
+        { onConflict: "subject,since", ignoreDuplicates: true },
+      );
+      if (error) return warn("keepAway", error.message), false;
+      return true;
+    },
+    async awayOf(subject, limit = 5) {
+      const { data, error } = await admin.from("echo_away").select("cell, room, since, until, log").eq("subject", subject).order("since", { ascending: false }).limit(limit);
+      if (error) return warn("awayOf", error.message), null;
+      return (data as { cell: string; room: string; since: string; until: string; log: AwayEntry[] }[]).map((r) => ({ cell: r.cell, room: r.room, since: Date.parse(r.since), until: Date.parse(r.until), log: r.log }));
+    },
+    async keepVeto(subject, v) {
+      const { error } = await admin.from("echo_vetoes").upsert({ subject, at: v.at, kind: v.kind, call: v.call }, { onConflict: "subject,at,kind", ignoreDuplicates: true });
+      if (error) return warn("keepVeto", error.message), false;
+      return true;
+    },
+    async vetoesOf(subject) {
+      const { data, error } = await admin.from("echo_vetoes").select("at, kind, call").eq("subject", subject).limit(5000);
+      if (error) return warn("vetoesOf", error.message), null;
+      return (data as { at: number | string; kind: string; call: string }[]).map((r) => ({ at: Number(r.at), kind: r.kind, call: r.call }));
+    },
+    async wordsOf(subject) {
+      const { data, error } = await admin.from("echo_words").select("subject").eq("subject", subject).maybeSingle();
+      if (error) return warn("wordsOf", error.message), null;
+      return data !== null;
+    },
+    async setWords(subject, on) {
+      if (on) {
+        const { error } = await admin.from("echo_words").upsert({ subject }, { onConflict: "subject", ignoreDuplicates: true });
+        if (error) return warn("setWords", error.message), false;
+        return true;
+      }
+      // No: what was kept goes first, so a failure leaves the yes standing and visible.
+      for (const table of ["echo_talk_looks", "echo_lines"]) {
+        const gone = await admin.from(table).delete().eq("subject", subject);
+        if (gone.error) return warn(`setWords (${table})`, gone.error.message), false;
+      }
+      const yes = await admin.from("echo_words").delete().eq("subject", subject);
+      if (yes.error) return warn("setWords", yes.error.message), false;
+      return true;
+    },
+    async keepLine(subject, l) {
+      const { error } = await admin.from("echo_lines").insert({ subject, at: l.at, cell: l.cell, room: l.room, to_kind: l.to, heard: l.heard, said: l.said });
+      if (error) return warn("keepLine", error.message), false;
+      return true;
+    },
+    async linesOf(subject, limit) {
+      const { data, error } = await admin.from("echo_lines").select("at, cell, room, to_kind, heard, said").eq("subject", subject).order("at", { ascending: false }).limit(limit);
+      if (error) return warn("linesOf", error.message), null;
+      return (data as { at: string; cell: string; room: string | null; to_kind: KeptLine["to"]; heard: string | null; said: string }[]).map((r) => ({
+        at: r.at,
+        cell: r.cell,
+        room: r.room,
+        to: r.to_kind,
+        heard: r.heard,
+        said: r.said,
+      }));
+    },
+    async keepTalkLook(subject, t) {
+      const { error } = await admin.from("echo_talk_looks").upsert(
+        { subject, seal: t.seal, cell: t.cell, heard: t.heard, guess: t.guess, p: t.p, said: t.said, hit: t.hit, why: t.why, sealed_at: t.sealedAt },
+        { onConflict: "subject,seal", ignoreDuplicates: true },
+      );
+      if (error) return warn("keepTalkLook", error.message), false;
+      return true;
+    },
+    async talkLooksOf(subject) {
+      const { data, error } = await admin
+        .from("echo_talk_looks")
+        .select("seal, cell, heard, guess, p, said, hit, why, sealed_at")
+        .eq("subject", subject)
+        .order("sealed_at", { ascending: true })
+        .limit(5000);
+      if (error) return warn("talkLooksOf", error.message), null;
+      return (data as { seal: string; cell: string; heard: string; guess: string; p: number; said: string; hit: boolean; why: string | null; sealed_at: string }[]).map((r) => ({
+        seal: r.seal,
+        cell: r.cell,
+        heard: r.heard,
+        guess: r.guess,
+        p: r.p,
+        said: r.said,
+        hit: r.hit,
+        why: r.why,
+        sealedAt: r.sealed_at,
+      }));
+    },
+    async looksOf(subject) {
+      const { data, error } = await admin
+        .from("echo_looks")
+        .select("seal, cell, kind, arm, call, p, did, sealed_at")
+        .eq("subject", subject)
+        .order("sealed_at", { ascending: true })
+        .limit(5000);
+      if (error) return warn("looksOf", error.message), null;
+      return (data as { seal: string; cell: string; kind: string; arm: string | null; call: string; p: number; did: string; sealed_at: string }[]).map((r) => ({
+        seal: r.seal,
+        cell: r.cell,
+        kind: r.kind,
+        arm: r.arm,
+        call: r.call,
+        p: r.p,
+        did: r.did,
+        sealedAt: r.sealed_at,
+      }));
+    },
     async forgetSubject() {
       return true;
     },
@@ -1095,6 +1327,16 @@ interface MemoryState {
   pilotRatings?: Map<string, PilotRating & { circle: string }>;
   pilotMoments?: Map<string, PilotMoment>;
   circles?: Map<string, PilotCircle>;
+  /** C103: who lets their echo stand in, and the settled calls kept for them. */
+  standIns?: Set<string>;
+  keptLooks?: Map<string, KeptLook[]>;
+  /** C105: what their echo did while it kept their body, and their vetoes. */
+  aways?: Map<string, AwayRecord[]>;
+  vetoes?: Map<string, Veto[]>;
+  /** C108: who lets their words be kept, their lines, and their echo's settled guesses. */
+  words?: Set<string>;
+  lines?: Map<string, KeptLine[]>;
+  talkLooks?: Map<string, TalkLook[]>;
   next: number;
 }
 const shared = globalThis as typeof globalThis & { __echoVillageStore?: MemoryState };
@@ -1407,8 +1649,92 @@ function memoryStore(): VillageStore {
     async pilotMomentsOf(subject) {
       return [...(memory.pilotMoments?.values() ?? [])].filter((m) => m.subject === subject).sort((a, b) => a.seenAt.localeCompare(b.seenAt)).map((m) => structuredClone(m));
     },
+    async standInOf(subject) {
+      return memory.standIns?.has(subject) ?? false;
+    },
+    async setStandIn(subject, on) {
+      memory.standIns ??= new Set();
+      if (on) memory.standIns.add(subject);
+      else {
+        memory.standIns.delete(subject);
+        memory.keptLooks?.delete(subject);
+        memory.aways?.delete(subject);
+        memory.vetoes?.delete(subject);
+      }
+      return true;
+    },
+    async keepLooks(subject, rows) {
+      memory.keptLooks ??= new Map();
+      const had = memory.keptLooks.get(subject) ?? [];
+      const seen = new Set(had.map((r) => r.seal));
+      const fresh = rows.filter((r) => !seen.has(r.seal)).map((r) => ({ ...r }));
+      memory.keptLooks.set(subject, [...had, ...fresh].sort((a, b) => a.sealedAt.localeCompare(b.sealedAt)));
+      return rows.map((r) => r.seal);
+    },
+    async looksOf(subject) {
+      return (memory.keptLooks?.get(subject) ?? []).map((r) => ({ ...r }));
+    },
+    async keepAway(subject, r) {
+      memory.aways ??= new Map();
+      const had = memory.aways.get(subject) ?? [];
+      if (!had.some((x) => x.since === r.since)) memory.aways.set(subject, [...had, structuredClone(r)]);
+      return true;
+    },
+    async awayOf(subject, limit = 5) {
+      return [...(memory.aways?.get(subject) ?? [])].sort((a, b) => b.since - a.since).slice(0, limit).map((r) => structuredClone(r));
+    },
+    async keepVeto(subject, v) {
+      memory.vetoes ??= new Map();
+      const had = memory.vetoes.get(subject) ?? [];
+      if (!had.some((x) => x.at === v.at && x.kind === v.kind)) memory.vetoes.set(subject, [...had, { ...v }]);
+      return true;
+    },
+    async vetoesOf(subject) {
+      return (memory.vetoes?.get(subject) ?? []).map((v) => ({ ...v }));
+    },
+    async wordsOf(subject) {
+      return memory.words?.has(subject) ?? false;
+    },
+    async setWords(subject, on) {
+      memory.words ??= new Set();
+      if (on) memory.words.add(subject);
+      else {
+        memory.words.delete(subject);
+        memory.lines?.delete(subject);
+        memory.talkLooks?.delete(subject);
+      }
+      return true;
+    },
+    async keepLine(subject, l) {
+      memory.lines ??= new Map();
+      const had = memory.lines.get(subject) ?? [];
+      // Stable: two lines of one instant stay in the order they were said.
+      memory.lines.set(subject, [...had, { ...l }].sort((a, b) => a.at.localeCompare(b.at)));
+      return true;
+    },
+    async linesOf(subject, limit) {
+      return [...(memory.lines?.get(subject) ?? [])].reverse().slice(0, limit).map((l) => ({ ...l }));
+    },
+    async keepTalkLook(subject, t) {
+      memory.talkLooks ??= new Map();
+      const had = memory.talkLooks.get(subject) ?? [];
+      if (!had.some((x) => x.seal === t.seal)) memory.talkLooks.set(subject, [...had, { ...t }].sort((a, b) => a.sealedAt.localeCompare(b.sealedAt)));
+      return true;
+    },
+    async talkLooksOf(subject) {
+      return (memory.talkLooks?.get(subject) ?? []).map((t) => ({ ...t }));
+    },
     async forgetSubject(subject) {
       const mine = (k: string) => k.startsWith(`${subject}|`);
+      // C103, C105: their echo's yes, the record it stood in from, what it did, and their vetoes.
+      memory.standIns?.delete(subject);
+      memory.keptLooks?.delete(subject);
+      memory.aways?.delete(subject);
+      memory.vetoes?.delete(subject);
+      // C108: their yes to keeping their words, the words, and their echo's guesses.
+      memory.words?.delete(subject);
+      memory.lines?.delete(subject);
+      memory.talkLooks?.delete(subject);
       for (const k of [...memory.memories.keys()]) if (mine(k)) memory.memories.delete(k);
       for (const map of [memory.deeds, memory.landings] as (Map<string, unknown> | undefined)[]) for (const k of [...(map?.keys() ?? [])]) if (mine(k)) map!.delete(k);
       for (const map of [memory.packs, memory.homes, memory.looks, memory.presence, memory.bars, memory.demos, memory.pilot] as (Map<string, unknown> | undefined)[]) map?.delete(subject);
@@ -1456,16 +1782,75 @@ function memoryStore(): VillageStore {
 
 let announced = false;
 
-/** The store for this process, or null when there is none to use. */
-export function villageStore(): VillageStore | null {
+/**
+ * The store as one world sees it (DECISIONS C102): the open world everyone walks, or a village room's copy.
+ *
+ * A copy keeps its own memory. Everything a village writes about a place (what conversations changed,
+ * what villagers remember of a stranger, the marks acts left, the deeds they know, who landed on its shore)
+ * is filed under the world's key (`worldKey`): the cell for the open world, `cell~CODE` for a copy. The
+ * routes never build that key themselves; they ask for the store of their room and go on naming cells,
+ * and the store files under the right world. So a route written before rooms existed answers for the open
+ * world unchanged, and the same route asked with a room answers for that copy and nothing else.
+ *
+ * WHAT IS NOT A WORLD'S: a stranger's pack, look, house and everything else filed by subject alone. A
+ * person carries those from copy to copy, as they carry their own body.
+ *
+ * The open world's one difference from the raw store: who a stranger has talked to (`metBy`) leaves out
+ * the copies, so an echo going out, or a villager asking after someone met elsewhere, never reaches into
+ * a room. A copy sees only its own, by cell.
+ */
+function scoped(raw: VillageStore, room: string | null): VillageStore {
+  if (room === null) {
+    return {
+      ...raw,
+      async metBy(subject, limit) {
+        const rows = await raw.metBy(subject, limit + 40);
+        return rows ? rows.filter((r) => worldOf(r.cell).room === null).slice(0, limit) : null;
+      },
+    };
+  }
+  const k = (cell: string) => worldKey(cell, room);
+  return {
+    ...raw,
+    changesFor: (cell) => raw.changesFor(k(cell)),
+    addChange: (cell, change, subject) => raw.addChange(k(cell), change, subject),
+    memoryOf: (subject, cell, person) => raw.memoryOf(subject, k(cell), person),
+    remember: (subject, cell, person, memory) => raw.remember(subject, k(cell), person, memory),
+    forget: (subject, cell, person) => raw.forget(subject, k(cell), person),
+    async metBy(subject, limit) {
+      const rows = await raw.metBy(subject, limit * 4 + 40);
+      if (!rows) return null;
+      return rows.flatMap((r) => {
+        const w = worldOf(r.cell);
+        return w.room === room ? [{ ...r, cell: w.cell }] : [];
+      }).slice(0, limit);
+    },
+    effectsFor: (cell, day) => raw.effectsFor(k(cell), day),
+    addEffect: (cell, effect, subject) => raw.addEffect(k(cell), effect, subject),
+    healMark: (cell, id, day) => raw.healMark(k(cell), id, day),
+    deedsFor: (subject, cell) => raw.deedsFor(subject, k(cell)),
+    addDeed: (subject, cell, deed) => raw.addDeed(subject, k(cell), deed),
+    landingsIn: (subject, cell) => raw.landingsIn(subject, k(cell)),
+    addLanding: (subject, cell, landing) => raw.addLanding(subject, k(cell), landing),
+    tracesIn: (cell, sinceDay) => raw.tracesIn(k(cell), sinceDay),
+    deleteChange: (cell, id) => raw.deleteChange(k(cell), id),
+  };
+}
+
+/**
+ * The store for this process as `room` sees it (null, the default: the open world), or null when there is
+ * no store to use.
+ */
+export function villageStore(room: string | null = null): VillageStore | null {
+  let raw: VillageStore | null;
   if (process.env.VILLAGE_STORE === "memory") {
     if (!announced) {
       announced = true;
       console.warn("[village-store] VILLAGE_STORE=memory: changes and memories live in this process and are lost on restart");
     }
-    return memoryStore();
-  }
-  return supabaseStore();
+    raw = memoryStore();
+  } else raw = supabaseStore();
+  return raw ? scoped(raw, room) : null;
 }
 
 /** For tests: empty the in-process store. */
@@ -1488,6 +1873,13 @@ export function resetMemoryStore(): void {
   memory.invites?.clear();
   memory.pairs?.clear();
   memory.meetings?.clear();
+  memory.standIns?.clear();
+  memory.keptLooks?.clear();
+  memory.aways?.clear();
+  memory.vetoes?.clear();
+  memory.words?.clear();
+  memory.lines?.clear();
+  memory.talkLooks?.clear();
   memory.demos?.clear();
   memory.pilot?.clear();
   memory.pilotRatings?.clear();

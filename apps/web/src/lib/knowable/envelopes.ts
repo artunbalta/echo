@@ -26,6 +26,8 @@ export interface Envelope extends Sealed {
   open: boolean;
   /** Whether it has been added to the village's count (C91); only ever by someone who said yes to that. */
   sent?: boolean;
+  /** Whether it has been kept for an echo that stands in for its person (C103); only ever after a yes to that. */
+  kept?: boolean;
   /** The parcel it was sealed in: a raft may have crossed since, and the count asks where it happened. */
   cell?: string;
   /**
@@ -120,6 +122,19 @@ export function unsent(book: Book, cell: string): CountRow[] {
   return book.chain
     .filter((e) => e.did !== null && !e.sent && !e.here && known(e.kind))
     .map((e) => ({ seal: e.hash, cell: e.cell ?? cell, kind: e.kind, arm: e.arm, call: e.call, did: e.did!, same: e.looks.same, family: e.looks.family, at: e.at }));
+}
+
+/** Settled envelopes not yet kept for an echo that stands in (C103), as `/api/echo/looks` takes them. */
+export function unkept(book: Book, cell: string): { seal: string; cell: string; kind: string; arm: string | null; call: string; p: number; did: string; at: string }[] {
+  return book.chain
+    .filter((e) => e.did !== null && !e.kept && known(e.kind))
+    .map((e) => ({ seal: e.hash, cell: e.cell ?? cell, kind: e.kind, arm: e.arm, call: e.call, p: e.p, did: e.did!, at: e.at }));
+}
+
+/** Those were kept, or will never be: not offered again. */
+export function markKept(book: Book, seals: readonly string[]): Book {
+  const done = new Set(seals);
+  return { ...book, chain: book.chain.map((e) => (done.has(e.hash) && !e.kept ? { ...e, kept: true } : e)) };
 }
 
 /** Those rows were taken. */

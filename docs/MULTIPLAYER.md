@@ -1,5 +1,41 @@
 # Live multiplayer — two real players, one world
 
+> **Village rooms (DECISIONS C101).** The 3D village has its own kind of room: a copy of the reference
+> village (Drurnscree) that a group enters by a five-character code. Locally: `npm run dev` (realtime
+> :2567 + web :3000), open <http://localhost:3000/parcel/84dcee5ffffffff>, Menu → **Play with friends** →
+> **Start a new room**, and open the link it gives in a second browser (or a private window). Friends are
+> drawn as villagers; Enter to speak. Room: `apps/realtime/src/VillageRoom.ts`; page:
+> `apps/web/src/lib/villageRoom.ts`, `game/world/othersLayer.ts`, `components/world/RoomPanel.tsx`; rules:
+> `packages/shared/src/village.ts`; test: `npm run test:village -w @echo/realtime`.
+>
+> **Your echo keeps your body (C104).** With **When you leave → Let my echo take my place** on, leaving the
+> room leaves your body there: the room walks it along your own way (`apps/realtime/src/echoBody.ts`) and it
+> acts only where its standing is `act` (C103), by a brief the web app signs (`/api/echo/standin`,
+> `@echo/shared/standin`). Coming back gives you the same body and a card of what it did. The realtime
+> server now imports `@echo/planet` (build it before the realtime service); `ECHO_STANDIN_MAX_S` shortens
+> the keeping for a test. Test: `npm run test:standin -w @echo/realtime`.
+>
+> **Watching it (C105).** Once you have left with your echo standing in, the door offers **Watch it**:
+> `/watch/<cell>?room=<code>` follows the body from outside with what it meets, and "Not me" beside each.
+> The room sends what the echo did to the web app when the keeping ends: set `ECHO_WEB_URL` on the realtime
+> service (locally, the web app's address). Test: `npm run test:watch -w @echo/realtime`.
+>
+> **Hosting it (C106).** `apps/realtime/Dockerfile` builds shared, planet and the server (Node 22); Render's
+> `echo-realtime` in `render.yaml` runs it (Starter, one instance: not Free, which sleeps). It needs
+> `ECHO_IDENTITY_SECRET` (the same as Vercel's) and `ECHO_WEB_URL`; Vercel needs `NEXT_PUBLIC_REALTIME_URL`
+> = `wss://<service>.onrender.com` and a redeploy. A deploy stops the server with SIGTERM: keepings end and
+> are reported first, and pages come back into their rooms by themselves. A friend is sent
+> `/in/<pass>?room=<ROOM>` (a pass from `ECHO_PASS`). Test: `npm run test:shutdown -w @echo/realtime`.
+>
+> **Who is who (C107).** No name crosses the wire: a body is a handle, a look (`roomLookOf(subject, code)`, per copy)
+> and a pose, and each page names it from the look in the village's tongue (`visitorName`) with a visitor's plate.
+> `talk {to, text}` reaches one body's person alone (`told`); to a body an echo keeps it reaches only its watcher
+> (`heard`), and nobody answers. The page talks to anyone nearest through the villagers' own panel.
+>
+> **Learning how you talk (C108).** With a yes of its own under "When you leave", a person's lines (to villagers, to someone in a room, aloud in one) are kept by the web app, never by the room; the room still stores no line. A line to a person carries nothing that person said. Before each answer to a villager, the echo's guess is sealed and later judged, earning the "talk" threshold; (C109) past that threshold a body its echo keeps answers `talk` with a line the web app writes (`/api/echo/speak`, signed by the room), after a typing pause; close to it, the line goes to the watching person as `would` and is said only on their `sayIt`.
+>
+> What follows describes the old 2D world's `WorldRoom`.
+
 Two (or more) people on different devices share the same map: they **see** each other
 (live players carry a glowing marker and show up in a "live now" roster) and can **play**
 together — walk up, press **E**, and chat in real time. Once your echo has earned autonomy,

@@ -17,9 +17,11 @@
  */
 import { NextResponse } from "next/server";
 import { gatheringName, gatheringsOn, type Deed } from "@echo/planet";
+import { roomOfRequest } from "@echo/shared";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
 import { subjectOf, subjectRejection } from "@/lib/subject";
+import { villageStore } from "@/lib/villageStore";
 import { loadVillage } from "@/lib/villageTalk";
 
 export const runtime = "nodejs";
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
-  let body: { cell?: unknown; gathering?: unknown; at?: unknown };
+  let body: { cell?: unknown; gathering?: unknown; at?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -49,6 +51,8 @@ export async function POST(req: Request) {
   }
   const { cell, gathering } = body;
   if (typeof cell !== "string" || !CELL.test(cell)) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   if (typeof gathering !== "string" || !GATHERING.test(gathering)) return bad("bad_gathering");
   const pos = body.at as { x?: unknown; y?: unknown } | undefined;
   if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number" || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return bad("bad_position");
@@ -59,7 +63,8 @@ export async function POST(req: Request) {
     return NextResponse.json(error, { status });
   }
 
-  const loaded = await loadVillage(cell);
+  // A village room's copy (C102) has its own gatherings' guests and its own deeds.
+  const loaded = await loadVillage(cell, undefined, villageStore(room.room));
   if (!loaded) return bad("no_village", 404);
   const { village, store, day, hour } = loaded;
   const s = village.settlement;

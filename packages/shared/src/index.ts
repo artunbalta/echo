@@ -14,6 +14,7 @@ export * from "./persona.js";
 export * from "./telemetry.js";
 export * from "./protocol.js";
 export * from "./npcgen.js";
+export * from "./village.js";
 // THE PREDICATE, NOT THE PARSE. `identityFormat.ts` is crypto-free and therefore safe in the barrel
 // that client components pull in — but `parseIdentityToken` is documented as VERIFYING NOTHING, and
 // publishing it to every browser bundle beside a verifier that does verify is an invitation to reach

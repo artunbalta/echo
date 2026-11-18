@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { t, useLang } from "@/lib/i18n";
 import { identityHeaders, identityToken } from "@/lib/identity";
 import { closePanel, openPanel, usePanel } from "@/lib/panels";
+import { worldRoom } from "@/lib/villageRoom";
 
 import EchoPanel from "./Panel";
 
@@ -42,7 +43,7 @@ export default function ReportPanel({ cell }: { cell: string }) {
     try {
       // A report needs no identity: one who never let the echo watch is heard all the same.
       const headers = identityToken() ? identityHeaders({ "content-type": "application/json" }) : { "content-type": "application/json" };
-      const res = await fetch("/api/moderation/report", { method: "POST", headers, body: JSON.stringify({ cell, reason, note: note.trim() || undefined }) });
+      const res = await fetch("/api/moderation/report", { method: "POST", headers, body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, reason, note: note.trim() || undefined }) });
       setState(res.ok ? "sent" : "failed");
     } catch {
       setState("failed");

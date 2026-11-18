@@ -18,6 +18,7 @@
  * for one thing.
  */
 import { NextResponse } from "next/server";
+import { roomOfRequest } from "@echo/shared";
 import {
   ITEMS,
   add,
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
   // A stranger barred by a moderator changes nothing in the shared world (C67).
   const barredNow = await refuseBarred(villageStore(), caller.subject);
   if (barredNow) return barredNow;
-  let body: { cell?: unknown; person?: unknown; at?: unknown; offered?: unknown; asked?: unknown };
+  let body: { cell?: unknown; person?: unknown; at?: unknown; offered?: unknown; asked?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -74,6 +75,8 @@ export async function POST(req: Request) {
   }
   const { cell, person } = body;
   if (typeof cell !== "string" || !CELL.test(cell)) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   if (typeof person !== "string" || !PERSON.test(person)) return bad("bad_person");
   const raw = body.at as { x?: unknown; y?: unknown } | undefined;
   if (!raw || typeof raw.x !== "number" || typeof raw.y !== "number" || !Number.isFinite(raw.x) || !Number.isFinite(raw.y)) return bad("bad_position");
@@ -88,7 +91,8 @@ export async function POST(req: Request) {
     return NextResponse.json(error, { status });
   }
 
-  const loaded = await loadVillage(cell);
+  // A village room's copy (C102): its own deeds, marks and changes; the pack is the stranger's own, in every copy.
+  const loaded = await loadVillage(cell, undefined, villageStore(room.room));
   if (!loaded) return bad("no_village", 404);
   const { village, changes, store, day, hour } = loaded;
   if (!store) return bad("no_store", 503);

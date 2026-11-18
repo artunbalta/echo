@@ -22,6 +22,7 @@
  * world's cues are the client's to send).
  */
 import { NextResponse } from "next/server";
+import { roomOfRequest } from "@echo/shared";
 import { getResolution, gridDistance } from "h3-js";
 import {
   CROSSING,
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
     const { body: error, status } = subjectRejection(caller);
     return NextResponse.json(error, { status });
   }
-  let body: { cell?: unknown; at?: unknown; from?: unknown; launchedAt?: unknown };
+  let body: { cell?: unknown; at?: unknown; from?: unknown; launchedAt?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -76,6 +77,8 @@ export async function POST(req: Request) {
   }
   const { cell, from } = body;
   if (typeof cell !== "string" || !CELL.test(cell) || getResolution(cell) !== PLANET_PARAMS.startResolution) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   if (typeof from !== "string" || !CELL.test(from) || getResolution(from) !== PLANET_PARAMS.startResolution) return bad("bad_from");
   const at = point(body.at);
   const launchedAt = point(body.launchedAt);
@@ -97,7 +100,8 @@ export async function POST(req: Request) {
   const now = Date.now();
   const day = worldDayIndex(clock, now);
   const hour = timeOfDay(clock, now);
-  const store = villageStore();
+  // Landing on a village room's copy (C102) is told in that copy.
+  const store = villageStore(room.room);
   const changes = store ? ((await store.changesFor(cell)) ?? []) : [];
   const village = villageAt(world.seed, cell, field, calibration, world.radiusKm, { commons: commons.cells, day, changes });
   const dock = village?.plan.dock ?? null;

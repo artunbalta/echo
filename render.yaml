@@ -84,7 +84,11 @@ services:
     dockerfilePath: apps/realtime/Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    plan: starter # "free" also works but cold-starts on idle (~30-60s first hit)
+    # NOT "free" for the village rooms: a free service is put to sleep after a quarter of an hour with no
+    # traffic, and an echo keeping a place for a group that has gone quiet is exactly that, so the keeping
+    # (up to 45 minutes) would end with the process. One instance: rooms are matched in this process's
+    # memory, so a second instance would split a group between two copies (Redis presence first).
+    plan: starter
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -106,6 +110,14 @@ services:
       # Only during a key rotation, matching the web side's overlap window.
       - key: ECHO_IDENTITY_SECRET_OLD
         sync: false
+      # THE VILLAGE ROOMS (C101–C106) need only the secret above and this. When an echo stops keeping a
+      # person's place in a room (they came back, its time ran out, or this server is stopped for a
+      # deploy), the room sends what it did to the web app, signed with the identity secret, to be kept
+      # with that person's record (`/api/echo/keeping`). Absent → the room still keeps places, and the
+      # person is still told on coming back, but nothing is kept for later. The apex domain answers
+      # directly (no redirect, so the POST is not turned into a GET on the way).
+      - key: ECHO_WEB_URL
+        value: https://echovirtualworld.com
       # Real NPC dialogue (without it, NPCs reply with deterministic mocks). Enter in dashboard.
       - key: ANTHROPIC_API_KEY
         sync: false

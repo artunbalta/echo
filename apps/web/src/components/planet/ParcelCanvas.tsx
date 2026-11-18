@@ -71,6 +71,9 @@ import PilotOverlay, { type PilotSettings } from "@/components/pilot/PilotOverla
 import EchoAway from "@/components/world/EchoAway";
 import EchoMeeting from "@/components/world/EchoMeeting";
 import EchoPairs from "@/components/world/EchoPairs";
+import RoomPanel from "@/components/world/RoomPanel";
+import { useStandIn } from "@/components/world/useStandIn";
+import { useWords } from "@/components/world/useWords";
 import { EnvelopeAsides, EnvelopeChip, EnvelopesPanel, LEAVING_AT, useEnvelopes } from "@/components/world/Envelopes";
 import ReportPanel from "@/components/world/ReportPanel";
 import Interact from "@/components/world/Interact";
@@ -87,6 +90,7 @@ import type { PlayerLayer } from "@/game/world/playerLayer";
 import { carryHandoff } from "@/game/world/crossTo";
 import type { HomeLayer } from "@/game/world/homeLayer";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { roomable, worldQuery } from "@/lib/villageRoom";
 import { useLang, type Lang } from "@/lib/lang";
 import { PREVIEW_MS } from "@/lib/preview";
 import { step } from "@/lib/steps";
@@ -225,7 +229,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
     let live = true;
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 2500);
-    fetch(`/api/village/changes?cell=${encodeURIComponent(manifest.cell)}`, { signal: ctl.signal })
+    fetch(`/api/village/changes?${worldQuery(manifest.cell)}`, { signal: ctl.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { changes?: LifeChange[]; effects?: WorldEffect[] } | null) => {
         if (!live) return;
@@ -254,6 +258,9 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
 
   // What the echo sealed about the stranger before each moment (C89): never in a pilot visit.
   const envelopes = useEnvelopes(() => world.current, consent, !pilot, here, !demo);
+  // Your echo standing in for you when you leave a room (C103): the yes, and where it has earned the right to.
+  const standIn = useStandIn(envelopes, consent, here);
+  const words = useWords(consent);
   // When the count's sentence came onto the consent card (C91): a yes covers it only if it had been
   // there long enough to be read. The answer to "is the count on" can land a moment before the click.
   const sentenceAt = useRef<number | null>(null);
@@ -277,7 +284,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
       let changesThere: LifeChange[] = [];
       let marksThere: WorldEffect[] = [];
       try {
-        const r = await fetch(`/api/village/changes?cell=${encodeURIComponent(j.cell)}`);
+        const r = await fetch(`/api/village/changes?${worldQuery(j.cell)}`);
         const d = r.ok ? ((await r.json()) as { changes?: LifeChange[]; effects?: WorldEffect[] }) : null;
         changesThere = Array.isArray(d?.changes) ? d.changes : [];
         marksThere = Array.isArray(d?.effects) ? d.effects : [];
@@ -453,6 +460,7 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
         inspecting={inspecting}
         onToggleInspector={() => setInspecting((v) => !v)}
         study={!!pilot}
+        rooms={!pilot && !demo && roomable(here)}
         under={pilot ? null : <EnvelopeChip env={envelopes} />}
         onBack={(e) => {
           // Leaving with envelopes never opened: asked once, and the second press goes.
@@ -524,6 +532,8 @@ export default function ParcelCanvas({ stations = null, demo = null, pilot = nul
           <EchoMeeting world={() => world.current} cell={here} consent={consent} guide={!!demo} />
           {demo ? <DemoOverlay demo={demo} /> : null}
           <EchoPairs consent={consent} />
+          {/* A village room with friends (C101): the door, the room's chip and the line said. Not in the demo. */}
+          {demo ? null : <RoomPanel cell={manifest.cell} world={() => world.current} standIn={standIn} words={words} />}
           {/* How the echo sees you and what moved it, with your say over it (C61): `Y`, or the meter. */}
           <Mirror consent={consent} onAccept={() => chain.accept()} onRevoke={() => chain.revoke()} />
           {/* What the echo sealed before each moment, opened afterwards (C89): `O`, the envelope, the way out. */}

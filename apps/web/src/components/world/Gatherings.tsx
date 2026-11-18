@@ -24,6 +24,7 @@ import { attendanceLabel, attendStep, newAttendState, realWhen, type AttendEvent
 import { t, useLang, type Key } from "@/lib/i18n";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
 import { publishNews, type NewsItem } from "@/lib/villageNews";
+import { worldRoom } from "@/lib/villageRoom";
 
 const CLOCK = worldClock(WORLD_EPOCH);
 
@@ -62,7 +63,7 @@ export default function Gatherings({ world, cell, consent, chain }: { world: () 
           const res = await fetch("/api/village/attend", {
             method: "POST",
             headers: identityHeaders({ "content-type": "application/json" }),
-            body: JSON.stringify({ cell, gathering: e.gathering.id, at }),
+            body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, gathering: e.gathering.id, at }),
           });
           knew = ((await res.json().catch(() => ({}))) as { knew?: boolean }).knew === true;
         } catch {

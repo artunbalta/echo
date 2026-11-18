@@ -41,7 +41,8 @@ export interface EchoPanelProps {
 export default function EchoPanel({ tab, label, wide = false, attrs, onKeyDown, children }: EchoPanelProps) {
   const lang = useLang();
   const waiting = useWaiting();
-  const tabs = tab !== "report";
+  // The echo's four carry the tabs; the report and the room's door are pages of their own.
+  const tabs = (ECHO_TABS as readonly string[]).includes(tab);
   return (
     <section
       {...attrs}

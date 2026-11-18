@@ -9,6 +9,7 @@
  * and not after. The reporter is never told who that was.
  */
 import { NextResponse } from "next/server";
+import { roomOfRequest, worldKey } from "@echo/shared";
 import { worldClock, worldDayIndex, WORLD_EPOCH } from "@echo/planet";
 
 import { MODERATION } from "@/lib/moderation";
@@ -25,7 +26,7 @@ const REASONS: readonly ReportReason[] = ["ruining", "offensive", "other"];
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
 
 export async function POST(req: Request) {
-  let body: { cell?: unknown; reason?: unknown; note?: unknown };
+  let body: { cell?: unknown; reason?: unknown; note?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -33,6 +34,8 @@ export async function POST(req: Request) {
   }
   const cell = typeof body.cell === "string" && CELL.test(body.cell) ? body.cell : null;
   if (!cell) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   const reason = REASONS.find((r) => r === body.reason);
   if (!reason) return bad("bad_reason");
   const note = typeof body.note === "string" ? body.note.trim().slice(0, MODERATION.noteChars) : "";
@@ -41,7 +44,7 @@ export async function POST(req: Request) {
     const { body: error, status } = rateLimitRejection(rate);
     return NextResponse.json(error, { status });
   }
-  const store = villageStore();
+  const store = villageStore(room.room);
   if (!store) return bad("no_store", 503);
   const caller = subjectOf(req);
   const reporter = caller.ok ? caller.subject : null;
@@ -50,7 +53,8 @@ export async function POST(req: Request) {
   const traces = (await store.tracesIn(cell, day - MODERATION.snapshotDays)) ?? [];
   const report = await store.addReport({
     reporter,
-    cell,
+    // A report from a village room's copy (C102) names the copy, so the moderator undoes what was done there.
+    cell: worldKey(cell, room.room),
     reason,
     note: note || null,
     day,

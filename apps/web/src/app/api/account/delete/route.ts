@@ -61,6 +61,15 @@ const USER_KEYED: [string, string][] = [
   ["player_items", "subject"],
   // C57. Where they came ashore from the sea, and who saw it.
   ["player_landings", "subject"],
+  // C103. Their echo's yes to standing in for them, and every settled call it stood in from.
+  ["echo_stand_in", "subject"],
+  ["echo_looks", "subject"],
+  ["echo_away", "subject"],
+  ["echo_vetoes", "subject"],
+  // C108. Their yes to keeping their words, the lines kept, and every guess their echo sealed of them.
+  ["echo_words", "subject"],
+  ["echo_lines", "subject"],
+  ["echo_talk_looks", "subject"],
   // C59. Their house and their look. The land goes back to being land.
   ["player_homes", "subject"],
   ["player_looks", "subject"],
@@ -104,9 +113,19 @@ const USER_NAMED: [string, string][] = [
   // C83. A circle they started stays for the friends in it, and stops being theirs.
   ["pilot_circles", "created_by"],
 ];
-// Tables that are not there until their migration is applied (0037 for circles, 0039 for moments): absent, nothing of the
-// person's can be in them, so a 404 is not a failure.
-const NOT_YET: ReadonlySet<string> = new Set(["pilot_circles", "pilot_moments"]);
+// Tables that are not there until their migration is applied (0037 for circles, 0039 for moments, 0042 for the
+// echo's stand-in, 0043 for its words): absent, nothing of the person's can be in them, so a 404 is not a failure.
+const NOT_YET: ReadonlySet<string> = new Set([
+  "pilot_circles",
+  "pilot_moments",
+  "echo_stand_in",
+  "echo_looks",
+  "echo_away",
+  "echo_vetoes",
+  "echo_words",
+  "echo_lines",
+  "echo_talk_looks",
+]);
 
 /** One table's rows for one person, deleted by REST: true, or why not. */
 async function supabaseDeleteRow(table: string, col: string, uid: string): Promise<true | string> {

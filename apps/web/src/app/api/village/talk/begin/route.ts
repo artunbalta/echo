@@ -15,6 +15,7 @@
  * model is still closed when the counter is.
  */
 import { NextResponse } from "next/server";
+import { roomOfRequest, worldKey } from "@echo/shared";
 import { ageYears, dayPlans, doorOf, grievance, homeState, present, residentsOn } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   // A stranger barred by a moderator changes nothing in the shared world (C67).
   const barredNow = await refuseBarred(villageStore(), caller.subject);
   if (barredNow) return barredNow;
-  let body: { cell?: unknown; person?: unknown; at?: unknown };
+  let body: { cell?: unknown; person?: unknown; at?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -49,6 +50,8 @@ export async function POST(req: Request) {
   }
   const { cell, person, at } = body;
   if (typeof cell !== "string" || !CELL.test(cell)) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   if (typeof person !== "string" || !PERSON.test(person)) return bad("bad_person");
   const pos = at as { x?: unknown; y?: unknown } | undefined;
   if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number" || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return bad("bad_position");
@@ -60,7 +63,8 @@ export async function POST(req: Request) {
   }
 
   const now = Date.now();
-  const loaded = await loadVillage(cell, now);
+  // A villager of a village room's copy (C102) remembers what was said in that copy, and only that.
+  const loaded = await loadVillage(cell, now, villageStore(room.room));
   if (!loaded) return bad("no_village", 404);
   const { village, changes, store, day, hour } = loaded;
   const s = village.settlement;
@@ -95,7 +99,8 @@ export async function POST(req: Request) {
   const held = grievance(s, me, deeds, day, village.plan);
   if (held) return NextResponse.json({ error: "turns_away", deed: held.verb }, { status: 409 });
 
-  const conv = signConversation(caller.subject, cell, person, now);
+  // The token names the world as well as the cell: a conversation begun in one copy goes on in that copy.
+  const conv = signConversation(caller.subject, worldKey(cell, room.room), person, now);
   if (!conv) return bad("identity_unconfigured", 503);
 
   // The meeting, counted. A store that cannot be read or written costs the villager their memory of

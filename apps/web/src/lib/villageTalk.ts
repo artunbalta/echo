@@ -98,13 +98,13 @@ export interface LoadedVillage {
  * The village on a cell as it now is: the seed's, with every change made to it. Null if there is no
  * village. When the changes cannot be read the seed's village is returned with `readable: false`, so
  * the villager can still answer and nothing is decided against a world the server did not see.
+ * `store` is the world's (C102): a village room's copy is read through its own, and has only its own changes.
  */
-export async function loadVillage(cell: string, now = Date.now()): Promise<LoadedVillage | null> {
+export async function loadVillage(cell: string, now = Date.now(), store: VillageStore | null = villageStore()): Promise<LoadedVillage | null> {
   const { field, calibration, commons, world } = planet();
   const clock = worldClock(WORLD_EPOCH);
   const day = worldDayIndex(clock, now);
   const hour = timeOfDay(clock, now);
-  const store = villageStore();
   const read = store ? await store.changesFor(cell) : [];
   const changes = read ?? [];
   const village = villageAt(world.seed, cell, field, calibration, world.radiusKm, { commons: commons.cells, day, changes });

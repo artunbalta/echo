@@ -37,12 +37,14 @@ import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import { seatOf } from "@/game/world/seats";
+import { nearestToTalk } from "@/game/world/othersLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
 import { actFor } from "@/lib/actSites";
 import { beatText, nameText, t, useLang, verbLabel } from "@/lib/i18n";
 import { closePanel, usePanel } from "@/lib/panels";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { worldQuery, worldRoom } from "@/lib/villageRoom";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 import { tradeMeasurement, type TradeReply } from "@/lib/barter";
 
@@ -251,7 +253,7 @@ export default function Interact({
   const refreshDeeds = useCallback(async () => {
     try {
       await ensureIdentity();
-      const res = await fetch(`/api/village/deeds?cell=${encodeURIComponent(cell)}`, { headers: identityHeaders() });
+      const res = await fetch(`/api/village/deeds?${worldQuery(cell)}`, { headers: identityHeaders() });
       const data = (await res.json().catch(() => ({}))) as { deeds?: unknown[] };
       if (Array.isArray(data.deeds)) {
         layers().villagers?.setDeeds(data.deeds as never);
@@ -278,7 +280,7 @@ export default function Interact({
         const res = await fetch("/api/world/act", {
           method: "POST",
           headers: identityHeaders({ "content-type": "application/json" }),
-          body: JSON.stringify({ cell, thing: thing.ref, kind: thing.kind, verb: verb.id, at, ...(item ? { item } : {}) }),
+          body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, thing: thing.ref, kind: thing.kind, verb: verb.id, at, ...(item ? { item } : {}) }),
         });
         const data = (await res.json().catch(() => ({}))) as {
           seenBy?: string[];
@@ -368,7 +370,7 @@ export default function Interact({
         const res = await fetch("/api/village/trade", {
           method: "POST",
           headers: identityHeaders({ "content-type": "application/json" }),
-          body: JSON.stringify({ cell, person, at, offered, asked: null }),
+          body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, person, at, offered, asked: null }),
         });
         const data = (await res.json().catch(() => ({}))) as TradeReply;
         if (data.words) {
@@ -775,7 +777,8 @@ export default function Interact({
         if (m && chain.armed()) void chain.emitAction(m.action, m.opts);
       }
       wasInside.current = insideNow;
-      setTalkable(villagers?.nearest() ?? null);
+      // Whoever is nearest, a villager or someone who came into the room, is the one `T` talks to (C107).
+      setTalkable(nearestToTalk(layers().ctx));
     }, 120);
     return () => clearInterval(id);
   }, [layers, finish]);
@@ -836,7 +839,7 @@ export default function Interact({
         const res = await fetch("/api/world/landing", {
           method: "POST",
           headers: identityHeaders({ "content-type": "application/json" }),
-          body: JSON.stringify({ cell: cellNow, at: { x, y }, from: started.cell, launchedAt: started.at }),
+          body: JSON.stringify({ cell: cellNow, room: worldRoom(cellNow) ?? undefined, at: { x, y }, from: started.cell, launchedAt: started.at }),
         });
         if (!res.ok) throw new Error(String(res.status));
         const answer = (await res.json()) as LandingAnswer;

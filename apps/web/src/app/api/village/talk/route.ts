@@ -20,7 +20,9 @@
  * the villager makes of them — a note in the villager's voice, at most 600 characters — is kept,
  * privately, keyed on this stranger (`villager_memories`), erased with them (§13), and never read
  * into their echo: the consent card's "never what you type" holds because this route is still not part
- * of the measurement chain. The panel says what is kept before anything is typed.
+ * of the measurement chain. The panel says what is kept before anything is typed. A person who says a yes
+ * of its own to keeping their words (C108) has their lines kept, by `/api/echo/settle` and `/api/echo/said`,
+ * never by this route.
  *
  * IT SPENDS, SO IT IS GUARDED LIKE THE ROUTES THAT SPEND (⚑30): a signed subject first, the
  * conversation token, caps answered 413 before any provider call, a zero-key path, and a rate limit
@@ -31,6 +33,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { roomOfRequest, worldKey } from "@echo/shared";
 import { ageYears, checkChange, doorOf, homeChanges, metOn, moveChanges, needOf, portable, present, residentsOn, visitChanges, weddingDays, type LifeChange, type SettledParcel } from "@echo/planet";
 
 import { rateLimit, rateLimitRejection } from "@/lib/rateLimit";
@@ -93,7 +96,7 @@ export async function POST(req: Request) {
   const barredNow = await refuseBarred(villageStore(), caller.subject);
   if (barredNow) return barredNow;
 
-  let body: { cell?: unknown; person?: unknown; message?: unknown; history?: unknown; conv?: unknown };
+  let body: { cell?: unknown; person?: unknown; message?: unknown; history?: unknown; conv?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -102,6 +105,8 @@ export async function POST(req: Request) {
   const { cell, person, message } = body;
   const history = (body.history ?? []) as Turn[];
   if (typeof cell !== "string" || !CELL.test(cell)) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   if (typeof person !== "string" || !PERSON.test(person)) return bad("bad_person");
   if (typeof message !== "string" || message.trim() === "") return bad("bad_message");
   if (message.length > TALK_LIMITS.messageChars) return bad("message_too_long", 413);
@@ -117,12 +122,14 @@ export async function POST(req: Request) {
 
   const now = Date.now();
   // A conversation begins where the villager is (`begin`); a line without one is refused unspent.
-  if (!verifyConversation(body.conv, caller.subject, cell, person, now)) return bad("no_conversation", 403);
+  if (!verifyConversation(body.conv, caller.subject, worldKey(cell, room.room), person, now)) return bad("no_conversation", 403);
 
   // The village as it now is: the seed's, with every change made to it.
   // Every answer carries a token for its own words (C60): the voice route speaks those, and only those.
   const answer = (body: { reply: string } & Record<string, unknown>) => NextResponse.json({ ...body, voice: signLine(caller.subject, cell, person, body.reply, Date.now()) });
-  const loaded = await loadVillage(cell, now);
+  // Everything below reads and writes the world of the room asked for (C102), other villages included:
+  // a copy's courtships and moves are the copy's.
+  const loaded = await loadVillage(cell, now, villageStore(room.room));
   if (!loaded) return bad("no_village", 404);
   const { village, changes, readable, store, day, hour } = loaded;
   const s = village.settlement;
@@ -158,7 +165,7 @@ export async function POST(req: Request) {
   if (canDecide && meetings >= 2) {
     const found = await singlesMet(store!, caller.subject, me, cell, day, async (c) => {
       if (c === cell) return { village, changes };
-      const l = await loadVillage(c, now);
+      const l = await loadVillage(c, now, villageStore(room.room));
       return l ? { village: l.village, changes: l.changes } : null;
     });
     singles = found.map((f) => {

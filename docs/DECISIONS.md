@@ -6879,3 +6879,536 @@ on the page has no captions beyond its own words on the screen (it has no speech
 chooses in try one could be the first thing their echo knows if they then join, and is thrown away;
 `/bench`, `/audit` and `/story` have not been moved to the two voices (only what uses `SectionHead`
 changed with the landing: the story's title).
+
+## C101 — village rooms: copies of the reference village, entered by a code, with friends drawn as villagers
+
+**Date:** 2026-11-17. **Asked for by the owner**, in these words: "one village, and that village
+multiplayer: there will really be NPCs, but your friends can come in too; you can talk to them, but you
+will not quite know who is what"; and then: "we choose the room, so everyone is in the same one, maybe on a
+different server: copies of our best reference village, like different Minecraft servers; a group of
+people who know each other come to the same village, through a room entrance".
+
+**What was there:** the 3D village had no networking at all. Two browsers in Drurnscree did not see each
+other; the only realtime code was the old 2D world's `WorldRoom`, built round tiles, an ocean and flows.
+
+**Decision: a room is a copy of the reference village, and a group enters it by a code.**
+
+- **The room** (`apps/realtime/src/VillageRoom.ts`, `villageState.ts`). A second room type in the same
+  Colyseus process, matched by `cell` and `code` (`filterBy`), so "join or create" with a code is the whole
+  of entering one; it goes when the last person leaves. Only the reference village can be copied
+  (`ROOM_VILLAGES`, Drurnscree), and a code must come in the page's own form, or two halves of a group would
+  make two copies. Sixteen people at most.
+- **What it holds**: the people who came in, and nothing else. The villagers are a closed form of the seed
+  and the clock (C27, C43), so every copy has the same people at the same well at the same hour with no
+  server moving them.
+- **What it trusts.** A page reports its body's pose ten times a second; the room has no ground, so it does
+  not walk the body for it. It refuses what no body could do: a pose that is not numbers, outside the
+  village, or further than the fastest walk allows is pulled back to where a walk gets (`stepToward`).
+  Movement on the planet's own ground, decided by the server, is a later step.
+- **No subject on the wire.** A person is a room-scoped session id, the name typed at the door, a look and
+  a pose. Their subject stays on the server (⚑27); the look is a digest of it, never it. The identity
+  policy both rooms use is one function now (`auth.ts`), lifted out of `WorldRoom.onAuth` unchanged.
+- **Friends are drawn as villagers.** Someone who came in is drawn by the crowd (`othersLayer.ts`), with a
+  look from the villagers' own trades, ages and dress (`roomLookOf`, `lookFor`), at their gait, with their
+  plate ("name, age · trade") at their distance. No colour of its own and no mark. **This departs from the
+  art bible's §8**, which kept violet for live humans: the owner's "you will not quite know who is what"
+  is the newer word. The page says it once, at the door: "Some of the people you meet are villagers. Nobody
+  is marked."
+- **Talking.** Enter opens a line, Enter says it to whoever stands within fourteen metres, as a voice
+  carries; it shows over the speaker's head as a villager's line does. No line is kept or measured.
+- **The door** (`components/world/RoomPanel.tsx`, the menu's "Play with friends"). A name, "Start a new
+  room" or a code. The address carries the code (`?room=`), so the link is the invitation; a link opened
+  with a name already known goes straight in. A dropped connection comes back within twenty seconds.
+- **Who is watching** is not a question the room or the page can answer: neither has the notion. That is
+  the ground the later spectator view stands on.
+
+**Checked:** the room headless with real clients and real tokens (`npm run test:village -w
+@echo/realtime`): one code one copy, no subject in the synced state, a teleport pulled back, earshot, the
+door refusing another cell, a bad code, an empty name and a forged token, and leaving. Then two browsers on
+Drurnscree: one starts a room, the other opens the link, each draws the other as a villager with a plate,
+a line said by one shows over their head on both screens, and when one closes the tab the other draws
+nobody.
+
+**Not decided here, and not done:**
+- **The copies share the village's memory.** What anyone does or says to a villager in a room is written
+  to the cell's changes, memories and marks (C44, C45), the same ones every other copy and every solo
+  visitor reads. A copy with a world of its own is the next step. *(Done in C102.)*
+- The plate of someone who came in has no line of a life under it, as a villager's has; the name is the
+  one they typed, not a village name.
+- No echo takes anyone's place yet, there is no view to watch from, and the realtime server runs nowhere
+  but on a laptop.
+
+## C102 — a village room's copy has a world of its own, and keeps it
+
+**Date:** 2026-11-17. **Asked for by the owner** as the second step of C101 ("copies of our best reference
+village, like different Minecraft servers"), after C101 named what was missing: every copy wrote what was
+done in it into the one village every other copy and every solo visitor reads.
+
+**Decision: a world is the open one or a room's copy, and everything a village remembers is filed under
+its world.**
+
+- **The key** (`worldKey`, `packages/shared/src/village.ts`). The open world's key is the cell, as every row
+  already has it; a copy's is `cell~CODE`. Neither an H3 cell nor a code can hold `~`.
+- **No migration.** The tables that hold what a village remembers (`village_changes`, `villager_memories`,
+  `world_effects`, `village_deeds`, the landings) keep the place in a `cell` text column with no format of
+  its own, so a copy's rows are filed under its key in the same column. Nothing needs applying before this
+  can run, and a deployment with this code and an old database cannot break: the open world's rows are
+  read and written exactly as before. Any reading of those tables by cell that should see only the open
+  world filters `cell not like '%~%'`.
+- **The store decides, the routes do not** (`villageStore(room)`, `lib/villageStore.ts`). A route asks for
+  the store of its room and goes on naming cells; the store files under the world. `villageStore()` with no
+  room is the open world, so every caller written before rooms existed is unchanged, and the open world's
+  "who has this stranger met" leaves the copies out, so an echo's outing or a villager asking after someone
+  met elsewhere never reaches into a room. What is filed by subject alone (a pack, a look, a house) is the
+  person's own and goes with them from copy to copy.
+- **The routes take a room** (`changes`, `deeds`, `memory`, `attend`, `talk/begin`, `talk`, `trade`,
+  `world/act`, `world/landing`, `moderation/report`): `room` beside `cell`, refused unless it is a code as the
+  page writes it for a village that can be copied (`roomOfRequest`), never quietly answered for the open
+  world. A conversation's token names the world, so one begun in a copy goes on only in that copy. A copy's
+  courtships and moves to other villages are written to those villages' copies of the same room. A report
+  made in a copy names the copy, so the moderator undoes what was done there; the undo reads a trace's
+  village from its key (`worldOf`), so a copy's trade is given back from the copy's own village. Read by
+  cell, a copy's key had made that preview fail outright, which a test now holds.
+- **The page's world is its address** (`worldRoom`, `lib/villageRoom.ts`). `?room=` decides which world
+  every request reads and writes and which village the page builds. The door writes it on coming in and
+  clears it on leaving, and when it moves the village is built again with that world's changes and marks
+  (`revillage`, `setMarks`). Someone who opens a room's link before typing a name is already in that copy,
+  alone: the address no longer drops the code on the way in.
+- **A copy starts as the seed's village**, with nothing changed: what the open world's visitors did is not
+  carried in. **A copy stays** when its last person leaves: the realtime room goes, its world does not, and
+  the door lists the rooms this browser has been in ("Your rooms") to go back to.
+
+**Checked:** eight tests (`tests/roomWorlds.test.mts`): a change, a memory, a mark and a deed made in one
+copy are in neither the open world nor another; "who has been met" in each; the raw key; the changes,
+deeds and memory routes, and a room refused for a bad code and for the pilot's village; a conversation's
+token bound to its world. And in `moderation.test.mts`, a stranger's trade and mark in a copy undone in the
+copy with the open world untouched (it fails with the undo reading the village by the raw key). In a browser: a room started, a field weeded
+in it (the request carried the room), one mark and one deed in the copy and none in the open world; left,
+and the village built again for the open world; back in through "Your rooms", and the copy as it was left.
+
+**Not decided here, and not done:**
+- Someone already in a copy sees what another person does there (a mark, a change) when they next build
+  the village, as in the open world; it is not pushed to them live.
+- A copy's world is never thrown away. Who may delete one, and when an unvisited copy is forgotten, is
+  not decided.
+- Where the echo goes out while its person is away (C64) still reads the open world only.
+
+## C103 — an echo stands in for its person only where it has earned it: the record on the server, and a threshold per kind of situation
+
+**Date:** 2026-11-17. **Asked for by the owner**, for the step where an echo keeps a person's body in a room
+when they leave it. To keeping their behaviour on the server: "yes". To the echo talking: "it should be able
+to talk, but there must be a threshold. A dynamic threshold. It should be able to replace you differently for
+everything: it must not talk at once, it must not replace you at once, but after it passes a certain
+threshold it can talk", with talking itself in a later step.
+
+**This entry is the first half** (the record and the thresholds). The body taking over in the room is the
+second half, and a later entry.
+
+**Decision: the right to stand in is earned by sealed calls that came true, one kind of situation at a
+time, at a bar set by what is at stake, and it moves with every look.**
+
+- **What it is earned from** (`lib/knowable/standing.ts`). The envelopes (C89): the call the echo sealed
+  before each moment, and what the person did. Nothing else grants anything: not a profile, not a
+  questionnaire, not time spent, not the yes itself.
+- **Kinds of situation and their stakes.** The families the calls already read, and talking: courtesy,
+  order and curiosity low; help and going along medium; honesty high; talking highest. What each asks for:
+  low 6 looks and a lower bound of 0.60 on how often it was right, medium 10 and 0.70, high 16 and 0.80,
+  talking 30 and 0.85. Six is the theory's number of looks for a choice of stability 0.6 to be 90% known.
+- **Why it is dynamic.** "Sure" is a lower bound (Wilson, one-sided 90%) recomputed on every look, so few
+  looks are worth little, and someone inconsistent in a kind of situation never gives their echo the right
+  there. The echo may not claim to be surer than it was: its average confidence may exceed its hit rate by
+  0.15 at most, judged once there are enough looks to judge it by; an echo right more often than it says is
+  only careful. The last looks weigh most, so the right is lost when recent calls start missing. Each "that
+  was not me" asks for half as many looks again and 0.05 more (`vetoes`, used once there is a view to say it
+  from).
+- **Three standings.** `act` (may do it for them), `ask` (close, or the right just lost: it holds back),
+  `watch` (still learning them there).
+- **The record on the server** (migration `0042_echo_stand_in.sql`: `echo_stand_in`, `echo_looks`;
+  `/api/echo/standin`, `/api/echo/looks`). Only on a yes, given at the room's door under "When you leave":
+  settled envelopes go a few seconds after they settle, each once, as the moment, the call, how sure, and
+  what was done. A no deletes the yes and every row then and there. Both tables are in the erasure (§13).
+  Nothing is kept before a yes or after a no (409).
+- **What cannot be checked from here**: that a person did not write their own record. The chain is theirs;
+  a made-up record would give their own echo a right over their own body, in their own room, and nothing
+  more.
+- **Talking** has a threshold now and no record yet, so it waits ("comes later").
+
+**Checked:** ten tests of the thresholds (`tests/standing.test.mts`), five of the routes as real handlers
+(`tests/standIn.test.mts`), the erasure lists; 703 web tests pass. In a browser with Supabase disconnected:
+watching on, the yes given at the door, two envelopes settled as moments came and went and were kept (one
+greeting called right, one call of help that missed), the door's list moved to "learning · 5 more right"
+for courtesy, and a no left nothing kept.
+
+**Not decided here, and not done:**
+- The body taking over (the server walking it, meeting its own moments, acting where it stands at `act`)
+  is the next entry.
+- Nobody but the person sees where their echo stands.
+- The stakes and the numbers are a starting point; the pilot's measured stabilities should replace the
+  assumed ones they rest on.
+
+## C104 — your echo keeps your body in a room while you are away, and does there only what it has earned
+
+**Date:** 2026-11-17. **Asked for by the owner**: a multiplayer village where, when you leave, your echo
+takes your place, nobody can tell who is who, and the echo must not replace you at once but only past a
+dynamic threshold, differently for everything (C103 is that threshold; this is the body). "Geç" to this step.
+
+**Decision: when a person who said yes leaves a room, the room keeps their body and their echo moves it:
+along the person's own way, at their pace, meeting the village's moments, doing at each what it says they
+would only where it stands at `act`, and holding back everywhere else. From outside it is the same body.**
+
+- **The brief** (`lib/knowable/brief.ts`, `@echo/shared/standin`). With the yes, `/api/echo/standin` answers
+  a brief: for every moment kind, the echo's call made from the kept record (C103) and its standing in that
+  kind's family; a kind in no family is always `watch`. Signed with the identity secret both services already
+  hold, good for two hours, asked for afresh every twenty minutes, carried by the page to the room
+  (`setStandInBrief`), taken back with a no. The room keeps it beside the body if, and only if, it verifies
+  and names that body's own subject. It is made without the village's count (the server does not read it
+  here); where the echo may act its record is long and carries it.
+- **The way** (`echoBody.ts`, `Trail`). While the person moves the body, the room keeps a breadcrumb every
+  1.5 m of the last ~900 m, the time they stood still at each (sitting or not) and their pace. A jump (back
+  from another shore, a page asleep) starts the way again; the water is no way. The echo walks that way back
+  and on again, stands where they stood as long as they did (capped at 20 s), and never goes anywhere they
+  had not, because the room has no ground of its own and a way already walked is a way a body can walk.
+- **The moments.** The three streams at the person's rhythm (`MOMENT.lanes`), from a rotation of the echo's
+  own (`echo|<look seed>`), at the world's hour. Only those that come to someone on their way (`where:
+  "ahead"`), and no errand: the ones tied to a place (the well, a door, a field, the shore, a bench) and the
+  errands wait for the person. Every family has moments that come this way.
+- **What it does.** Where it may act, its call: walking on included, and a verb is done where it is met, a
+  few strides ahead on the way, for as long as that verb takes (a nod 1.5 s, an old man helped up 9 s), as
+  `stand`, `sit` or `work`. Where it may not, the body walks on and what it would have done is kept. Nothing
+  it does is the person's: no act is sent, nothing is measured, no mark is left in the village.
+- **Nobody can tell.** Who moves a body is server-only (`Walker.echo`); the synced fields of a kept body are
+  those of any body; it moves at the pages' own ten poses a second; a body keeps its handle when its person
+  comes back on a new connection (the room now seats connections on bodies, `seats`, and says which body is a
+  page's own, `WHO`/`YOU`). The count at the door counts it as a person, which it looks like.
+- **Coming back.** The same body, where it stands: the page takes its place there, and poses from where the
+  page came in are not taken for five seconds so the body is not pulled away first. The door opens on what
+  the echo did: each moment, done or held back, and what it would have done. Told once.
+- **How long.** `STAND_IN.maxS`, 45 minutes, or until the brief runs out; then the body goes, as a person's
+  does. The room stays while it keeps a body, with nobody connected or not, and goes by itself after. Kept
+  bodies count toward the room's sixteen.
+
+**Checked:** pure tests of the way and the moments (every pose on the person's way, at their pace, standing
+where they stood; acts only where `act`, walking on where `ask`; only moments that come on its way; all three
+streams), and the real room with real clients and signed briefs (`src/standIn.test.mts`): the body stays under
+the same handle and nothing synced says who moves it; coming back gets the same body, the record once, no pull
+toward the door; no brief, one for someone else, one with another key, or a no lets the body go; a room with
+only an echo in it stays and then goes. Five brief tests in `@echo/shared`, one more web route test (704 web
+tests in all pass). In two browsers with Supabase disconnected: A, with nine greetings called right (courtesy at
+`act`), walked, left; B saw one body throughout, walking 67 m of A's way in 70 s; A came back to it, at the
+same spot B saw it, and read that its echo stepped aside on the narrow path and greeted someone warmly, and held
+back at eight others (an old man fallen, the purse, the honey stall) with what it would have done.
+
+**Not decided here, and not done:**
+- Talking: the echo says nothing yet (talking's threshold has no record behind it).
+- Watching it from outside without it knowing (the next step), and saying "that was not me" from there (the
+  vetoes C103 already counts). What it did is told only to the person, only on coming back, and kept only in
+  the room's memory: a room that goes, or a restart, forgets it.
+- What it does is a body's pose, as a person's acts are to others in a room today; the moment's own people are
+  drawn by each page for itself, so nobody else sees the old man it helps.
+
+## C105 — watching your echo from outside without it knowing, "that was not me", and what it did kept
+
+**Date:** 2026-11-17. **Asked for by the owner**: "when the agent takes your place, we should be able to watch
+it from outside, but it must not understand that we are watching; we must be able to see whether it really
+behaves like you." "Geç" to this step.
+
+**Decision: a person whose echo keeps their body can watch it from a page of its own, as a connection with no
+body that the room tells no one about and the echo is never given; from there they can say "that was not me"
+of anything it met, which takes back the right it acted by at once; and what it did is kept with their record.**
+
+- **The page** (`/watch/<cell>?room=<code>`, `WatchVisit.tsx`). The village of the room's world (its changes
+  read first, as the room page does), its villagers and animals, the room's bodies, and a camera on the body
+  the echo keeps (`watchLayer`: the player layer is there only for its camera; its body is hidden and put
+  where the watched body is drawn). No walk, no acts, no moments, no envelopes: nothing on it is measured.
+  Beside it, each moment as the echo meets it, done or held back and what it would have done. The door of
+  the room offers it (in a tab of its own) once you have left with your echo standing in.
+- **The connection** (`watchEcho.ts`; room `watch: true`). Only your own echo, only while it keeps the body,
+  or the room refuses. No body, nothing synced, nobody told; the room counts the same people. It is told
+  what the echo met so far (`WATCH`), each moment after (`MET`) and when the watching ends, its person back
+  or its time up (`WATCH_END`).
+- **The echo cannot tell.** The room's whole step for kept bodies is `advanceKept(bodies, now, dt, rand)`:
+  no watcher in its arguments and nothing it reads says whether there is one. A watcher hears through
+  `newsFor`, which copies and writes nothing. The test runs ten minutes of keeping with a watcher hearing
+  every moment exactly as the room tells it and without one: the 6000 poses and the moments are the same byte
+  for byte, and hearing leaves the body byte for byte as it was.
+- **"That was not me"** (`/api/echo/veto`, `AwayList`). Of a moment in a family (the only moments the echo can
+  stand in at), from the watch page, the card on coming back, or the door's last record. Kept once per
+  moment, only with the yes. Each raises that family's bar (C103 `needsOf`: half as many looks again and
+  0.05), so `/api/echo/standin` reads them; the watch page then hands the room the fresh brief, and the echo
+  acts by the new standing from the next moment (two "not me"s take a nine-for-nine courtesy from `act` to
+  `ask`).
+- **What it did, kept** (`/api/echo/keeping`; 0042 now also has `echo_away` and `echo_vetoes`). When a keeping
+  ends the room sends its record to the web app with its signature over the exact body (`signReport`, the
+  identity secret both hold, its own domain word; the room needs `ECHO_WEB_URL`). Kept only while the yes
+  stands, one per keeping; read back by the person, newest first, and shown at the door as the last time. A
+  no, from the door or from outside, deletes it with the vetoes and the rest; a no from outside also lets the
+  body go at once and reports nothing. Both tables are in the erasure (§13). 0042 was extended rather than
+  followed by 0043 because it has never been applied anywhere; it is still one file to apply.
+- **A brief does not outlive its keeping.** Coming back clears the brief a body was kept by, and every page
+  hands in its own (or none) on coming in, so a no said elsewhere since is not overridden by an old yes. (A
+  test leaves again without handing one in and the body goes.)
+
+**Checked:** in `@echo/realtime`, `src/watch.test.mts`: it cannot tell (above); only your own and only while
+kept; a watcher has no body and nothing synced says anyone watches; moments heard as met; a fresh brief from
+outside is acted by; the watcher told when its person comes back and when time is up; the report signed, and
+refused when changed; a no from outside reports nothing. `src/standIn.test.mts` gains the brief-does-not-outlive
+case. In `apps/web`, `tests/keeping.test.mts` (6): only a room's signed report, never a changed one, never one
+that could not have been; only with a yes, once per keeping; vetoes once, only in a family, raising the bar in
+the standing and the brief; a no and an erasure take it all. 710 web tests pass. In three browser tabs with
+Supabase disconnected and the room reporting to the local web app: A (courtesy earned) left; the door offered
+to watch; the watch page followed A's body through the village and listed 15 moments as they came (greetings
+done, a purse, a man lying on the path, an old man fallen held back), while B saw one body and no more; "not
+me" was kept and a fresh brief handed in; A came back, the watch page said so, and the record (15 moments) was
+on the server for the door.
+
+**Not decided here, and not done:**
+- Friends cannot watch someone else's echo; only its person can. Whether a friend may (with the person's
+  leave) is a later question.
+- The echo still says nothing (talking's threshold has no record behind it yet).
+- The moment's own people are drawn by each page for itself, so the watch page shows the body and the list,
+  not the old man it helps up; drawing the echo's moments for its watcher is a later step.
+- A dev server compiles `/watch` on first visit slowly; production builds it ahead.
+
+## C106 — the room server ready to be hosted: its image, its stopping, and the one link a friend is sent
+
+Phase 5 of the village rooms (C101–C105) is real friends on the real site. The room server has to be hosted
+(Render's `echo-realtime` is suspended by its owner), and three things stood between it and that:
+
+- **The image would not have built.** Since C104 the server imports `@echo/planet` (the moments and the
+  clock an echo walks by), and `apps/realtime/Dockerfile` copied only `@echo/shared`. It now copies and builds
+  the planet too, on Node 22 (the repo's `engines`). Rehearsed without Docker: the image's steps run in a clean
+  folder (`npm ci` from the manifests alone, the three builds), and the shutdown test below run against that
+  folder's `dist/index.js` under `NODE_ENV=production`.
+- **A deploy would have lost what echoes did, and stranded the people in rooms.** A host stops the process
+  with SIGTERM. Two signal handlers ran (Colyseus's own and `index.ts`'s); the second to call
+  `gracefullyShutdown` exits at once, before any room has closed. And a room an echo keeps a body in has
+  `autoDispose` off, so Colyseus waited on it until the host killed the process. Now `index.ts` alone stops
+  the server (`gracefullyShutdown: false` on the Server, one handler, gone in 12 s whatever happens), and
+  `VillageRoom.onBeforeShutdown` ends every keeping as its time running out would: the record sent to the web
+  app and waited for (5 s at most), the watcher told it is over, then the room closed. The page, finding the
+  room gone when it tries to come back, comes into the same code again (`villageRoom.ts` `comeBack`), which
+  makes the room anew on the new server; the copy's village was the web app's all along, so nothing is lost
+  but the bodies, which their people bring back where they stand. Half a minute of tries (1, 2, 4, 8, 8, 8 s);
+  a server that is up and says no is an answer, not a reason to keep trying.
+- **A friend had no way past the look.** On the site the village is a thirty-second look until a turn
+  (`/in/<code>`, C97), and a room's link is not a turn: a room code made up by anyone must not open the
+  village to everyone who reads the address. So a turn may name a room: `/in/<pass>?room=<ROOM>` leaves the
+  cookie and walks into that copy with its door open. The owner puts a pass in `ECHO_PASS` and sends one link.
+
+Also: the server says at start what a missing setting means (`ECHO_IDENTITY_SECRET`: every join refused;
+`ECHO_WEB_URL`: nothing an echo did is kept). `render.yaml` sets `ECHO_WEB_URL` to the apex domain, which
+answers without a redirect (a redirected POST can arrive as a GET), and says why the service must not be on
+the free plan (it sleeps after fifteen minutes without traffic, which is a group gone quiet while an echo keeps
+a place) and must be one instance (rooms are matched in the process's memory; a second would split a group
+between two copies).
+
+**Checked:** `src/shutdown.test.mts` (`npm run test:shutdown`) runs the real entry point as its own process,
+stops it with SIGTERM while an echo keeps a body and its person watches: the record arrives signed before the
+process is gone, the watcher is told, the person in the room is let go, the process exits by itself (tens of
+ms here), and the same code makes the room again on the next server. With `onBeforeShutdown` taken out the
+record never arrives, so the test bites. Same test passes on the rehearsed image. `tests/preview.test.mts`
+gains the room link (into the copy with a turn; the village without a room or with a bad one; the waitlist and
+no cookie without a turn). 711 web tests, every realtime test. In three browser tabs: A (courtesy earned)
+left with the echo keeping the place, B and C stayed; the server was stopped and started again; both pages
+said "Connection lost. Trying again." and were back in the room together by themselves seven seconds after the
+stop, with A's echo gone with the old server and its record (5 moments) kept by the web app.
+
+**Not done here:** hosting it (the owner's account), the site's settings, migration 0042, and the try with
+two real devices. A room server of more than one instance, and a cap on rooms per process, wait for more
+people than a group of friends.
+
+## C107 — who is who in a room: no name at the door, a visitor's plate, and one way of talking to anyone
+
+Phase 6 of the village rooms. The owner's words were "you can talk to them, but you will not quite know who
+is what": a villager, a friend, or someone's echo. After C101–C105 the room still told: someone who came in
+wore the name they typed at the door ("Deniz" among "Brannoc Velt"s) and a plate with no line of a life
+under it; walking up to a villager offered `T Talk` and a card, walking up to a friend offered nothing; the
+only way to speak to a friend was the open line (Enter), and a body an echo kept said nothing to anyone. Each
+of these said who someone was before they had done anything.
+
+**Decision: the interface tells nobody apart. Only what someone does can.**
+
+- **No name at the door.** The room carries no name at all (`Walker.name`, `WatchMsg.name` and the join's
+  `name` are gone): a body is a handle, a look and a pose. The page names a body from its look's seed in the
+  village's own tongue (`@echo/planet` `visitorName`, the settlement's culture), as the village names its own.
+  The door, inside, says who you are here ("Here you are Raruik Maunridge, 32, herder. Nobody knows it is you
+  unless you say so."); nobody else is told who that is. A link opened by someone who has been through a
+  door here before goes straight in; anyone else sees the door first, with the code filled.
+- **A look per copy.** `roomLookOf(subject, code)`: the same body and name every time in one copy, another in
+  the next. A group that has learned who is who in one copy has to find each other again in the next.
+- **A visitor's plate.** Someone who came in wears the villagers' plate (one `fillPlate`, one `PLATE_CSS`,
+  so the two cannot drift) and what a real visitor's says, word for word (`visitorLine`, C53): "Here for the
+  day from another village, visiting" one of the village's grown people, the same host all day on every page.
+  That is what they are. One plate shows, over whoever is nearest, villager or not.
+- **One way of talking.** Whoever is nearest is the one `T` talks to (`nearestToTalk`), and at arm's length
+  a person has the card a villager has, with the one thing that passes between people here yet: Talk. Both
+  open the same panel (`VillagerTalk`), with the same header, words and wait. Only where a line goes differs:
+  to a villager, the routes as before; to someone who came in, through the room to them alone
+  (`VILLAGE_C2S.TALK` → `VILLAGE_S2C.TOLD`, within earshot, the sender, bystanders and the far told nothing).
+  On their screen it shows over the speaker as any line does, and their `T` opens the panel on the speaker
+  with that line first; what they say back comes into the asker's panel as a villager's answer does, and is
+  spoken in this browser's voice for a body like theirs when voice is on. Nobody who has not answered in 25 s
+  has, and the panel says what it says of a villager who cannot hear.
+- **A body an echo keeps hears and does not answer.** The echo talks only past its own threshold for talking
+  (C103), which nothing measures yet. The room tells the speaker nothing either way, so a body that does not
+  answer is a person who did not, or an echo; it changes nothing the echo does. Only its person, watching,
+  is shown what was said to it and by whom (`VILLAGE_S2C.HEARD`), under "Said to it", kept nowhere.
+- **Nobody walks through a person.** A body that came in stops the player as a villager's does (C46); a step
+  that takes a body no closer is never refused, so two who came in at the same spot can part.
+- **The door says it.** "Some of the people you meet are villagers, and some may be someone's echo. Nobody is
+  marked." It was true since C104 and now says so.
+
+**"Forget me" on someone who came in** says what it says of a villager once their note of you is gone ("…
+will not remember you"), and sends nothing: nothing of you is kept for them anywhere. Saying anything else
+would be the one place the panel told them apart. It is a line in the village's voice, not a claim about a
+person's memory.
+
+**Nothing new is kept or measured.** A line said to one body is not written anywhere and not measured, as no
+room line is (C101); opening a conversation with anyone was never measured and is not now.
+
+**Checked:** realtime `test:village` (a line to one body reaches its person alone within earshot; nobody else,
+not the speaker; out of earshot, to oneself, to nobody, an empty line: nothing; the answer back), `test:watch`
+(a line to a kept body reaches only its watcher, the speaker is told nothing, the echo walks on meeting what it
+meets; still byte-for-byte the same with a watcher and without), the other four suites; shared 69, planet
+society 23 (`visitorName`), web 715 (`tests/roomTalk.test.mts`). In two browsers, Supabase disconnected:
+the door asked no name and said who each was; B, beside A, saw A's plate (A's name, age · trade, visiting a
+villager), the card "E Talk", no villager plate; T opened the panel on A; A saw the line over B's head and T
+began with it; the answer came into B's panel, with no bubble over A meanwhile; a step into A was refused,
+one away was not. Then A left with the echo keeping the body and watched: B's "Still there?" showed on the
+watch page as said to it, unanswered, and B's panel said after 25 s that A did not seem to hear.
+
+**Not done, and still telling:** how fast and how someone types (a villager answers in a second); a villager
+greets you on opening and remembers you, a person does not; a villager stops and turns to you, a person need
+not; giving, trading and asking at arm's length are a villager's alone; with cloud voices on, a villager
+speaks in one and a person in the browser's. An echo that talks, past its threshold, is the next step.
+
+## C108 — the echo learns how you talk: your words kept by a yes of their own, and a guess sealed before every answer to a villager
+
+**Asked.** C107 left the body an echo keeps silent: it talks only past its own threshold for talking (C103,
+30 looks and a lower bound of 0.85), and nothing measured talking. The owner was asked two things on
+2026-11-18 and said yes to both: (1) keep what a person says, to villagers and in rooms, with consent and
+erasably, so the echo can learn to talk as they do, by a yes of its own; (2) earn the talking threshold the way
+every other kind is earned: before the person answers a villager, the echo guesses the answer and seals it, and
+a model says whether what they wrote means the same and sounds the same.
+
+**Decided.**
+- **A yes of its own** (`echo_words`, 0043; `/api/echo/words`), under "When you leave", beside the stand-in's
+  yes and apart from it and from watching. The card's "never what you type" stays true of watching; the yes
+  says so in its own words. A no deletes the yes, every line and every guess, and says so only if it did (⚑26).
+  An erasure takes all three tables.
+- **What is kept** (`echo_lines`): the lines the person types to villagers, to someone in a room, and aloud
+  in one, while the yes stands. Beside a villager line, what the villager had just said. Never what another
+  person said: theirs is not this person's to give. The talk route still keeps nothing of what is typed;
+  `/api/echo/settle` and `/api/echo/said` do.
+- **The guess is sealed before the answer exists.** When a villager's line comes, the panel asks
+  `/api/echo/guess` (only inside a conversation begun where the villager stood, checked by its token). Claude,
+  shown the person's last 60 lines and the conversation, writes the line they will type and how likely it is
+  to be taken for theirs. It comes back in a box the page cannot open (AES-256-GCM under a key drawn from the
+  identity secret), and goes back with the answer to `/api/echo/settle`, which opens it. So neither the page
+  nor the server can change the guess once the answer is known, and the person never sees it first.
+- **The judge is blind.** Claude is shown the villager's line and two replies as A and B, in an order drawn
+  per call, and asked whether someone who knows the person would take one for the other: the same point in
+  the same manner. It is not told that one is a guess. A refusal, or a verdict that cannot be read, counts as
+  nothing either way. The person's answer is kept as a line whatever the verdict.
+- **One talk look per settled guess** (`echo_talk_looks`), kept under the hash of what was sealed, so a box
+  settled twice counts once. `standingOf` reads them into the "talk" kind with the same Wilson bound, the same
+  honesty about how sure (an echo that says 0.95 and is right 70% of the time earns nothing), the same running
+  share, and a "not me" of a line it said (kind `talk`) asks half as many again and 0.05 more.
+- **Nothing of it shows in the panel.** A sealed mark under a villager's line and not a person's would tell
+  them apart in a room (C107). The line under the input says that words are kept, the same line whoever you are
+  talking to. The guesses are shown afterwards under "When you leave": what was said to you, what it guessed,
+  what you said, and whether they were taken for the same, with the judge's few words.
+- **Models.** `claude-opus-5-5` for both, at low effort, structured output, server-side fallback on refusal;
+  `ECHO_TALK_MODEL` and `ECHO_JUDGE_MODEL` name others. Guarded like the routes that spend (⚑30): a signed
+  subject, the conversation token, caps answered 413 before any call, a rate limit (`echo-guess`) that fails
+  closed on a deployment, and on a deployment without a key no guess at all (503 `no_model`). On the
+  developer's own machine without a key, the guess is the last line kept and the judge counts shared words,
+  marked as such, so the flow can be tried; a record earned that way would not be a record of anything, so it
+  is never made where it could count.
+
+**Not yet.** The echo does not talk. "Ready to talk" is what the door says once talking stands at `act`; the
+body an echo keeps still hears and does not answer (C107). Guesses are made only for answers to villagers: a
+line to a person in a room is kept but not guessed, since the server never sees what the person said first.
+A guess the person never answers (they walk away) waits 15 minutes and is gone, counted neither way. The judge's
+words are in English whatever the page's language.
+
+**Checked:** web 733 (`tests/talkGuess.test.mts`: the box cannot be read or changed and opens under a key
+being rotated out; the guesser is shown the person's own lines, oldest first, never a person's words; talking
+needs 30, is denied to an echo surer than it is, allowed to a careful one, and a talk "not me" raises talking
+alone. `tests/echoWords.test.mts`: nothing kept or guessed before a yes; a guess only inside a begun
+conversation, sealed; one look per box, the answer one line; a box not yours, changed, or 16 minutes old is
+refused; lines to people carry nothing of theirs; a deployment without a model guesses nothing; a no and an
+erasure take it all. `tests/echoWordsModel.test.mts`, the provider answered in the test: the guess is asked
+with the person's lines and the villager's line; the judge sees A and B and never the word "guess"; a refusal
+or unreadable verdict is no look). The one-file SQL (`_local/sql/echo-supabase-0042-0043.sql`) on Postgres 16:
+schema and ledger identical to the runner's, a second run refuses, an injected failure leaves the database at
+0032. In a browser, Supabase and the model disconnected: the yes under "When you leave"; the panel's line
+"Kept, so your echo learns how you talk"; three answers to a villager, each guess back (sealed, unreadable)
+before the answer it waited for was sent; the door then showed two guesses, one the same and one not, talking
+at "learning · 28 more right"; a line said aloud in a room was kept; a no left nothing.
+
+## C109 — the echo talks for you in a room, as far as it has earned it, and you can say "not me" of every line
+
+**Asked.** The owner said "geç" to 7b on 2026-11-18: once the echo has earned talking (C108's sealed guesses,
+30 looks and 0.85), the body it keeps answers what is said to it as the person would, with a pause as long as
+typing takes; close to the threshold it stays silent but shows the person watching "it would say …" with a
+"Say it"; and every line it says can be called "not me", which raises the threshold.
+
+**Decided.**
+- **The brief carries talking** (`StandInBrief.talk`, signed with the rest). A brief from before it has no
+  word on talking, and the room reads that as silent.
+- **The room asks, the web app decides.** When a line is said to a body an echo keeps at `act`, the room
+  sends `/api/echo/speak` a signed request (`signSpeak`, a word of its own so no report or brief signature can
+  pass for it) with the last eight lines of that conversation. The web app reads the yes to keeping words, the
+  settled guesses and the "not me"s again: an answer the room will say by itself needs `act` now, not two hours
+  ago; one it will put to the person needs `ask` at least (409 otherwise). Claude writes the line from the
+  person's kept lines (`answerLine`, the guesser's own instructions, so what it earned is what it uses), or an
+  empty line when they would not answer.
+- **What it never says** (in the instructions it answers by): who the person is outside the game, anything that
+  binds them (a promise, an arrangement outside the game), anything cruel; and it never claims to be human or
+  denies being an echo. Asked, it may decline to say, as anyone in a room may. The door has said since C104 that
+  some of the people met may be someone's echo; nobody is told which, and nobody is lied to about it.
+- **As long as typing takes.** The line reaches the speaker after 1.4 s plus 55 ms a character, with up to 1.2 s
+  of jitter and never more than 12 s, counted from when the line was said. An answer at once would tell an
+  echo from a person.
+- **One line at a time**, at most `STAND_IN.talkMax` (30) in a keeping. A line said while it is answering is
+  not answered on its own and goes into the next request, as a person typing reads two lines and answers once.
+- **At `ask`, only with its person watching**, and the web app is not even asked otherwise: the watch page shows
+  "It would say …" with "Say it" for 40 s, and only that press sends it (`VILLAGE_C2S.SAY_IT`).
+- **Watched or not, the same.** At `act` a line goes out whether or not anyone watches. At `ask` a line exists
+  only because its person is watching, and only their own press says it.
+- **What is kept.** Each line said goes into what the echo did (`AwayEntry` of kind `talk`, `said` = its line)
+  and so into the report and "While you were away", with "not me" beside it. What was said to it never is:
+  the request carries it to the model and nothing keeps it, in the room or the web app. A report entry carrying
+  anything but the echo's own line is read as just that line.
+- **"Not me"** of a line (`/api/echo/veto` with kind `talk`) asks half as many looks again and 0.05 more of
+  talking (C103). The watch page hands the room the new brief at once, so an echo at 36 looks, 30 needed, drops
+  to `ask` after one "not me" (45 needed) and from then only offers its lines.
+- **`echo_lines` has an id of its own** (0043, not applied anywhere yet, so changed in place): keyed on
+  `(subject, at)`, two lines kept in the same millisecond collided and the second was silently dropped. The
+  combined SQL is regenerated (`_local/sql/echo-supabase-0042-0043.sql`).
+
+**Not yet.** The echo answers only lines said to its body (`T`), not lines said aloud near it. It does not start
+a conversation. The answers use the guesser trained on answers to villagers; a person in a room is a different
+listener, and the "not me"s are what corrects that.
+
+**Checked:** realtime `test:talk` (typing time; at `act`, a signed request with the conversation, the answer to
+the speaker from the body, seen by the watcher in what the echo did; one line at a time, with what was said
+meanwhile in the next request; nothing to say, or 409, is silence; the report has the three lines it said and
+none of the five said to it; at `ask`, nothing asked unwatched, then the line put to the watcher, said on "Say
+it" and only once, never for an id it did not offer; at `watch` or by a brief with no word on talking, nothing
+asked or said), the six earlier suites; shared 71 (talk level, speak signature apart from the report's); web 740
+(`tests/echoSpeak.test.mts`: only a signed request; requests it could not have sent; standing read here, 29 is
+not 30, after a "not me" `ask` and not `act`; a deployment without a model says nothing; the brief carries
+talking; a talk "not me" makes it 45; a report keeps the line and not a field of someone else's words.
+`tests/echoWordsModel.test.mts`: the model is given the person's lines and the line to answer, under the rules
+above; an empty line and a refusal are silence). The SQL dry-run on Postgres 16 again: identical to the runner,
+refuses twice, two lines in one millisecond both kept, an injected failure leaves 0032. In three browsers,
+Supabase and the model disconnected: A earned talking (36 of 36) and the door said "talks for you"; A left; B
+said "hey, where are you off to?" and the body answered after 2.9 to 3.6 s in B's panel, as a person does; A's
+watch page showed the line and the answer with "not me"; after "not me" talking stood at `ask` (45 needed),
+B's next line got no answer and A saw "It would say … 41 s left · Say it"; pressed, it reached B. Back in the
+room, A's door listed both lines said for them, one already called "not me". Under `next dev` only, React's
+double mount on a page opened by the room's link joins, leaves and joins again, so the body taken back is let go
+and "While you were away" comes from the server's record ("Last time…") instead of opening by itself; the
+production build mounts once.

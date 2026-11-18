@@ -65,6 +65,31 @@ test("a turn is a code on the list: its cookie holds a digest, and taking the co
   assert.equal(isPreview(undefined, { NODE_ENV: "production", ECHO_OPEN: "1" }), false);
 });
 
+test("the link a friend is sent: a turn that names a room walks into that room's copy, and only a turn does", async () => {
+  const IN = await import("../src/app/in/[code]/route");
+  const saved = process.env.ECHO_PASS;
+  process.env.ECHO_PASS = "first-friends";
+  try {
+    const go = async (path: string) => {
+      const [code, query] = path.split("?");
+      const res = await IN.GET(new Request(`https://echo.test/in/${path}`), { params: Promise.resolve({ code: code! }) });
+      return { status: res.status, to: new URL(res.headers.get("location")!).pathname + new URL(res.headers.get("location")!).search, cookie: res.headers.get("set-cookie") ?? "", query };
+    };
+    const room = await go("first-friends?room=sh-ape");
+    assert.equal(room.status, 303);
+    assert.equal(room.to, "/parcel/84dcee5ffffffff?room=SHAPE", "into the copy, the code as the door writes it");
+    assert.match(room.cookie, /echo_pass=/, "and the turn is given");
+    assert.equal((await go("first-friends")).to, "/parcel/84dcee5ffffffff", "no room named: the village");
+    assert.equal((await go("first-friends?room=nope!")).to, "/parcel/84dcee5ffffffff", "a room that is no code: the village");
+    const stranger = await go("someone-else?room=SHAPE");
+    assert.equal(stranger.to, "/", "a room named without a turn leads to the waitlist");
+    assert.equal(stranger.cookie, "", "and gives nothing");
+  } finally {
+    if (saved === undefined) delete process.env.ECHO_PASS;
+    else process.env.ECHO_PASS = saved;
+  }
+});
+
 test("a page is served in English, and in Turkish only to a reader who chose Turkish here", () => {
   assert.equal(langOf(undefined), "en");
   assert.equal(langOf(""), "en");

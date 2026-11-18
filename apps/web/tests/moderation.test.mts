@@ -8,6 +8,7 @@ import test, { after, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
+import { ROOM_VILLAGES } from "@echo/shared";
 import { signIdentity } from "@echo/shared/identity";
 import { ageYears, goalId, present, villageAt, worldClock, worldDayIndex, WORLD_DAY_S, WORLD_EPOCH, type LifeChange, type SettledParcel } from "@echo/planet";
 
@@ -216,4 +217,25 @@ test("C67: what a reporter filed and a bar on them go with an erasure; what mode
   assert.match(src, /\["barred_subjects", "subject"\]/);
   assert.match(src, /USER_NAMED[\s\S]*\["moderation_actions", "subject"\]/);
   assert.ok(worldDayIndex(CLOCK, NOW) === DAY);
+});
+
+test("C102: what a stranger did in a village room's copy is undone in that copy, and the open world is left as it was", async () => {
+  const D = ROOM_VILLAGES[0]!;
+  const { field, calibration, commons, world } = planet();
+  const s = villageAt(world.seed, D, field, calibration, world.radiusKm, { commons: commons.cells, day: DAY, changes: [] })!.settlement;
+  const c = s.people.find((p) => present(s, p, DAY) && ageYears(p, DAY) >= 25 && ageYears(p, DAY) < 50 && p.leftDay === Infinity)!;
+  const copy = villageStore("ABCDE")!;
+  await copy.addChange(D, { person: c.id, kind: "trade", occupation: c.occupation === "miner" ? "potter" : "miner", madeDay: DAY - 3, day: DAY - 2 }, GRIEFER);
+  await copy.addEffect(D, { thing: "field:0", kind: "trampled", day: DAY - 1, untilDay: DAY + 5 }, GRIEFER);
+
+  // The preview reads the copy's village to know what the trade was before; it must not fail on a copy's key.
+  const preview = await MOD.GET(new Request(`https://echo.test/api/moderation?subject=${GRIEFER}`, as(MODERATOR)));
+  assert.equal(preview.status, 200);
+  const res = await MOD.POST(new Request("https://echo.test/api/moderation", as(MODERATOR, { op: "undo", subject: GRIEFER })));
+  assert.equal(res.status, 200);
+
+  const now = (await copy.changesFor(D))!;
+  assert.ok(now.some((x) => x.kind === "trade" && x.person === c.id && x.occupation === c.occupation), "the trade is given back in the copy");
+  assert.equal((await copy.effectsFor(D, DAY))!.length, 0, "the copy's mark is healed");
+  assert.deepEqual(await villageStore()!.changesFor(D), [], "the open world was never touched");
 });

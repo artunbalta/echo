@@ -10,7 +10,7 @@
  *
  * WHAT IT SENDS AND WHAT IT KEEPS. The cell, the villager's id, your position at the start, your line
  * and the conversation so far — never a description of the villager, which the server rebuilds. Your
- * words go to the model to be answered and are not stored. What the villager makes of you is: a short
+ * words go to the model to be answered and are not stored, unless you said yes to keeping them (C108, below). What the villager makes of you is: a short
  * note in their own words, so they remember you next time, private to you, and erased by "Forget me".
  * None of it is read into your echo. The line under the input says so before anything is typed.
  *
@@ -20,6 +20,24 @@
  *
  * WHY IT WAITS FOR THE CARD. The routes need a signed id and minting one is only allowed after the
  * consent question is answered, either way (identity/session's own rule).
+ *
+ * IN A VILLAGE ROOM, ANYONE (C107). Whoever is nearest is the one `T` talks to, a villager or someone who
+ * came in through the room's door (`nearestToTalk`), and this is the panel for both: the same header, the
+ * same words, the same wait while they think. Only where a line goes differs. To someone who came in it goes
+ * through the room to them alone (`talkInRoom`), and what they say back comes into this panel as a
+ * villager's answer does; what they said to you a moment before you turned to them is where the
+ * conversation starts. Nobody who does not answer within `ANSWER_WAIT_MS` has, and the panel says so as it
+ * does of a villager who cannot hear: a person who walked off, or one whose body an echo keeps
+ * and has not earned talking, read the same; an echo that has (C109) answers as a person does, after typing.
+ * Nothing of it is sent anywhere else, and none of it is measured.
+ *
+ * LEARNING HOW YOU TALK (C108). With a yes to keeping your words (under "When you leave"), the moment a
+ * villager's line comes your echo is asked for its guess of your answer, sealed in a box this page cannot
+ * open (`askGuess`), and when you answer, the box goes back with what you said (`settleGuess`). A line with
+ * no guess waiting for it, to someone who came in or your first to a villager, is kept as it is
+ * (`keepSaid`); what someone who came in says to you is never sent. Nothing of it shows in this panel, so a
+ * panel open on a villager looks as one open on a person does; the line under the input says that your words
+ * are kept, the same line whoever you are talking to.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -29,8 +47,11 @@ import type { LifeChange } from "@echo/planet";
 
 import type { ConsentState } from "@/game/world/measure";
 import type { PlanetWorld } from "@/game/world/PlanetWorld";
+import { nearestToTalk, type OthersLayer } from "@/game/world/othersLayer";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
+import { askGuess, keepSaid, onWordsKept, settleGuess, wordsKept } from "@/lib/echoWords";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
+import { ANSWER_WAIT_MS, onTold, roomOthers, talkInRoom, toldFrom, worldRoom } from "@/lib/villageRoom";
 import { canRecord, canSpeak, cloudWanted, hearIt, hush, hushCloud, ownVoiceHere, recorder, setCloudWanted, setVoiceWanted, speak, speakCloud, speakSelf, unlockCloud, voiceWanted } from "@/lib/villagerVoice";
 
 interface Turn {
@@ -40,6 +61,8 @@ interface Turn {
 
 /** Beyond this many metres a conversation is over: they have walked on with their day. */
 const PARTING_M = 12;
+
+export { ANSWER_WAIT_MS } from "@/lib/villageRoom";
 
 /** What a refusal from the routes means, in the villager's world rather than the server's. */
 function trouble(status: number, error: string | undefined, name: string): string {
@@ -69,6 +92,14 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
   const [greeting, setGreeting] = useState<string | null>(null);
   const [voice, setVoice] = useState(false);
   const conv = useRef<string | null>(null);
+  /** The echo's sealed guess of your answer to the villager's last line, on its way or come (C108). */
+  const guess = useRef<Promise<string | null> | null>(null);
+  /** Whether your words are kept: what the line under the input says (C108). */
+  const [keeping, setKeeping] = useState(false);
+  useEffect(() => {
+    setKeeping(wordsKept());
+    return onWordsKept(setKeeping);
+  }, []);
   const input = useRef<HTMLInputElement>(null);
   const log = useRef<HTMLDivElement>(null);
 
@@ -104,18 +135,28 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
   const worldRef = useRef(world);
   worldRef.current = world;
   const layer = useCallback(() => worldRef.current()?.context().layer<VillagersLayer>("villagers") ?? null, []);
+  const others = useCallback(() => worldRef.current()?.context().layer<OthersLayer>("others") ?? null, []);
+  /** Waiting for someone who came in to answer (C107): the timer that gives up. */
+  const waiting = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopWaiting = useCallback(() => {
+    if (waiting.current) clearTimeout(waiting.current);
+    waiting.current = null;
+  }, []);
   const personOf = useCallback((id: string) => worldRef.current()?.region.village?.settlement.people.find((p) => p.id === id) ?? null, []);
   const first = (talking ?? near)?.name.split(" ")[0];
 
   const end = useCallback(() => {
     window.dispatchEvent(new CustomEvent("echo:talking", { detail: false }));
     layer()?.hold(null);
+    others()?.hold(null);
+    stopWaiting();
     hush();
     hushCloud();
     holding.current = false;
     rec.current.cancel();
     setRecording(false);
     conv.current = null;
+    guess.current = null;
     setTalking(null);
     setTurns([]);
     setDraft("");
@@ -123,7 +164,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     setGreeting(null);
     setPending(false);
     (document.activeElement as HTMLElement | null)?.blur?.();
-  }, [layer]);
+  }, [layer, others, stopWaiting]);
 
   /** Ask the server to begin: it checks where you both are and counts the meeting. */
   const begin = useCallback(
@@ -135,7 +176,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
         const res = await fetch("/api/village/talk/begin", {
           method: "POST",
           headers: identityHeaders({ "content-type": "application/json" }),
-          body: JSON.stringify({ cell, person: who.id, at }),
+          body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, person: who.id, at }),
         });
         const data = (await res.json().catch(() => ({}))) as { conv?: string; recognised?: string | null; error?: string };
         if (!res.ok || !data.conv) {
@@ -155,27 +196,30 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
 
   const start = useCallback(() => {
     const v = layer();
-    const who = v?.nearest();
+    const who = nearestToTalk(worldRef.current()?.context());
     if (!v || !who) return;
-    v.hold(who.id);
+    if (who.room) others()?.hold(who.id);
+    else v.hold(who.id);
     window.dispatchEvent(new CustomEvent("echo:talking", { detail: true }));
     setTalking(who);
-    setTurns([]);
+    // Someone who came in begins where they left off: what they said to you a moment ago (C107).
+    setTurns(who.room ? toldFrom(who.id).map((l) => ({ role: "villager" as const, text: l.text })) : []);
     setNote(null);
     setGreeting(null);
     conv.current = null;
+    guess.current = null;
     if (consent === "unset") setNote("Answer the card first: talking needs the answer, either way.");
-    else void begin(who);
+    else if (!who.room) void begin(who);
     setTimeout(() => input.current?.focus(), 0);
-  }, [layer, consent, begin]);
+  }, [layer, others, consent, begin]);
 
   // Who is near, four times a second; and whether the one being talked to has walked off.
   useEffect(() => {
     const id = setInterval(() => {
       const v = layer();
-      setNear(v?.nearest() ?? null);
+      setNear(nearestToTalk(worldRef.current()?.context()));
       if (talking && v) {
-        const d = v.distanceTo(talking.id);
+        const d = talking.room ? (others()?.distanceTo(talking.id) ?? null) : v.distanceTo(talking.id);
         if (d === null || d > PARTING_M) {
           setNote(`${talking.name.split(" ")[0]} has gone on with their day.`);
           setTimeout(end, 1600);
@@ -183,7 +227,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       }
     }, 250);
     return () => clearInterval(id);
-  }, [layer, talking, end]);
+  }, [layer, others, talking, end]);
 
   // Escape ends a conversation; beginning one is `Interact`'s (C45): one prompt for everything within
   // reach, `T` for whoever is near enough to talk to, and an `echo:talk` event to open this panel.
@@ -216,6 +260,29 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
     if (w && !had.some((c) => c.id === change.id)) w.revillage([...had, change]);
   }, []);
 
+  /** A line someone who came in said, in this browser's voice for a body like theirs, when voice is on. */
+  const voiceOf = useCallback(
+    (who: NearVillager, text: string) => {
+      if (!voice || !canSpeak()) return;
+      const o = roomOthers().get(who.id);
+      if (o) speak(text, { id: `room:${o.lookSeed}`, sex: o.sex, age: o.age });
+    },
+    [voice],
+  );
+
+  // What the one you are talking to in a room says back (C107), as a villager's answer comes.
+  useEffect(() => {
+    if (!talking?.room) return;
+    return onTold((m) => {
+      if (m.from !== talking.id) return;
+      stopWaiting();
+      setPending(false);
+      setNote(null);
+      setTurns((ts) => [...ts, { role: "villager", text: m.text }]);
+      voiceOf(talking, m.text);
+    });
+  }, [talking, stopWaiting, voiceOf]);
+
   const send = useCallback(async (spoken?: string) => {
     const text = (spoken ?? draft).trim();
     if (!talking || !text || pending) return;
@@ -228,10 +295,41 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       setNote("Answer the card first: talking needs the answer, either way.");
       return;
     }
+    if (talking.room) {
+      // Someone who came in (C107): through the room to them alone; their answer comes by `onTold`.
+      const said = talkInRoom(talking.id, text);
+      if (!said) {
+        setNote(`${talking.name.split(" ")[0]} does not seem to hear you.`);
+        return;
+      }
+      setDraft("");
+      setNote(null);
+      setTurns((ts) => [...ts, { role: "stranger", text: said }]);
+      // Your line is kept with your others when you let it be (C108); theirs never is.
+      keepSaid({ cell, room: worldRoom(cell), to: "person", said });
+      setPending(true);
+      stopWaiting();
+      const who = talking.name.split(" ")[0];
+      waiting.current = setTimeout(() => {
+        waiting.current = null;
+        setPending(false);
+        setNote(`${who} does not seem to hear you.`);
+        setTimeout(() => input.current?.focus(), 0);
+      }, ANSWER_WAIT_MS);
+      setTimeout(() => input.current?.focus(), 0);
+      return;
+    }
     setDraft("");
     setPending(true);
     setNote(null);
     const history = turns.filter((t) => t.role !== "decided") as { role: "stranger" | "villager"; text: string }[];
+    // The guess sealed before you wrote this goes back with it (C108); a line no guess waited for is kept as it is.
+    const sealed = guess.current;
+    guess.current = null;
+    const last = history[history.length - 1];
+    const heard = last?.role === "villager" ? last.text : null;
+    if (sealed) void sealed.then((box) => (box ? settleGuess(box, text) : keepSaid({ cell, room: worldRoom(cell), to: "villager", said: text, heard })));
+    else keepSaid({ cell, room: worldRoom(cell), to: "villager", said: text, heard });
     const before = turns;
     setTurns([...before, { role: "stranger", text }]);
     try {
@@ -243,7 +341,7 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       const res = await fetch("/api/village/talk", {
         method: "POST",
         headers: identityHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ cell, person: talking.id, message: text, history, conv: conv.current }),
+        body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, person: talking.id, message: text, history, conv: conv.current }),
       });
       const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; change?: LifeChange; decided?: string; invited?: string; voice?: string | null };
       if (!res.ok || !data.reply) {
@@ -263,6 +361,11 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
           window.dispatchEvent(new CustomEvent("echo:invited", { detail: { house: data.invited, host: talking.id } }));
         }
         setTurns(next);
+        // Before you answer, your echo guesses what you will say and seals it (C108).
+        if (wordsKept() && conv.current) {
+          const said = next.filter((t) => t.role !== "decided") as { role: "stranger" | "villager"; text: string }[];
+          guess.current = askGuess({ cell, room: worldRoom(cell), person: talking.id, conv: conv.current, history: said.slice(-16) });
+        }
         if (voice) {
           // In their own voice when the stranger said yes to ElevenLabs (C60); in this browser's
           // local voice otherwise, or when the cloud does not answer.
@@ -282,16 +385,23 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
       setPending(false);
       setTimeout(() => input.current?.focus(), 0);
     }
-  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf, cloud, mine]);
+  }, [draft, talking, pending, consent, turns, cell, begin, adopt, voice, personOf, cloud, mine, stopWaiting]);
 
   const forget = useCallback(async () => {
     if (!talking || consent === "unset") return;
+    // Someone who came in (C107): nothing of you is kept for them anywhere to forget, which is what the
+    // panel says of a villager once their note of you is gone.
+    if (talking.room) {
+      setNote(`${talking.name.split(" ")[0]} will not remember you.`);
+      setGreeting(null);
+      return;
+    }
     try {
       await ensureIdentity();
       const res = await fetch("/api/village/memory", {
         method: "DELETE",
         headers: identityHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ cell, person: talking.id }),
+        body: JSON.stringify({ cell, room: worldRoom(cell) ?? undefined, person: talking.id }),
       });
       setNote(res.ok ? `${talking.name.split(" ")[0]} will not remember you.` : `${talking.name.split(" ")[0]} could not forget you just now. Try again.`);
       if (res.ok) setGreeting(null);
@@ -497,14 +607,14 @@ export default function VillagerTalk({ world, cell, consent, coarse }: { world: 
           the long paragraph made is still made, word for word, behind "How this works". */}
       <div className="px-5 pb-3 text-[11px] leading-snug text-parchment/40">
         <p>
-          {tr(lang, "talk.private")}{" "}
+          {tr(lang, keeping ? "talk.kept" : "talk.private")}{" "}
           <button type="button" data-talk-how aria-expanded={how} onClick={() => setHow((h) => !h)} className="underline decoration-parchment/25 hover:text-parchment">
             {tr(lang, "talk.how")}
           </button>
         </p>
         {how ? (
           <p data-talk-how-open className="mt-1.5 text-[10.5px] text-parchment/45">
-            {tr(lang, "talk.detail", { name: first })}
+            {tr(lang, keeping ? "talk.detailKept" : "talk.detail", { name: first })}
             {cloud ? ` ${tr(lang, "talk.detailCloud")}` : ""}
             {cloud && canRecord() ? ` ${tr(lang, "talk.detailMic")}` : ""}{" "}
             {cloud ? (

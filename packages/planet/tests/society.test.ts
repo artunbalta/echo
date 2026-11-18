@@ -521,3 +521,15 @@ test("a village is cheap enough that a caller can afford to memoise rather than 
   // Generous by design: this is a regression bar on the O(n^2) pairing scan, not a benchmark.
   assert.ok(ms < 4000, `${settlements} settlements and ${people} people took ${ms.toFixed(0)} ms`);
 });
+
+test("a visitor's name (C107) is the land's own: the same key gives the same name, in the settlement's tongue", async () => {
+  const { visitorName } = await import("../lib/society.js");
+  const a = visitorName("upland", "1a2b3c4d");
+  assert.deepEqual(visitorName("upland", "1a2b3c4d"), a, "the same body, the same name, on every page");
+  assert.notDeepEqual(visitorName("upland", "5e6f7a8b"), a, "another body, another name");
+  assert.match(a.given, /^[A-Z][a-z]+$/);
+  const tails = ["crag", "scree", "tarn", "pike", "fell", "seam", "adit", "slate", "ridge", "cairn"];
+  assert.ok(tails.some((t) => a.family.endsWith(t)), `an upland family name: ${a.family}`);
+  assert.ok(["strand", "haven", "skerry", "salt", "net", "keel", "tide", "gull", "reef", "spar"].some((t) => visitorName("coast", "1a2b3c4d").family.endsWith(t)), "a coast one on the coast");
+  assert.deepEqual(visitorName("no-such-tongue", "k"), visitorName("vale", "k"), "an unknown tongue falls back to the first");
+});

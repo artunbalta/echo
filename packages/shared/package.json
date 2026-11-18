@@ -15,6 +15,11 @@
       "types": "./dist/identityToken.d.ts",
       "import": "./dist/identityToken.js",
       "default": "./dist/identityToken.js"
+    },
+    "./standin": {
+      "types": "./dist/standInBrief.d.ts",
+      "import": "./dist/standInBrief.js",
+      "default": "./dist/standInBrief.js"
     }
   },
   "scripts": {

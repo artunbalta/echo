@@ -27,6 +27,7 @@
  * and the deed remembers whose need it met. The answer carries what they say about it.
  */
 import { NextResponse } from "next/server";
+import { roomOfRequest } from "@echo/shared";
 import {
   ANIMALS,
   WRONGS,
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
   // A stranger barred by a moderator changes nothing in the shared world (C67).
   const barredNow = await refuseBarred(villageStore(), caller.subject);
   if (barredNow) return barredNow;
-  let body: { cell?: unknown; thing?: unknown; kind?: unknown; verb?: unknown; at?: unknown; item?: unknown };
+  let body: { cell?: unknown; thing?: unknown; kind?: unknown; verb?: unknown; at?: unknown; item?: unknown; room?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -94,6 +95,8 @@ export async function POST(req: Request) {
   }
   const { cell, thing, kind, verb: verbId, at } = body;
   if (typeof cell !== "string" || !CELL.test(cell)) return bad("bad_cell");
+  const room = roomOfRequest(cell, body.room);
+  if (!room.ok) return bad("bad_room");
   if (typeof thing !== "string" || thing.length > 64) return bad("bad_thing");
   if (typeof kind !== "string" || kind.length > 32) return bad("bad_kind");
   if (typeof verbId !== "string" || verbId.length > 32) return bad("bad_verb");
@@ -112,8 +115,9 @@ export async function POST(req: Request) {
     return NextResponse.json(error, { status });
   }
 
-  const loaded = await loadVillage(cell);
-  if (!loaded) return unpeopled(caller.subject, cell, thing, kind, verb, pos, body.item);
+  // A village room's copy (C102) keeps its own marks, deeds and changes; the open world never sees them.
+  const loaded = await loadVillage(cell, undefined, villageStore(room.room));
+  if (!loaded) return unpeopled(caller.subject, cell, room.room, thing, kind, verb, pos, body.item);
   const { village, changes, store, day, hour } = loaded;
   if (!store) return NextResponse.json({ recorded: false, reason: "no_store" });
   const s = village.settlement;
@@ -261,12 +265,12 @@ export async function POST(req: Request) {
  * village" and nothing was recorded, so a stranger could gather nothing on their own empty land to
  * build a house with.
  */
-async function unpeopled(subject: string, cell: string, thing: string, kind: string, verb: NonNullable<ReturnType<typeof verbOf>>, pos: { x?: unknown; y?: unknown }, item: unknown) {
+async function unpeopled(subject: string, cell: string, room: string | null, thing: string, kind: string, verb: NonNullable<ReturnType<typeof verbOf>>, pos: { x?: unknown; y?: unknown }, item: unknown) {
   const scatter = parseScatterRef(thing);
   if (!scatter || verb.deed) return bad("no_village", 404);
   if (scatter.classId !== kind || Math.hypot(scatter.x, scatter.y) > REGION_M) return bad("no_such_thing", 404);
   if (Math.hypot(scatter.x - (pos.x as number), scatter.y - (pos.y as number)) > verb.reachM + 1 + SLACK_M) return bad("too_far", 403);
-  const store = villageStore();
+  const store = villageStore(room);
   if (!store) return NextResponse.json({ recorded: false, reason: "no_store" });
   const clock = worldClock(WORLD_EPOCH);
   const day = worldDayIndex(clock, Date.now());

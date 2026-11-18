@@ -33,6 +33,7 @@ import {
 
 import type { LayerContext, WorldFrame, WorldLayer } from "./PlanetWorld";
 import type { VillagersLayer } from "./villagersLayer";
+import type { OthersLayer } from "./othersLayer";
 import type { InteriorLayer } from "./interiorLayer";
 import type { HomeLayer } from "./homeLayer";
 import type { DirectorLayer } from "./directorLayer";
@@ -42,6 +43,9 @@ import { buildMarks } from "./villageGeometry";
 
 /** The refs that win over the ground's own things within reach: the director's, a moment's, a hidden thing's. */
 const SET_OUT = /^(staged|moment|egg):/;
+
+/** What someone who came into a village room offers at arm's length (C107): a villager's card, talking only. */
+const TALK_ONLY: readonly Verb[] = verbsOf("villager").filter((v) => v.id === "talk");
 
 export interface NearThing extends Thing {
   verbs: readonly Verb[];
@@ -198,8 +202,8 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
 
       let best: NearThing | null = null;
       let bestRank = Infinity;
-      const consider = (t: Thing) => {
-        const verbs = verbsOf(t.kind);
+      const consider = (t: Thing, only?: readonly Verb[]) => {
+        const verbs = only ?? verbsOf(t.kind);
         if (verbs.length === 0) return;
         const reach = Math.max(...verbs.map((v) => v.reachM));
         const d = Math.max(0, Math.hypot(t.x - mx, t.y - my) - t.sizeM);
@@ -255,6 +259,12 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
       if (v && v.distanceM < 3) {
         const p = ctx.region.village?.settlement.people.find((q) => q.id === v.id);
         if (p) consider({ ref: `villager:${p.id}`, kind: "villager", x: mx + v.distanceM, y: my, sizeM: 0, owners: [p.id], name: p.given });
+      }
+      // Someone who came into a village room, at arm's length (C107): the card a villager's is, with the one
+      // thing that passes between people here yet, talking. Nearer than the villager, it is theirs.
+      const o = ctx.layer<OthersLayer>("others")?.nearest();
+      if (o?.room && o.distanceM < 3 && (!v || o.distanceM < v.distanceM)) {
+        consider({ ref: `person:${o.id}`, kind: "villager", x: mx + o.distanceM, y: my, sizeM: 0, owners: [], name: o.name.split(" ")[0]! }, TALK_ONLY);
       }
       near = best;
     },
