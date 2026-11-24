@@ -7412,3 +7412,55 @@ room, A's door listed both lines said for them, one already called "not me". Und
 double mount on a page opened by the room's link joins, leaves and joins again, so the body taken back is let go
 and "While you were away" comes from the server's record ("Last time…") instead of opening by itself; the
 production build mounts once.
+
+## C110 — nobody told apart by how they answer: the pace, the greeting, the turn, what passes between people, the voice
+
+**Asked.** Phase 8, 2026-11-24: before the rooms open to friends, the five things C107 listed as still telling a
+villager from a person had to go. A villager answered in a second; said that they remembered you before you
+had spoken; stopped and turned the moment you came up; was the only one you could give something to, trade
+with or ask; and spoke in a cloud voice while a person spoke in the browser's.
+
+**Decided.** Everything below holds in a village room only; the open world, where everyone met is a villager,
+is as it was.
+- **One pace.** A villager's answer waits as long as typing it would take, counted from when the line was said
+  (`typingMs`, the echo's own, moved to `@echo/shared` so the room and the page read one formula: 1.4 s plus
+  55 ms a character, up to 1.2 s of jitter, never more than 12 s). Measured in a browser: 3.9 and 4.6 s.
+- **No line before the first.** The "remembers you" line is not shown in a room; what a villager remembers is
+  in what they say, as it is for a person. The panel opens on "{name} is within earshot", the same for anyone.
+- **The turn comes with the first line.** A villager in a room stops and turns once you have said something,
+  not when the panel opens, as a person who hears you does. Whoever you talk to, your own body turns to them as
+  you say it (`playerLayer.face`), so on their screen you turn as a villager would. A body an echo keeps stands
+  and turns to whoever it answers while it types, and a moment after (`EchoBody.facing`, set by the room, never
+  by a watcher; the watch test's byte-identical run still holds).
+- **What passes between people.** The card for someone at arm's length is a villager's: talk, give what you
+  carry, offer it in trade, ask for something for your help (a fate's verb stays a villager's alone). An offer
+  goes through the room to them alone (`OFFER`); they take it or not, and for a trade or an ask choose what goes
+  back from their pack (`OfferCard`, `ANSWER`); the room then asks the web app, signed with a word of its own
+  (`signHand`), to move the things (`/api/village/hand`), which checks both packs and room in them, writes both
+  and puts the first back if the second fails. Both are told how it ended, each with their own pack
+  (`SETTLED`). One open offer per body; 30 s to answer. A no and no answer read the same to the one who offered,
+  so an offer to a body an echo keeps (never handed on; it lapses) is not told from a person who would not.
+  Nothing of it is measured or recorded as a deed (C107). No migration: packs are a person's already (C47).
+- **One voice.** A line handed to one person carries the room's token for it (`signToldVoice`, bound to whom it
+  was said, the room, the look of the body that said it, the line and the moment). With the cloud voice on, it
+  is read in a voice picked for that look as a villager's is picked for theirs (`/api/village/voice`, room form:
+  the look's sex and age, and a liveliness from its seed for a temperament); otherwise in the browser's voice
+  for a body like theirs, as before.
+
+**Not yet.** A villager still greets nobody first and a person may; lines said aloud are not voiced; offers made
+to a body an echo keeps are not shown to its person watching. A person's typing is still a person's.
+
+**Checked:** realtime `test:offer` (new: a gift reaches only its taker, their yes moves it by a signed request
+and both are told with their packs; no unknown thing, no ask holding something out, nothing to oneself or out
+of reach, one offer at a time; a no asks nothing; a trade needs something back; a refused hand-over is refused;
+an offer lapses, one to a kept body is never handed on, one answered after the offerer walked off is gone; a
+line to one person carries a token for its voice), `test:talk` (the token vouches for the line to its listener
+only; the answering body stands turned to the speaker) and the other six suites; shared 75 (typing pace, the
+facing yaw, the hand-over and voice signatures apart from every other); web 745 (`tests/roomHand.test.mts`: what
+each kind is, a hand-over moves what it says or nothing, only a room's fresh signed request, trade and ask both
+ways, a full pack and a thing not there move nothing; a room line is voiced only by its token, for its listener,
+recent, in its body's look). In two browsers in a room, Supabase and the model disconnected: A picked up
+driftwood; B's body walked over; A's card for B was Talk, Give, Offer in trade, Ask; B was offered the driftwood,
+took it, and had it in their pack; A asked for something and B gave it back; A, facing away, turned exactly to
+B on saying a line; a villager's answer in the room came after 3.9 and 4.6 s, and the panel opened on "within
+earshot".

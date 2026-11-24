@@ -77,6 +77,10 @@ export interface OthersLayer extends WorldLayer {
   nearestM(): number | null;
   /** Metres from this body to one of them drawn last frame, or null. */
   distanceTo(id: string): number | null;
+  /** Where one of them was drawn last frame, planet-local metres, or null: for turning to them (C110). */
+  whereIs(id: string): { x: number; y: number } | null;
+  /** What this page calls one of them (C107), drawn from their look as a villager's name is; null if not here. */
+  nameOf(id: string): string | null;
   /** Keep the plate on one of them while a conversation lasts; null lets it go. Presentation only. */
   hold(id: string | null): void;
   /** One of them is being talked to. */
@@ -134,6 +138,7 @@ export function othersLayer(source: OthersSource = ROOM_SOURCE): OthersLayer {
   const lastAt = new Map<string, { x: number; y: number }>();
   const meAt = { x: Number.NaN, y: Number.NaN };
   let frameNow: LayerContext["frame"] | null = null;
+  let ctxNow: LayerContext | null = null;
   /** Who they are here: a name and a visitor's line, drawn once a body from its look (C107). */
   const known = new Map<string, { name: string; line: string }>();
   const whoIs = (ctx: LayerContext, o: Other) => {
@@ -204,6 +209,7 @@ export function othersLayer(source: OthersSource = ROOM_SOURCE): OthersLayer {
       if (!crowd) return;
       const frame = ctx.frame;
       frameNow = frame;
+      ctxNow = ctx;
       const self = source.self();
       const inRoom = self !== null && source.cell() === ctx.region.cell;
       crowd.begin();
@@ -351,6 +357,14 @@ export function othersLayer(source: OthersSource = ROOM_SOURCE): OthersLayer {
     distanceTo(id) {
       const at = lastAt.get(id);
       return at && Number.isFinite(meAt.x) ? Math.hypot(at.x - meAt.x, at.y - meAt.y) : null;
+    },
+    whereIs(id) {
+      const at = lastAt.get(id);
+      return at ? { x: at.x, y: at.y } : null;
+    },
+    nameOf(id) {
+      const o = source.others().get(id);
+      return o && ctxNow ? (whoIs(ctxNow, o)?.name ?? null) : null;
     },
     hold(id) {
       held = id;

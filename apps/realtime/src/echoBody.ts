@@ -122,6 +122,11 @@ export interface EchoBody {
   log: AwayEntry[];
   /** How many moments it has met in all: the log keeps the last `STAND_IN.logMax`, this counts on past them. */
   met: number;
+  /**
+   * Turned to someone it is answering (C110): it stands, faces them, and does not walk on until `until`, as a
+   * person typing an answer does. Set by the room when it answers, never by a watcher.
+   */
+  facing: { yaw: number; until: number } | null;
 }
 
 /** Hands on a thing, sitting, or just standing a moment: how a verb looks on the body. */
@@ -168,6 +173,7 @@ export function keepBody(at: P, trail: Trail, brief: StandInBrief, seed: string,
     lanes,
     lastMet: new Map(),
     doing: null,
+    facing: null,
     log: [],
     met: 0,
   };
@@ -309,6 +315,15 @@ export function advanceKept<T extends KeptBody>(bodies: Iterable<T>, now: number
       over.push(w);
       continue;
     }
+    // Answering someone (C110): it stands where it is, turned to them, until the answer is said.
+    const f = w.echo.facing;
+    if (f && now < f.until) {
+      w.yaw = f.yaw;
+      w.speed = 0;
+      if (w.activity === "walk") w.activity = "stand";
+      continue;
+    }
+    if (f) w.echo.facing = null;
     const p = stepEcho(w.echo, { x: w.x, y: w.y, yaw: w.yaw, speed: w.speed, activity: w.activity as BodyPose["activity"] }, now, dtMs, rand);
     w.x = p.x;
     w.y = p.y;

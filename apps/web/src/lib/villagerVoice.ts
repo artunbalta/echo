@@ -331,3 +331,24 @@ export async function hearIt(blob: Blob, headers: Record<string, string>): Promi
     return { error: "unreachable" };
   }
 }
+
+/**
+ * A line someone in a village room said to you, in the voice picked for their body as a villager's is picked
+ * for theirs (C110), by the room's token for it. False when it could not be had, so the caller can fall back.
+ */
+export async function speakRoomCloud(
+  line: { cell: string; room: string; seed: string; sex: "f" | "m"; age: number; at: number; text: string; token: string },
+  headers: Record<string, string>,
+): Promise<boolean> {
+  if (typeof Audio === "undefined") return false;
+  try {
+    const res = await fetch("/api/village/voice", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(line) });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    await selfLine;
+    await playBlob(blob);
+    return true;
+  } catch {
+    return false;
+  }
+}

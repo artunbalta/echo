@@ -34,6 +34,15 @@
  * the web app to be answered and kept nowhere, here or there. Whether a body answers never depends on who
  * else is watching: an answer at `act` goes out watched or not.
  *
+ * NOBODY TOLD APART BY HOW THEY ANSWER (C110). A body an echo keeps stands and turns to whoever it answers
+ * while it types, as a person does. A line handed to one person carries the room's token for it
+ * (`signToldVoice`), so their page can have it read in a voice picked for the body's look, as a villager's
+ * line is read in one picked for theirs. And one person can give another what they carry, offer it in
+ * trade, or ask for something for their help, as they can a villager (`OFFER`, `ANSWER`): the room hands the
+ * offer to the person it is made to, and on their yes asks the web app, signed, to move the things between
+ * their packs (`/api/village/hand`). An offer to a body an echo keeps is not taken, as one to a person who did
+ * not turn round is not. Nothing of it is measured.
+ *
  * NO NAMES (C107). A body is a handle, a look and a pose; each page names it from its look in the
  * village's own tongue, as it names the villagers, so no name typed at a door can say who someone is.
  *
@@ -61,7 +70,10 @@
  * nothing of the copy is lost but the bodies, which their people bring back.
  */
 import { Room, type Client } from "@colyseus/core";
+import { ITEMS } from "@echo/planet";
 import {
+  OFFER,
+  OFFER_KINDS,
   ROOM,
   ROOM_VILLAGES,
   STAND_IN,
@@ -74,7 +86,15 @@ import {
   roomLookOf,
   stepToward,
   TALK_KIND,
+  typingMs as typingFor,
+  yawToward,
+  type AnswerMsg,
   type AwayReport,
+  type HandAnswer,
+  type HandRequest,
+  type OfferKind,
+  type OfferedMsg,
+  type SettledMsg,
   type HeardMsg,
   type SpeakAnswer,
   type SpeakRequest,
@@ -86,7 +106,7 @@ import {
   type YouMsg,
 } from "@echo/shared";
 import { identitySecretsFor } from "@echo/shared/identity";
-import { signReport, signSpeak, verifyBrief } from "@echo/shared/standin";
+import { signHand, signReport, signSpeak, signToldVoice, verifyBrief } from "@echo/shared/standin";
 
 import { authSubject } from "./auth.js";
 import { advanceKept, keepBody, newsFor, type EchoBody } from "./echoBody.js";
@@ -131,10 +151,30 @@ interface TalkState {
  * would tell an echo from a person. `ECHO_TALK_PACE` scales it (0 in tests).
  */
 export function typingMs(text: string, dice: () => number = Math.random): number {
-  const pace = Number(process.env.ECHO_TALK_PACE ?? "1");
-  const ms = Math.min(12_000, 1400 + 55 * text.length + dice() * 1200);
-  return Number.isFinite(pace) && pace >= 0 ? ms * pace : ms;
+  return typingFor(text, dice, Number(process.env.ECHO_TALK_PACE ?? "1"));
 }
+
+/** How long a body an echo keeps stays turned to someone after its answer is said, ms: a person does not walk off mid-sentence. */
+const FACE_AFTER_MS = 2500;
+
+/** An offer one person made another (C110), until it is answered or lapses. */
+interface Open {
+  from: string;
+  to: string;
+  kind: OfferKind;
+  item: string | null;
+  until: number;
+  lapse: { clear(): void };
+}
+
+/** How long an offer waits for an answer, ms: `OFFER.waitMs`, shorter where a test says so. */
+const offerWaitMs = () => {
+  const v = Number(process.env.ECHO_OFFER_WAIT_MS);
+  return Number.isFinite(v) && v > 0 ? Math.min(v, OFFER.waitMs) : OFFER.waitMs;
+};
+
+/** An item the planet knows, or null: the only things that pass between people. */
+const itemOf = (v: unknown): string | null => (typeof v === "string" && ITEMS[v] ? v : null);
 
 /** How long an echo keeps a body, seconds: `STAND_IN.maxS`, shorter where a test says so. */
 const keepS = () => {
@@ -160,6 +200,8 @@ export class VillageRoom extends Room<VillageState> {
   private watchers = new Map<string, { body: string; seen: number }>();
   /** Each keeping's talking (C109), gone with the keeping. */
   private talks = new WeakMap<EchoBody, TalkState>();
+  /** Offers made and not yet answered (C110), by id. */
+  private offers = new Map<string, Open>();
 
   onCreate(options: VillageCreateOptions) {
     const cell = typeof options.cell === "string" ? options.cell : "";
@@ -184,6 +226,8 @@ export class VillageRoom extends Room<VillageState> {
     });
     this.onMessage(VILLAGE_C2S.BRIEF, (client, raw) => this.brief(client, raw));
     this.onMessage(VILLAGE_C2S.SAY_IT, (client, raw) => this.sayIt(client, raw));
+    this.onMessage(VILLAGE_C2S.OFFER, (client, raw) => this.offer(client, raw));
+    this.onMessage(VILLAGE_C2S.ANSWER, (client, raw) => void this.answerOffer(client, raw));
     this.onMessage(VILLAGE_C2S.WHO, (client) => {
       const watch = this.watchers.get(client.sessionId);
       if (watch) {
@@ -464,8 +508,22 @@ export class VillageRoom extends Room<VillageState> {
       void this.answer(them, w.id, text, now);
       return;
     }
-    const msg: SaidMsg = { from: w.id, text };
-    for (const c of this.clients) if (this.seats.get(c.sessionId) === them.id) c.send(VILLAGE_S2C.TOLD, msg);
+    this.told(them, w, text);
+  }
+
+  /**
+   * A line to one person, from one body (C107), with the room's token for having it read aloud (C110): bound to
+   * whom it was said to, the look of the body that said it, the line and the moment, so it voices nothing else.
+   */
+  private told(to: Walker, from: Walker, text: string): void {
+    const msg: SaidMsg = { from: from.id, text };
+    const secret = secrets()[0];
+    if (secret) {
+      const at = Date.now();
+      const token = signToldVoice({ sub: to.refId, cell: this.state.cell, room: this.state.code, seed: from.lookSeed, sex: from.sex === "f" ? "f" : "m", age: from.age, text, at }, secret);
+      msg.voice = { at, token };
+    }
+    for (const c of this.clients) if (this.seats.get(c.sessionId) === to.id) c.send(VILLAGE_S2C.TOLD, msg);
   }
 
   /** Send to whoever watches one body. */
@@ -500,6 +558,9 @@ export class VillageRoom extends Room<VillageState> {
       const line = got ? cleanSaid(got.say ?? "") : null;
       if (!got || !line) return;
       const wait = typingMs(line) - (Date.now() - now);
+      // Typing it, as a person would: standing, turned to whoever it is answering (C110).
+      const them = level === "act" ? this.state.walkers.get(speaker) : undefined;
+      if (them) echo.facing = { yaw: yawToward(body, them), until: Date.now() + Math.max(0, wait) + FACE_AFTER_MS };
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       if (body.echo !== echo) return;
       if (level === "act") {
@@ -519,8 +580,9 @@ export class VillageRoom extends Room<VillageState> {
   private sayFor(body: Walker, echo: EchoBody, to: string, text: string, sure: number, may: "act" | "ask"): boolean {
     const speaker = this.state.walkers.get(to);
     if (!speaker || hearersOf(body.id, body, [speaker]).length === 0) return false;
-    const msg: SaidMsg = { from: body.id, text };
-    for (const c of this.clients) if (this.seats.get(c.sessionId) === to) c.send(VILLAGE_S2C.TOLD, msg);
+    this.told(speaker, body, text);
+    // Said, it stays turned to them a moment (C110), as a person does who has just answered.
+    echo.facing = { yaw: yawToward(body, speaker), until: Math.max(echo.facing?.until ?? 0, Date.now() + FACE_AFTER_MS) };
     const t = this.talkOf(echo);
     t.said++;
     t.with.set(to, [...(t.with.get(to) ?? []), { from: "me" as const, text }].slice(-STAND_IN.talkContext));
@@ -560,6 +622,93 @@ export class VillageRoom extends Room<VillageState> {
       if (!r.ok) return null;
       const d = (await r.json()) as SpeakAnswer;
       return typeof d?.say === "string" ? { say: d.say, sure: typeof d.sure === "number" ? d.sure : undefined } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ── one person to another, as to a villager (C110) ─────────────────────────────
+
+  /** Send to every page that moves one body. */
+  private toBody(body: string, type: string, msg: unknown): void {
+    for (const c of this.clients) if (this.seats.get(c.sessionId) === body) c.send(type, msg);
+  }
+
+  /** Whether two bodies are within arm's length, both in the village. */
+  private within(a: Walker, b: Walker): boolean {
+    return a.here && b.here && Math.hypot(a.x - b.x, a.y - b.y) <= OFFER.reachM;
+  }
+
+  /**
+   * An offer to someone at arm's length: to give what one carries, offer it in trade, or ask for something for
+   * one's help. One open offer from a body at a time. To a body its echo keeps it is not handed on, and lapses.
+   */
+  private offer(client: Client, raw: unknown): void {
+    const w = this.bodyOf(client);
+    if (!w || !w.here || !raw || typeof raw !== "object") return;
+    const { to, kind, item: rawItem } = raw as { to?: unknown; kind?: unknown; item?: unknown };
+    if (!OFFER_KINDS.includes(kind as OfferKind)) return;
+    const k = kind as OfferKind;
+    const item = itemOf(rawItem);
+    if ((k === "ask") !== (item === null)) return;
+    const them = typeof to === "string" && to !== w.id ? this.state.walkers.get(to) : undefined;
+    if (!them || !this.within(w, them)) return;
+    if ([...this.offers.values()].some((o) => o.from === w.id)) return;
+    const id = `${w.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+    const wait = offerWaitMs();
+    const until = Date.now() + wait;
+    const lapse = this.clock.setTimeout(() => this.settle(id, { ok: false, why: "lapsed" }), wait);
+    this.offers.set(id, { from: w.id, to: them.id, kind: k, item, until, lapse });
+    if (them.echo) return;
+    this.toBody(them.id, VILLAGE_S2C.OFFERED, { id, from: w.id, kind: k, item, until } satisfies OfferedMsg);
+  }
+
+  /** An offer ends: both are told, the one who made it with their pack as it now is when it changed. */
+  private settle(id: string, end: { ok: boolean; why?: SettledMsg["why"]; back?: string | null; packs?: HandAnswer["packs"] }): void {
+    const o = this.offers.get(id);
+    if (!o) return;
+    this.offers.delete(id);
+    o.lapse.clear();
+    const base = { id, kind: o.kind, ok: end.ok, ...(end.why ? { why: end.why } : {}), item: o.item, back: end.back ?? null };
+    this.toBody(o.from, VILLAGE_S2C.SETTLED, { ...base, side: "from", ...(end.packs ? { pack: end.packs.from } : {}) } satisfies SettledMsg);
+    this.toBody(o.to, VILLAGE_S2C.SETTLED, { ...base, side: "to", ...(end.packs ? { pack: end.packs.to } : {}) } satisfies SettledMsg);
+  }
+
+  /** The answer to an offer, from the one it was made to: no, or yes and what goes back, made by the web app. */
+  private async answerOffer(client: Client, raw: unknown): Promise<void> {
+    const w = this.bodyOf(client);
+    if (!w || !raw || typeof raw !== "object") return;
+    const { id, yes, back: rawBack } = raw as Partial<AnswerMsg>;
+    const o = typeof id === "string" ? this.offers.get(id) : undefined;
+    if (!o || o.to !== w.id || o.until < Date.now()) return;
+    if (yes !== true) return this.settle(id!, { ok: false, why: "no" });
+    const back = itemOf(rawBack);
+    // A gift is taken as it is; a trade and an ask are answered with something.
+    if ((o.kind === "give") !== (back === null)) return;
+    const from = this.state.walkers.get(o.from);
+    if (!from || from.echo || !this.within(from, w)) return this.settle(id!, { ok: false, why: "gone" });
+    // Answered: it cannot lapse while the web app makes it.
+    o.lapse.clear();
+    o.until = Number.POSITIVE_INFINITY;
+    const made = await this.hand({ id: id!, cell: this.state.cell, room: this.state.code, kind: o.kind, from: from.refId, to: w.refId, item: o.item, back, at: Date.now() });
+    this.settle(id!, made?.ok ? { ok: true, back, packs: made.packs } : { ok: false, why: "refused", back });
+  }
+
+  /** The hand-over, made by the web app between the two packs; null when it could not be asked. */
+  private async hand(req: HandRequest): Promise<HandAnswer | null> {
+    const url = process.env.ECHO_WEB_URL;
+    const secret = secrets()[0];
+    if (!url || !secret) return null;
+    const body = JSON.stringify(req);
+    try {
+      const r = await fetch(`${url.replace(/\/$/, "")}/api/village/hand`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-echo-room": signHand(body, secret) },
+        body,
+        signal: AbortSignal.timeout(OFFER.handMs),
+      });
+      const d = (await r.json().catch(() => null)) as HandAnswer | null;
+      return d && typeof d.ok === "boolean" ? d : null;
     } catch {
       return null;
     }

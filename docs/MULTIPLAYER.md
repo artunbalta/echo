@@ -33,6 +33,8 @@
 > (`heard`), and nobody answers. The page talks to anyone nearest through the villagers' own panel.
 >
 > **Learning how you talk (C108).** With a yes of its own under "When you leave", a person's lines (to villagers, to someone in a room, aloud in one) are kept by the web app, never by the room; the room still stores no line. A line to a person carries nothing that person said. Before each answer to a villager, the echo's guess is sealed and later judged, earning the "talk" threshold; (C109) past that threshold a body its echo keeps answers `talk` with a line the web app writes (`/api/echo/speak`, signed by the room), after a typing pause; close to it, the line goes to the watching person as `would` and is said only on their `sayIt`.
+
+> **Nobody told apart by how they answer (C110).** In a room a villager's answer waits a typing pause (`typingMs`, shared with the echo), says nothing of remembering you first, and the villager stops and turns once spoken to; a body turns to whoever it talks to, and one an echo keeps stands turned while it answers. People give, trade and ask at arm's length as with a villager: `offer` → `offered` to that person alone → `answer` → the room asks `/api/village/hand` (signed `echo.hand`) to move the things → `settled` to both with their packs. A line to one person (`told`) carries `voice: { at, token }` (`echo.voice`), which `/api/village/voice` reads aloud in a voice picked for the speaker's look.
 >
 > What follows describes the old 2D world's `WorldRoom`.
 

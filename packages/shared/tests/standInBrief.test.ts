@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { signBrief, signReport, signSpeak, verifyBrief, verifyReport, verifySpeak } from "../src/standInBrief";
+import { signBrief, signHand, signReport, signSpeak, signToldVoice, verifyBrief, verifyHand, verifyReport, verifySpeak, verifyToldVoice } from "../src/standInBrief";
 import type { StandInBrief } from "../src/village";
 
 const NOW = Date.UTC(2026, 10, 17, 12);
@@ -68,4 +68,27 @@ test("a room's request to speak is signed for that and nothing else (C109)", () 
   assert.equal(verifySpeak(body, undefined, ["k1"]), false);
   assert.equal(verifyReport(body, sig, ["k1"]), false, "a request to speak is not a report");
   assert.equal(verifySpeak(body, signReport(body, "k1"), ["k1"]), false, "and a report is not a request to speak");
+});
+
+test("a hand-over between two people is signed for that and nothing else (C110)", () => {
+  const body = JSON.stringify({ id: "x", cell: "84dcee5ffffffff", room: "ABCDE", kind: "give", from: "a", to: "b", item: "shell", back: null, at: NOW });
+  const sig = signHand(body, "k1");
+  assert.equal(verifyHand(body, sig, ["k1"]), true);
+  assert.equal(verifyHand(body, sig, ["k2", "k1"]), true, "during a rotation");
+  assert.equal(verifyHand(body.replace('"a"', '"c"'), sig, ["k1"]), false, "another giver");
+  assert.equal(verifyHand(body, signSpeak(body, "k1"), ["k1"]), false, "a request to speak is not a hand-over");
+  assert.equal(verifyHand(body, signReport(body, "k1"), ["k1"]), false, "nor is a report");
+  assert.equal(verifySpeak(body, sig, ["k1"]), false, "and a hand-over is neither");
+  assert.equal(verifyReport(body, sig, ["k1"]), false);
+});
+
+test("a line handed on in a room is vouched for to whom it was said, as said, by that look, then (C110)", () => {
+  const line = { sub: "deniz", cell: "84dcee5ffffffff", room: "ABCDE", seed: "0a1b2c3d", sex: "f" as const, age: 33, text: "nice shell", at: NOW };
+  const token = signToldVoice(line, "k1");
+  assert.equal(verifyToldVoice(line, token, ["k1"]), true);
+  for (const [k, v] of [["sub", "artun"], ["room", "ABCDF"], ["seed", "0a1b2c3e"], ["sex", "m"], ["age", 34], ["text", "nice shells"], ["at", NOW + 1]] as const) {
+    assert.equal(verifyToldVoice({ ...line, [k]: v }, token, ["k1"]), false, `another ${k}`);
+  }
+  assert.equal(verifyToldVoice(line, token, ["k2"]), false);
+  assert.equal(verifyToldVoice(line, signHand(JSON.stringify(line), "k1"), ["k1"]), false, "a hand-over's signature is not a line's");
 });

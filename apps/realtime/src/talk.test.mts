@@ -23,6 +23,8 @@ import { MOMENT_KINDS, verbsOf } from "@echo/planet";
 import {
   ROOM_VILLAGES,
   TALK_KIND,
+  roomLookOf,
+  yawToward,
   VILLAGE_C2S,
   VILLAGE_ROOM,
   VILLAGE_S2C,
@@ -37,7 +39,7 @@ import {
   type WouldMsg,
 } from "@echo/shared";
 import { identitySecretsFor, signIdentity } from "@echo/shared/identity";
-import { signBrief, verifySpeak } from "@echo/shared/standin";
+import { signBrief, verifySpeak, verifyToldVoice } from "@echo/shared/standin";
 
 import { ON } from "./echoBody.js";
 import { VillageRoom, typingMs } from "./VillageRoom.js";
@@ -162,7 +164,20 @@ async function roomTests() {
     web.next.push({ status: 200, body: { say: "just walking, you?", sure: 0.6 } });
     k.b.send(VILLAGE_C2S.TALK, { to: k.aId, text: "hello, where to?" });
     await waitFor(() => k.told.length === 1, "the answer reaches the speaker");
-    assert.deepEqual(k.told[0], { from: k.aId, text: "just walking, you?" }, "from the body, as a person's answer comes");
+    assert.deepEqual({ from: k.told[0]!.from, text: k.told[0]!.text }, { from: k.aId, text: "just walking, you?" }, "from the body, as a person's answer comes");
+    // With the room's token for having it read aloud in the voice of the body's look (C110), to the speaker only.
+    const look = roomLookOf("artun-TAKES", "TAKES");
+    const v = k.told[0]!.voice!;
+    const line = { cell: CELL, room: "TAKES", seed: look.seed, sex: look.sex, age: look.age, text: "just walking, you?", at: v.at };
+    assert.equal(verifyToldVoice({ ...line, sub: "deniz-TAKES" }, v.token, [secret]), true, "the room vouches for the line, to the one it was said to");
+    assert.equal(verifyToldVoice({ ...line, sub: "artun-TAKES" }, v.token, [secret]), false, "and to nobody else");
+    assert.equal(verifyToldVoice({ ...line, sub: "deniz-TAKES", text: "something else" }, v.token, [secret]), false, "and for no other line");
+    // Answering, it stands turned to them (C110), as a person typing an answer does.
+    await sleep(120);
+    const body = (k.b.state as any).walkers.get(k.aId) as { x: number; y: number; yaw: number; speed: number };
+    const facing = yawToward({ x: body.x, y: body.y }, { x: 12, y: 3 });
+    assert.ok(Math.abs(Math.atan2(Math.sin(body.yaw - facing), Math.cos(body.yaw - facing))) < 1e-6, "turned to the one it answers");
+    assert.equal(body.speed, 0, "and standing");
     assert.equal(web.asked.length, 1);
     const first = web.asked[0]!;
     assert.equal(first.signed, true, "the room's request is signed");
@@ -238,7 +253,7 @@ async function roomTests() {
     assert.equal(q.told.length, 0, "a line it never offered is not said");
     qw.r.send(VILLAGE_C2S.SAY_IT, { id: would.id });
     await waitFor(() => q.told.length === 1, "said, on 'Say it'");
-    assert.deepEqual(q.told[0], { from: q.aId, text: "yeah, hi" });
+    assert.deepEqual({ from: q.told[0]!.from, text: q.told[0]!.text }, { from: q.aId, text: "yeah, hi" });
     qw.r.send(VILLAGE_C2S.SAY_IT, { id: would.id });
     await sleep(250);
     assert.equal(q.told.length, 1, "once");

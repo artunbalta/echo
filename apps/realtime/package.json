@@ -15,7 +15,8 @@
     "test:standin": "tsx src/standIn.test.mts",
     "test:watch": "tsx src/watch.test.mts",
     "test:shutdown": "tsx src/shutdown.test.mts",
-    "test:talk": "tsx src/talk.test.mts"
+    "test:talk": "tsx src/talk.test.mts",
+    "test:offer": "tsx src/offer.test.mts"
   },
   "dependencies": {
     "@colyseus/core": "^0.16.0",

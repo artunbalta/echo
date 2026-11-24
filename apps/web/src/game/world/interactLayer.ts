@@ -44,8 +44,12 @@ import { buildMarks } from "./villageGeometry";
 /** The refs that win over the ground's own things within reach: the director's, a moment's, a hidden thing's. */
 const SET_OUT = /^(staged|moment|egg):/;
 
-/** What someone who came into a village room offers at arm's length (C107): a villager's card, talking only. */
-const TALK_ONLY: readonly Verb[] = verbsOf("villager").filter((v) => v.id === "talk");
+/**
+ * What someone who came into a village room offers at arm's length: a villager's card (C107), with what passes
+ * between people as it does with a villager (C110): talking, giving what you carry, offering it in trade, and
+ * asking for something for your help. Only a fate's verb (a fisher asked to stay ashore) is a villager's alone.
+ */
+const PERSON_VERBS: readonly Verb[] = verbsOf("villager").filter((v) => ["talk", "give", "trade", "ask-back"].includes(v.id));
 
 export interface NearThing extends Thing {
   verbs: readonly Verb[];
@@ -260,11 +264,11 @@ export function interactLayer(options: { clock: WorldClock }): InteractLayer {
         const p = ctx.region.village?.settlement.people.find((q) => q.id === v.id);
         if (p) consider({ ref: `villager:${p.id}`, kind: "villager", x: mx + v.distanceM, y: my, sizeM: 0, owners: [p.id], name: p.given });
       }
-      // Someone who came into a village room, at arm's length (C107): the card a villager's is, with the one
-      // thing that passes between people here yet, talking. Nearer than the villager, it is theirs.
+      // Someone who came into a village room, at arm's length (C107): the card a villager's is, with what passes
+      // between people as with a villager (C110). Nearer than the villager, it is theirs.
       const o = ctx.layer<OthersLayer>("others")?.nearest();
       if (o?.room && o.distanceM < 3 && (!v || o.distanceM < v.distanceM)) {
-        consider({ ref: `person:${o.id}`, kind: "villager", x: mx + o.distanceM, y: my, sizeM: 0, owners: [], name: o.name.split(" ")[0]! }, TALK_ONLY);
+        consider({ ref: `person:${o.id}`, kind: "villager", x: mx + o.distanceM, y: my, sizeM: 0, owners: [], name: o.name.split(" ")[0]! }, PERSON_VERBS);
       }
       near = best;
     },

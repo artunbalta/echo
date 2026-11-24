@@ -17,6 +17,8 @@ import {
   readPose,
   roomLookOf,
   stepToward,
+  typingMs,
+  yawToward,
 } from "../src/village.js";
 
 test("a code is five readable characters, and typing it loosely still finds it", () => {
@@ -108,4 +110,21 @@ test("a route's room is none, or a code as the page writes it for a village that
   assert.deepEqual(roomOfRequest(cell, "ABCDE"), { ok: true, room: "ABCDE" });
   for (const bad of ["abcde", "ABC0E", 5, "ABCDEF"]) assert.deepEqual(roomOfRequest(cell, bad), { ok: false }, String(bad));
   assert.deepEqual(roomOfRequest("843f6a1ffffffff", "ABCDE"), { ok: false }, "the pilot's village is never copied");
+});
+
+test("typing a line takes as long as a person would (C109, C110), and a test can say no waiting", () => {
+  assert.equal(typingMs("ok", () => 0), 1400 + 55 * 2);
+  assert.equal(typingMs("x".repeat(240), () => 1), 12_000, "never longer than twelve seconds");
+  assert.ok(typingMs("a longer line than that", () => 0) > typingMs("ok", () => 0));
+  assert.equal(typingMs("anything", () => 0.5, 0), 0);
+  assert.equal(typingMs("ok", () => 0, 2), 2 * (1400 + 110));
+});
+
+test("facing someone is the yaw a pose carries for the heading toward them (C110)", () => {
+  // Planet-local metres are (east, north); a body's yaw is pi/2 - heading, the heading atan2(south, east).
+  const close = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) < 1e-9;
+  assert.ok(close(yawToward({ x: 0, y: 0 }, { x: 5, y: 0 }), Math.PI / 2), "east: heading 0");
+  assert.ok(close(yawToward({ x: 0, y: 0 }, { x: 0, y: -5 }), 0), "south: heading pi/2");
+  assert.ok(close(yawToward({ x: 0, y: 0 }, { x: 0, y: 5 }), Math.PI), "north: heading -pi/2");
+  assert.ok(close(yawToward({ x: 2, y: 2 }, { x: -3, y: 2 }), -Math.PI / 2), "west: heading pi");
 });

@@ -132,3 +132,55 @@ export function verifySpeak(body: string, signature: unknown, secrets: readonly 
   }
   return matched;
 }
+
+// ── things passed between people in a room, and the voice a line is said in (DECISIONS C110) ──
+
+const sign = (domain: string, body: string, secret: string) => {
+  if (!secret) throw new Error("[standin] refusing to sign with an empty secret");
+  return createHmac("sha256", secret).update(`${domain}|${body}`).digest("base64url");
+};
+const verify = (domain: string, body: string, signature: unknown, secrets: readonly string[]) => {
+  if (typeof signature !== "string" || !signature) return false;
+  const offered = Buffer.from(signature, "base64url");
+  let matched = false;
+  for (const secret of secrets) {
+    if (!secret) continue;
+    const expected = Buffer.from(createHmac("sha256", secret).update(`${domain}|${body}`).digest("base64url"), "base64url");
+    if (expected.length === offered.length && timingSafeEqual(expected, offered)) matched = true;
+  }
+  return matched;
+};
+
+/** Its own word: a hand-over the room asks the web app to make, which no other signature passes for. */
+const HAND = "echo.hand";
+
+/** The signature a room sends beside a hand-over between two people (`HandRequest`), as `x-echo-room`. */
+export const signHand = (body: string, secret: string): string => sign(HAND, body, secret);
+
+/** Whether `signature` is a room's hand-over over exactly `body`, by any of `secrets`. */
+export const verifyHand = (body: string, signature: unknown, secrets: readonly string[]): boolean => verify(HAND, body, signature, secrets);
+
+/** Its own word: a line the room vouches was said to this person, by a body that looks like this. */
+const VOICE = "echo.voice";
+
+/** What a room vouches for when it hands a line on (`ToldVoice`), in the one order it is signed in. */
+export interface ToldVoice {
+  /** Who it was said to: only they may have it said aloud. */
+  sub: string;
+  cell: string;
+  room: string;
+  /** The look of the body that said it (`roomLookOf`): what its voice is picked from, as a villager's is. */
+  seed: string;
+  sex: "f" | "m";
+  age: number;
+  text: string;
+  at: number;
+}
+
+const voiceBody = (v: ToldVoice) => JSON.stringify([v.sub, v.cell, v.room, v.seed, v.sex, v.age, v.text, v.at]);
+
+/** The token beside a line handed on in a room, which the voice route reads it aloud on. */
+export const signToldVoice = (v: ToldVoice, secret: string): string => sign(VOICE, voiceBody(v), secret);
+
+/** Whether `token` is the room's for exactly this line, to this person, by any of `secrets`. */
+export const verifyToldVoice = (v: ToldVoice, token: unknown, secrets: readonly string[]): boolean => verify(VOICE, voiceBody(v), token, secrets);

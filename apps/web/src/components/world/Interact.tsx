@@ -37,14 +37,16 @@ import type { ConsentState, MeasureChain } from "@/game/world/measure";
 import type { PlanetWorld, WorldLayer } from "@/game/world/PlanetWorld";
 import type { PlayerLayer } from "@/game/world/playerLayer";
 import { seatOf } from "@/game/world/seats";
-import { nearestToTalk } from "@/game/world/othersLayer";
+import { nearestToTalk, type OthersLayer } from "@/game/world/othersLayer";
+import type { OfferKind } from "@echo/shared";
+import OfferCard from "./OfferCard";
 import type { NearVillager, VillagersLayer } from "@/game/world/villagersLayer";
 import { measurementFor, recipeVerb, touchesTheWorld, verbsInHand } from "@/lib/acts";
 import { actFor } from "@/lib/actSites";
 import { beatText, nameText, t, useLang, verbLabel } from "@/lib/i18n";
 import { closePanel, usePanel } from "@/lib/panels";
 import { ensureIdentity, identityHeaders } from "@/lib/identity";
-import { worldQuery, worldRoom } from "@/lib/villageRoom";
+import { offerTo, onSettled, useRoomView, worldQuery, worldRoom } from "@/lib/villageRoom";
 import { landingLine, preparationMeasurement, provisioned, travelMeasurement, type LandingAnswer } from "@/lib/landing";
 import { tradeMeasurement, type TradeReply } from "@/lib/barter";
 
@@ -355,6 +357,54 @@ export default function Interact({
     [cell, layers, say, refreshDeeds],
   );
 
+  /**
+   * Someone who came into the room (C110): what is held out, offered in trade or asked for goes through the room
+   * to them, as it goes to a villager through the routes; how it ended comes back by `onSettled`. Nothing of it
+   * is measured or recorded as a deed: what passes between two people is theirs (C107).
+   */
+  const offering = useRef<{ name: string; beat: string } | null>(null);
+  const offerIt = useCallback(
+    (verb: Verb, thing: NearThing) => {
+      const to = thing.ref.slice("person:".length);
+      const kind: OfferKind = verb.id === "give" ? "give" : verb.id === "trade" ? "trade" : "ask";
+      const item = kind === "ask" ? null : carryingRef.current;
+      if (kind !== "ask" && !item) return;
+      if (!offerTo(to, kind, item)) {
+        say(t(lang, "offer.kept", { name: thing.name }));
+        return;
+      }
+      offering.current = { name: thing.name, beat: verb.beat };
+    },
+    [lang, say],
+  );
+  useEffect(
+    () =>
+      onSettled((m) => {
+        if (m.side !== "from") return;
+        const was = offering.current;
+        offering.current = null;
+        const name = was?.name ?? "They";
+        const thingOf = (id: string | null) => (id ? (ITEMS[id]?.name ?? id) : "");
+        if (m.pack) {
+          setPack(m.pack);
+          const held = carryingRef.current;
+          if (held && !((m.pack[held] ?? 0) > 0)) {
+            setCarrying(null);
+            layers().player?.setCarrying(false);
+          }
+        }
+        if (m.ok) say(m.kind === "give" ? (was?.beat ?? t(lang, "offer.kept", { name })) : m.kind === "trade" ? t(lang, "offer.traded", { name, item: thingOf(m.back) }) : t(lang, "offer.gave", { name, item: thingOf(m.back) }), 5200);
+        // Said no, or never answered, read the same: a person who did not turn round is not told from one who would not.
+        else if (m.why === "gone") say(t(lang, "offer.moved", { name }), 5200);
+        else if (m.why === "refused") say(t(lang, "offer.stuck"), 5200);
+        else say(t(lang, m.kind === "ask" ? "offer.none" : "offer.kept", { name }), 5200);
+      }),
+    [lang, layers, say],
+  );
+
+  const nameOfOther = useCallback((id: string) => layers().ctx?.layer<OthersLayer>("others")?.nameOf(id) ?? null, [layers]);
+  const sayLong = useCallback((text: string) => say(text, 5200), [say]);
+
   /** Who has turned the stranger down today (C58), so asking them again is pressing a bargain. */
   const refused = useRef(new Map<string, number>());
   /** A trade, or asking for something back for help (C58): the trade route answers, in the villager's words. */
@@ -523,6 +573,11 @@ export default function Interact({
         if (done) void stageIt(a.verb, a.thing);
         return;
       }
+      // Someone who came into the room (C110): through the room to them, and nothing measured.
+      if (a.thing.ref.startsWith("person:")) {
+        if (done) offerIt(a.verb, a.thing);
+        return;
+      }
       // A trade comes back with something (C58): its own route, its own measurement.
       if (a.verb.id === "trade" || a.verb.id === "ask-back") {
         if (done) void tradeIt(a.verb, a.thing);
@@ -577,7 +632,7 @@ export default function Interact({
       if (chain.armed()) void chain.emitAction(m.action, m.opts);
       if (done && touchesTheWorld(a.verb) && consent !== "unset") void record(a.verb, a.thing, a.verb.needs === "carrying" ? carryingRef.current : null);
     },
-    [chain, consent, lang, layers, record, say, tradeIt, homeIt, stageIt],
+    [chain, consent, lang, layers, record, say, tradeIt, homeIt, stageIt, offerIt],
   );
 
   const begin = useCallback(
@@ -900,10 +955,14 @@ export default function Interact({
   }, []);
 
   const talkHint = talkable && !(near?.kind === "villager") ? talkable.name.split(" ")[0] : null;
-  if (talking) return null;
+  // Offers someone in the room made you (C110), whether or not you are in a conversation.
+  const inRoom = useRoomView().status === "in";
+  const offers = inRoom ? <OfferCard pack={pack} onPack={setPack} nameOf={nameOfOther} say={sayLong} /> : null;
+  if (talking) return offers;
 
   return (
     <>
+      {offers}
       {acting ? (
         // Above the consent card while it stands, where the prompt it replaces was (C94): at the foot of
         // the screen the bar was drawn across the card's second paragraph.

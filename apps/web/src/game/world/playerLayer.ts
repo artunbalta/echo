@@ -91,6 +91,11 @@ export interface PlayerLayer extends WorldLayer {
    */
   perform(pose: ActivityKind, face: { x: number; y: number } | null, act?: Act): void;
   release(): void;
+  /**
+   * Turn, standing, to face a tile position: to whoever this body is talking to (C110), as a villager turns
+   * to whoever talks to them. Nothing while walking, in an act or in a boat; the next step turns it again.
+   */
+  face(at: { x: number; y: number }): void;
   /** The seat the body is on, or null: whoever sits beside it keeps clear of it. */
   seat(): Seat | null;
   wantsToMove(): boolean;
@@ -579,6 +584,14 @@ export function playerLayer(options: PlayerLayerOptions = {}): PlayerLayer {
       if (acting?.seat && acting.arrived) state = { ...state, x: acting.seat.up.x, y: acting.seat.up.y, vx: 0, vy: 0 };
       acting = null;
       now = null;
+    },
+    face(at) {
+      if (acting || boating || state.state === "walk" || state.state === "run") return;
+      const dx = at.x - state.x;
+      const dy = at.y - state.y;
+      if (Math.hypot(dx, dy) < 1e-4) return;
+      const heading = Math.atan2(dy, dx);
+      state = { ...state, heading, facing: facingFromHeading(heading) };
     },
     seat: () => (acting?.arrived ? acting.seat : null),
     wantsToMove: () => wants,

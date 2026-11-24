@@ -19,6 +19,10 @@
  * which body is yours (it may be one your echo kept: same handle, somewhere else), this page takes its
  * place there (`takePlace`), and what your echo did meanwhile is kept for the door to show (`away`).
  *
+ * BETWEEN PEOPLE AS WITH A VILLAGER (C110). An offer to someone at arm's length (a gift, a trade, an ask)
+ * goes through the room to them alone (`offerTo`); an offer made to this body comes in (`onOffered`) and is
+ * answered by `answerOffer`; how each ended, with this page's pack as it now is, comes to both (`onSettled`).
+ *
  * WHO IS WATCHING is not something this module can tell anyone: it has no such notion.
  */
 import { Client, type Room } from "colyseus.js";
@@ -32,9 +36,14 @@ import {
   VILLAGE_S2C,
   cleanSaid,
   normalizeRoomCode,
+  type AnswerMsg,
   type AwayEntry,
+  type OfferKind,
+  type OfferMsg,
+  type OfferedMsg,
   type PoseMsg,
   type SaidMsg,
+  type SettledMsg,
   type WalkerActivity,
   type YouMsg,
 } from "@echo/shared";
@@ -140,6 +149,38 @@ export function onSaid(fn: (m: SaidMsg) => void): () => void {
   return () => void saidSubs.delete(fn);
 }
 
+const offeredSubs = new Set<(m: OfferedMsg) => void>();
+const settledSubs = new Set<(m: SettledMsg) => void>();
+
+/** Hear the offers made to this body (C110). Returns the way to stop. */
+export function onOffered(fn: (m: OfferedMsg) => void): () => void {
+  offeredSubs.add(fn);
+  return () => void offeredSubs.delete(fn);
+}
+
+/** Hear how offers made by or to this body ended (C110). Returns the way to stop. */
+export function onSettled(fn: (m: SettledMsg) => void): () => void {
+  settledSubs.add(fn);
+  return () => void settledSubs.delete(fn);
+}
+
+/** Offer someone at arm's length what this body carries, or ask them for something (C110). False with no room to do it in. */
+export function offerTo(to: string, kind: OfferKind, item: string | null): boolean {
+  if (!room || view.status !== "in" || !others.has(to)) return false;
+  room.send(VILLAGE_C2S.OFFER, { to, kind, item } satisfies OfferMsg);
+  return true;
+}
+
+/** Answer an offer made to this body: no, or yes and what goes back (C110). */
+export function answerOffer(id: string, yes: boolean, back: string | null): boolean {
+  if (!room || view.status !== "in") return false;
+  room.send(VILLAGE_C2S.ANSWER, { id, yes, back } satisfies AnswerMsg);
+  return true;
+}
+
+/** The code of the room this page is in, or null outside one. */
+export const roomCodeNow = (): string | null => (view.status === "in" ? view.code : null);
+
 /** Hear the lines said to this body alone (C107). Returns the way to stop. */
 export function onTold(fn: (m: SaidMsg) => void): () => void {
   toldSubs.add(fn);
@@ -211,6 +252,14 @@ function bind(r: Room, cell: string, code: string): void {
     if (room !== r || typeof m?.from !== "string" || typeof m.text !== "string") return;
     toldBy.set(m.from, [...toldFrom(m.from), { text: m.text, at: Date.now() }]);
     toldSubs.forEach((fn) => fn(m));
+  });
+  r.onMessage(VILLAGE_S2C.OFFERED, (m: OfferedMsg) => {
+    if (room !== r || typeof m?.id !== "string" || typeof m.from !== "string") return;
+    offeredSubs.forEach((fn) => fn(m));
+  });
+  r.onMessage(VILLAGE_S2C.SETTLED, (m: SettledMsg) => {
+    if (room !== r || typeof m?.id !== "string") return;
+    settledSubs.forEach((fn) => fn(m));
   });
   // Which body is this page's: its own connection's, or one its echo kept while it was away.
   r.onMessage(VILLAGE_S2C.YOU, (m: YouMsg) => {

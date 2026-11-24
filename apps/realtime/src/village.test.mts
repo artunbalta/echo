@@ -140,7 +140,8 @@ async function main() {
     a.send(VILLAGE_C2S.TALK, { to: b.sessionId, text: " are you  from here?\n" });
     await waitFor(() => toldB.length === 1, "B is told");
     await sleep(200);
-    assert.deepEqual(toldB[0], { from: a.sessionId, text: "are you from here?" });
+    assert.deepEqual({ from: toldB[0]!.from, text: toldB[0]!.text }, { from: a.sessionId, text: "are you from here?" });
+    assert.equal(typeof toldB[0]!.voice?.token, "string", "with the room's token for its voice (C110)");
     assert.equal(heardB.length, 1, "it is not said to the street: B's earshot heard nothing new");
     assert.equal(toldD.length + toldA.length + heardD.length + heardA.length, 0, "nobody else is told, the speaker included");
     await sleep(ROOM.sayEveryMs + 50);
@@ -153,7 +154,7 @@ async function main() {
     assert.equal(toldB.length, 1, "an empty line is no line");
     b.send(VILLAGE_C2S.TALK, { to: a.sessionId, text: "born here" });
     await waitFor(() => toldA.length === 1, "and A is told the answer");
-    assert.deepEqual(toldA[0], { from: b.sessionId, text: "born here" });
+    assert.deepEqual({ from: toldA[0]!.from, text: toldA[0]!.text }, { from: b.sessionId, text: "born here" });
     console.log("✓ a line to one body reaches its person alone, within earshot");
 
     // ── 5. the door ──

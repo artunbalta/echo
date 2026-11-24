@@ -69,6 +69,12 @@ export interface PoseMsg {
 export interface SaidMsg {
   from: string;
   text: string;
+  /**
+   * Beside a line said to one person (C110): when, and the room's token for it (`signToldVoice`), so that
+   * their page may have it read aloud in a voice picked for the body that said it, as a villager's is.
+   * Absent where the room has no key to sign with: the page then says it in the browser's own voice.
+   */
+  voice?: { at: number; token: string };
 }
 
 /**
@@ -94,14 +100,14 @@ export interface HeardMsg {
  * it is away, the brief its echo stands in by (C104), and a question the room answers once on coming in:
  * which body is mine.
  */
-export const VILLAGE_C2S = { POSE: "pose", SAY: "say", TALK: "talk", AWAY: "away", BRIEF: "brief", WHO: "who", SAY_IT: "sayIt" } as const;
+export const VILLAGE_C2S = { POSE: "pose", SAY: "say", TALK: "talk", AWAY: "away", BRIEF: "brief", WHO: "who", SAY_IT: "sayIt", OFFER: "offer", ANSWER: "answer" } as const;
 /**
  * What the room sends: a line heard; a line said to this page's body alone (C107); which body is a page's
  * own; and, to someone watching their own echo from outside (C105), what it has met so far, each moment as
  * it meets it, what was said to it (C107), a line it would say and may not yet without them (C109), and that
  * the watching is over.
  */
-export const VILLAGE_S2C = { SAID: "said", TOLD: "told", YOU: "you", WATCH: "watch", MET: "met", HEARD: "heard", WOULD: "would", WATCH_END: "watchEnd" } as const;
+export const VILLAGE_S2C = { SAID: "said", TOLD: "told", YOU: "you", WATCH: "watch", MET: "met", HEARD: "heard", WOULD: "would", WATCH_END: "watchEnd", OFFERED: "offered", SETTLED: "settled" } as const;
 
 /**
  * To someone watching their own echo (C109): a line it would say to `to` and has not, because talking is
@@ -398,4 +404,103 @@ export function roomOfRequest(cell: string, raw: unknown): { ok: true; room: str
   const code = normalizeRoomCode(raw);
   if (!code || code !== raw || !ROOM_VILLAGES.includes(cell)) return { ok: false };
   return { ok: true, room: code };
+}
+
+// ── nobody told apart by how they answer (DECISIONS C110) ─────────────────────────
+
+/**
+ * How long typing a line takes, ms: a person reads, thinks a moment, and types (C109). An echo waits this
+ * long before its line goes, and in a room so does a villager's answer (C110): one that came at once would
+ * tell either from a person. `pace` scales it (0 in tests).
+ */
+export function typingMs(text: string, dice: () => number = Math.random, pace = 1): number {
+  const ms = Math.min(12_000, 1400 + 55 * text.length + dice() * 1200);
+  return Number.isFinite(pace) && pace >= 0 ? ms * pace : ms;
+}
+
+/**
+ * The yaw a body at `from` has facing `to`, both planet-local metres (east, north), in three's yaw as a
+ * pose carries it: the heading in the tile frame (east, south) is atan2(-north, east), and the rig's yaw
+ * for a heading h is pi/2 - h (`playerLayer` `yawFromHeading`).
+ */
+export function yawToward(from: { x: number; y: number }, to: { x: number; y: number }): number {
+  return Math.PI / 2 - Math.atan2(-(to.y - from.y), to.x - from.x);
+}
+
+/** What one person can do for another at arm's length, as with a villager: give, offer in trade, ask. */
+export type OfferKind = "give" | "trade" | "ask";
+export const OFFER_KINDS: readonly OfferKind[] = ["give", "trade", "ask"];
+
+export const OFFER = {
+  /** An offer not answered in this long, ms, was not taken: as a person who did not turn round. */
+  waitMs: 30_000,
+  /** Arm's length, metres, and a little more for frames that disagree: the villager card's own reach. */
+  reachM: 4,
+  /** How long the room gives the web app to make a hand-over, ms. */
+  handMs: 8000,
+} as const;
+
+/**
+ * An offer from one person to another (C110), as the card offers it to a villager: `give` holds out
+ * `item`, `trade` holds out `item` for something back, `ask` asks for something for one's help (`item`
+ * null). To a body within {@link OFFER.reachM}.
+ */
+export interface OfferMsg {
+  to: string;
+  kind: OfferKind;
+  item: string | null;
+}
+
+/** An offer, as the room hands it to the person it is made to. They answer it by `id` before `until`. */
+export interface OfferedMsg {
+  id: string;
+  from: string;
+  kind: OfferKind;
+  item: string | null;
+  until: number;
+}
+
+/** An answer to an offer: yes or no, and for a trade or an ask, what is given back. */
+export interface AnswerMsg {
+  id: string;
+  yes: boolean;
+  back: string | null;
+}
+
+/**
+ * How an offer ended, to both: taken (`ok`), or not, and why: `no` (they said no), `lapsed` (no answer in
+ * time), `gone` (one of them walked off or left), `refused` (the hand-over could not be made: a thing no
+ * longer carried, a full pack). `pack` is the receiving page's own pack as it now is, when it changed.
+ */
+export interface SettledMsg {
+  id: string;
+  /** Which side of it this page is: the one who made the offer, or the one it was made to. */
+  side: "from" | "to";
+  kind: OfferKind;
+  ok: boolean;
+  why?: "no" | "lapsed" | "gone" | "refused";
+  item: string | null;
+  back: string | null;
+  pack?: Record<string, number>;
+}
+
+/** A hand-over the room asks the web app to make between two people's packs, signed (`signHand`). */
+export interface HandRequest {
+  id: string;
+  cell: string;
+  room: string;
+  kind: OfferKind;
+  /** The one who offered, and the one who answered. Subjects: this goes server to server only. */
+  from: string;
+  to: string;
+  item: string | null;
+  back: string | null;
+  at: number;
+}
+
+/** The web app's answer: made, with both packs as they now are, or not, and why. */
+export interface HandAnswer {
+  ok: boolean;
+  error?: string;
+  packs?: { from: Record<string, number>; to: Record<string, number> };
 }
